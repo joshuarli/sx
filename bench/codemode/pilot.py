@@ -11,6 +11,16 @@ from typing import Any
 
 from sx.diagnostics import render
 from sx.reader import read
+from sx.syntax import Form, ListLiteral, Node, RecordLiteral, Symbol
+
+FORMS = frozenset({
+    "let", "if", "match", "fn", "get", "call", "attempt", "retry", "wait-until", "loop", "recur", "par", "par-map",
+})
+PRELUDE = frozenset({
+    "+", "-", "*", "quot", "rem", "=", "not=", "<", "<=", ">", ">=", "not", "and", "or", "str", "count", "take",
+    "concat", "flatten", "contains?", "map", "filter", "any?", "all?", "reduce", "sort-by", "distinct-by", "group-by",
+    "some", "ok", "err",
+})
 
 BENCH = Path(__file__).parent
 ROOT = BENCH.parent.parent
@@ -44,6 +54,7 @@ class Run:
     error: str | None
     diagnostics: list[str]
     rendered: str
+    unknown: list[str]
 
 
 def task_section(task: Json, cores: Json) -> str:
@@ -142,8 +153,37 @@ def extract(reply: str) -> tuple[str, str | None]:
     return body, language
 
 
-def run_one(task: Json, sample: int, model: str, prompt: Path, workdir: Path) -> Run:
-    reply, tokens, error = ask(prompt, model, workdir)
+def unknown_names(node: Node, task: Json, cores: Json) -> list[str]:
+    functions = {f["name"] for f in cores["functions"] if f["name"].split(".")[0] in task.get("cores", [])}
+    capabilities = {c["id"] for c in task["capabilities"]}
+    found: list[str] = []
+    stack: list[Node] = [node]
+    while stack:
+        current = stack.pop()
+        if isinstance(current, Form):
+            items = current.items
+            head = items[0] if items else None
+            if isinstance(head, Symbol):
+                if head.name == "call" and len(items) > 1 and isinstance(items[1], Symbol):
+                    if items[1].name not in capabilities:
+                        found.append(f"call {items[1].name}")
+                elif head.name == "str" and len(items) != 3:
+                    found.append(f"str with {len(items) - 1} arguments")
+                elif head.name == "loop" and len(items) > 1 and not isinstance(items[1], RecordLiteral):
+                    found.append("loop without options")
+                elif head.name not in FORMS | PRELUDE | functions and not head.name[0].isupper():
+                    found.append(head.name)
+            stack.extend(items)
+        elif isinstance(current, ListLiteral):
+            stack.extend(current.items)
+        elif isinstance(current, RecordLiteral):
+            stack.extend(field.value for field in current.fields)
+    return found
+
+
+def score(
+    task: Json, sample: int, model: str, reply: str, tokens: dict[str, int], error: str | None, cores: Json
+) -> Run:
     program, fence = extract(reply)
     result = read(program)
     return Run(
@@ -157,7 +197,13 @@ def run_one(task: Json, sample: int, model: str, prompt: Path, workdir: Path) ->
         error=error,
         diagnostics=[d.label for d in result.diagnostics],
         rendered=render(program, result.diagnostics),
+        unknown=[] if result.program is None else unknown_names(result.program, task, cores),
     )
+
+
+def run_one(task: Json, sample: int, model: str, prompt: Path, workdir: Path, cores: Json) -> Run:
+    reply, tokens, error = ask(prompt, model, workdir)
+    return score(task, sample, model, reply, tokens, error, cores)
 
 
 def main() -> None:
@@ -167,6 +213,7 @@ def main() -> None:
     parser.add_argument("--jobs", type=int, default=4)
     parser.add_argument("--out", type=Path, default=ROOT / ".work" / "pilot" / "runs")
     parser.add_argument("--task", action="append", help="Run only these task ids")
+    parser.add_argument("--rescore", action="store_true", help="Score saved replies again without calling the model")
     args = parser.parse_args()
 
     args.out = args.out.resolve()
@@ -184,6 +231,18 @@ def main() -> None:
             continue
         tasks.append(task)
 
+    if args.rescore:
+        by_id = {task["id"]: task for task in tasks}
+        runs = []
+        for path in sorted(args.out.glob("*/[0-9]*.json")):
+            saved = json.loads(path.read_text())
+            if saved["task"] in by_id:
+                task = by_id[saved["task"]]
+                fields = (saved["sample"], saved["model"], saved["reply"], saved["tokens"], saved["error"])
+                runs.append(score(task, *fields, cores))
+        report(runs, tasks, args.out)
+        return
+
     jobs = []
     with ThreadPoolExecutor(max_workers=args.jobs) as pool:
         for task in tasks:
@@ -191,13 +250,18 @@ def main() -> None:
             prompt.parent.mkdir(parents=True, exist_ok=True)
             prompt.write_text(f"{guide}\n\n{task_section(task, cores)}\n")
             jobs.extend(
-                pool.submit(run_one, task, sample, args.model, prompt, workdir) for sample in range(args.samples)
+                pool.submit(run_one, task, sample, args.model, prompt, workdir, cores) for sample in range(args.samples)
             )
         runs = [job.result() for job in jobs]
+    report(runs, tasks, args.out)
 
+
+def report(runs: list[Run], tasks: list[Json], out: Path) -> None:
     labels: Counter[str] = Counter()
+    unknown: Counter[str] = Counter()
     for run in runs:
-        (args.out / run.task / f"{run.sample}.json").write_text(json.dumps(asdict(run), indent=2))
+        unknown.update(set(run.unknown))
+        (out / run.task / f"{run.sample}.json").write_text(json.dumps(asdict(run), indent=2))
         labels.update(set(run.diagnostics))
     for task in tasks:
         mine = [r for r in runs if r.task == task["id"]]
@@ -208,6 +272,9 @@ def main() -> None:
     print(f"total read {total_ok}/{len(runs)}; model errors {sum(1 for r in runs if r.error is not None)}")
     for label, count in labels.most_common():
         print(f"  {label}: {count} answers")
+    print("names Sx does not have, in answers that read cleanly:")
+    for name, count in unknown.most_common():
+        print(f"  {name}: {count} answers")
 
 
 if __name__ == "__main__":
