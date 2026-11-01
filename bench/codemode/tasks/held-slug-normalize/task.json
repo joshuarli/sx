@@ -1,0 +1,145 @@
+{
+ "id": "held-slug-normalize",
+ "split": "held-out",
+ "kinds": [
+  "string",
+  "core-composition",
+  "ad-hoc-logic",
+  "conditional-call",
+  "write"
+ ],
+ "domain": "other",
+ "sx-expressible": true,
+ "description": "Give every page a URL slug. The base slug of a page is its title with surrounding whitespace trimmed, lowercased, and every space replaced by a hyphen. Going through the pages in the order they are returned, the first page with a given base slug gets exactly that slug, and the n-th page (n of 2 or more) with the same base slug gets the base slug followed by `-n`. Only set the slug of pages whose current slug differs from the new one (a missing slug differs from every slug). Return the list of records `id` and `slug` for the pages whose slug was set, in the order the pages were returned.",
+ "types": {
+  "Page": "Record {id: Int, title: String, slug: Option<String>}"
+ },
+ "cores": [
+  "text"
+ ],
+ "capabilities": [
+  {
+   "id": "cms.pages",
+   "effect": "read",
+   "input": "Record {}",
+   "output": "List<Page>",
+   "description": "Lists all pages in display order."
+  },
+  {
+   "id": "cms.set-slug",
+   "effect": "write",
+   "idempotent": true,
+   "input": "Record {id: Int, slug: String}",
+   "output": "Unit",
+   "description": "Sets a page's slug."
+  }
+ ],
+ "responses": [
+  {
+   "capability": "cms.pages",
+   "input": {},
+   "results": [
+    {
+     "output": [
+      {
+       "id": 1,
+       "title": "Hello World ",
+       "slug": "hello-world"
+      },
+      {
+       "id": 2,
+       "title": "About Us",
+       "slug": null
+      },
+      {
+       "id": 3,
+       "title": "hello world",
+       "slug": "hello-world"
+      },
+      {
+       "id": 4,
+       "title": " HELLO WORLD",
+       "slug": null
+      },
+      {
+       "id": 5,
+       "title": "FAQ",
+       "slug": "faq"
+      },
+      {
+       "id": 6,
+       "title": "About us",
+       "slug": "about"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "cms.set-slug",
+   "input": {
+    "id": 2,
+    "slug": "about-us"
+   },
+   "results": [
+    {
+     "output": null
+    }
+   ]
+  },
+  {
+   "capability": "cms.set-slug",
+   "input": {
+    "id": 3,
+    "slug": "hello-world-2"
+   },
+   "results": [
+    {
+     "output": null
+    }
+   ]
+  },
+  {
+   "capability": "cms.set-slug",
+   "input": {
+    "id": 4,
+    "slug": "hello-world-3"
+   },
+   "results": [
+    {
+     "output": null
+    }
+   ]
+  },
+  {
+   "capability": "cms.set-slug",
+   "input": {
+    "id": 6,
+    "slug": "about-us-2"
+   },
+   "results": [
+    {
+     "output": null
+    }
+   ]
+  }
+ ],
+ "expected": [
+  {
+   "id": 2,
+   "slug": "about-us"
+  },
+  {
+   "id": 3,
+   "slug": "hello-world-2"
+  },
+  {
+   "id": 4,
+   "slug": "hello-world-3"
+  },
+  {
+   "id": 6,
+   "slug": "about-us-2"
+  }
+ ]
+}

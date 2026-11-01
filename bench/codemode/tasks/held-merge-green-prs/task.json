@@ -1,0 +1,223 @@
+{
+ "id": "held-merge-green-prs",
+ "split": "held-out",
+ "kinds": [
+  "parallel",
+  "conditional-call",
+  "write",
+  "partial-failure",
+  "filter-group"
+ ],
+ "domain": "repomod",
+ "sx-expressible": true,
+ "description": "In repository `laputa/xsh`, merge every open pull request that is not a draft and whose CI state is Passing. Do not merge any other pull request. If a merge is rejected, carry on with the rest. Return a record with `merged`: the numbers of the pull requests that were merged, ascending, and `rejected`: a list of records `number` and `kind` (the name of the error kind the merge failed with) for the rejected merges, ascending by number.",
+ "types": {
+  "Pr": "Record {number: Int, title: String, draft: Bool}"
+ },
+ "enums": {
+  "ci.State": {
+   "Passing": null,
+   "Pending": null,
+   "Failing": "String"
+  }
+ },
+ "cores": [],
+ "capabilities": [
+  {
+   "id": "github.list-open-prs",
+   "effect": "read",
+   "input": "Record {repo: String}",
+   "output": "List<Pr>",
+   "description": "Lists the open pull requests of a repository."
+  },
+  {
+   "id": "ci.pr-state",
+   "effect": "read",
+   "input": "Record {repo: String, number: Int}",
+   "output": "ci.State",
+   "description": "Returns the aggregate CI state of a pull request."
+  },
+  {
+   "id": "github.merge-pr",
+   "effect": "write",
+   "idempotent": false,
+   "input": "Record {repo: String, number: Int}",
+   "output": "Record {sha: String}",
+   "description": "Merges a pull request and returns the merge commit sha."
+  }
+ ],
+ "responses": [
+  {
+   "capability": "github.list-open-prs",
+   "input": {
+    "repo": "laputa/xsh"
+   },
+   "results": [
+    {
+     "output": [
+      {
+       "number": 7,
+       "title": "PR 7",
+       "draft": false
+      },
+      {
+       "number": 4,
+       "title": "PR 4",
+       "draft": true
+      },
+      {
+       "number": 11,
+       "title": "PR 11",
+       "draft": false
+      },
+      {
+       "number": 5,
+       "title": "PR 5",
+       "draft": false
+      },
+      {
+       "number": 8,
+       "title": "PR 8",
+       "draft": false
+      },
+      {
+       "number": 20,
+       "title": "PR 20",
+       "draft": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "ci.pr-state",
+   "input": {
+    "repo": "laputa/xsh",
+    "number": 7
+   },
+   "results": [
+    {
+     "output": "Passing"
+    }
+   ]
+  },
+  {
+   "capability": "ci.pr-state",
+   "input": {
+    "repo": "laputa/xsh",
+    "number": 4
+   },
+   "results": [
+    {
+     "output": "Passing"
+    }
+   ]
+  },
+  {
+   "capability": "ci.pr-state",
+   "input": {
+    "repo": "laputa/xsh",
+    "number": 11
+   },
+   "results": [
+    {
+     "output": {
+      "tag": "Failing",
+      "value": "lint"
+     }
+    }
+   ]
+  },
+  {
+   "capability": "ci.pr-state",
+   "input": {
+    "repo": "laputa/xsh",
+    "number": 5
+   },
+   "results": [
+    {
+     "output": "Passing"
+    }
+   ]
+  },
+  {
+   "capability": "ci.pr-state",
+   "input": {
+    "repo": "laputa/xsh",
+    "number": 8
+   },
+   "results": [
+    {
+     "output": "Pending"
+    }
+   ]
+  },
+  {
+   "capability": "ci.pr-state",
+   "input": {
+    "repo": "laputa/xsh",
+    "number": 20
+   },
+   "results": [
+    {
+     "output": "Passing"
+    }
+   ]
+  },
+  {
+   "capability": "github.merge-pr",
+   "input": {
+    "repo": "laputa/xsh",
+    "number": 7
+   },
+   "results": [
+    {
+     "output": {
+      "sha": "a1b2c3"
+     }
+    }
+   ]
+  },
+  {
+   "capability": "github.merge-pr",
+   "input": {
+    "repo": "laputa/xsh",
+    "number": 5
+   },
+   "results": [
+    {
+     "error": {
+      "kind": "Conflict",
+      "message": "merge conflict"
+     }
+    }
+   ]
+  },
+  {
+   "capability": "github.merge-pr",
+   "input": {
+    "repo": "laputa/xsh",
+    "number": 20
+   },
+   "results": [
+    {
+     "output": {
+      "sha": "d4e5f6"
+     }
+    }
+   ]
+  }
+ ],
+ "expected": {
+  "merged": [
+   7,
+   20
+  ],
+  "rejected": [
+   {
+    "number": 5,
+    "kind": "Conflict"
+   }
+  ]
+ }
+}

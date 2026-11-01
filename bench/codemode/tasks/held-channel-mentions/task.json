@@ -1,0 +1,186 @@
+{
+ "id": "held-channel-mentions",
+ "split": "held-out",
+ "kinds": [
+  "parallel",
+  "partial-failure",
+  "string",
+  "core-composition",
+  "filter-group"
+ ],
+ "domain": "other",
+ "sx-expressible": true,
+ "description": "Count, for every channel, the messages that mention `@oncall`, ignoring letter case, anywhere in the text (a message that mentions it twice counts once). Return a record with `channels`: a list of records `name` and `mentions` for channels with at least one such message, sorted by mentions descending and then name ascending; and `unreadable`: the names of channels whose history could not be read (any error), ascending.",
+ "types": {
+  "Message": "Record {author: String, text: String}"
+ },
+ "cores": [
+  "text"
+ ],
+ "capabilities": [
+  {
+   "id": "messaging.channels",
+   "effect": "read",
+   "input": "Record {}",
+   "output": "List<String>",
+   "description": "Lists channel names."
+  },
+  {
+   "id": "messaging.history",
+   "effect": "read",
+   "input": "Record {channel: String}",
+   "output": "List<Message>",
+   "description": "Returns the recent messages of a channel."
+  }
+ ],
+ "responses": [
+  {
+   "capability": "messaging.channels",
+   "input": {},
+   "results": [
+    {
+     "output": [
+      "ops",
+      "dev",
+      "random",
+      "alerts",
+      "pager",
+      "infra"
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "messaging.history",
+   "input": {
+    "channel": "ops"
+   },
+   "results": [
+    {
+     "output": [
+      {
+       "author": "a",
+       "text": "@OnCall please look"
+      },
+      {
+       "author": "b",
+       "text": "ok"
+      },
+      {
+       "author": "c",
+       "text": "@oncall @oncall twice"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "messaging.history",
+   "input": {
+    "channel": "dev"
+   },
+   "results": [
+    {
+     "output": [
+      {
+       "author": "a",
+       "text": "no @on-call here"
+      },
+      {
+       "author": "b",
+       "text": "oncall"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "messaging.history",
+   "input": {
+    "channel": "random"
+   },
+   "results": [
+    {
+     "output": []
+    }
+   ]
+  },
+  {
+   "capability": "messaging.history",
+   "input": {
+    "channel": "alerts"
+   },
+   "results": [
+    {
+     "output": [
+      {
+       "author": "bot",
+       "text": "@ONCALL disk full"
+      },
+      {
+       "author": "bot",
+       "text": "@oncall cpu"
+      },
+      {
+       "author": "bot",
+       "text": "@Oncall mem"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "messaging.history",
+   "input": {
+    "channel": "pager"
+   },
+   "results": [
+    {
+     "error": {
+      "kind": "PermissionDenied",
+      "message": "not a member"
+     }
+    }
+   ]
+  },
+  {
+   "capability": "messaging.history",
+   "input": {
+    "channel": "infra"
+   },
+   "results": [
+    {
+     "output": [
+      {
+       "author": "a",
+       "text": "@oncall x"
+      },
+      {
+       "author": "b",
+       "text": "@oncall y"
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "expected": {
+  "channels": [
+   {
+    "name": "alerts",
+    "mentions": 3
+   },
+   {
+    "name": "infra",
+    "mentions": 2
+   },
+   {
+    "name": "ops",
+    "mentions": 2
+   }
+  ],
+  "unreadable": [
+   "pager"
+  ]
+ }
+}

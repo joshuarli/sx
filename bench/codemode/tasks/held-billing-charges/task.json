@@ -1,0 +1,252 @@
+{
+ "id": "held-billing-charges",
+ "split": "held-out",
+ "kinds": [
+  "parallel",
+  "arithmetic",
+  "write",
+  "partial-failure",
+  "conditional-call"
+ ],
+ "domain": "other",
+ "sx-expressible": false,
+ "description": "Bill every customer for their usage. A customer's usage total in dollars is the sum of `units` times `rate` over their usage lines. Customers whose usage total is zero (no lines, or only lines with 0 units) are skipped. Every other customer is charged the usage total, raised to at least 10.00 dollars, converted to whole cents. If a charge fails, carry on with the others. Return a record with `charged`: a list of records `customer`, `cents` and `charge` (the charge id returned); `skipped`: the customers skipped for zero usage; and `failed`: a list of records `customer` and `kind` (the error kind name); every list sorted by customer name ascending.",
+ "types": {
+  "Usage": "Record {meter: String, units: Int, rate: Float}"
+ },
+ "cores": [],
+ "capabilities": [
+  {
+   "id": "billing.customers",
+   "effect": "read",
+   "input": "Record {}",
+   "output": "List<String>",
+   "description": "Lists customer names."
+  },
+  {
+   "id": "billing.usage",
+   "effect": "read",
+   "input": "Record {customer: String}",
+   "output": "List<Usage>",
+   "description": "Lists a customer's metered usage lines; rate is dollars per unit."
+  },
+  {
+   "id": "billing.charge",
+   "effect": "write",
+   "idempotent": false,
+   "input": "Record {customer: String, cents: Int}",
+   "output": "Record {charge: String}",
+   "description": "Charges a customer's payment method and returns the charge id."
+  }
+ ],
+ "responses": [
+  {
+   "capability": "billing.customers",
+   "input": {},
+   "results": [
+    {
+     "output": [
+      "fox",
+      "acme",
+      "echo",
+      "cyan",
+      "bolt",
+      "dyna"
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "billing.usage",
+   "input": {
+    "customer": "acme"
+   },
+   "results": [
+    {
+     "output": [
+      {
+       "meter": "api",
+       "units": 1000,
+       "rate": 0.25
+      },
+      {
+       "meter": "storage",
+       "units": 40,
+       "rate": 0.125
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "billing.usage",
+   "input": {
+    "customer": "bolt"
+   },
+   "results": [
+    {
+     "output": [
+      {
+       "meter": "api",
+       "units": 20,
+       "rate": 0.25
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "billing.usage",
+   "input": {
+    "customer": "cyan"
+   },
+   "results": [
+    {
+     "output": []
+    }
+   ]
+  },
+  {
+   "capability": "billing.usage",
+   "input": {
+    "customer": "dyna"
+   },
+   "results": [
+    {
+     "output": [
+      {
+       "meter": "api",
+       "units": 0,
+       "rate": 0.25
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "billing.usage",
+   "input": {
+    "customer": "echo"
+   },
+   "results": [
+    {
+     "output": [
+      {
+       "meter": "api",
+       "units": 100,
+       "rate": 0.5
+      },
+      {
+       "meter": "mail",
+       "units": 3,
+       "rate": 1.5
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "billing.usage",
+   "input": {
+    "customer": "fox"
+   },
+   "results": [
+    {
+     "output": [
+      {
+       "meter": "cpu",
+       "units": 30,
+       "rate": 0.375
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "billing.charge",
+   "input": {
+    "customer": "acme",
+    "cents": 25500
+   },
+   "results": [
+    {
+     "output": {
+      "charge": "ch_1"
+     }
+    }
+   ]
+  },
+  {
+   "capability": "billing.charge",
+   "input": {
+    "customer": "bolt",
+    "cents": 1000
+   },
+   "results": [
+    {
+     "output": {
+      "charge": "ch_2"
+     }
+    }
+   ]
+  },
+  {
+   "capability": "billing.charge",
+   "input": {
+    "customer": "echo",
+    "cents": 5450
+   },
+   "results": [
+    {
+     "error": {
+      "kind": "PermissionDenied",
+      "message": "card blocked"
+     }
+    }
+   ]
+  },
+  {
+   "capability": "billing.charge",
+   "input": {
+    "customer": "fox",
+    "cents": 1125
+   },
+   "results": [
+    {
+     "output": {
+      "charge": "ch_3"
+     }
+    }
+   ]
+  }
+ ],
+ "expected": {
+  "charged": [
+   {
+    "customer": "acme",
+    "cents": 25500,
+    "charge": "ch_1"
+   },
+   {
+    "customer": "bolt",
+    "cents": 1000,
+    "charge": "ch_2"
+   },
+   {
+    "customer": "fox",
+    "cents": 1125,
+    "charge": "ch_3"
+   }
+  ],
+  "skipped": [
+   "cyan",
+   "dyna"
+  ],
+  "failed": [
+   {
+    "customer": "echo",
+    "kind": "PermissionDenied"
+   }
+  ]
+ }
+}

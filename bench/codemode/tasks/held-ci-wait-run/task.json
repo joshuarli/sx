@@ -1,0 +1,85 @@
+{
+ "id": "held-ci-wait-run",
+ "split": "held-out",
+ "kinds": [
+  "polling",
+  "write"
+ ],
+ "domain": "repomod",
+ "sx-expressible": true,
+ "description": "Start a CI run for branch `release` of repository `laputa/xsh` and wait for it to finish. Wait 10 seconds, then check the run's state; repeat, making at most 5 checks, and stop at the first check that reports Succeeded or Failed. Return a record with `run` (the run number), `outcome` (`succeeded`, `failed`, or `timeout` if all 5 checks showed Queued or Running), `polls` (the number of checks made), and `reason` (the failure reason when the run failed, otherwise null).",
+ "enums": {
+  "ci.Run": {
+   "Queued": null,
+   "Running": null,
+   "Succeeded": null,
+   "Failed": "String"
+  }
+ },
+ "cores": [],
+ "capabilities": [
+  {
+   "id": "ci.trigger",
+   "effect": "write",
+   "idempotent": false,
+   "input": "Record {repo: String, branch: String}",
+   "output": "Record {run: Int}",
+   "description": "Starts a CI run on a branch and returns its run number."
+  },
+  {
+   "id": "ci.get-run",
+   "effect": "read",
+   "input": "Record {run: Int}",
+   "output": "ci.Run",
+   "description": "Returns the current state of a CI run."
+  }
+ ],
+ "responses": [
+  {
+   "capability": "ci.trigger",
+   "input": {
+    "repo": "laputa/xsh",
+    "branch": "release"
+   },
+   "results": [
+    {
+     "output": {
+      "run": 481
+     }
+    }
+   ]
+  },
+  {
+   "capability": "ci.get-run",
+   "input": {
+    "run": 481
+   },
+   "results": [
+    {
+     "output": "Queued"
+    },
+    {
+     "output": "Running"
+    },
+    {
+     "output": "Running"
+    },
+    {
+     "output": {
+      "tag": "Failed",
+      "value": "2 tests failed"
+     }
+    },
+    {
+     "output": "Succeeded"
+    }
+   ]
+  }
+ ],
+ "expected": {
+  "run": 481,
+  "outcome": "failed",
+  "polls": 4,
+  "reason": "2 tests failed"
+ }
+}

@@ -1,0 +1,156 @@
+{
+ "id": "held-metric-trend",
+ "split": "held-out",
+ "kinds": [
+  "parallel",
+  "ad-hoc-logic",
+  "filter-group"
+ ],
+ "domain": "other",
+ "sx-expressible": true,
+ "description": "Find the metric series that are climbing dangerously: their last three points are strictly increasing (each larger than the one before) and their latest point is at least 90. Series with fewer than three points never qualify. Return the names of the qualifying series, sorted ascending.",
+ "cores": [],
+ "capabilities": [
+  {
+   "id": "metrics.names",
+   "effect": "read",
+   "input": "Record {}",
+   "output": "List<String>",
+   "description": "Lists metric series names."
+  },
+  {
+   "id": "metrics.series",
+   "effect": "read",
+   "input": "Record {name: String}",
+   "output": "List<Int>",
+   "description": "Returns a series' points, oldest first."
+  }
+ ],
+ "responses": [
+  {
+   "capability": "metrics.names",
+   "input": {},
+   "results": [
+    {
+     "output": [
+      "cpu",
+      "mem",
+      "disk",
+      "net",
+      "io",
+      "gpu",
+      "swap"
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "metrics.series",
+   "input": {
+    "name": "cpu"
+   },
+   "results": [
+    {
+     "output": [
+      10,
+      50,
+      85,
+      91,
+      95
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "metrics.series",
+   "input": {
+    "name": "mem"
+   },
+   "results": [
+    {
+     "output": [
+      95,
+      96
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "metrics.series",
+   "input": {
+    "name": "disk"
+   },
+   "results": [
+    {
+     "output": [
+      70,
+      80,
+      89
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "metrics.series",
+   "input": {
+    "name": "net"
+   },
+   "results": [
+    {
+     "output": [
+      99,
+      99,
+      100
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "metrics.series",
+   "input": {
+    "name": "io"
+   },
+   "results": [
+    {
+     "output": [
+      1,
+      92,
+      93,
+      94
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "metrics.series",
+   "input": {
+    "name": "gpu"
+   },
+   "results": [
+    {
+     "output": [
+      5,
+      6,
+      100
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "metrics.series",
+   "input": {
+    "name": "swap"
+   },
+   "results": [
+    {
+     "output": []
+    }
+   ]
+  }
+ ],
+ "expected": [
+  "cpu",
+  "gpu",
+  "io"
+ ]
+}

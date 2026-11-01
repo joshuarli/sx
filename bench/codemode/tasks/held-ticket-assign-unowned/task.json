@@ -1,0 +1,184 @@
+{
+ "id": "held-ticket-assign-unowned",
+ "split": "held-out",
+ "kinds": [
+  "conditional-call",
+  "write",
+  "partial-failure",
+  "filter-group"
+ ],
+ "domain": "other",
+ "sx-expressible": true,
+ "description": "Every open ticket with priority `P1` and no assignee must be assigned to the person currently on call for its team. Assign them. If the on-call lookup for a team fails with any error, leave that team's tickets alone. Tickets with another priority, or that already have an assignee, are not touched. Return a record with `assigned`: a list of records `ticket` and `user`, ascending by ticket id; and `unassigned`: the ids of P1 tickets without an assignee that could not be assigned, ascending.",
+ "types": {
+  "Ticket": "Record {id: Int, team: String, priority: String, assignee: Option<String>}"
+ },
+ "cores": [],
+ "capabilities": [
+  {
+   "id": "tickets.list-open",
+   "effect": "read",
+   "input": "Record {}",
+   "output": "List<Ticket>",
+   "description": "Lists all open tickets."
+  },
+  {
+   "id": "oncall.current",
+   "effect": "read",
+   "input": "Record {team: String}",
+   "output": "Record {user: String}",
+   "description": "Returns who is currently on call for a team."
+  },
+  {
+   "id": "tickets.assign",
+   "effect": "write",
+   "idempotent": true,
+   "input": "Record {id: Int, user: String}",
+   "output": "Unit",
+   "description": "Sets a ticket's assignee."
+  }
+ ],
+ "responses": [
+  {
+   "capability": "tickets.list-open",
+   "input": {},
+   "results": [
+    {
+     "output": [
+      {
+       "id": 106,
+       "team": "infra",
+       "priority": "P1",
+       "assignee": null
+      },
+      {
+       "id": 101,
+       "team": "infra",
+       "priority": "P1",
+       "assignee": null
+      },
+      {
+       "id": 102,
+       "team": "infra",
+       "priority": "P1",
+       "assignee": "kim"
+      },
+      {
+       "id": 103,
+       "team": "web",
+       "priority": "P1",
+       "assignee": null
+      },
+      {
+       "id": 104,
+       "team": "data",
+       "priority": "P2",
+       "assignee": null
+      },
+      {
+       "id": 105,
+       "team": "data",
+       "priority": "P1",
+       "assignee": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "oncall.current",
+   "input": {
+    "team": "infra"
+   },
+   "results": [
+    {
+     "output": {
+      "user": "max"
+     }
+    }
+   ]
+  },
+  {
+   "capability": "oncall.current",
+   "input": {
+    "team": "data"
+   },
+   "results": [
+    {
+     "output": {
+      "user": "lee"
+     }
+    }
+   ]
+  },
+  {
+   "capability": "oncall.current",
+   "input": {
+    "team": "web"
+   },
+   "results": [
+    {
+     "error": {
+      "kind": "NotFound",
+      "message": "no rotation"
+     }
+    }
+   ]
+  },
+  {
+   "capability": "tickets.assign",
+   "input": {
+    "id": 101,
+    "user": "max"
+   },
+   "results": [
+    {
+     "output": null
+    }
+   ]
+  },
+  {
+   "capability": "tickets.assign",
+   "input": {
+    "id": 105,
+    "user": "lee"
+   },
+   "results": [
+    {
+     "output": null
+    }
+   ]
+  },
+  {
+   "capability": "tickets.assign",
+   "input": {
+    "id": 106,
+    "user": "max"
+   },
+   "results": [
+    {
+     "output": null
+    }
+   ]
+  }
+ ],
+ "expected": {
+  "assigned": [
+   {
+    "ticket": 101,
+    "user": "max"
+   },
+   {
+    "ticket": 105,
+    "user": "lee"
+   },
+   {
+    "ticket": 106,
+    "user": "max"
+   }
+  ],
+  "unassigned": [
+   103
+  ]
+ }
+}

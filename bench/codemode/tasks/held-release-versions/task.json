@@ -1,0 +1,195 @@
+{
+ "id": "held-release-versions",
+ "split": "held-out",
+ "kinds": [
+  "parallel",
+  "partial-failure",
+  "core-composition",
+  "string"
+ ],
+ "domain": "repomod",
+ "sx-expressible": true,
+ "description": "For each catalogued repository tagged `released`, find its latest release version. Git tags look like `v1.2.3` or `1.2.3`: remove one leading `v` if present, and ignore any tag that is then not exactly MAJOR.MINOR.PATCH (so `v2.0.0-rc1` and `nightly` are ignored). Compare versions numerically. Return a record with `releases`: a list of records `repo` and `latest` (the latest version written MAJOR.MINOR.PATCH without a `v`, or null when no tag is valid) for the repositories whose tags could be listed, sorted by `repo` ascending; and `failed`: a list of records `repo` and `kind` (the error kind name) for repositories whose tag listing failed, sorted by `repo` ascending.",
+ "types": {
+  "Repo": "Record {id: String, owner: String, name: String, tags: List<String>, archived: Bool}"
+ },
+ "cores": [
+  "text",
+  "semver"
+ ],
+ "capabilities": [
+  {
+   "id": "catalog.list",
+   "effect": "read",
+   "input": "Record {tags: List<String>}",
+   "output": "List<Repo>",
+   "description": "Lists catalogued repositories that carry every given tag. An empty list of tags lists all repositories."
+  },
+  {
+   "id": "github.list-tags",
+   "effect": "read",
+   "input": "Record {repo: String}",
+   "output": "List<String>",
+   "description": "Lists the git tag names of a repository."
+  }
+ ],
+ "responses": [
+  {
+   "capability": "catalog.list",
+   "input": {
+    "tags": [
+     "released"
+    ]
+   },
+   "results": [
+    {
+     "output": [
+      {
+       "id": "r/e",
+       "owner": "r",
+       "name": "e",
+       "tags": [
+        "released"
+       ],
+       "archived": false
+      },
+      {
+       "id": "r/c",
+       "owner": "r",
+       "name": "c",
+       "tags": [
+        "released"
+       ],
+       "archived": false
+      },
+      {
+       "id": "r/d",
+       "owner": "r",
+       "name": "d",
+       "tags": [
+        "released"
+       ],
+       "archived": false
+      },
+      {
+       "id": "r/a",
+       "owner": "r",
+       "name": "a",
+       "tags": [
+        "released"
+       ],
+       "archived": false
+      },
+      {
+       "id": "r/b",
+       "owner": "r",
+       "name": "b",
+       "tags": [
+        "released"
+       ],
+       "archived": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "github.list-tags",
+   "input": {
+    "repo": "r/a"
+   },
+   "results": [
+    {
+     "output": [
+      "v1.2.3",
+      "v1.10.0",
+      "1.9.9",
+      "nightly"
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "github.list-tags",
+   "input": {
+    "repo": "r/b"
+   },
+   "results": [
+    {
+     "output": [
+      "v2.0.0-rc1",
+      "latest"
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "github.list-tags",
+   "input": {
+    "repo": "r/d"
+   },
+   "results": [
+    {
+     "output": [
+      "v0.9.12",
+      "v0.9.2"
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "github.list-tags",
+   "input": {
+    "repo": "r/c"
+   },
+   "results": [
+    {
+     "error": {
+      "kind": "NotFound",
+      "message": "gone"
+     }
+    }
+   ]
+  },
+  {
+   "capability": "github.list-tags",
+   "input": {
+    "repo": "r/e"
+   },
+   "results": [
+    {
+     "error": {
+      "kind": "Timeout",
+      "message": "slow"
+     }
+    }
+   ]
+  }
+ ],
+ "expected": {
+  "releases": [
+   {
+    "repo": "r/a",
+    "latest": "1.10.0"
+   },
+   {
+    "repo": "r/b",
+    "latest": null
+   },
+   {
+    "repo": "r/d",
+    "latest": "0.9.12"
+   }
+  ],
+  "failed": [
+   {
+    "repo": "r/c",
+    "kind": "NotFound"
+   },
+   {
+    "repo": "r/e",
+    "kind": "Timeout"
+   }
+  ]
+ }
+}

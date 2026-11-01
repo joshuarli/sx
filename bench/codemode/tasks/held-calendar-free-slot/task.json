@@ -1,0 +1,96 @@
+{
+ "id": "held-calendar-free-slot",
+ "split": "held-out",
+ "kinds": [
+  "parallel",
+  "ad-hoc-logic",
+  "arithmetic",
+  "string"
+ ],
+ "domain": "other",
+ "sx-expressible": true,
+ "description": "Find the earliest time on 2026-03-12 at which `ana`, `ben` and `chi` are all free for a 45-minute meeting that lies entirely within working hours 09:00 to 17:00. Busy blocks are half-open intervals [start, end) in minutes since midnight; they may overlap, may be unsorted, and may extend outside working hours. A meeting may start at the exact minute a block ends and may end at the exact minute a block starts. The meeting may start at any minute. Return the start time as a string `HH:MM` (24-hour, zero-padded), or null if there is no such time.",
+ "types": {
+  "Block": "Record {start: Int, end: Int}"
+ },
+ "cores": [],
+ "capabilities": [
+  {
+   "id": "calendar.busy",
+   "effect": "read",
+   "input": "Record {user: String, day: String}",
+   "output": "List<Block>",
+   "description": "Lists a user's busy blocks on a day (YYYY-MM-DD) as minutes since midnight."
+  }
+ ],
+ "responses": [
+  {
+   "capability": "calendar.busy",
+   "input": {
+    "user": "ana",
+    "day": "2026-03-12"
+   },
+   "results": [
+    {
+     "output": [
+      {
+       "start": 660,
+       "end": 720
+      },
+      {
+       "start": 825,
+       "end": 870
+      },
+      {
+       "start": 540,
+       "end": 600
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "calendar.busy",
+   "input": {
+    "user": "ben",
+    "day": "2026-03-12"
+   },
+   "results": [
+    {
+     "output": [
+      {
+       "start": 570,
+       "end": 630
+      },
+      {
+       "start": 600,
+       "end": 690
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "calendar.busy",
+   "input": {
+    "user": "chi",
+    "day": "2026-03-12"
+   },
+   "results": [
+    {
+     "output": [
+      {
+       "start": 725,
+       "end": 780
+      },
+      {
+       "start": 480,
+       "end": 545
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "expected": "13:00"
+}

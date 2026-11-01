@@ -1,0 +1,112 @@
+{
+ "id": "held-currency-total",
+ "split": "held-out",
+ "kinds": [
+  "arithmetic",
+  "ad-hoc-logic",
+  "schema-detail"
+ ],
+ "domain": "other",
+ "sx-expressible": false,
+ "description": "Convert every payment to US dollars and add them up, in cents. A USD payment is already in dollars. For any other currency X, use the rate for X from the rates for base `USD`, which gives units of X per 1 USD: the payment's `cents` divided by that rate, rounded to the nearest whole cent, is its value in US cents. A payment in a currency with no rate is left out of the total. Return a record with `total`: the sum of the converted amounts in cents, and `unconverted`: the ids of payments left out, ascending.",
+ "types": {
+  "Payment": "Record {id: String, cents: Int, currency: String}"
+ },
+ "cores": [],
+ "capabilities": [
+  {
+   "id": "payments.list",
+   "effect": "read",
+   "input": "Record {}",
+   "output": "List<Payment>",
+   "description": "Lists payments with their amount in minor units of their currency."
+  },
+  {
+   "id": "fx.rates",
+   "effect": "read",
+   "input": "Record {base: String}",
+   "output": "Map<String, Float>",
+   "description": "Returns, for each currency code, how many units of it equal one unit of the base currency."
+  }
+ ],
+ "responses": [
+  {
+   "capability": "payments.list",
+   "input": {},
+   "results": [
+    {
+     "output": [
+      {
+       "id": "p1",
+       "cents": 1000,
+       "currency": "USD"
+      },
+      {
+       "id": "p2",
+       "cents": 500,
+       "currency": "EUR"
+      },
+      {
+       "id": "p3",
+       "cents": 2000,
+       "currency": "CAD"
+      },
+      {
+       "id": "p4",
+       "cents": 8000,
+       "currency": "JPY"
+      },
+      {
+       "id": "p8",
+       "cents": 7,
+       "currency": "BTC"
+      },
+      {
+       "id": "p5",
+       "cents": 300,
+       "currency": "XYZ"
+      },
+      {
+       "id": "p6",
+       "cents": 1001,
+       "currency": "CAD"
+      },
+      {
+       "id": "p7",
+       "cents": 100,
+       "currency": "GBP"
+      },
+      {
+       "id": "p9",
+       "cents": 2,
+       "currency": "JPY"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "fx.rates",
+   "input": {
+    "base": "USD"
+   },
+   "results": [
+    {
+     "output": {
+      "EUR": 0.5,
+      "GBP": 0.25,
+      "JPY": 160,
+      "CAD": 1.25
+     }
+    }
+   ]
+  }
+ ],
+ "expected": {
+  "total": 4851,
+  "unconverted": [
+   "p5",
+   "p8"
+  ]
+ }
+}

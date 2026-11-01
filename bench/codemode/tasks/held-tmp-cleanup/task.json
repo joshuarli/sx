@@ -1,0 +1,147 @@
+{
+ "id": "held-tmp-cleanup",
+ "split": "held-out",
+ "kinds": [
+  "filter-group",
+  "write",
+  "conditional-call",
+  "arithmetic",
+  "partial-failure",
+  "core-composition"
+ ],
+ "domain": "other",
+ "sx-expressible": true,
+ "description": "Today is day 200. In directory `scratch`, delete every file whose name ends with `.tmp` and whose `modified` day is 193 or earlier (7 or more days old). A file path is `scratch/` followed by the file name. A delete that fails with NotFound means the file was already gone: it is neither counted as deleted nor as failed. A delete that fails any other way is reported as failed. Return a record with `deleted`: names of the files actually deleted, ascending; `freed`: the total `bytes` of the files actually deleted; and `failed`: names of files whose delete failed, ascending.",
+ "types": {
+  "Entry": "Record {name: String, bytes: Int, modified: Int}"
+ },
+ "cores": [
+  "text"
+ ],
+ "capabilities": [
+  {
+   "id": "files.list",
+   "effect": "read",
+   "input": "Record {dir: String}",
+   "output": "List<Entry>",
+   "description": "Lists the files in a directory; modified is a day number."
+  },
+  {
+   "id": "files.delete",
+   "effect": "write",
+   "idempotent": true,
+   "input": "Record {path: String}",
+   "output": "Unit",
+   "description": "Deletes a file."
+  }
+ ],
+ "responses": [
+  {
+   "capability": "files.list",
+   "input": {
+    "dir": "scratch"
+   },
+   "results": [
+    {
+     "output": [
+      {
+       "name": "d.tmp",
+       "bytes": 400,
+       "modified": 193
+      },
+      {
+       "name": "a.tmp",
+       "bytes": 100,
+       "modified": 190
+      },
+      {
+       "name": "b.tmp",
+       "bytes": 50,
+       "modified": 195
+      },
+      {
+       "name": "c.txt",
+       "bytes": 999,
+       "modified": 100
+      },
+      {
+       "name": "e.tmp",
+       "bytes": 70,
+       "modified": 10
+      },
+      {
+       "name": "f.tmp",
+       "bytes": 30,
+       "modified": 150
+      },
+      {
+       "name": "g.tmp.bak",
+       "bytes": 5,
+       "modified": 1
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "files.delete",
+   "input": {
+    "path": "scratch/a.tmp"
+   },
+   "results": [
+    {
+     "output": null
+    }
+   ]
+  },
+  {
+   "capability": "files.delete",
+   "input": {
+    "path": "scratch/d.tmp"
+   },
+   "results": [
+    {
+     "output": null
+    }
+   ]
+  },
+  {
+   "capability": "files.delete",
+   "input": {
+    "path": "scratch/e.tmp"
+   },
+   "results": [
+    {
+     "error": {
+      "kind": "NotFound",
+      "message": "already gone"
+     }
+    }
+   ]
+  },
+  {
+   "capability": "files.delete",
+   "input": {
+    "path": "scratch/f.tmp"
+   },
+   "results": [
+    {
+     "error": {
+      "kind": "PermissionDenied",
+      "message": "read-only"
+     }
+    }
+   ]
+  }
+ ],
+ "expected": {
+  "deleted": [
+   "a.tmp",
+   "d.tmp"
+  ],
+  "freed": 500,
+  "failed": [
+   "f.tmp"
+  ]
+ }
+}

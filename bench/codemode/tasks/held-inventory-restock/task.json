@@ -1,0 +1,135 @@
+{
+ "id": "held-inventory-restock",
+ "split": "held-out",
+ "kinds": [
+  "conditional-call",
+  "write",
+  "arithmetic",
+  "filter-group"
+ ],
+ "domain": "other",
+ "sx-expressible": true,
+ "description": "Restock low items. An item's available stock is `on-hand` minus `reserved` (it can be negative). For every item whose available stock is strictly below its `reorder` level, create one purchase order for (2 times `reorder`, minus the available stock) units. Items at or above the reorder level get no order. Return a list of records `sku`, `qty` (units ordered) and `po` (the purchase order id returned), sorted by `sku` ascending.",
+ "types": {
+  "Item": "Record {sku: String, on-hand: Int, reserved: Int, reorder: Int}"
+ },
+ "cores": [],
+ "capabilities": [
+  {
+   "id": "inventory.list",
+   "effect": "read",
+   "input": "Record {}",
+   "output": "List<Item>",
+   "description": "Lists all stocked items."
+  },
+  {
+   "id": "purchasing.create-po",
+   "effect": "write",
+   "idempotent": false,
+   "input": "Record {sku: String, qty: Int}",
+   "output": "Record {po: String}",
+   "description": "Creates a purchase order and returns its id."
+  }
+ ],
+ "responses": [
+  {
+   "capability": "inventory.list",
+   "input": {},
+   "results": [
+    {
+     "output": [
+      {
+       "sku": "sku-d",
+       "on-hand": 0,
+       "reserved": 0,
+       "reorder": 4
+      },
+      {
+       "sku": "sku-a",
+       "on-hand": 20,
+       "reserved": 5,
+       "reorder": 15
+      },
+      {
+       "sku": "sku-b",
+       "on-hand": 5,
+       "reserved": 2,
+       "reorder": 10
+      },
+      {
+       "sku": "sku-e",
+       "on-hand": 50,
+       "reserved": 10,
+       "reorder": 20
+      },
+      {
+       "sku": "sku-c",
+       "on-hand": 3,
+       "reserved": 6,
+       "reorder": 2
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "purchasing.create-po",
+   "input": {
+    "sku": "sku-b",
+    "qty": 17
+   },
+   "results": [
+    {
+     "output": {
+      "po": "PO-901"
+     }
+    }
+   ]
+  },
+  {
+   "capability": "purchasing.create-po",
+   "input": {
+    "sku": "sku-c",
+    "qty": 7
+   },
+   "results": [
+    {
+     "output": {
+      "po": "PO-902"
+     }
+    }
+   ]
+  },
+  {
+   "capability": "purchasing.create-po",
+   "input": {
+    "sku": "sku-d",
+    "qty": 8
+   },
+   "results": [
+    {
+     "output": {
+      "po": "PO-903"
+     }
+    }
+   ]
+  }
+ ],
+ "expected": [
+  {
+   "sku": "sku-b",
+   "qty": 17,
+   "po": "PO-901"
+  },
+  {
+   "sku": "sku-c",
+   "qty": 7,
+   "po": "PO-902"
+  },
+  {
+   "sku": "sku-d",
+   "qty": 8,
+   "po": "PO-903"
+  }
+ ]
+}

@@ -1,0 +1,205 @@
+{
+ "id": "held-stale-forks",
+ "split": "held-out",
+ "kinds": [
+  "parallel",
+  "filter-group",
+  "schema-detail"
+ ],
+ "domain": "repomod",
+ "sx-expressible": true,
+ "description": "Among all catalogued repositories, find the forks whose last push was before 2025-01-01 (pushed-at is an ISO date `YYYY-MM-DD`; a push on 2025-01-01 is not before it). Return a list of records with `repo` (the repository id) and `upstream` (the id of the repository it was forked from, or null when that is not known), sorted by `repo` ascending.",
+ "types": {
+  "Repo": "Record {id: String, owner: String, name: String, tags: List<String>, archived: Bool}",
+  "Meta": "Record {id: String, fork: Bool, parent: Option<String>, pushed-at: String, stars: Int}"
+ },
+ "cores": [],
+ "capabilities": [
+  {
+   "id": "catalog.list",
+   "effect": "read",
+   "input": "Record {tags: List<String>}",
+   "output": "List<Repo>",
+   "description": "Lists catalogued repositories that carry every given tag. An empty list of tags lists all repositories."
+  },
+  {
+   "id": "github.get-repo",
+   "effect": "read",
+   "input": "Record {id: String}",
+   "output": "Meta",
+   "description": "Returns GitHub metadata for a repository id."
+  }
+ ],
+ "responses": [
+  {
+   "capability": "catalog.list",
+   "input": {
+    "tags": []
+   },
+   "results": [
+    {
+     "output": [
+      {
+       "id": "c/six",
+       "owner": "c",
+       "name": "six",
+       "tags": [],
+       "archived": false
+      },
+      {
+       "id": "a/one",
+       "owner": "a",
+       "name": "one",
+       "tags": [],
+       "archived": false
+      },
+      {
+       "id": "b/three",
+       "owner": "b",
+       "name": "three",
+       "tags": [],
+       "archived": false
+      },
+      {
+       "id": "a/two",
+       "owner": "a",
+       "name": "two",
+       "tags": [],
+       "archived": false
+      },
+      {
+       "id": "c/five",
+       "owner": "c",
+       "name": "five",
+       "tags": [],
+       "archived": false
+      },
+      {
+       "id": "b/four",
+       "owner": "b",
+       "name": "four",
+       "tags": [],
+       "archived": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "github.get-repo",
+   "input": {
+    "id": "a/one"
+   },
+   "results": [
+    {
+     "output": {
+      "id": "a/one",
+      "fork": true,
+      "parent": "up/one",
+      "pushed-at": "2024-06-01",
+      "stars": 3
+     }
+    }
+   ]
+  },
+  {
+   "capability": "github.get-repo",
+   "input": {
+    "id": "a/two"
+   },
+   "results": [
+    {
+     "output": {
+      "id": "a/two",
+      "fork": false,
+      "parent": null,
+      "pushed-at": "2020-01-01",
+      "stars": 3
+     }
+    }
+   ]
+  },
+  {
+   "capability": "github.get-repo",
+   "input": {
+    "id": "b/three"
+   },
+   "results": [
+    {
+     "output": {
+      "id": "b/three",
+      "fork": true,
+      "parent": "up/three",
+      "pushed-at": "2025-03-10",
+      "stars": 3
+     }
+    }
+   ]
+  },
+  {
+   "capability": "github.get-repo",
+   "input": {
+    "id": "b/four"
+   },
+   "results": [
+    {
+     "output": {
+      "id": "b/four",
+      "fork": true,
+      "parent": null,
+      "pushed-at": "2023-12-31",
+      "stars": 3
+     }
+    }
+   ]
+  },
+  {
+   "capability": "github.get-repo",
+   "input": {
+    "id": "c/five"
+   },
+   "results": [
+    {
+     "output": {
+      "id": "c/five",
+      "fork": true,
+      "parent": "up/five",
+      "pushed-at": "2025-01-01",
+      "stars": 3
+     }
+    }
+   ]
+  },
+  {
+   "capability": "github.get-repo",
+   "input": {
+    "id": "c/six"
+   },
+   "results": [
+    {
+     "output": {
+      "id": "c/six",
+      "fork": true,
+      "parent": "up/six",
+      "pushed-at": "2019-05-05",
+      "stars": 3
+     }
+    }
+   ]
+  }
+ ],
+ "expected": [
+  {
+   "repo": "a/one",
+   "upstream": "up/one"
+  },
+  {
+   "repo": "b/four",
+   "upstream": null
+  },
+  {
+   "repo": "c/six",
+   "upstream": "up/six"
+  }
+ ]
+}

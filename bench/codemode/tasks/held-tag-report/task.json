@@ -1,0 +1,131 @@
+{
+ "id": "held-tag-report",
+ "split": "held-out",
+ "kinds": [
+  "string",
+  "core-composition",
+  "filter-group"
+ ],
+ "domain": "repomod",
+ "sx-expressible": true,
+ "description": "Tags in the catalogue are inconsistent. Normalise each tag by trimming surrounding whitespace and lowercasing it, and drop tags that are empty after trimming. Report every normalised tag carried by at least two distinct repositories (a repository counts once for a tag even if it carries several spellings of it). Return a list of records `tag` and `repos` (the ids of the repositories carrying it, sorted ascending), sorted by `tag` ascending.",
+ "types": {
+  "Repo": "Record {id: String, owner: String, name: String, tags: List<String>, archived: Bool}"
+ },
+ "cores": [
+  "text"
+ ],
+ "capabilities": [
+  {
+   "id": "catalog.list",
+   "effect": "read",
+   "input": "Record {tags: List<String>}",
+   "output": "List<Repo>",
+   "description": "Lists catalogued repositories that carry every given tag. An empty list of tags lists all repositories."
+  }
+ ],
+ "responses": [
+  {
+   "capability": "catalog.list",
+   "input": {
+    "tags": []
+   },
+   "results": [
+    {
+     "output": [
+      {
+       "id": "x/a",
+       "owner": "x",
+       "name": "a",
+       "tags": [
+        " Rust",
+        "CLI",
+        "rust"
+       ],
+       "archived": false
+      },
+      {
+       "id": "x/b",
+       "owner": "x",
+       "name": "b",
+       "tags": [
+        "rust",
+        "",
+        "  "
+       ],
+       "archived": false
+      },
+      {
+       "id": "x/c",
+       "owner": "x",
+       "name": "c",
+       "tags": [
+        "Cli",
+        "web "
+       ],
+       "archived": false
+      },
+      {
+       "id": "x/d",
+       "owner": "x",
+       "name": "d",
+       "tags": [
+        "WEB",
+        "docs"
+       ],
+       "archived": false
+      },
+      {
+       "id": "x/e",
+       "owner": "x",
+       "name": "e",
+       "tags": [
+        "docs"
+       ],
+       "archived": false
+      },
+      {
+       "id": "x/f",
+       "owner": "x",
+       "name": "f",
+       "tags": [
+        "solo"
+       ],
+       "archived": false
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "expected": [
+  {
+   "tag": "cli",
+   "repos": [
+    "x/a",
+    "x/c"
+   ]
+  },
+  {
+   "tag": "docs",
+   "repos": [
+    "x/d",
+    "x/e"
+   ]
+  },
+  {
+   "tag": "rust",
+   "repos": [
+    "x/a",
+    "x/b"
+   ]
+  },
+  {
+   "tag": "web",
+   "repos": [
+    "x/c",
+    "x/d"
+   ]
+  }
+ ]
+}

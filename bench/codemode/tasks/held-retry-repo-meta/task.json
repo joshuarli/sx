@@ -1,0 +1,97 @@
+{
+ "id": "held-retry-repo-meta",
+ "split": "held-out",
+ "kinds": [
+  "retry",
+  "partial-failure"
+ ],
+ "domain": "repomod",
+ "sx-expressible": true,
+ "description": "Fetch the metadata of repositories `laputa/xsh`, `laputa/diff-pretty`, and `laputa/old`, in that order. A call that fails with RateLimited or Timeout is retried up to 3 more times (at most 4 attempts in all), waiting 2, then 4, then 8 seconds before the retries. Errors of any other kind are not retried. Return a list of records `repo`, `attempts` (how many calls were made for it) and `stars` (the star count, or null if no call succeeded).",
+ "types": {
+  "Meta": "Record {stars: Int, issues: Int}"
+ },
+ "cores": [],
+ "capabilities": [
+  {
+   "id": "github.get-repo",
+   "effect": "read",
+   "input": "Record {id: String}",
+   "output": "Meta",
+   "description": "Returns star and open-issue counts for a repository id."
+  }
+ ],
+ "responses": [
+  {
+   "capability": "github.get-repo",
+   "input": {
+    "id": "laputa/xsh"
+   },
+   "results": [
+    {
+     "error": {
+      "kind": "RateLimited",
+      "message": "slow down"
+     }
+    },
+    {
+     "error": {
+      "kind": "Timeout",
+      "message": "timed out"
+     }
+    },
+    {
+     "output": {
+      "stars": 120,
+      "issues": 4
+     }
+    }
+   ]
+  },
+  {
+   "capability": "github.get-repo",
+   "input": {
+    "id": "laputa/diff-pretty"
+   },
+   "results": [
+    {
+     "error": {
+      "kind": "RateLimited",
+      "message": "slow down"
+     }
+    }
+   ]
+  },
+  {
+   "capability": "github.get-repo",
+   "input": {
+    "id": "laputa/old"
+   },
+   "results": [
+    {
+     "error": {
+      "kind": "NotFound",
+      "message": "no such repo"
+     }
+    }
+   ]
+  }
+ ],
+ "expected": [
+  {
+   "repo": "laputa/xsh",
+   "attempts": 3,
+   "stars": 120
+  },
+  {
+   "repo": "laputa/diff-pretty",
+   "attempts": 4,
+   "stars": null
+  },
+  {
+   "repo": "laputa/old",
+   "attempts": 1,
+   "stars": null
+  }
+ ]
+}

@@ -106,3 +106,12 @@ Describe the goal, not the steps. Name no programming language.
 
 `schema-detail` marks a task whose correct answer depends on reading the declared types closely,
 for example an `Option` field or a field whose name differs from the obvious one.
+
+## Checker limits
+
+The Phase 2 harness must close these before the probe scores anything:
+
+- The checker does not compare `api.sleep` durations, so a solution that retries or polls without
+  waiting, or with the wrong waits, still passes.
+- Key conversion between kebab-case and camelCase applies to every object key, including the keys
+  of a `Map`. It must apply only to record fields, using the declared types.

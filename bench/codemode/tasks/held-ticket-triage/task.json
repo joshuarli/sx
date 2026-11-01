@@ -1,0 +1,130 @@
+{
+ "id": "held-ticket-triage",
+ "split": "held-out",
+ "kinds": [
+  "pagination",
+  "filter-group",
+  "schema-detail"
+ ],
+ "domain": "other",
+ "sx-expressible": true,
+ "description": "Collect all tickets with status `open`; pages are numbered from 1 and each response says how many pages exist. Group them by priority, where a ticket with no priority counts as `P3`. Return a list of records `priority` and `ids` (ticket ids ascending), in the order `P1`, `P2`, `P3`, leaving out priorities that have no tickets.",
+ "types": {
+  "Ticket": "Record {id: Int, title: String, priority: Option<String>}",
+  "Page": "Record {items: List<Ticket>, pages: Int}"
+ },
+ "cores": [],
+ "capabilities": [
+  {
+   "id": "tickets.list",
+   "effect": "read",
+   "input": "Record {status: String, page: Int}",
+   "output": "Page",
+   "description": "Lists tickets with the given status, one numbered page at a time, together with the total number of pages."
+  }
+ ],
+ "responses": [
+  {
+   "capability": "tickets.list",
+   "input": {
+    "status": "open",
+    "page": 1
+   },
+   "results": [
+    {
+     "output": {
+      "items": [
+       {
+        "id": 40,
+        "title": "T40",
+        "priority": "P2"
+       },
+       {
+        "id": 12,
+        "title": "T12",
+        "priority": "P2"
+       },
+       {
+        "id": 33,
+        "title": "T33",
+        "priority": null
+       }
+      ],
+      "pages": 3
+     }
+    }
+   ]
+  },
+  {
+   "capability": "tickets.list",
+   "input": {
+    "status": "open",
+    "page": 2
+   },
+   "results": [
+    {
+     "output": {
+      "items": [
+       {
+        "id": 7,
+        "title": "T7",
+        "priority": "P3"
+       },
+       {
+        "id": 51,
+        "title": "T51",
+        "priority": "P2"
+       },
+       {
+        "id": 2,
+        "title": "T2",
+        "priority": "P2"
+       }
+      ],
+      "pages": 3
+     }
+    }
+   ]
+  },
+  {
+   "capability": "tickets.list",
+   "input": {
+    "status": "open",
+    "page": 3
+   },
+   "results": [
+    {
+     "output": {
+      "items": [
+       {
+        "id": 19,
+        "title": "T19",
+        "priority": null
+       }
+      ],
+      "pages": 3
+     }
+    }
+   ]
+  }
+ ],
+ "expected": [
+  {
+   "priority": "P2",
+   "ids": [
+    2,
+    12,
+    40,
+    51
+   ]
+  },
+  {
+   "priority": "P3",
+   "ids": [
+    7,
+    19,
+    33
+   ]
+  }
+ ]
+}

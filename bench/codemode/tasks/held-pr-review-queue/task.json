@@ -1,0 +1,157 @@
+{
+ "id": "held-pr-review-queue",
+ "split": "held-out",
+ "kinds": [
+  "pagination",
+  "filter-group",
+  "schema-detail"
+ ],
+ "domain": "repomod",
+ "sx-expressible": true,
+ "description": "In repository `laputa/xsh`, find the pull requests waiting for a first reviewer: `state` is `open`, not a draft, and no reviewers requested. Read every page of the pull request listing. Return a record with `waiting`: the numbers of those pull requests, ascending, and `scanned`: the total number of pull requests seen across all pages.",
+ "types": {
+  "Pr": "Record {number: Int, title: String, author: String, draft: Bool, reviewers: List<String>, state: String}",
+  "Page": "Record {items: List<Pr>, next: Option<String>}"
+ },
+ "cores": [],
+ "capabilities": [
+  {
+   "id": "github.list-prs",
+   "effect": "read",
+   "input": "Record {repo: String, after: Option<String>}",
+   "output": "Page",
+   "description": "Lists pull requests of any state, one page at a time; pass null for the first page and the returned cursor `next` for the following page, which is null on the last page."
+  }
+ ],
+ "responses": [
+  {
+   "capability": "github.list-prs",
+   "input": {
+    "repo": "laputa/xsh",
+    "after": null
+   },
+   "results": [
+    {
+     "output": {
+      "items": [
+       {
+        "number": 12,
+        "title": "PR 12",
+        "author": "dev",
+        "draft": false,
+        "reviewers": [],
+        "state": "open"
+       },
+       {
+        "number": 9,
+        "title": "PR 9",
+        "author": "dev",
+        "draft": true,
+        "reviewers": [],
+        "state": "open"
+       },
+       {
+        "number": 15,
+        "title": "PR 15",
+        "author": "dev",
+        "draft": false,
+        "reviewers": [
+         "ana"
+        ],
+        "state": "open"
+       }
+      ],
+      "next": "c2"
+     }
+    }
+   ]
+  },
+  {
+   "capability": "github.list-prs",
+   "input": {
+    "repo": "laputa/xsh",
+    "after": "c2"
+   },
+   "results": [
+    {
+     "output": {
+      "items": [
+       {
+        "number": 3,
+        "title": "PR 3",
+        "author": "dev",
+        "draft": false,
+        "reviewers": [],
+        "state": "closed"
+       },
+       {
+        "number": 21,
+        "title": "PR 21",
+        "author": "dev",
+        "draft": false,
+        "reviewers": [],
+        "state": "open"
+       }
+      ],
+      "next": "c3"
+     }
+    }
+   ]
+  },
+  {
+   "capability": "github.list-prs",
+   "input": {
+    "repo": "laputa/xsh",
+    "after": "c3"
+   },
+   "results": [
+    {
+     "output": {
+      "items": [],
+      "next": "c4"
+     }
+    }
+   ]
+  },
+  {
+   "capability": "github.list-prs",
+   "input": {
+    "repo": "laputa/xsh",
+    "after": "c4"
+   },
+   "results": [
+    {
+     "output": {
+      "items": [
+       {
+        "number": 18,
+        "title": "PR 18",
+        "author": "dev",
+        "draft": false,
+        "reviewers": [],
+        "state": "open"
+       },
+       {
+        "number": 17,
+        "title": "PR 17",
+        "author": "dev",
+        "draft": false,
+        "reviewers": [],
+        "state": "merged"
+       }
+      ],
+      "next": null
+     }
+    }
+   ]
+  }
+ ],
+ "expected": {
+  "waiting": [
+   12,
+   18,
+   21
+  ],
+  "scanned": 7
+ }
+}

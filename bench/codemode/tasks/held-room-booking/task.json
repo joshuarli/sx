@@ -1,0 +1,124 @@
+{
+ "id": "held-room-booking",
+ "split": "held-out",
+ "kinds": [
+  "conditional-call",
+  "write",
+  "ad-hoc-logic",
+  "partial-failure"
+ ],
+ "domain": "other",
+ "sx-expressible": true,
+ "description": "Book a room on 2026-05-01 for guest `Ines Moreau`. Try the available rooms from cheapest to most expensive, breaking price ties by room name ascending. If a booking attempt fails with Conflict (the room was just taken), try the next room, making at most 3 attempts in all. Stop at the first success. If an attempt fails with any other error, stop immediately and do not try further rooms. Return a record with `booking` (the booking id, or null if none was made), `tried` (the rooms attempted, in order), and `error` (the name of the error kind that ended the attempts, or null if there was none; when all 3 attempts hit Conflict, it is `Conflict`).",
+ "types": {
+  "Room": "Record {room: String, cents: Int}"
+ },
+ "cores": [],
+ "capabilities": [
+  {
+   "id": "rooms.search",
+   "effect": "read",
+   "input": "Record {date: String}",
+   "output": "List<Room>",
+   "description": "Lists the rooms available on a date with their nightly price."
+  },
+  {
+   "id": "rooms.book",
+   "effect": "write",
+   "idempotent": false,
+   "input": "Record {room: String, date: String, guest: String}",
+   "output": "Record {booking: String}",
+   "description": "Books a room for a guest and returns the booking id."
+  }
+ ],
+ "responses": [
+  {
+   "capability": "rooms.search",
+   "input": {
+    "date": "2026-05-01"
+   },
+   "results": [
+    {
+     "output": [
+      {
+       "room": "r4",
+       "cents": 9000
+      },
+      {
+       "room": "r2",
+       "cents": 7000
+      },
+      {
+       "room": "r1",
+       "cents": 7000
+      },
+      {
+       "room": "r3",
+       "cents": 12000
+      },
+      {
+       "room": "r5",
+       "cents": 6500
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "rooms.book",
+   "input": {
+    "room": "r5",
+    "date": "2026-05-01",
+    "guest": "Ines Moreau"
+   },
+   "results": [
+    {
+     "error": {
+      "kind": "Conflict",
+      "message": "taken"
+     }
+    }
+   ]
+  },
+  {
+   "capability": "rooms.book",
+   "input": {
+    "room": "r1",
+    "date": "2026-05-01",
+    "guest": "Ines Moreau"
+   },
+   "results": [
+    {
+     "error": {
+      "kind": "Conflict",
+      "message": "taken"
+     }
+    }
+   ]
+  },
+  {
+   "capability": "rooms.book",
+   "input": {
+    "room": "r2",
+    "date": "2026-05-01",
+    "guest": "Ines Moreau"
+   },
+   "results": [
+    {
+     "output": {
+      "booking": "bk-77"
+     }
+    }
+   ]
+  }
+ ],
+ "expected": {
+  "booking": "bk-77",
+  "tried": [
+   "r5",
+   "r1",
+   "r2"
+  ],
+  "error": null
+ }
+}

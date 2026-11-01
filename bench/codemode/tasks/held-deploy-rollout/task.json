@@ -1,0 +1,114 @@
+{
+ "id": "held-deploy-rollout",
+ "split": "held-out",
+ "kinds": [
+  "polling",
+  "write",
+  "conditional-call",
+  "schema-detail"
+ ],
+ "domain": "other",
+ "sx-expressible": true,
+ "description": "Deploy version `2.4.1` of service `checkout`. Wait 5 seconds, then check the deployment's status; repeat, making at most 8 checks. Healthy ends the wait successfully and Failed ends it unsuccessfully; Pending and Rolling mean keep waiting. If the deployment failed, roll it back exactly once; do not roll back if it became healthy or if all 8 checks passed without a result. Return a record with `outcome` (`healthy`, `failed` or `timeout`), `checks` (the number of status checks made), `detail` (the failure reason when failed, otherwise null) and `restored` (the version the rollback restored, or null if there was no rollback).",
+ "enums": {
+  "deploy.State": {
+   "Pending": null,
+   "Rolling": "Int",
+   "Healthy": null,
+   "Failed": "String"
+  }
+ },
+ "cores": [],
+ "capabilities": [
+  {
+   "id": "deploy.start",
+   "effect": "write",
+   "idempotent": false,
+   "input": "Record {service: String, version: String}",
+   "output": "Record {deployment: String}",
+   "description": "Starts a deployment and returns its id."
+  },
+  {
+   "id": "deploy.status",
+   "effect": "read",
+   "input": "Record {deployment: String}",
+   "output": "deploy.State",
+   "description": "Returns the current state of a deployment; Rolling carries the percentage of instances updated."
+  },
+  {
+   "id": "deploy.rollback",
+   "effect": "write",
+   "idempotent": true,
+   "input": "Record {deployment: String}",
+   "output": "Record {restored: String}",
+   "description": "Rolls a deployment back and returns the version that was restored."
+  }
+ ],
+ "responses": [
+  {
+   "capability": "deploy.start",
+   "input": {
+    "service": "checkout",
+    "version": "2.4.1"
+   },
+   "results": [
+    {
+     "output": {
+      "deployment": "dep-88"
+     }
+    }
+   ]
+  },
+  {
+   "capability": "deploy.status",
+   "input": {
+    "deployment": "dep-88"
+   },
+   "results": [
+    {
+     "output": "Pending"
+    },
+    {
+     "output": {
+      "tag": "Rolling",
+      "value": 25
+     }
+    },
+    {
+     "output": {
+      "tag": "Rolling",
+      "value": 60
+     }
+    },
+    {
+     "output": {
+      "tag": "Failed",
+      "value": "readiness probe failed"
+     }
+    },
+    {
+     "output": "Healthy"
+    }
+   ]
+  },
+  {
+   "capability": "deploy.rollback",
+   "input": {
+    "deployment": "dep-88"
+   },
+   "results": [
+    {
+     "output": {
+      "restored": "2.4.0"
+     }
+    }
+   ]
+  }
+ ],
+ "expected": {
+  "outcome": "failed",
+  "checks": 4,
+  "detail": "readiness probe failed",
+  "restored": "2.4.0"
+ }
+}

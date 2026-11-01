@@ -1,0 +1,117 @@
+{
+ "id": "held-registry-search",
+ "split": "held-out",
+ "kinds": [
+  "pagination",
+  "retry",
+  "arithmetic"
+ ],
+ "domain": "other",
+ "sx-expressible": true,
+ "description": "Search the package registry for `http` and read every page of results. A call that fails with Timeout is retried immediately, up to 2 more times (3 attempts in all). Return a record with `total`: the sum of downloads over all hits; `top`: the names of the 3 hits with the most downloads, most first, breaking ties by name ascending; and `pages`: the number of pages read.",
+ "types": {
+  "Hit": "Record {name: String, downloads: Int}",
+  "Page": "Record {items: List<Hit>, next: Option<String>}"
+ },
+ "cores": [],
+ "capabilities": [
+  {
+   "id": "registry.search",
+   "effect": "read",
+   "input": "Record {query: String, after: Option<String>}",
+   "output": "Page",
+   "description": "Searches packages by name, one page at a time; pass null for the first page and the returned cursor `next` for the following one, which is null on the last page."
+  }
+ ],
+ "responses": [
+  {
+   "capability": "registry.search",
+   "input": {
+    "query": "http",
+    "after": null
+   },
+   "results": [
+    {
+     "output": {
+      "items": [
+       {
+        "name": "axios",
+        "downloads": 900
+       },
+       {
+        "name": "got",
+        "downloads": 400
+       }
+      ],
+      "next": "p2"
+     }
+    }
+   ]
+  },
+  {
+   "capability": "registry.search",
+   "input": {
+    "query": "http",
+    "after": "p2"
+   },
+   "results": [
+    {
+     "error": {
+      "kind": "Timeout",
+      "message": "t"
+     }
+    },
+    {
+     "error": {
+      "kind": "Timeout",
+      "message": "t"
+     }
+    },
+    {
+     "output": {
+      "items": [
+       {
+        "name": "ky",
+        "downloads": 400
+       },
+       {
+        "name": "undici",
+        "downloads": 1200
+       }
+      ],
+      "next": "p3"
+     }
+    }
+   ]
+  },
+  {
+   "capability": "registry.search",
+   "input": {
+    "query": "http",
+    "after": "p3"
+   },
+   "results": [
+    {
+     "output": {
+      "items": [
+       {
+        "name": "superagent",
+        "downloads": 150
+       }
+      ],
+      "next": null
+     }
+    }
+   ]
+  }
+ ],
+ "expected": {
+  "total": 3050,
+  "top": [
+   "undici",
+   "axios",
+   "got"
+  ],
+  "pages": 3
+ }
+}

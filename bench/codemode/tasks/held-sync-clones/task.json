@@ -1,0 +1,226 @@
+{
+ "id": "held-sync-clones",
+ "split": "held-out",
+ "kinds": [
+  "parallel",
+  "conditional-call",
+  "write",
+  "filter-group"
+ ],
+ "domain": "repomod",
+ "sx-expressible": true,
+ "description": "Bring local checkouts up to date where that is safe. A checkout is pulled when it is behind its upstream (`behind` > 0), has no uncommitted changes (`dirty` false), and is not ahead (`ahead` is 0). Return a record with `pulled`: list of `repo` and `commits` (the number of commits the pull reports) for each pulled checkout, and `skipped`: list of `repo` and `reason` for checkouts that are behind but not pulled, where reason is `dirty` if the checkout has uncommitted changes, otherwise `diverged`. Checkouts that are not behind are omitted. Both lists are sorted by `repo` ascending.",
+ "types": {
+  "Checkout": "Record {repo: String, path: String}",
+  "Status": "Record {branch: String, ahead: Int, behind: Int, dirty: Bool}"
+ },
+ "cores": [],
+ "capabilities": [
+  {
+   "id": "checkouts.list",
+   "effect": "read",
+   "input": "Record {}",
+   "output": "List<Checkout>",
+   "description": "Lists the local checkouts with the repository each belongs to."
+  },
+  {
+   "id": "git.status",
+   "effect": "read",
+   "input": "Record {path: String}",
+   "output": "Status",
+   "description": "Returns the branch, commits ahead and behind upstream, and whether the working tree is dirty."
+  },
+  {
+   "id": "git.pull",
+   "effect": "write",
+   "idempotent": true,
+   "input": "Record {path: String}",
+   "output": "Record {commits: Int}",
+   "description": "Fast-forwards a checkout and returns how many commits were applied."
+  }
+ ],
+ "responses": [
+  {
+   "capability": "checkouts.list",
+   "input": {},
+   "results": [
+    {
+     "output": [
+      {
+       "repo": "r/zeta",
+       "path": "/w/zeta"
+      },
+      {
+       "repo": "r/alpha",
+       "path": "/w/alpha"
+      },
+      {
+       "repo": "r/beta",
+       "path": "/w/beta"
+      },
+      {
+       "repo": "r/gamma",
+       "path": "/w/gamma"
+      },
+      {
+       "repo": "r/delta",
+       "path": "/w/delta"
+      },
+      {
+       "repo": "r/eps",
+       "path": "/w/eps"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "git.status",
+   "input": {
+    "path": "/w/alpha"
+   },
+   "results": [
+    {
+     "output": {
+      "branch": "main",
+      "ahead": 0,
+      "behind": 3,
+      "dirty": false
+     }
+    }
+   ]
+  },
+  {
+   "capability": "git.status",
+   "input": {
+    "path": "/w/beta"
+   },
+   "results": [
+    {
+     "output": {
+      "branch": "main",
+      "ahead": 0,
+      "behind": 0,
+      "dirty": false
+     }
+    }
+   ]
+  },
+  {
+   "capability": "git.status",
+   "input": {
+    "path": "/w/gamma"
+   },
+   "results": [
+    {
+     "output": {
+      "branch": "main",
+      "ahead": 0,
+      "behind": 2,
+      "dirty": true
+     }
+    }
+   ]
+  },
+  {
+   "capability": "git.status",
+   "input": {
+    "path": "/w/delta"
+   },
+   "results": [
+    {
+     "output": {
+      "branch": "main",
+      "ahead": 1,
+      "behind": 5,
+      "dirty": false
+     }
+    }
+   ]
+  },
+  {
+   "capability": "git.status",
+   "input": {
+    "path": "/w/eps"
+   },
+   "results": [
+    {
+     "output": {
+      "branch": "main",
+      "ahead": 0,
+      "behind": 1,
+      "dirty": false
+     }
+    }
+   ]
+  },
+  {
+   "capability": "git.status",
+   "input": {
+    "path": "/w/zeta"
+   },
+   "results": [
+    {
+     "output": {
+      "branch": "main",
+      "ahead": 2,
+      "behind": 4,
+      "dirty": true
+     }
+    }
+   ]
+  },
+  {
+   "capability": "git.pull",
+   "input": {
+    "path": "/w/alpha"
+   },
+   "results": [
+    {
+     "output": {
+      "commits": 3
+     }
+    }
+   ]
+  },
+  {
+   "capability": "git.pull",
+   "input": {
+    "path": "/w/eps"
+   },
+   "results": [
+    {
+     "output": {
+      "commits": 1
+     }
+    }
+   ]
+  }
+ ],
+ "expected": {
+  "pulled": [
+   {
+    "repo": "r/alpha",
+    "commits": 3
+   },
+   {
+    "repo": "r/eps",
+    "commits": 1
+   }
+  ],
+  "skipped": [
+   {
+    "repo": "r/delta",
+    "reason": "diverged"
+   },
+   {
+    "repo": "r/gamma",
+    "reason": "dirty"
+   },
+   {
+    "repo": "r/zeta",
+    "reason": "dirty"
+   }
+  ]
+ }
+}

@@ -1,0 +1,171 @@
+{
+ "id": "held-log-errors",
+ "split": "held-out",
+ "kinds": [
+  "parallel",
+  "partial-failure",
+  "string",
+  "filter-group"
+ ],
+ "domain": "other",
+ "sx-expressible": false,
+ "description": "In directory `logs`, look only at files whose name ends with `.log`. For each, count the lines that contain the text `ERROR` (case-sensitive); the file contents are UTF-8 text with lines separated by newline characters. A file path is `logs/` followed by the file name. Return a record with `files`: a list of records `name` and `errors` for the files with at least one such line, sorted by errors descending and then name ascending; and `unreadable`: the names of `.log` files whose read failed, ascending.",
+ "types": {
+  "Entry": "Record {name: String, size: Int}"
+ },
+ "cores": [],
+ "capabilities": [
+  {
+   "id": "files.list",
+   "effect": "read",
+   "input": "Record {dir: String}",
+   "output": "List<Entry>",
+   "description": "Lists the files in a directory."
+  },
+  {
+   "id": "files.read",
+   "effect": "read",
+   "input": "Record {path: String}",
+   "output": "Bytes",
+   "description": "Reads a file's contents."
+  }
+ ],
+ "responses": [
+  {
+   "capability": "files.list",
+   "input": {
+    "dir": "logs"
+   },
+   "results": [
+    {
+     "output": [
+      {
+       "name": "web.log",
+       "size": 10
+      },
+      {
+       "name": "notes.txt",
+       "size": 10
+      },
+      {
+       "name": "app.log",
+       "size": 10
+      },
+      {
+       "name": "old.log.gz",
+       "size": 10
+      },
+      {
+       "name": "secrets.log",
+       "size": 10
+      },
+      {
+       "name": "db.log",
+       "size": 10
+      },
+      {
+       "name": "empty.log",
+       "size": 10
+      },
+      {
+       "name": "zed.log",
+       "size": 10
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "files.read",
+   "input": {
+    "path": "logs/app.log"
+   },
+   "results": [
+    {
+     "output": "SU5GTyBzdGFydApFUlJPUiBib29tCklORk8gb2sKRVJST1IgYWdhaW4K"
+    }
+   ]
+  },
+  {
+   "capability": "files.read",
+   "input": {
+    "path": "logs/db.log"
+   },
+   "results": [
+    {
+     "output": "RVJST1IgYQpFUlJPUiBiCkVSUk9SIGM="
+    }
+   ]
+  },
+  {
+   "capability": "files.read",
+   "input": {
+    "path": "logs/web.log"
+   },
+   "results": [
+    {
+     "output": "aW5mbwplcnJvciBsb3dlcgpFUlJPUiB4Cg=="
+    }
+   ]
+  },
+  {
+   "capability": "files.read",
+   "input": {
+    "path": "logs/empty.log"
+   },
+   "results": [
+    {
+     "output": ""
+    }
+   ]
+  },
+  {
+   "capability": "files.read",
+   "input": {
+    "path": "logs/zed.log"
+   },
+   "results": [
+    {
+     "output": "RVJST1IgMQpXQVJOCkVSUk9SIDI="
+    }
+   ]
+  },
+  {
+   "capability": "files.read",
+   "input": {
+    "path": "logs/secrets.log"
+   },
+   "results": [
+    {
+     "error": {
+      "kind": "PermissionDenied",
+      "message": "no access"
+     }
+    }
+   ]
+  }
+ ],
+ "expected": {
+  "files": [
+   {
+    "name": "db.log",
+    "errors": 3
+   },
+   {
+    "name": "app.log",
+    "errors": 2
+   },
+   {
+    "name": "zed.log",
+    "errors": 2
+   },
+   {
+    "name": "web.log",
+    "errors": 1
+   }
+  ],
+  "unreadable": [
+   "secrets.log"
+  ]
+ }
+}

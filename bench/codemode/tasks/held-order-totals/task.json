@@ -1,0 +1,136 @@
+{
+ "id": "held-order-totals",
+ "split": "held-out",
+ "kinds": [
+  "arithmetic",
+  "ad-hoc-logic"
+ ],
+ "domain": "other",
+ "sx-expressible": true,
+ "description": "Compute the total of every order, in cents. An order's subtotal is the sum of `qty` times `cents` over its lines. Its discount is `discount` percent of the subtotal, rounded down to a whole cent, and its total is the subtotal minus the discount. An order with no lines has total 0. Return a record with `orders`: a list of records `id` and `total`, sorted by total descending and then by id ascending; and `revenue`: the sum of all totals.",
+ "types": {
+  "Line": "Record {sku: String, qty: Int, cents: Int}",
+  "Order": "Record {id: String, discount: Int, lines: List<Line>}"
+ },
+ "cores": [],
+ "capabilities": [
+  {
+   "id": "orders.list",
+   "effect": "read",
+   "input": "Record {}",
+   "output": "List<Order>",
+   "description": "Lists all orders with their lines and percentage discount."
+  }
+ ],
+ "responses": [
+  {
+   "capability": "orders.list",
+   "input": {},
+   "results": [
+    {
+     "output": [
+      {
+       "id": "o-101",
+       "discount": 0,
+       "lines": [
+        {
+         "sku": "C",
+         "qty": 3,
+         "cents": 250
+        }
+       ]
+      },
+      {
+       "id": "o-100",
+       "discount": 10,
+       "lines": [
+        {
+         "sku": "A",
+         "qty": 2,
+         "cents": 1999
+        },
+        {
+         "sku": "B",
+         "qty": 1,
+         "cents": 501
+        }
+       ]
+      },
+      {
+       "id": "o-102",
+       "discount": 25,
+       "lines": []
+      },
+      {
+       "id": "o-104",
+       "discount": 50,
+       "lines": [
+        {
+         "sku": "E",
+         "qty": 2,
+         "cents": 1500
+        },
+        {
+         "sku": "F",
+         "qty": 1,
+         "cents": 500
+        }
+       ]
+      },
+      {
+       "id": "o-103",
+       "discount": 15,
+       "lines": [
+        {
+         "sku": "D",
+         "qty": 1,
+         "cents": 9999
+        }
+       ]
+      },
+      {
+       "id": "o-105",
+       "discount": 0,
+       "lines": [
+        {
+         "sku": "G",
+         "qty": 1,
+         "cents": 750
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "expected": {
+  "orders": [
+   {
+    "id": "o-103",
+    "total": 8500
+   },
+   {
+    "id": "o-100",
+    "total": 4050
+   },
+   {
+    "id": "o-104",
+    "total": 1750
+   },
+   {
+    "id": "o-101",
+    "total": 750
+   },
+   {
+    "id": "o-105",
+    "total": 750
+   },
+   {
+    "id": "o-102",
+    "total": 0
+   }
+  ],
+  "revenue": 15800
+ }
+}

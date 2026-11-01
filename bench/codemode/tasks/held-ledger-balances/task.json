@@ -1,0 +1,175 @@
+{
+ "id": "held-ledger-balances",
+ "split": "held-out",
+ "kinds": [
+  "parallel",
+  "arithmetic"
+ ],
+ "domain": "other",
+ "sx-expressible": true,
+ "description": "Compute the balance of every ledger account in cents: the sum of its credits minus the sum of its debits. Accounts with no entries have balance 0. Return a list of records `account` and `balance`, sorted by balance ascending and then by account name ascending.",
+ "types": {
+  "Entry": "Record {kind: ledger.Kind, cents: Int}"
+ },
+ "enums": {
+  "ledger.Kind": {
+   "Credit": null,
+   "Debit": null
+  }
+ },
+ "cores": [],
+ "capabilities": [
+  {
+   "id": "ledger.accounts",
+   "effect": "read",
+   "input": "Record {}",
+   "output": "List<String>",
+   "description": "Lists account names."
+  },
+  {
+   "id": "ledger.entries",
+   "effect": "read",
+   "input": "Record {account: String}",
+   "output": "List<Entry>",
+   "description": "Lists the entries posted to an account."
+  }
+ ],
+ "responses": [
+  {
+   "capability": "ledger.accounts",
+   "input": {},
+   "results": [
+    {
+     "output": [
+      "cash",
+      "rent",
+      "sales",
+      "tips",
+      "tax"
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "ledger.entries",
+   "input": {
+    "account": "cash"
+   },
+   "results": [
+    {
+     "output": [
+      {
+       "kind": "Credit",
+       "cents": 5000
+      },
+      {
+       "kind": "Debit",
+       "cents": 1200
+      },
+      {
+       "kind": "Debit",
+       "cents": 800
+      },
+      {
+       "kind": "Credit",
+       "cents": 300
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "ledger.entries",
+   "input": {
+    "account": "rent"
+   },
+   "results": [
+    {
+     "output": [
+      {
+       "kind": "Debit",
+       "cents": 1500
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "ledger.entries",
+   "input": {
+    "account": "sales"
+   },
+   "results": [
+    {
+     "output": [
+      {
+       "kind": "Credit",
+       "cents": 9000
+      },
+      {
+       "kind": "Credit",
+       "cents": 1000
+      },
+      {
+       "kind": "Debit",
+       "cents": 250
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "ledger.entries",
+   "input": {
+    "account": "tips"
+   },
+   "results": [
+    {
+     "output": []
+    }
+   ]
+  },
+  {
+   "capability": "ledger.entries",
+   "input": {
+    "account": "tax"
+   },
+   "results": [
+    {
+     "output": [
+      {
+       "kind": "Debit",
+       "cents": 500
+      },
+      {
+       "kind": "Credit",
+       "cents": 500
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "expected": [
+  {
+   "account": "rent",
+   "balance": -1500
+  },
+  {
+   "account": "tax",
+   "balance": 0
+  },
+  {
+   "account": "tips",
+   "balance": 0
+  },
+  {
+   "account": "cash",
+   "balance": 3300
+  },
+  {
+   "account": "sales",
+   "balance": 9750
+  }
+ ]
+}

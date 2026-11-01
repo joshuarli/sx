@@ -1,0 +1,122 @@
+{
+ "id": "held-average-latency",
+ "split": "held-out",
+ "kinds": [
+  "parallel",
+  "arithmetic",
+  "schema-detail"
+ ],
+ "domain": "other",
+ "sx-expressible": false,
+ "description": "For every service, compute the mean of its latency samples in milliseconds, rounded to 2 decimal places. Return a record with `means`: a list of records `service` and `mean` (null for a service with no samples), sorted by service name ascending; and `slowest`: the name of the service with the highest mean, taking the alphabetically first name on a tie, or null if no service has samples.",
+ "cores": [],
+ "capabilities": [
+  {
+   "id": "metrics.services",
+   "effect": "read",
+   "input": "Record {}",
+   "output": "List<String>",
+   "description": "Lists the names of monitored services."
+  },
+  {
+   "id": "metrics.latency",
+   "effect": "read",
+   "input": "Record {service: String}",
+   "output": "List<Float>",
+   "description": "Returns recent latency samples in milliseconds for a service."
+  }
+ ],
+ "responses": [
+  {
+   "capability": "metrics.services",
+   "input": {},
+   "results": [
+    {
+     "output": [
+      "web",
+      "api",
+      "db",
+      "cron"
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "metrics.latency",
+   "input": {
+    "service": "api"
+   },
+   "results": [
+    {
+     "output": [
+      120.5,
+      130.5,
+      99,
+      100
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "metrics.latency",
+   "input": {
+    "service": "db"
+   },
+   "results": [
+    {
+     "output": [
+      10.25,
+      10.75
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "metrics.latency",
+   "input": {
+    "service": "web"
+   },
+   "results": [
+    {
+     "output": [
+      250.25,
+      250.5,
+      300
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "metrics.latency",
+   "input": {
+    "service": "cron"
+   },
+   "results": [
+    {
+     "output": []
+    }
+   ]
+  }
+ ],
+ "expected": {
+  "means": [
+   {
+    "service": "api",
+    "mean": 112.5
+   },
+   {
+    "service": "cron",
+    "mean": null
+   },
+   {
+    "service": "db",
+    "mean": 10.5
+   },
+   {
+    "service": "web",
+    "mean": 266.92
+   }
+  ],
+  "slowest": "web"
+ }
+}

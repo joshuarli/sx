@@ -1,0 +1,146 @@
+{
+ "id": "held-notify-owners",
+ "split": "held-out",
+ "kinds": [
+  "write",
+  "retry",
+  "string",
+  "filter-group"
+ ],
+ "domain": "other",
+ "sx-expressible": true,
+ "description": "Send each owner of overdue tasks exactly one message listing their tasks. The text is `N overdue: ` followed by the titles of that owner's overdue tasks, sorted ascending in plain character order and joined with `; `, for example `2 overdue: Fix CI; Update docs`. Tasks without an owner are not sent anywhere. If a send fails with RateLimited, wait 1 second and retry that send once; a send that fails any other way is not retried. Return a record with `sent`: a list of records `owner` and `message` (the message id returned), `failed`: the owners whose message was not delivered, and `unowned`: the number of overdue tasks without an owner; `sent` and `failed` are sorted by owner ascending.",
+ "types": {
+  "Task": "Record {id: Int, title: String, owner: Option<String>}"
+ },
+ "cores": [],
+ "capabilities": [
+  {
+   "id": "tasks.overdue",
+   "effect": "read",
+   "input": "Record {}",
+   "output": "List<Task>",
+   "description": "Lists overdue tasks."
+  },
+  {
+   "id": "messaging.send",
+   "effect": "write",
+   "idempotent": false,
+   "input": "Record {to: String, text: String}",
+   "output": "Record {message: String}",
+   "description": "Sends a direct message and returns its id."
+  }
+ ],
+ "responses": [
+  {
+   "capability": "tasks.overdue",
+   "input": {},
+   "results": [
+    {
+     "output": [
+      {
+       "id": 1,
+       "title": "Update docs",
+       "owner": "ana"
+      },
+      {
+       "id": 3,
+       "title": "Rotate keys",
+       "owner": "ben"
+      },
+      {
+       "id": 4,
+       "title": "Triage",
+       "owner": null
+      },
+      {
+       "id": 2,
+       "title": "Fix CI",
+       "owner": "ana"
+      },
+      {
+       "id": 5,
+       "title": "Backup",
+       "owner": "cho"
+      },
+      {
+       "id": 7,
+       "title": "Alpha",
+       "owner": null
+      },
+      {
+       "id": 6,
+       "title": "Audit logs",
+       "owner": "ben"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "messaging.send",
+   "input": {
+    "to": "ana",
+    "text": "2 overdue: Fix CI; Update docs"
+   },
+   "results": [
+    {
+     "output": {
+      "message": "m1"
+     }
+    }
+   ]
+  },
+  {
+   "capability": "messaging.send",
+   "input": {
+    "to": "ben",
+    "text": "2 overdue: Audit logs; Rotate keys"
+   },
+   "results": [
+    {
+     "error": {
+      "kind": "RateLimited",
+      "message": "slow"
+     }
+    },
+    {
+     "output": {
+      "message": "m2"
+     }
+    }
+   ]
+  },
+  {
+   "capability": "messaging.send",
+   "input": {
+    "to": "cho",
+    "text": "1 overdue: Backup"
+   },
+   "results": [
+    {
+     "error": {
+      "kind": "Unavailable",
+      "message": "down"
+     }
+    }
+   ]
+  }
+ ],
+ "expected": {
+  "sent": [
+   {
+    "owner": "ana",
+    "message": "m1"
+   },
+   {
+    "owner": "ben",
+    "message": "m2"
+   }
+  ],
+  "failed": [
+   "cho"
+  ],
+  "unowned": 2
+ }
+}

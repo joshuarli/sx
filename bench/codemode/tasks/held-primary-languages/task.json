@@ -1,0 +1,166 @@
+{
+ "id": "held-primary-languages",
+ "split": "held-out",
+ "kinds": [
+  "parallel",
+  "filter-group",
+  "ad-hoc-logic"
+ ],
+ "domain": "repomod",
+ "sx-expressible": false,
+ "description": "For each catalogued repository tagged `library` that is not archived, report its primary language: the language with the most bytes. When languages tie, take the one whose name comes first in plain character order. A repository with no language data has language null. Return a list of records `repo` and `language`, sorted by `repo` ascending.",
+ "types": {
+  "Repo": "Record {id: String, owner: String, name: String, tags: List<String>, archived: Bool}"
+ },
+ "cores": [],
+ "capabilities": [
+  {
+   "id": "catalog.list",
+   "effect": "read",
+   "input": "Record {tags: List<String>}",
+   "output": "List<Repo>",
+   "description": "Lists catalogued repositories that carry every given tag. An empty list of tags lists all repositories."
+  },
+  {
+   "id": "github.get-languages",
+   "effect": "read",
+   "input": "Record {id: String}",
+   "output": "Map<String, Int>",
+   "description": "Returns the number of bytes of code per language name for a repository."
+  }
+ ],
+ "responses": [
+  {
+   "capability": "catalog.list",
+   "input": {
+    "tags": [
+     "library"
+    ]
+   },
+   "results": [
+    {
+     "output": [
+      {
+       "id": "l/e",
+       "owner": "l",
+       "name": "e",
+       "tags": [
+        "library"
+       ],
+       "archived": false
+      },
+      {
+       "id": "l/a",
+       "owner": "l",
+       "name": "a",
+       "tags": [
+        "library"
+       ],
+       "archived": false
+      },
+      {
+       "id": "l/d",
+       "owner": "l",
+       "name": "d",
+       "tags": [
+        "library"
+       ],
+       "archived": true
+      },
+      {
+       "id": "l/c",
+       "owner": "l",
+       "name": "c",
+       "tags": [
+        "library"
+       ],
+       "archived": false
+      },
+      {
+       "id": "l/b",
+       "owner": "l",
+       "name": "b",
+       "tags": [
+        "library"
+       ],
+       "archived": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "github.get-languages",
+   "input": {
+    "id": "l/a"
+   },
+   "results": [
+    {
+     "output": {
+      "Rust": 9000,
+      "Shell": 1200
+     }
+    }
+   ]
+  },
+  {
+   "capability": "github.get-languages",
+   "input": {
+    "id": "l/b"
+   },
+   "results": [
+    {
+     "output": {}
+    }
+   ]
+  },
+  {
+   "capability": "github.get-languages",
+   "input": {
+    "id": "l/c"
+   },
+   "results": [
+    {
+     "output": {
+      "Go": 500,
+      "Assembly": 500,
+      "C": 100
+     }
+    }
+   ]
+  },
+  {
+   "capability": "github.get-languages",
+   "input": {
+    "id": "l/e"
+   },
+   "results": [
+    {
+     "output": {
+      "TypeScript": 3000,
+      "JavaScript": 3000,
+      "CSS": 10
+     }
+    }
+   ]
+  }
+ ],
+ "expected": [
+  {
+   "repo": "l/a",
+   "language": "Rust"
+  },
+  {
+   "repo": "l/b",
+   "language": null
+  },
+  {
+   "repo": "l/c",
+   "language": "Assembly"
+  },
+  {
+   "repo": "l/e",
+   "language": "JavaScript"
+  }
+ ]
+}

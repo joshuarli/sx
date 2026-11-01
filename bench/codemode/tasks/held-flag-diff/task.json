@@ -1,0 +1,75 @@
+{
+ "id": "held-flag-diff",
+ "split": "held-out",
+ "kinds": [
+  "parallel",
+  "ad-hoc-logic",
+  "schema-detail"
+ ],
+ "domain": "other",
+ "sx-expressible": false,
+ "description": "Compare the feature flags of environments `staging` and `prod`. Return a list of records `flag`, `staging` and `prod` for every flag whose value is not the same in both environments, including flags that exist in only one of them (the value for the environment lacking the flag is null). Sort by flag name ascending.",
+ "cores": [],
+ "capabilities": [
+  {
+   "id": "flags.all",
+   "effect": "read",
+   "input": "Record {env: String}",
+   "output": "Map<String, Bool>",
+   "description": "Returns every feature flag defined in an environment with its on/off value."
+  }
+ ],
+ "responses": [
+  {
+   "capability": "flags.all",
+   "input": {
+    "env": "staging"
+   },
+   "results": [
+    {
+     "output": {
+      "darkmode": true,
+      "newcheckout": true,
+      "betaapi": false,
+      "search": true,
+      "legacy": false
+     }
+    }
+   ]
+  },
+  {
+   "capability": "flags.all",
+   "input": {
+    "env": "prod"
+   },
+   "results": [
+    {
+     "output": {
+      "darkmode": true,
+      "newcheckout": false,
+      "search": true,
+      "legacy": false,
+      "onlyprod": true
+     }
+    }
+   ]
+  }
+ ],
+ "expected": [
+  {
+   "flag": "betaapi",
+   "staging": false,
+   "prod": null
+  },
+  {
+   "flag": "newcheckout",
+   "staging": true,
+   "prod": false
+  },
+  {
+   "flag": "onlyprod",
+   "staging": null,
+   "prod": true
+  }
+ ]
+}

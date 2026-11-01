@@ -1,0 +1,126 @@
+{
+ "id": "held-package-outdated",
+ "split": "held-out",
+ "kinds": [
+  "parallel",
+  "partial-failure",
+  "core-composition"
+ ],
+ "domain": "other",
+ "sx-expressible": true,
+ "description": "A project has these packages installed: `left-pad` 1.2.0, `chalk` 4.1.2, `ms` 2.1.3, `ghost-pkg` 0.0.1, `debug` 4.3.4. For each, look up its published versions and find the highest stable one, where stable means exactly MAJOR.MINOR.PATCH (ignore anything else, such as prereleases); compare numerically. A package is outdated when that version is higher than the installed one. Return a record with `outdated`: a list of records `name`, `installed`, `latest` and `bump` (`major`, `minor` or `patch`: the most significant component in which latest differs from installed), sorted by `name`; and `missing`: names of packages whose lookup failed with NotFound, sorted ascending.",
+ "cores": [
+  "semver"
+ ],
+ "capabilities": [
+  {
+   "id": "registry.versions",
+   "effect": "read",
+   "input": "Record {name: String}",
+   "output": "List<String>",
+   "description": "Lists every published version string of a package."
+  }
+ ],
+ "responses": [
+  {
+   "capability": "registry.versions",
+   "input": {
+    "name": "left-pad"
+   },
+   "results": [
+    {
+     "output": [
+      "1.0.0",
+      "1.3.0",
+      "1.2.0",
+      "1.3.1-beta"
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "registry.versions",
+   "input": {
+    "name": "chalk"
+   },
+   "results": [
+    {
+     "output": [
+      "4.1.2",
+      "5.0.0",
+      "5.3.0",
+      "5.4.0-rc.1"
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "registry.versions",
+   "input": {
+    "name": "ms"
+   },
+   "results": [
+    {
+     "output": [
+      "2.1.3",
+      "2.1.2"
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "registry.versions",
+   "input": {
+    "name": "debug"
+   },
+   "results": [
+    {
+     "output": [
+      "4.3.4",
+      "4.3.7",
+      "4.3.10"
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "registry.versions",
+   "input": {
+    "name": "ghost-pkg"
+   },
+   "results": [
+    {
+     "error": {
+      "kind": "NotFound",
+      "message": "unknown package"
+     }
+    }
+   ]
+  }
+ ],
+ "expected": {
+  "outdated": [
+   {
+    "name": "chalk",
+    "installed": "4.1.2",
+    "latest": "5.3.0",
+    "bump": "major"
+   },
+   {
+    "name": "debug",
+    "installed": "4.3.4",
+    "latest": "4.3.10",
+    "bump": "patch"
+   },
+   {
+    "name": "left-pad",
+    "installed": "1.2.0",
+    "latest": "1.3.0",
+    "bump": "minor"
+   }
+  ],
+  "missing": [
+   "ghost-pkg"
+  ]
+ }
+}

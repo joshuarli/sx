@@ -1,0 +1,244 @@
+{
+ "id": "held-ci-red",
+ "split": "held-out",
+ "kinds": [
+  "parallel",
+  "partial-failure",
+  "filter-group",
+  "schema-detail"
+ ],
+ "domain": "repomod",
+ "sx-expressible": true,
+ "description": "Among catalogued repositories tagged `service`, find those with at least one failing CI check. Return a record with `red`: a list of records `repo` and `failing` (the names of its failing checks, sorted alphabetically), only for repositories that have a failing check, sorted by `repo` ascending; and `unreachable`: the ids of repositories whose check listing failed with any error, sorted ascending. Pending checks are not failures.",
+ "types": {
+  "Repo": "Record {id: String, owner: String, name: String, tags: List<String>, archived: Bool}",
+  "Check": "Record {name: String, state: ci.State}"
+ },
+ "enums": {
+  "ci.State": {
+   "Passing": null,
+   "Pending": null,
+   "Failing": "String"
+  }
+ },
+ "cores": [],
+ "capabilities": [
+  {
+   "id": "catalog.list",
+   "effect": "read",
+   "input": "Record {tags: List<String>}",
+   "output": "List<Repo>",
+   "description": "Lists catalogued repositories that carry every given tag. An empty list of tags lists all repositories."
+  },
+  {
+   "id": "ci.list-checks",
+   "effect": "read",
+   "input": "Record {repo: String}",
+   "output": "List<Check>",
+   "description": "Lists the CI checks on a repository's default branch with their states."
+  }
+ ],
+ "responses": [
+  {
+   "capability": "catalog.list",
+   "input": {
+    "tags": [
+     "service"
+    ]
+   },
+   "results": [
+    {
+     "output": [
+      {
+       "id": "s/api",
+       "owner": "s",
+       "name": "api",
+       "tags": [
+        "service"
+       ],
+       "archived": false
+      },
+      {
+       "id": "s/billing",
+       "owner": "s",
+       "name": "billing",
+       "tags": [
+        "service"
+       ],
+       "archived": false
+      },
+      {
+       "id": "s/auth",
+       "owner": "s",
+       "name": "auth",
+       "tags": [
+        "service"
+       ],
+       "archived": false
+      },
+      {
+       "id": "s/web",
+       "owner": "s",
+       "name": "web",
+       "tags": [
+        "service"
+       ],
+       "archived": false
+      },
+      {
+       "id": "s/queue",
+       "owner": "s",
+       "name": "queue",
+       "tags": [
+        "service"
+       ],
+       "archived": false
+      },
+      {
+       "id": "s/db",
+       "owner": "s",
+       "name": "db",
+       "tags": [
+        "service"
+       ],
+       "archived": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "ci.list-checks",
+   "input": {
+    "repo": "s/api"
+   },
+   "results": [
+    {
+     "output": [
+      {
+       "name": "unit",
+       "state": "Passing"
+      },
+      {
+       "name": "lint",
+       "state": {
+        "tag": "Failing",
+        "value": "2 errors"
+       }
+      },
+      {
+       "name": "e2e",
+       "state": {
+        "tag": "Failing",
+        "value": "timeout"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "ci.list-checks",
+   "input": {
+    "repo": "s/billing"
+   },
+   "results": [
+    {
+     "output": []
+    }
+   ]
+  },
+  {
+   "capability": "ci.list-checks",
+   "input": {
+    "repo": "s/auth"
+   },
+   "results": [
+    {
+     "error": {
+      "kind": "Unavailable",
+      "message": "ci is down"
+     }
+    }
+   ]
+  },
+  {
+   "capability": "ci.list-checks",
+   "input": {
+    "repo": "s/web"
+   },
+   "results": [
+    {
+     "output": [
+      {
+       "name": "build",
+       "state": "Passing"
+      },
+      {
+       "name": "deploy-preview",
+       "state": "Pending"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "ci.list-checks",
+   "input": {
+    "repo": "s/queue"
+   },
+   "results": [
+    {
+     "error": {
+      "kind": "NotFound",
+      "message": "no ci configured"
+     }
+    }
+   ]
+  },
+  {
+   "capability": "ci.list-checks",
+   "input": {
+    "repo": "s/db"
+   },
+   "results": [
+    {
+     "output": [
+      {
+       "name": "migrate",
+       "state": {
+        "tag": "Failing",
+        "value": "bad sql"
+       }
+      },
+      {
+       "name": "unit",
+       "state": "Passing"
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "expected": {
+  "red": [
+   {
+    "repo": "s/api",
+    "failing": [
+     "e2e",
+     "lint"
+    ]
+   },
+   {
+    "repo": "s/db",
+    "failing": [
+     "migrate"
+    ]
+   }
+  ],
+  "unreachable": [
+   "s/auth",
+   "s/queue"
+  ]
+ }
+}
