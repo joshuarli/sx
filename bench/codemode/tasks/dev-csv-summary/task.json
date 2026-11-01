@@ -1,0 +1,16 @@
+{
+  "id": "dev-csv-summary",
+  "split": "development",
+  "kinds": ["string", "arithmetic"],
+  "domain": "other",
+  "sx-expressible": true,
+  "description": "Read the file `stock.csv`. Its first line names the columns, separated by commas, and each later non-empty line is one row; the file may end with a newline. The `qty` column holds whole numbers. Return a record with `columns` (the column names in order), `rows` (the number of rows), and `total` (the sum of the `qty` column).",
+  "cores": ["text"],
+  "capabilities": [
+    {"id": "files.read", "effect": "read", "input": "Record {path: String}", "output": "String", "description": "Reads a text file from the shared store."}
+  ],
+  "responses": [
+    {"capability": "files.read", "input": {"path": "stock.csv"}, "results": [{"output": "name,qty,bin\napple,3,A1\npear,10,B2\n\nfig,0,C3\nplum,-2,C4\n"}]}
+  ],
+  "expected": {"columns": ["name", "qty", "bin"], "rows": 4, "total": 11}
+}

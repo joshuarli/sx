@@ -1,0 +1,31 @@
+{
+  "id": "dev-active-tools",
+  "split": "development",
+  "kinds": ["filter-group"],
+  "domain": "repomod",
+  "sx-expressible": true,
+  "description": "List the names of catalogued repositories tagged `tool` that are not archived, sorted alphabetically.",
+  "types": {
+    "Repo": "Record {id: String, owner: String, name: String, tags: List<String>, archived: Bool}"
+  },
+  "cores": [],
+  "capabilities": [
+    {"id": "catalog.list", "effect": "read", "input": "Record {tags: List<String>}", "output": "List<Repo>", "description": "Lists catalogued repositories that carry every given tag. An empty list of tags lists all repositories."}
+  ],
+  "responses": [
+    {"capability": "catalog.list", "input": {"tags": ["tool"]}, "results": [{"output": [
+      {"id": "laputa-systems/xsh", "owner": "laputa-systems", "name": "xsh", "tags": ["tool", "rust"], "archived": false},
+      {"id": "joshuarli/mdtool", "owner": "joshuarli", "name": "mdtool", "tags": ["tool"], "archived": false},
+      {"id": "joshuarli/oldtool", "owner": "joshuarli", "name": "oldtool", "tags": ["tool"], "archived": true},
+      {"id": "laputa-systems/diff-pretty", "owner": "laputa-systems", "name": "diff-pretty", "tags": ["tool", "rust"], "archived": false}
+    ]}]},
+    {"capability": "catalog.list", "input": {"tags": []}, "results": [{"output": [
+      {"id": "laputa-systems/xsh", "owner": "laputa-systems", "name": "xsh", "tags": ["tool", "rust"], "archived": false},
+      {"id": "joshuarli/mdtool", "owner": "joshuarli", "name": "mdtool", "tags": ["tool"], "archived": false},
+      {"id": "joshuarli/oldtool", "owner": "joshuarli", "name": "oldtool", "tags": ["tool"], "archived": true},
+      {"id": "laputa-systems/diff-pretty", "owner": "laputa-systems", "name": "diff-pretty", "tags": ["tool", "rust"], "archived": false},
+      {"id": "joshuarli/blog", "owner": "joshuarli", "name": "blog", "tags": ["site"], "archived": false}
+    ]}]}
+  ],
+  "expected": ["diff-pretty", "mdtool", "xsh"]
+}

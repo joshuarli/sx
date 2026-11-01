@@ -1,0 +1,36 @@
+{
+  "id": "dev-dirty-or-ahead",
+  "split": "development",
+  "kinds": ["parallel", "schema-detail", "filter-group"],
+  "domain": "repomod",
+  "sx-expressible": true,
+  "description": "Find the local checkouts of catalogued repositories that have uncommitted changes or commits not yet pushed. Return a list of records with `repo` (the repository id) and `ahead` (the number of unpushed commits, or 0 when Git cannot tell), sorted by `repo`. A checkout with no upstream branch has an unknown ahead count.",
+  "types": {
+    "Repo": "Record {id: String, owner: String, name: String, tags: List<String>, archived: Bool}",
+    "Status": "Record {repo: String, branch: Option<String>, dirty: Bool, ahead: Option<Int>, behind: Option<Int>}"
+  },
+  "cores": [],
+  "capabilities": [
+    {"id": "catalog.list", "effect": "read", "input": "Record {tags: List<String>}", "output": "List<Repo>", "description": "Lists catalogued repositories that carry every given tag. An empty list of tags lists all repositories."},
+    {"id": "git.status", "effect": "read", "input": "Record {repo: String}", "output": "Status", "description": "Reads the local checkout's branch, whether it has uncommitted changes, and its ahead and behind counts against its upstream, which are absent when there is no upstream."}
+  ],
+  "responses": [
+    {"capability": "catalog.list", "input": {"tags": []}, "results": [{"output": [
+      {"id": "acme/api", "owner": "acme", "name": "api", "tags": ["service"], "archived": false},
+      {"id": "acme/docs", "owner": "acme", "name": "docs", "tags": ["site"], "archived": false},
+      {"id": "acme/cli", "owner": "acme", "name": "cli", "tags": ["tool"], "archived": false},
+      {"id": "acme/lab", "owner": "acme", "name": "lab", "tags": ["tool"], "archived": false},
+      {"id": "acme/web", "owner": "acme", "name": "web", "tags": ["service"], "archived": false}
+    ]}]},
+    {"capability": "git.status", "input": {"repo": "acme/api"}, "results": [{"output": {"repo": "acme/api", "branch": "main", "dirty": false, "ahead": 2, "behind": 0}}]},
+    {"capability": "git.status", "input": {"repo": "acme/docs"}, "results": [{"output": {"repo": "acme/docs", "branch": "main", "dirty": false, "ahead": 0, "behind": 3}}]},
+    {"capability": "git.status", "input": {"repo": "acme/cli"}, "results": [{"output": {"repo": "acme/cli", "branch": null, "dirty": true, "ahead": null, "behind": null}}]},
+    {"capability": "git.status", "input": {"repo": "acme/lab"}, "results": [{"output": {"repo": "acme/lab", "branch": "experiment", "dirty": false, "ahead": null, "behind": null}}]},
+    {"capability": "git.status", "input": {"repo": "acme/web"}, "results": [{"output": {"repo": "acme/web", "branch": "main", "dirty": true, "ahead": 1, "behind": 0}}]}
+  ],
+  "expected": [
+    {"repo": "acme/api", "ahead": 2},
+    {"repo": "acme/cli", "ahead": 0},
+    {"repo": "acme/web", "ahead": 1}
+  ]
+}

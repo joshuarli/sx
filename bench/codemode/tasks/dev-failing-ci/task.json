@@ -1,0 +1,37 @@
+{
+  "id": "dev-failing-ci",
+  "split": "development",
+  "kinds": ["parallel", "schema-detail"],
+  "domain": "repomod",
+  "sx-expressible": true,
+  "description": "For every catalogued repository tagged `service`, check CI on the current tip of its default branch on GitHub. Return the `id`s of the repositories whose CI state is `Failing`, sorted alphabetically.",
+  "types": {
+    "Repo": "Record {id: String, owner: String, name: String, tags: List<String>, archived: Bool}",
+    "Remote": "Record {repo: String, branch: String, sha: String, archived: Bool}",
+    "Ci": "Record {repo: String, sha: String, state: ci.State, failing: List<String>}"
+  },
+  "enums": {"ci.State": {"Passing": null, "Failing": null, "Pending": null, "Unknown": null}},
+  "cores": [],
+  "capabilities": [
+    {"id": "catalog.list", "effect": "read", "input": "Record {tags: List<String>}", "output": "List<Repo>", "description": "Lists catalogued repositories that carry every given tag. An empty list of tags lists all repositories."},
+    {"id": "github.repo", "effect": "read", "input": "Record {repo: String}", "output": "Remote", "description": "Reads a repository's default branch name and the commit SHA at its tip."},
+    {"id": "github.ci", "effect": "read", "input": "Record {repo: String, sha: String}", "output": "Ci", "description": "Reads the combined CI state of one commit and the names of its failing checks."}
+  ],
+  "responses": [
+    {"capability": "catalog.list", "input": {"tags": ["service"]}, "results": [{"output": [
+      {"id": "acme/api", "owner": "acme", "name": "api", "tags": ["service"], "archived": false},
+      {"id": "acme/web", "owner": "acme", "name": "web", "tags": ["service"], "archived": false},
+      {"id": "acme/billing", "owner": "acme", "name": "billing", "tags": ["service"], "archived": false},
+      {"id": "acme/queue", "owner": "acme", "name": "queue", "tags": ["service"], "archived": false}
+    ]}]},
+    {"capability": "github.repo", "input": {"repo": "acme/api"}, "results": [{"output": {"repo": "acme/api", "branch": "main", "sha": "a1", "archived": false}}]},
+    {"capability": "github.repo", "input": {"repo": "acme/web"}, "results": [{"output": {"repo": "acme/web", "branch": "trunk", "sha": "w7", "archived": false}}]},
+    {"capability": "github.repo", "input": {"repo": "acme/billing"}, "results": [{"output": {"repo": "acme/billing", "branch": "main", "sha": "b3", "archived": false}}]},
+    {"capability": "github.repo", "input": {"repo": "acme/queue"}, "results": [{"output": {"repo": "acme/queue", "branch": "main", "sha": "q9", "archived": false}}]},
+    {"capability": "github.ci", "input": {"repo": "acme/api", "sha": "a1"}, "results": [{"output": {"repo": "acme/api", "sha": "a1", "state": "Failing", "failing": ["lint"]}}]},
+    {"capability": "github.ci", "input": {"repo": "acme/web", "sha": "w7"}, "results": [{"output": {"repo": "acme/web", "sha": "w7", "state": "Pending", "failing": []}}]},
+    {"capability": "github.ci", "input": {"repo": "acme/billing", "sha": "b3"}, "results": [{"output": {"repo": "acme/billing", "sha": "b3", "state": "Failing", "failing": ["test", "build"]}}]},
+    {"capability": "github.ci", "input": {"repo": "acme/queue", "sha": "q9"}, "results": [{"output": {"repo": "acme/queue", "sha": "q9", "state": "Passing", "failing": []}}]}
+  ],
+  "expected": ["acme/api", "acme/billing"]
+}

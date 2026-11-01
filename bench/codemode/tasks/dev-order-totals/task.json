@@ -1,0 +1,30 @@
+{
+  "id": "dev-order-totals",
+  "split": "development",
+  "kinds": ["filter-group", "arithmetic"],
+  "domain": "other",
+  "sx-expressible": true,
+  "description": "Total the open orders per customer. An order's total is the sum over its lines of `quantity` times `price` (in cents). Return a list of records with `customer` and `total` (in cents), one per customer who has at least one open order, sorted by `customer`.",
+  "types": {
+    "Line": "Record {sku: String, quantity: Int, price: Int}",
+    "Order": "Record {id: String, customer: String, status: String, lines: List<Line>}"
+  },
+  "cores": [],
+  "capabilities": [
+    {"id": "orders.list", "effect": "read", "input": "Record {status: String}", "output": "List<Order>", "description": "Lists orders with the given status: open, shipped, or cancelled."}
+  ],
+  "responses": [
+    {"capability": "orders.list", "input": {"status": "open"}, "results": [{"output": [
+      {"id": "o1", "customer": "c-bea", "status": "open", "lines": [{"sku": "pen", "quantity": 3, "price": 150}, {"sku": "pad", "quantity": 1, "price": 400}]},
+      {"id": "o2", "customer": "c-ada", "status": "open", "lines": [{"sku": "ink", "quantity": 2, "price": 999}]},
+      {"id": "o3", "customer": "c-bea", "status": "open", "lines": []},
+      {"id": "o4", "customer": "c-bea", "status": "open", "lines": [{"sku": "pen", "quantity": 10, "price": 150}]},
+      {"id": "o5", "customer": "c-cy", "status": "open", "lines": [{"sku": "pad", "quantity": 0, "price": 400}]}
+    ]}]}
+  ],
+  "expected": [
+    {"customer": "c-ada", "total": 1998},
+    {"customer": "c-bea", "total": 2350},
+    {"customer": "c-cy", "total": 0}
+  ]
+}

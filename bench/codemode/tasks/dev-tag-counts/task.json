@@ -1,0 +1,26 @@
+{
+  "id": "dev-tag-counts",
+  "split": "development",
+  "kinds": ["filter-group"],
+  "domain": "repomod",
+  "sx-expressible": true,
+  "description": "Count how many catalogued repositories carry each tag. Return a list of records with `tag` and `count`, sorted by `count` from highest to lowest, and alphabetically by `tag` among equal counts.",
+  "types": {"Repo": "Record {id: String, owner: String, name: String, tags: List<String>, archived: Bool}"},
+  "cores": [],
+  "capabilities": [{"id": "catalog.list", "effect": "read", "input": "Record {tags: List<String>}", "output": "List<Repo>", "description": "Lists catalogued repositories that carry every given tag. An empty list of tags lists all repositories."}],
+  "responses": [
+    {"capability": "catalog.list", "input": {"tags": []}, "results": [{"output": [
+      {"id": "acme/a", "owner": "acme", "name": "a", "tags": ["tool", "rust"], "archived": false},
+      {"id": "acme/b", "owner": "acme", "name": "b", "tags": ["tool"], "archived": false},
+      {"id": "acme/c", "owner": "acme", "name": "c", "tags": ["site"], "archived": true},
+      {"id": "acme/d", "owner": "acme", "name": "d", "tags": ["rust", "tool"], "archived": false},
+      {"id": "acme/e", "owner": "acme", "name": "e", "tags": ["service", "rust"], "archived": false}
+    ]}]}
+  ],
+  "expected": [
+    {"tag": "rust", "count": 3},
+    {"tag": "tool", "count": 3},
+    {"tag": "service", "count": 1},
+    {"tag": "site", "count": 1}
+  ]
+}

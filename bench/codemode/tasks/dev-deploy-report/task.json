@@ -1,0 +1,19 @@
+{
+  "id": "dev-deploy-report",
+  "split": "development",
+  "kinds": ["parallel", "string", "schema-detail"],
+  "domain": "other",
+  "sx-expressible": true,
+  "description": "Report the last deployment of the services `api`, `web`, and `worker`, in that order, as one line per service: `NAME: ok URL` for a successful deployment, `NAME: failed REASON` for a failed one, and `NAME: skipped` for a skipped one. Return the list of lines.",
+  "enums": {"deploy.Outcome": {"Succeeded": "Record {url: String}", "Failed": "Record {reason: String}", "Skipped": null}},
+  "cores": [],
+  "capabilities": [
+    {"id": "deploy.last", "effect": "read", "input": "Record {service: String}", "output": "deploy.Outcome", "description": "Reads the outcome of a service's most recent deployment."}
+  ],
+  "responses": [
+    {"capability": "deploy.last", "input": {"service": "api"}, "results": [{"output": {"tag": "Succeeded", "value": {"url": "https://api.example.com"}}}]},
+    {"capability": "deploy.last", "input": {"service": "web"}, "results": [{"output": {"tag": "Failed", "value": {"reason": "health check timed out"}}}]},
+    {"capability": "deploy.last", "input": {"service": "worker"}, "results": [{"output": "Skipped"}]}
+  ],
+  "expected": ["api: ok https://api.example.com", "web: failed health check timed out", "worker: skipped"]
+}

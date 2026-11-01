@@ -1,0 +1,33 @@
+{
+  "id": "dev-ci-partial",
+  "split": "development",
+  "kinds": ["partial-failure", "parallel"],
+  "domain": "repomod",
+  "sx-expressible": true,
+  "description": "Check the latest CI state of each repository tagged `tool`. Some lookups fail. Return a record with `failing`, the ids of repositories whose state is `Failing`, and `unknown`, the ids of repositories whose lookup failed for any reason. Sort both lists alphabetically.",
+  "types": {
+    "Repo": "Record {id: String, owner: String, name: String, tags: List<String>, archived: Bool}",
+    "Ci": "Record {repo: String, state: ci.State}"
+  },
+  "enums": {"ci.State": {"Passing": null, "Failing": null, "Pending": null, "Unknown": null}},
+  "cores": [],
+  "capabilities": [
+    {"id": "catalog.list", "effect": "read", "input": "Record {tags: List<String>}", "output": "List<Repo>", "description": "Lists catalogued repositories that carry every given tag. An empty list of tags lists all repositories."},
+    {"id": "github.latest-ci", "effect": "read", "input": "Record {repo: String}", "output": "Ci", "description": "Reads the combined CI state of the newest commit on a repository's default branch."}
+  ],
+  "responses": [
+    {"capability": "catalog.list", "input": {"tags": ["tool"]}, "results": [{"output": [
+      {"id": "acme/cli", "owner": "acme", "name": "cli", "tags": ["tool"], "archived": false},
+      {"id": "acme/fmt", "owner": "acme", "name": "fmt", "tags": ["tool"], "archived": false},
+      {"id": "acme/gone", "owner": "acme", "name": "gone", "tags": ["tool"], "archived": false},
+      {"id": "acme/lint", "owner": "acme", "name": "lint", "tags": ["tool"], "archived": false},
+      {"id": "acme/bench", "owner": "acme", "name": "bench", "tags": ["tool"], "archived": false}
+    ]}]},
+    {"capability": "github.latest-ci", "input": {"repo": "acme/cli"}, "results": [{"output": {"repo": "acme/cli", "state": "Failing"}}]},
+    {"capability": "github.latest-ci", "input": {"repo": "acme/fmt"}, "results": [{"error": {"kind": "RateLimited", "message": "API rate limit exceeded"}}]},
+    {"capability": "github.latest-ci", "input": {"repo": "acme/gone"}, "results": [{"error": {"kind": "NotFound", "message": "repository not found"}}]},
+    {"capability": "github.latest-ci", "input": {"repo": "acme/lint"}, "results": [{"output": {"repo": "acme/lint", "state": "Passing"}}]},
+    {"capability": "github.latest-ci", "input": {"repo": "acme/bench"}, "results": [{"output": {"repo": "acme/bench", "state": "Failing"}}]}
+  ],
+  "expected": {"failing": ["acme/bench", "acme/cli"], "unknown": ["acme/fmt", "acme/gone"]}
+}

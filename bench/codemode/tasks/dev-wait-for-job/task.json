@@ -1,0 +1,27 @@
+{
+  "id": "dev-wait-for-job",
+  "split": "development",
+  "kinds": ["polling", "write"],
+  "domain": "other",
+  "sx-expressible": true,
+  "description": "Start a job named `reindex`, then check its status every 5 seconds, for at most 2 minutes, until its state is `done` or `failed`. Return a record with `state` (the final state) and `detail` (the job's detail message, or null if it has none). If the job does not finish within 2 minutes, the whole task fails.",
+  "types": {
+    "Job": "Record {id: String}",
+    "JobStatus": "Record {id: String, state: String, detail: Option<String>}"
+  },
+  "cores": [],
+  "capabilities": [
+    {"id": "jobs.start", "effect": "write", "idempotent": false, "input": "Record {name: String}", "output": "Job", "description": "Starts a new run of a named job and returns its id."},
+    {"id": "jobs.status", "effect": "read", "input": "Record {id: String}", "output": "JobStatus", "description": "Reads a job run's state: queued, running, done, or failed."}
+  ],
+  "responses": [
+    {"capability": "jobs.start", "input": {"name": "reindex"}, "results": [{"output": {"id": "run-41"}}]},
+    {"capability": "jobs.status", "input": {"id": "run-41"}, "results": [
+      {"output": {"id": "run-41", "state": "queued", "detail": null}},
+      {"output": {"id": "run-41", "state": "running", "detail": "12% indexed"}},
+      {"output": {"id": "run-41", "state": "running", "detail": "80% indexed"}},
+      {"output": {"id": "run-41", "state": "done", "detail": "4120 documents"}}
+    ]}
+  ],
+  "expected": {"state": "done", "detail": "4120 documents"}
+}

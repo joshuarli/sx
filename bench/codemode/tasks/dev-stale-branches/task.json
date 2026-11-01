@@ -1,0 +1,35 @@
+{
+  "id": "dev-stale-branches",
+  "split": "development",
+  "kinds": ["conditional-call", "schema-detail", "parallel"],
+  "domain": "repomod",
+  "sx-expressible": true,
+  "description": "List the local checkouts that are on a branch other than their repository's default branch on GitHub, as `REPO@BRANCH` strings sorted alphabetically. A checkout with a detached HEAD has no branch and is not listed. Look up a repository on GitHub only when its checkout is on a branch.",
+  "types": {
+    "Repo": "Record {id: String, owner: String, name: String, tags: List<String>, archived: Bool}",
+    "Status": "Record {repo: String, branch: Option<String>, dirty: Bool}",
+    "Remote": "Record {repo: String, branch: String, sha: String}"
+  },
+  "cores": [],
+  "capabilities": [
+    {"id": "catalog.list", "effect": "read", "input": "Record {tags: List<String>}", "output": "List<Repo>", "description": "Lists catalogued repositories that carry every given tag. An empty list of tags lists all repositories."},
+    {"id": "git.status", "effect": "read", "input": "Record {repo: String}", "output": "Status", "description": "Reads the local checkout's current branch, absent when HEAD is detached, and whether it has uncommitted changes."},
+    {"id": "github.repo", "effect": "read", "input": "Record {repo: String}", "output": "Remote", "description": "Reads a repository's default branch name on GitHub and the commit SHA at its tip."}
+  ],
+  "responses": [
+    {"capability": "catalog.list", "input": {"tags": []}, "results": [{"output": [
+      {"id": "acme/a", "owner": "acme", "name": "a", "tags": ["tool"], "archived": false},
+      {"id": "acme/b", "owner": "acme", "name": "b", "tags": ["tool"], "archived": false},
+      {"id": "acme/c", "owner": "acme", "name": "c", "tags": ["tool"], "archived": false},
+      {"id": "acme/d", "owner": "acme", "name": "d", "tags": ["tool"], "archived": false}
+    ]}]},
+    {"capability": "git.status", "input": {"repo": "acme/a"}, "results": [{"output": {"repo": "acme/a", "branch": "main", "dirty": false}}]},
+    {"capability": "git.status", "input": {"repo": "acme/b"}, "results": [{"output": {"repo": "acme/b", "branch": "feature-x", "dirty": true}}]},
+    {"capability": "git.status", "input": {"repo": "acme/c"}, "results": [{"output": {"repo": "acme/c", "branch": null, "dirty": false}}]},
+    {"capability": "git.status", "input": {"repo": "acme/d"}, "results": [{"output": {"repo": "acme/d", "branch": "trunk", "dirty": false}}]},
+    {"capability": "github.repo", "input": {"repo": "acme/a"}, "results": [{"output": {"repo": "acme/a", "branch": "main", "sha": "1a"}}]},
+    {"capability": "github.repo", "input": {"repo": "acme/b"}, "results": [{"output": {"repo": "acme/b", "branch": "main", "sha": "2b"}}]},
+    {"capability": "github.repo", "input": {"repo": "acme/d"}, "results": [{"output": {"repo": "acme/d", "branch": "master", "sha": "4d"}}]}
+  ],
+  "expected": ["acme/b@feature-x", "acme/d@trunk"]
+}

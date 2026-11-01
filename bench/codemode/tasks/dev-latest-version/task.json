@@ -1,0 +1,16 @@
+{
+  "id": "dev-latest-version",
+  "split": "development",
+  "kinds": ["core-composition", "string"],
+  "domain": "other",
+  "sx-expressible": true,
+  "description": "Find the newest release of the package `left-pad`. The registry's version strings may have surrounding whitespace, and some are not valid MAJOR.MINOR.PATCH versions; ignore those. Return the newest valid version as a MAJOR.MINOR.PATCH string, or null if there is none.",
+  "cores": ["text", "semver"],
+  "capabilities": [
+    {"id": "registry.versions", "effect": "read", "input": "Record {name: String}", "output": "List<String>", "description": "Lists every version string published for a package, in publication order."}
+  ],
+  "responses": [
+    {"capability": "registry.versions", "input": {"name": "left-pad"}, "results": [{"output": ["1.0.0", " 1.2.0", "1.10.0 ", "1.9.3", "2.0.0-beta", "1.10", "latest", "1.3.0"]}]}
+  ],
+  "expected": "1.10.0"
+}

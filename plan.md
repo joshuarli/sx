@@ -177,9 +177,9 @@ This phase tests whether a model can learn the syntax before the checker and mac
 The corpus has about 45 tasks. Each task has:
 
 - A natural-language description.
-- Capability declarations, with input and output types written in the
+- Capability declarations, with input and output types in Sx type notation.
+- Fixture responses for every capability call, in the
   [JSON encoding](docs/language.md#values-and-json).
-- Fixture responses for every capability call.
 - The expected final value, as JSON.
 - A JavaScript reference solution that produces the expected value.
 

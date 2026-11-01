@@ -1,0 +1,22 @@
+{
+  "id": "dev-events-pages",
+  "split": "development",
+  "kinds": ["pagination", "filter-group"],
+  "domain": "other",
+  "sx-expressible": true,
+  "description": "Collect the ids of every audit event of kind `error`, across all pages of the audit log, in the order the log returns them. The log has at most 20 pages.",
+  "types": {
+    "Event": "Record {id: String, kind: String}",
+    "Page": "Record {events: List<Event>, next: Option<String>}"
+  },
+  "cores": [],
+  "capabilities": [
+    {"id": "audit.page", "effect": "read", "input": "Record {cursor: Option<String>}", "output": "Page", "description": "Reads one page of the audit log. Pass no cursor for the first page, then each page's `next` cursor; `next` is absent on the last page."}
+  ],
+  "responses": [
+    {"capability": "audit.page", "input": {"cursor": null}, "results": [{"output": {"events": [{"id": "e1", "kind": "info"}, {"id": "e2", "kind": "error"}], "next": "c2"}}]},
+    {"capability": "audit.page", "input": {"cursor": "c2"}, "results": [{"output": {"events": [], "next": "c3"}}]},
+    {"capability": "audit.page", "input": {"cursor": "c3"}, "results": [{"output": {"events": [{"id": "e3", "kind": "error"}, {"id": "e4", "kind": "warn"}, {"id": "e5", "kind": "error"}], "next": null}}]}
+  ],
+  "expected": ["e2", "e3", "e5"]
+}

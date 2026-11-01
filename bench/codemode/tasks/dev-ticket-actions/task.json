@@ -1,0 +1,31 @@
+{
+  "id": "dev-ticket-actions",
+  "split": "development",
+  "kinds": ["ad-hoc-logic"],
+  "domain": "other",
+  "sx-expressible": true,
+  "description": "Decide an action for each open support ticket using the first rule that applies: an `urgent` ticket with no assignee gets `page`; an `urgent` ticket, or a `high` ticket older than 7 days, gets `escalate`; a ticket older than 30 days gets `close-stale`; any other ticket gets no action. Return a list of records with `id` and `action` for the tickets that get an action, in the order the tickets are listed.",
+  "types": {"Ticket": "Record {id: String, priority: String, age: Int, assignee: Option<String>}"},
+  "cores": [],
+  "capabilities": [
+    {"id": "support.open-tickets", "effect": "read", "input": "Record {}", "output": "List<Ticket>", "description": "Lists open tickets with priority (low, high, or urgent), age in whole days, and assignee if any."}
+  ],
+  "responses": [
+    {"capability": "support.open-tickets", "input": {}, "results": [{"output": [
+      {"id": "t1", "priority": "urgent", "age": 1, "assignee": null},
+      {"id": "t2", "priority": "urgent", "age": 2, "assignee": "kim"},
+      {"id": "t3", "priority": "high", "age": 8, "assignee": "lee"},
+      {"id": "t4", "priority": "high", "age": 7, "assignee": null},
+      {"id": "t5", "priority": "low", "age": 31, "assignee": null},
+      {"id": "t6", "priority": "high", "age": 40, "assignee": "kim"},
+      {"id": "t7", "priority": "low", "age": 30, "assignee": "lee"}
+    ]}]}
+  ],
+  "expected": [
+    {"id": "t1", "action": "page"},
+    {"id": "t2", "action": "escalate"},
+    {"id": "t3", "action": "escalate"},
+    {"id": "t5", "action": "close-stale"},
+    {"id": "t6", "action": "escalate"}
+  ]
+}

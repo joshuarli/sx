@@ -1,0 +1,25 @@
+{
+  "id": "dev-low-stock-alerts",
+  "split": "development",
+  "kinds": ["write", "conditional-call"],
+  "domain": "other",
+  "sx-expressible": true,
+  "description": "Send one email to `ops@example.com` for each product whose stock is below 5, with the subject `Low stock: SKU` where SKU is the product's sku, in the order the inventory lists them. Return the number of emails sent.",
+  "types": {"Item": "Record {sku: String, stock: Int}"},
+  "cores": [],
+  "capabilities": [
+    {"id": "inventory.items", "effect": "read", "input": "Record {}", "output": "List<Item>", "description": "Lists every product with its current stock count."},
+    {"id": "mail.send", "effect": "write", "idempotent": false, "input": "Record {to: String, subject: String}", "output": "Unit", "description": "Sends one email. Each call sends another email."}
+  ],
+  "responses": [
+    {"capability": "inventory.items", "input": {}, "results": [{"output": [
+      {"sku": "A-100", "stock": 12},
+      {"sku": "B-200", "stock": 4},
+      {"sku": "C-300", "stock": 5},
+      {"sku": "D-400", "stock": 0}
+    ]}]},
+    {"capability": "mail.send", "input": {"to": "ops@example.com", "subject": "Low stock: B-200"}, "results": [{"output": null}]},
+    {"capability": "mail.send", "input": {"to": "ops@example.com", "subject": "Low stock: D-400"}, "results": [{"output": null}]}
+  ],
+  "expected": 2
+}
