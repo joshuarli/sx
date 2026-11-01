@@ -1,0 +1,6 @@
+; task: dev-tag-counts
+(let [repos (call catalog.list {:tags []})
+      all-tags (flatten (map (fn [r] (get r :tags)) repos))
+      groups (group-by (fn [t] t) all-tags)
+      tag-counts (map (fn [[tag instances]] {:tag tag :count (count instances)}) groups)]
+  (sort-by (fn [r] (str (- (get r :count)) "|" (get r :tag))) tag-counts))
