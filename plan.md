@@ -160,15 +160,22 @@ Build `bench/codemode` to compare Sx against JavaScript Code Mode on identical t
 - The Sx arm gets the generated registry listing plus a few examples. The JS arm gets TypeScript
   declarations for the same tools and runs them as async functions in Node, with the same fixture
   responses.
-- Run at least one large and one small current Claude model. Run each task several times per arm.
-  Pair the runs. Allow a fixed number of repair attempts, feeding back the checker or runtime
-  error.
+- Run `opencode-go/muse-spark-1.3-contributor` through `opencode run --format json`. The probe
+  uses a weak model on purpose: a language a weak model writes correctly is easy enough for a
+  strong one.
+- Define an opencode agent for the probe with every tool disabled, so the model answers with a
+  program instead of running commands. Both arms use the same agent, so opencode's own prompt
+  adds the same overhead to each.
+- Run each task several times per arm. Pair the runs. Allow a fixed number of repair attempts,
+  feeding back the checker or runtime error.
+- The OpenCode Go plan has a weekly usage limit. Before the full run, measure the tokens of one
+  paired task and size the corpus and sample count to fit the remaining quota.
 - Record per run: first-attempt correctness, final correctness, input and output tokens, tokens
   spent on the language guide, repair attempts, static rejections, runtime failures, and
   capability calls, including duplicates.
 
-**Gate:** Sx first-attempt correctness is no more than 5 percentage points below JavaScript on
-every model, and Sx is better on either correctness or total tokens per solved task. If the gate
+**Gate:** Sx first-attempt correctness is no more than 5 percentage points below JavaScript, and
+Sx is better on either correctness or total tokens per solved task. If the gate
 fails, revise the language at most once and rerun. If it fails again, stop the project.
 
 ### Phase 3: Cores and the repomod host
