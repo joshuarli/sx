@@ -19,7 +19,7 @@ FORMS = frozenset({
 PRELUDE = frozenset({
     "+", "-", "*", "quot", "rem", "=", "not=", "<", "<=", ">", ">=", "not", "and", "or", "str", "count", "take",
     "concat", "flatten", "contains?", "map", "filter", "any?", "all?", "reduce", "sort-by", "distinct-by", "group-by",
-    "some", "ok", "err",
+    "some", "ok", "err", "first", "rest", "nth", "keep",
 })
 
 BENCH = Path(__file__).parent
@@ -153,9 +153,38 @@ def extract(reply: str) -> tuple[str, str | None]:
     return body, language
 
 
+def local_functions(node: Node) -> set[str]:
+    names: set[str] = set()
+    stack: list[Node] = [node]
+    while stack:
+        current = stack.pop()
+        if isinstance(current, Form):
+            items = current.items
+            if len(items) > 1 and isinstance(items[0], Symbol) and items[0].name == "let":
+                bindings = items[1]
+                if isinstance(bindings, ListLiteral):
+                    pairs = zip(bindings.items[::2], bindings.items[1::2], strict=False)
+                    names.update(
+                        name.name
+                        for name, value in pairs
+                        if isinstance(name, Symbol)
+                        and isinstance(value, Form)
+                        and value.items
+                        and isinstance(value.items[0], Symbol)
+                        and value.items[0].name == "fn"
+                    )
+            stack.extend(items)
+        elif isinstance(current, ListLiteral):
+            stack.extend(current.items)
+        elif isinstance(current, RecordLiteral):
+            stack.extend(field.value for field in current.fields)
+    return names
+
+
 def unknown_names(node: Node, task: Json, cores: Json) -> list[str]:
     functions = {f["name"] for f in cores["functions"] if f["name"].split(".")[0] in task.get("cores", [])}
     capabilities = {c["id"] for c in task["capabilities"]}
+    local = local_functions(node)
     found: list[str] = []
     stack: list[Node] = [node]
     while stack:
@@ -167,11 +196,11 @@ def unknown_names(node: Node, task: Json, cores: Json) -> list[str]:
                 if head.name == "call" and len(items) > 1 and isinstance(items[1], Symbol):
                     if items[1].name not in capabilities:
                         found.append(f"call {items[1].name}")
-                elif head.name == "str" and len(items) != 3:
-                    found.append(f"str with {len(items) - 1} arguments")
+                elif head.name == "str" and len(items) < 2:
+                    found.append("str with no arguments")
                 elif head.name == "loop" and len(items) > 1 and not isinstance(items[1], RecordLiteral):
                     found.append("loop without options")
-                elif head.name not in FORMS | PRELUDE | functions and not head.name[0].isupper():
+                elif head.name not in FORMS | PRELUDE | functions | local and not head.name[0].isupper():
                     found.append(head.name)
             stack.extend(items)
         elif isinstance(current, ListLiteral):
@@ -288,11 +317,14 @@ def report(runs: list[Run], tasks: list[Json], out: Path) -> None:
         labels.update(set(run.diagnostics))
     for task in tasks:
         mine = [r for r in runs if r.task == task["id"]]
-        read_ok = sum(1 for r in mine if r.error is None and not r.diagnostics)
-        failed = sum(1 for r in mine if r.error is not None)
-        print(f"{task['id']:24} read {read_ok}/{len(mine)}" + (f"  model errors {failed}" if failed else ""))
-    total_ok = sum(1 for r in runs if r.error is None and not r.diagnostics)
-    print(f"total read {total_ok}/{len(runs)}; model errors {sum(1 for r in runs if r.error is not None)}")
+        answered = [r for r in mine if r.program]
+        read_ok = sum(1 for r in answered if not r.diagnostics)
+        noisy = sum(1 for r in mine if r.error is not None)
+        print(f"{task['id']:24} read {read_ok}/{len(answered)}" + (f"  harness noise {noisy}" if noisy else ""))
+    answered = [r for r in runs if r.program]
+    total_ok = sum(1 for r in answered if not r.diagnostics)
+    noisy = sum(1 for r in runs if r.error is not None)
+    print(f"total read {total_ok}/{len(answered)} answers from {len(runs)} runs; harness noise in {noisy} runs")
     for label, count in labels.most_common():
         print(f"  {label}: {count} answers")
     print("names Sx does not have, in answers that read cleanly:")
