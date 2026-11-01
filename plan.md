@@ -59,6 +59,24 @@ This shape matches the small-step semantics Lean will define in Phase 4, and it 
 port in Phase 5 a translation instead of a redesign. It is also the shape an external Code Mode
 host needs.
 
+### Diagnostics and help are part of the language
+
+No model has seen Sx before. The guide it reads up front and the errors it gets back are the only
+ways to teach it, so they decide the repair rate as much as the syntax does. Errors and help are
+built in Phase 1, alongside the checker, not added afterward.
+
+Help comes in two tiers, because always-loaded text costs tokens on every task:
+
+- **Guide.** A short overview from `sx help`: the forms, the prelude, and a few examples. Every
+  task loads it, and the probe counts its tokens.
+- **Diagnostics.** Each error carries the help for the thing that went wrong: the signature it
+  violated, the fields that exist, or the form it expected. A model learns the rest of the
+  language only when it needs it.
+
+A diagnostic never fails silently, never shows a Python traceback, and never stops at the first
+error when the checker found more. The format is in
+[docs/language.md](docs/language.md#diagnostics).
+
 ### The kernel knows no application domain
 
 The kernel owns syntax, types, effects, evaluation, budgets, and the suspension protocol. It
@@ -129,23 +147,40 @@ runner.
 
 Implement the language in `docs/language.md` in this order:
 
-1. Reader: source text to a syntax tree with source positions.
+1. Reader: source text to a syntax tree with source positions. Errors recover, so one bad form
+   does not hide the errors after it.
 2. Checker: name resolution, bidirectional type inference, effect inference, and authorization
-   against a capability allow-list.
+   against a capability allow-list. It reports every error it finds in the
+   [diagnostic format](docs/language.md#diagnostics).
 3. Machine: pure evaluation with budgets.
 4. Suspension: `call`, `par`, `par-map`, and `attempt`, with resumption by request ID.
 5. Registry: core and capability registration through a public API, with signatures readable
-   without invoking anything.
-6. Model-facing docs: generate a compact listing of the prelude, cores, and capabilities from the
-   registry.
+   without invoking anything. Every entry has a one-line description and at least one example.
+6. Habit detectors: recognize forms from Clojure, Scheme, and JavaScript that are not Sx, such as
+   `defn`, `nil`, `#(...)`, `->`, `(:key r)`, and reversed `filter` arguments. Each one says what
+   to write instead.
+7. CLI:
+   - `sx help` prints the guide.
+   - `sx help NAME` prints the full entry for a form, prelude function, core function, type, or
+     capability.
+   - `sx check FILE` prints diagnostics.
+   - `sx explain FILE` prints the capability set and effect classes.
+   - `sx run FILE --responses FILE` runs against scripted responses.
+
+   Every command takes `--format json` for hosts. Text output is plain, with no color codes.
 
 Write semantic fixtures as you go. Each fixture holds a program, the registered signatures, an
 allow-list, budgets, scripted capability responses, and the expected outcome and logical trace.
 Cover ill-typed programs, unauthorized capabilities, budget exhaustion, missing, duplicate, and
 unknown response IDs, invalid host results, and responses delivered out of order.
 
-**Gate:** All fixtures pass. A test shows that a program rejected by the checker, or a program
-that names an unauthorized capability, produces no capability request.
+**Gate:**
+- All fixtures pass.
+- A test shows that a program rejected by the checker, or a program that names an unauthorized
+  capability, produces no capability request.
+- Every diagnostic code has a fixture that pins its full message.
+- Every example in the guide and in `sx help NAME` runs as a test and produces its documented
+  result.
 
 ### Phase 2: Model probe against JavaScript
 
@@ -157,15 +192,19 @@ Build `bench/codemode` to compare Sx against JavaScript Code Mode on identical t
   composition of two cores, and tasks unrelated to repomod.
 - Use repomod-shaped fixture capabilities (`catalog.list`, `git.status`, `github.ci`) so the
   tasks are realistic, but do not call repomod.
-- The Sx arm gets the generated registry listing plus a few examples. The JS arm gets TypeScript
-  declarations for the same tools and runs them as async functions in Node, with the same fixture
-  responses.
+- The Sx arm gets the `sx help` guide and the task's capability entries. Repairs feed back
+  `sx check` or runtime diagnostics.
+- The JS arm gets TypeScript declarations for the same tools and runs them as async functions in
+  Node, with the same fixture responses. Repairs feed back `tsc` type errors before running and
+  runtime errors after. JS gets its best realistic tooling, so a win comes from the language and
+  not from weaker feedback.
 - Run `opencode-go/muse-spark-1.3-contributor` through `opencode run --format json`. The probe
   uses a weak model on purpose: a language a weak model writes correctly is easy enough for a
   strong one.
-- When the OpenCode Go weekly limit is reached, fall back to `opencode-go/iceman-contributor-free`,
-  which is free and weaker still. Both runs in a pair use the same model. Report results per
-  model, and apply the gate to each model that completed the full corpus.
+- Also run `opencode-go/iceman-contributor-free`, which is free, weaker still, and from a
+  different model family. It runs the full corpus. Muse Spark runs as much of the corpus as the
+  OpenCode Go weekly limit allows, and Iceman is the fallback when that limit is reached. Both
+  runs in a pair use the same model. Report results per model.
 - Define an opencode agent for the probe with every tool disabled, so the model answers with a
   program instead of running commands. Both arms use the same agent.
 - Read token counts from the `step_finish` events in opencode's JSON output. opencode adds its
@@ -179,9 +218,12 @@ Build `bench/codemode` to compare Sx against JavaScript Code Mode on identical t
 - Record per run: first-attempt correctness, final correctness, input and output tokens, tokens
   spent on the language guide, repair attempts, static rejections, runtime failures, and
   capability calls, including duplicates.
+- Record each diagnostic code a model received and whether the next attempt fixed it. A code
+  that models repeatedly fail to fix needs a better message. A mistake that appears often with no
+  habit detector needs a new detector.
 
-**Gate:** Sx first-attempt correctness is no more than 5 percentage points below JavaScript, and
-Sx is better on either correctness or total tokens per solved task. If the gate
+**Gate:** On each model, over the pairs it completed, Sx first-attempt correctness is no more
+than 5 percentage points below JavaScript, and Sx is better on either correctness or total tokens per solved task. If the gate
 fails, revise the language at most once and rerun. If it fails again, stop the project.
 
 ### Phase 3: Cores and the repomod host

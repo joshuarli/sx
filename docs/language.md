@@ -176,6 +176,78 @@ compare traces sorted by request ID.
 When a `par` branch fails, the machine waits for the current suspension's responses, then
 reports the failure with the lowest request ID. Effects that already ran are not rolled back.
 
+## Diagnostics
+
+The checker reports every error it finds, up to 20, followed by a count of the rest. The reader
+recovers at the next balanced form, so one unclosed bracket does not hide later errors. Nothing
+runs while any error remains.
+
+Each diagnostic has these parts:
+
+| Part | Content |
+| --- | --- |
+| Code | Stable ID, for example `unknown-field`. Fixtures and the probe key on it. |
+| Span | Line and column of the start and end of the offending text |
+| Excerpt | The source line, with the span underlined |
+| Message | What is wrong, in one sentence, using Sx type names |
+| Detail | Expected and found types, or the names that do exist |
+| Fix | The exact text to write, when one fix is likely |
+| Help | The `sx help NAME` entry to read next |
+
+In text form:
+
+```
+error[unknown-field] 4:12-4:17
+  (get repo :nmae)
+            ^^^^^
+  This record has no field :nmae.
+  Fields: :id, :name, :tags
+  Fix: (get repo :name)
+  Help: sx help get
+```
+
+`--format json` emits the same parts as one object per diagnostic.
+
+A diagnostic's message follows these rules:
+
+- Say what is wrong before saying why.
+- Name types as Sx writes them, for example `List<String>`, never interpreter class names.
+- Never use type-theory terms such as "unify" or "judgment".
+- Suggest a name only when it is within edit distance 2 of a name in scope.
+
+The checker's codes are:
+
+| Group | Codes |
+| --- | --- |
+| Reading | `unclosed`, `unexpected-close`, `bad-literal`, `int-range`, `bad-escape`, `duplicate-field` |
+| Names | `unknown-name`, `unknown-function`, `unknown-capability`, `unknown-field`, `unknown-variant` |
+| Calls | `arity`, `type-mismatch`, `unresolved-type`, `not-a-record` |
+| Forms | `condition-not-bool`, `branch-mismatch`, `fn-position`, `bad-pattern`, `attempt-operand` |
+| Match | `non-exhaustive`, `unreachable-clause` |
+| Effects | `unauthorized`, `parallel-write`, `par-map-limit` |
+| Size | `too-large`, naming the `source-bytes`, `nodes`, or `depth` budget |
+| Habits | `habit`, naming the construct, for example `defn`, `nil`, `anonymous-fn-shorthand`, `threading`, `keyword-call`, `argument-order` |
+
+A habit diagnostic names the language the construct comes from and gives the Sx form. For
+example, `(:name repo)` gets `Fix: (get repo :name)`.
+
+A runtime failure is reported in the same format. It adds the error class from
+[Failures](#failures), and, for capability errors, the request ID and capability. Its span points
+at the form that failed.
+
+## Help
+
+`sx help` prints the guide: every form, the prelude in one line per function, and a few complete
+examples. `sx help NAME` prints one entry, where `NAME` is a form, a prelude function, a qualified
+core function or type, or a capability. An entry has:
+
+- The signature, and for capabilities, the effect class.
+- A one-sentence description.
+- At least one example with its result.
+
+The registry generates core and capability entries from their declarations. Every example is a
+test, so a help entry cannot drift from the interpreter.
+
 ## Budgets
 
 The host sets every budget. A program cannot read or raise one.
