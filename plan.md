@@ -142,8 +142,8 @@ This phase tests whether a model can learn the syntax before the checker and mac
 
 1. Create the uv workspace, ruff and ty configuration, and the kernel package with a test runner.
 2. Write the probe's task corpus in `bench/codemode`. The corpus is described under
-   [Task corpus](#task-corpus). Commit it before any model writes Sx for it. After that commit,
-   held-out tasks do not change.
+   [Task corpus](#task-corpus). Commit it before any model writes Sx for it. A held-out task
+   does not change once any model has run on it.
 3. Write the reader: source text to a syntax tree with source positions. Errors recover, so one
    bad form does not hide the errors after it.
 4. Write the `sx help` guide by hand from `docs/language.md`. Phase 1 replaces it with the
