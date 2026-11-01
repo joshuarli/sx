@@ -43,6 +43,50 @@ are not goals.
   square of the core count. Cores exchange a few shared representations, and a bridge exists only
   where generic records lose domain meaning.
 
+## Where the architecture is weaker than it looks
+
+Separating pure cores from effectful capabilities is the functional-core, imperative-shell
+pattern, enforced at the language boundary. Static authority, explicit suspension, and a kernel
+with no domain knowledge follow from it. That part should not change. These weaknesses are known
+and bounded, and each has a campaign that addresses it:
+
+1. **Native cores are pure by promise.** A Rust or Python function registered as pure is trusted,
+   not checked. The guarantee is only as strong as each core's author until cores run sandboxed
+   in campaign 4.
+2. **Static authority is coarse for the capabilities that matter most.** The checker knows a
+   program calls `fs.read`, not which file, when the path is computed at run time. For files,
+   HTTP, and processes, the per-request check does most of the work, so "explain before running"
+   promises less than it sounds. Campaign 2's scoped authorization carries this weight.
+3. **Many small cores cost discovery and composition.** A model must find which core holds which
+   function, and every core boundary adds conversions, especially between nominal types such as
+   `RepoId`. That cost grows with the core count. Lazy discovery in campaign 3 and shared data
+   shapes address it, and neither is designed yet.
+4. **Logic that no core covers has nowhere good to live.** Sx has no named local functions and no
+   recursion, so ad hoc logic is written inline and repeated. The probe's string, arithmetic, and
+   ad hoc logic tasks measure this. Named local functions are the likeliest first gap the
+   evidence shows, ahead of `Map`.
+
+## Risks to the project
+
+- **Whether models write Sx reliably is unmeasured.** Everything else depends on it, which is why
+  the model probe comes before formal semantics and the Rust port.
+- **Adoption is harder than the technology.** Agent hosts already run model code in JavaScript
+  isolates that work well enough. The MCP importer is the most likely entry point: a host points
+  Sx at the tools it already exposes and gains authority checks and replay without rewriting
+  them. Measure the host code an integration needs. A few lines is a credible pitch, and a
+  bespoke adapter per tool is not.
+- **Growth erodes the advantage.** Every form added for coverage costs guide tokens and model
+  reliability, which is the edge Sx has over JavaScript. The rule that a new form needs evidence
+  protects the project's main claim, not a style preference.
+
+## Alternatives to rule out
+
+Full JavaScript is the baseline, not the strongest alternative. The strongest is a restricted,
+typed TypeScript subset, analyzed before it runs. It could deliver much of Sx's static authority
+while keeping the familiarity models already have. If Sx cannot beat it, the custom syntax does
+not earn its cost. Add a TypeScript-subset arm to the probe once the first probe passes, and to
+the campaign 2 workflow comparison.
+
 ## Campaign 1: language correctness
 
 This is the current campaign: Python interpreter, model probe, Git and GitHub cores, repomod
