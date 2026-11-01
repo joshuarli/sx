@@ -1,0 +1,5 @@
+; task: dev-low-stock-alerts
+(let [items (call inventory.items {})
+      low (filter (fn [i] (< (get i :stock) 5)) items)
+      _ (map (fn [i] (call mail.send {:to "ops@example.com" :subject (str "Low stock: " (get i :sku))})) low)]
+  (count low))

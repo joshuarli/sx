@@ -1,0 +1,13 @@
+; task: dev-retry-ci
+(map (fn [repo]
+  (match (attempt (retry {:delays [1s 2s 4s]} (call github.latest-ci {:repo repo})))
+    (ok ci)
+      (match (get ci :state)
+        Passing {:repo repo :state "Passing"}
+        Failing {:repo repo :state "Failing"}
+        Pending {:repo repo :state "Pending"}
+        Unknown {:repo repo :state "Unknown"}
+        _ {:repo repo :state "missing"})
+    (err e)
+      {:repo repo :state "missing"}))
+  ["acme/api" "acme/old" "acme/web"])

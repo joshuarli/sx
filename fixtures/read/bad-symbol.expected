@@ -1,0 +1,19 @@
+error[bad-symbol] 1:7-1:13
+  (let [reset! 1 *limit* 2] [reset! *limit*])
+        ^^^^^^
+  reset! is not a valid name. A name starts with a lowercase letter, then letters, digits, - and _.
+
+error[bad-symbol] 1:16-1:23
+  (let [reset! 1 *limit* 2] [reset! *limit*])
+                 ^^^^^^^
+  *limit* is not a valid name. A name starts with a lowercase letter, then letters, digits, - and _.
+
+error[bad-symbol] 1:28-1:34
+  (let [reset! 1 *limit* 2] [reset! *limit*])
+                             ^^^^^^
+  reset! is not a valid name. A name starts with a lowercase letter, then letters, digits, - and _.
+
+error[bad-symbol] 1:35-1:42
+  (let [reset! 1 *limit* 2] [reset! *limit*])
+                                    ^^^^^^^
+  *limit* is not a valid name. A name starts with a lowercase letter, then letters, digits, - and _.

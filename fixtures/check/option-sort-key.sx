@@ -1,0 +1,16 @@
+; task: dev-stale-branches
+(let [repos (call catalog.list {:tags []})
+      results (par-map {:limit 8}
+                 (fn [repo]
+                   (let [repo-id (get repo :id)
+                         status (call git.status {:repo repo-id})]
+                     (match (get status :branch)
+                       (some branch)
+                         (let [remote (call github.repo {:repo repo-id})]
+                           (if (not= branch (get remote :branch))
+                             (str repo-id "@" branch)
+                             none))
+                       none none)))
+                 repos)]
+  (sort-by (fn [x] x)
+           (filter (fn [x] (not= x none)) results)))

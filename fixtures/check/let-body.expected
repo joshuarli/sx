@@ -1,0 +1,6 @@
+error[habit:let-body] 5:5-5:16
+      (count low)))
+      ^^^^^^^^^^^
+  A let has one body expression, but this one has 2.
+  Bind a step that runs for its effect to _ among the bindings: [_ (map ...)].
+  Help: sx help let

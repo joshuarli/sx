@@ -1,0 +1,17 @@
+; task: dev-latest-version
+(let [raw (call registry.versions {:name "left-pad"})
+      trimmed (map text.trim raw)
+      parsed-opts (map semver.parse trimmed)
+      versions (reduce (fn [acc o]
+                         (match o
+                           (some v) (concat acc [v])
+                           none acc))
+                       []
+                       parsed-opts)]
+  (if (= (count versions) 0)
+    none
+    (semver.show
+      (reduce (fn [best v]
+                (if (> (semver.compare v best) 0) v best))
+              (first versions)
+              (rest versions)))))

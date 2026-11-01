@@ -1,0 +1,12 @@
+; task: dev-failing-ci
+(let [repos (call catalog.list {:tags ["service"]})
+      checked (par-map {:limit 16}
+                 (fn [r]
+                   (let [repo-str (str (get r :owner) "/" (get r :name))
+                         remote (call github.repo {:repo repo-str})
+                         ci (call github.ci {:repo repo-str :sha (get remote :sha)})]
+                     {:id (get r :id) :state (get ci :state)}))
+                 repos)
+      failing (filter (fn [x] (= (get x :state) Failing)) checked)
+      ids (map (fn [x] (get x :id)) failing)]
+  (sort-by (fn [id] id) ids))

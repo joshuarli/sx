@@ -37,12 +37,12 @@ _UNIT_SPELLINGS = {
 }
 _UNIT_SIZES = dict(DURATION_UNITS)
 _FLOAT = re.compile(r"-?[0-9]+(\.[0-9]*)?([eE][-+]?[0-9]+)?")
-_NAME = r"[a-z][a-z0-9]*(-[a-z0-9]+)*\??"
+_NAME = r"[a-z][A-Za-z0-9_-]*(\?|'+)?"
 _VARIANT = r"[A-Z][A-Za-z0-9]*"
 _PLAIN = re.compile(_NAME)
 _QUALIFIED = re.compile(rf"[a-z][a-z0-9]*(-[a-z0-9]+)*\.({_NAME}|{_VARIANT})")
 _VARIANT_NAME = re.compile(_VARIANT)
-_KEYWORD = re.compile(rf":{_NAME}")
+_KEYWORD = re.compile(r":[A-Za-z_][A-Za-z0-9_-]*\??")
 _OPERATORS = frozenset({"+", "-", "*", "=", "not=", "<", "<=", ">", ">=", "_"})
 _NIL_SPELLINGS = frozenset({"nil", "null", "undefined", "None"})
 _JS_OPERATORS = {
@@ -431,7 +431,7 @@ class _Reader:
             self.error(
                 "bad-literal",
                 span,
-                f"{text} is not a valid keyword. Keywords are lowercase words joined by -.",
+                f"{text} is not a valid keyword. A keyword is : and a field name, such as :repo-id.",
                 fix=fix,
             )
             return None
@@ -502,7 +502,7 @@ class _Reader:
             self.error(
                 "bad-symbol",
                 span,
-                f"{text} is not a valid name. Names are lowercase words joined by -.",
+                f"{text} is not a valid name. A name starts with a lowercase letter, then letters, digits, - and _.",
                 fix=suggestion if valid else None,
             )
 

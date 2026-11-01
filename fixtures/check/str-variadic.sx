@@ -1,0 +1,7 @@
+; task: dev-deploy-report
+(map (fn [name]
+       (match (call deploy.last {:service name})
+         (Succeeded r) (str name ": ok " (get r :url))
+         (Failed r)    (str name ": failed " (get r :reason))
+         Skipped       (str name ": skipped")))
+     ["api" "web" "worker"])

@@ -1,0 +1,29 @@
+error[habit:keyword-value] 7:30-7:38
+                (err e) {:kind :unknown :id repo-id}
+                               ^^^^^^^^
+  Keywords only name record fields. Use a string for a label.
+  Fix: "unknown"
+
+error[habit:keyword-value] 10:34-10:42
+                    Failing {:kind :failing :id repo-id}
+                                   ^^^^^^^^
+  Keywords only name record fields. Use a string for a label.
+  Fix: "failing"
+
+error[habit:keyword-value] 11:28-11:34
+                    _ {:kind :other :id repo-id}))))
+                             ^^^^^^
+  Keywords only name record fields. Use a string for a label.
+  Fix: "other"
+
+error[habit:keyword-value] 15:55-15:63
+                       (filter (fn [c] (= (get c :kind) :failing)) classified)))
+                                                        ^^^^^^^^
+  Keywords only name record fields. Use a string for a label.
+  Fix: "failing"
+
+error[habit:keyword-value] 18:55-18:63
+                       (filter (fn [c] (= (get c :kind) :unknown)) classified)))]
+                                                        ^^^^^^^^
+  Keywords only name record fields. Use a string for a label.
+  Fix: "unknown"

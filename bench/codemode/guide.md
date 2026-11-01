@@ -10,9 +10,12 @@ only the forms and functions below exist.
 - Integers: `42`, `-7`. There are no fractions.
 - Strings: `"text"`, with escapes `\"`, `\\`, `\n`, `\t`.
 - Lists: `[1 2 3]`
-- Records: `{:name "ada" :age 36}`. Field names are keywords. Commas are optional.
+- Records: `{:name "ada" :age 36}`. Field names are keywords. Commas are optional. Keywords
+  only name fields. Use strings, such as `"failing"`, for labels.
+- Tuples: `[1 "a"]`, a bracket literal whose elements have different types.
 - Optional values: `(some x)` or `none`. There is no `nil` or `null`. A tool field typed
-  `Option<T>` holds `(some x)` or `none`.
+  `Option<T>` holds `(some x)` or `none`. Wherever an optional is expected, a plain value works
+  too, so `(if found? name none)` is fine.
 - Results: `(ok x)` or `(err e)`, produced by `attempt`.
 - Durations, only in `retry` and `wait-until` options: `250ms`, `5s`, `2m`, `1h`.
 - Comments start with `;`.
@@ -21,8 +24,10 @@ only the forms and functions below exist.
 
 ```
 (let [a expr1
-      b expr2]            ; later bindings see earlier ones
-  body)
+      b expr2             ; later bindings see earlier ones
+      _ expr3             ; run for effect, discard the value
+      f (fn [x] ...)]     ; a local function, called as (f x)
+  body)                   ; exactly one body expression
 (if condition then else)  ; condition must be true or false
 (get record :field)       ; read a record field
 (call tool.name {:field value})          ; call a tool with a record
@@ -58,11 +63,15 @@ only the forms and functions below exist.
 - Arithmetic: `(+ a b)`, `(- a b)`, `(* a b)`, `(quot a b)`, `(rem a b)`
 - Comparison: `(= a b)`, `(not= a b)`, `(< a b)`, `(<= a b)`, `(> a b)`, `(>= a b)`
 - Logic: `(not x)`, `(and a b)`, `(or a b)`
-- `(str a b)` joins exactly two strings.
-- `(count xs)`, `(take n xs)`, `(concat xs ys)`, `(flatten xss)`, `(contains? xs x)`
+- Arithmetic: `(- x)` negates.
+- `(str a b c ...)` joins strings.
+- `(count xs)`, `(first xs)`, `(rest xs)`, `(nth xs i)`, `(take n xs)`, `(concat xs ys)`,
+  `(flatten xss)`, `(contains? xs x)`. `first` and `nth` stop the program on a list that is too
+  short, so check `(count xs)` first when it may be.
 - `(map f xs)`, `(filter f xs)`, `(any? f xs)`, `(all? f xs)`, `(reduce f init xs)`
-- `(sort-by f xs)` sorts ascending by an integer or string key. Sort descending by a negated
-  integer key: `(sort-by (fn [r] (- 0 (get r :n))) rs)`.
+- `(keep f xs)` applies `f`, which returns an optional, and keeps the `some` values unwrapped.
+- `(sort-by f xs)` sorts ascending by a key: an integer, a string, or a tuple of keys compared in
+  order. Sort by count descending, then name: `(sort-by (fn [r] [(- (get r :n)) (get r :name)]) rs)`.
 - `(distinct-by f xs)` keeps the first element for each key.
 - `(group-by f xs)` returns `[key items]` tuples in first-seen order. Take one apart with
   `(fn [[key items]] ...)`.

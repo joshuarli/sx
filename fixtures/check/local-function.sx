@@ -1,0 +1,32 @@
+; task: dev-csv-summary
+(let [content (call files.read {:path "stock.csv"})
+      raw-lines (text.split content "\n")
+      lines (filter (fn [l] (not (= l ""))) raw-lines)
+      header (first lines)
+      columns (text.split header ",")
+      data (rest lines)
+      rows-count (count data)
+      get-nth (fn [xs n]
+                (loop {:max 10000} [xs xs i 0]
+                  (if (= i n)
+                    (first xs)
+                    (recur (rest xs) (+ i 1)))))
+      qty-idx (loop {:max 2000} [cs columns idx 0]
+                (if (= (count cs) 0)
+                  0
+                  (if (= (first cs) "qty")
+                    idx
+                    (recur (rest cs) (+ idx 1)))))
+      total (reduce (fn [acc line]
+                      (let [parts (text.split line ",")
+                            qty-str-raw (get-nth parts qty-idx)
+                            qty-str (text.trim qty-str-raw)
+                            qv (match (text.to-int qty-str)
+                                 (some x) x
+                                 none 0)]
+                        (+ acc qv)))
+                    0
+                    data)]
+  {:columns columns
+   :rows rows-count
+   :total total})

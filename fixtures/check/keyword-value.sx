@@ -1,0 +1,19 @@
+; task: dev-ci-partial
+(let [repos (call catalog.list {:tags ["tool"]})
+      classified (par-map {:limit 8}
+        (fn [r]
+          (let [repo-id (get r :id)]
+            (match (attempt (call github.latest-ci {:repo repo-id}))
+              (err e) {:kind :unknown :id repo-id}
+              (ok ci)
+                (match (get ci :state)
+                  Failing {:kind :failing :id repo-id}
+                  _ {:kind :other :id repo-id}))))
+        repos)
+      failing (sort-by (fn [x] x)
+                (map (fn [c] (get c :id))
+                     (filter (fn [c] (= (get c :kind) :failing)) classified)))
+      unknown (sort-by (fn [x] x)
+                (map (fn [c] (get c :id))
+                     (filter (fn [c] (= (get c :kind) :unknown)) classified)))]
+  {:failing failing :unknown unknown})

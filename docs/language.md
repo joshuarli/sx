@@ -24,10 +24,10 @@ program runs. There is no general recursion and no unbounded loop.
 | Integer | `-?[0-9]+` | Signed 64-bit. A literal outside that range is rejected. |
 | Duration | `250ms`, `5s`, `2m`, `1h` | Only in `retry` and `wait-until` options. |
 | String | `"..."` | UTF-8. Escapes: `\"`, `\\`, `\n`, `\t`, `\u{HEX}`. |
-| Keyword | `:name` | Record field names only. |
-| Symbol | `name`, `name?` | Lowercase words of letters and digits joined by single `-`, starting with a letter. |
+| Keyword | `:name` | Record field names only. Same characters as a symbol. |
+| Symbol | `name`, `repo-id`, `repoId`, `ahead_count`, `ok?`, `acc'` | A lowercase letter, then letters, digits, `-`, and `_`, then optionally `?` or primes. |
 | Operator | `+ - * = not= < <= > >=` | Prelude functions |
-| Wildcard | `_` | Match patterns only |
+| Wildcard | `_` | Any pattern position: discards the value |
 | Variant | `OnBranch` | A capital letter, then letters and digits. Enum variants in patterns. |
 | Qualified symbol | `core.name`, `core.Type` | A core function, core type, or capability. Core IDs are one segment. |
 | List | `[a b c]` | |
@@ -43,16 +43,27 @@ program runs. There is no general recursion and no unbounded loop.
 | `String` | UTF-8 strings |
 | `Unit` | One value, returned by capabilities with no result |
 | `List<T>` | Ordered, finite |
-| `Tuple<T1, ..., Tn>` | Produced by `par` and `group-by` |
+| `Tuple<T1, ..., Tn>` | Produced by `par`, `group-by`, and bracket literals of mixed types |
 | `Option<T>` | `(some x)`, `none` |
 | `Result<T, E>` | `(ok x)`, `(err e)` |
 | `Record {k: T, ...}` | Structural, with exactly the declared fields |
 | Core enum | Nominal, declared by a core, for example `git.Checkout` |
 | Core nominal | Nominal wrapper over a base type, declared by a core, for example `git.RepoId` |
 
-There is no `Any`, no subtyping, no implicit conversion, and no user-declared type. Only core
-functions construct core enum and core nominal values. Each enum variant carries zero or one
-value. A variant that needs several values carries a record.
+There is no `Any`, no subtyping, and no user-declared type. Core functions construct core enum
+and core nominal values. A program may also write a variant that carries no value by name, such
+as `Failing`, where the expected type is the enum, for example `(= state Failing)`. Each enum
+variant carries zero or one value. A variant that needs several values carries a record.
+
+There is one implicit conversion, option promotion: where the checker expects `Option<T>`, a
+value of type `T` is accepted and becomes `(some value)`. So `(if empty? none name)` has type
+`Option<String>`, and `(recur next ...)` may pass a `String` to a binding of type
+`Option<String>`. Promotion never applies when `T` is itself an `Option`, and no other conversion
+exists.
+
+A bracket literal is a list when its elements share a type, and a tuple when they do not, or when
+a tuple is expected. `[1 2]` is a `List<Int>`, and `[(- 0 count) tag]` is a
+`Tuple<Int, String>`.
 
 Programs have no type annotations. The checker infers types bidirectionally from literals,
 bindings, prelude and core signatures, capability signatures, and the expected type of each
@@ -61,16 +72,18 @@ argument position. A lambda parameter gets its type from the position the lambda
 checker rejects any expression whose type it cannot resolve.
 
 Equality is structural on every type. Ordering with `<`, `<=`, `>`, and `>=` is defined on `Int`
-and on `String`, where strings compare lexicographically by Unicode code point.
+and on `String`, where strings compare lexicographically by Unicode code point. Sort keys, used by
+`sort-by`, may also be `Bool` (`false` first) and tuples or lists of sort keys, compared element
+by element.
 
 ## Special forms
 
 | Form | Type rule |
 | --- | --- |
-| `(let [p1 e1 p2 e2 ...] body)` | Each `e` is visible to later bindings and to `body`. |
+| `(let [p1 e1 p2 e2 ...] body)` | Each `e` is visible to later bindings and to `body`. The body is one expression. |
 | `(if c then else)` | `c` is `Bool`. Both branches have the same type. |
 | `(match e clause...)` | See [Match](#match). |
-| `(fn [p ...] body)` | Allowed only as a function argument to a prelude function or `par-map`. |
+| `(fn [p ...] body)` | A function argument, or the value of a `let` binding. See [Functions](#functions). |
 | `(get r :field)` | `r` is a record with `field`. A missing field is rejected by the checker. |
 | `(call cap.id arg)` | `arg` has the capability's input type. The result has its output type. |
 | `(attempt e)` | `Result<T, CallError>`, where `e` has type `T`. See [Recovery and repetition](#recovery-and-repetition). |
@@ -80,11 +93,26 @@ and on `String`, where strings compare lexicographically by Unicode code point.
 | `(par e1 ... en)` | `Tuple<T1, ..., Tn>`. Every branch has only `read` effects. |
 | `(par-map {:limit n} f xs)` | `List<U>`. `n` is an integer literal. `f` has only `read` effects. |
 
-A pattern `p` is a symbol or a tuple pattern `[p1 ... pn]`. Tuple patterns appear in `let` and in
-`fn` parameters.
+A pattern `p` is a symbol, `_`, or a tuple pattern `[p1 ... pn]`. Patterns appear in `let`,
+`loop`, and `fn` parameters. `_` evaluates the value and discards it, so
+`(let [_ (map send items)] (count items))` runs every send.
 
-A function argument `f` is either a `fn` form or the name of a prelude or core function with the
-right arity. Function values cannot be bound, returned, or stored.
+### Functions
+
+A function argument `f` is a `fn` form, the name of a prelude or core function with the right
+arity, or the name of a local function.
+
+A local function is a `let` binding whose value is a `fn` form:
+
+```
+(let [label (fn [svc state] (str svc ": " state))]
+  [(label "api" "ok") (label "web" "failed")])
+```
+
+The program calls it like any function and may pass it as a function argument. A local function
+cannot call itself, and it cannot be returned, stored in a record or list, or passed to a
+capability. The checker types its body at each call with the argument types of that call, so its
+parameters need no annotations.
 
 ### Match
 
@@ -97,8 +125,9 @@ right arity. Function values cannot be bound, returned, or stored.
 
 The scrutinee's type determines which variant names are in scope, so patterns are unqualified.
 `Option` patterns are `(some x)` and `none`. `Result` patterns are `(ok x)` and `(err e)`. `_`
-matches anything. A `match` without `_` must name every variant. A clause that can never match
-is rejected.
+matches anything. A `match` without `_` must name every variant. A final `_` clause is allowed
+even when the clauses before it name every variant. Any other clause that can never match is
+rejected.
 
 ## Recovery and repetition
 
@@ -196,23 +225,27 @@ as in Clojure.
 
 | Function | Type |
 | --- | --- |
-| `+ - *` | `Int Int -> Int` |
+| `+ - *` | `Int Int -> Int`. `(- x)` negates. |
 | `quot rem` | `Int Int -> Int`, truncating toward zero |
 | `= not=` | `T T -> Bool` |
 | `< <= > >=` | `T T -> Bool` for `Int` or `String` |
 | `not` | `Bool -> Bool` |
 | `and or` | `Bool Bool -> Bool`. Both arguments always evaluate. Use `if` to make a call conditional. |
-| `str` | `String String -> String` |
+| `str` | `String ... -> String`, one or more strings joined in order |
 | `count` | `List<T> -> Int` |
+| `first` | `List<T> -> T`. An empty list is an `out-of-range` error. |
+| `rest` | `List<T> -> List<T>`, every element after the first. Empty for an empty list. |
+| `nth` | `List<T> Int -> T`, counting from 0. A missing index is an `out-of-range` error. |
 | `take` | `Int List<T> -> List<T>`. A negative count is an arithmetic error. |
 | `concat` | `List<T> List<T> -> List<T>` |
 | `flatten` | `List<List<T>> -> List<T>` |
 | `contains?` | `List<T> T -> Bool` |
 | `map` | `(T -> U) List<T> -> List<U>` |
 | `filter` | `(T -> Bool) List<T> -> List<T>` |
+| `keep` | `(T -> Option<U>) List<T> -> List<U>`, the `some` values in order |
 | `any? all?` | `(T -> Bool) List<T> -> Bool` |
 | `reduce` | `(A T -> A) A List<T> -> A` |
-| `sort-by` | `(T -> K) List<T> -> List<T>`, stable, `K` is `Int` or `String` |
+| `sort-by` | `(T -> K) List<T> -> List<T>`, stable and ascending. `K` is a [sort key](#types). |
 | `distinct-by` | `(T -> K) List<T> -> List<T>`, keeps the first element for each key |
 | `group-by` | `(T -> K) List<T> -> List<Tuple<K, List<T>>>`, groups in first-occurrence order |
 
@@ -280,6 +313,7 @@ compare traces sorted by request ID.
 | `loop-limit` | A `loop` reached its `:max` and its body asked to `recur` again | No |
 | `budget-exhausted` | A budget ran out. The error names the budget. | No |
 | `arithmetic` | Overflow, division by zero, negative `take` count | No |
+| `out-of-range` | `first` of an empty list, or `nth` past the end | No |
 | `internal` | Interpreter bug | No |
 
 ### Call errors
@@ -397,7 +431,7 @@ The checker's codes are:
 | Match | `non-exhaustive`, `unreachable-clause` |
 | Effects | `unauthorized`, `parallel-write`, `par-map-limit`, `retry-write`, `wait-write` |
 | Size | `too-large`, naming the `source-bytes`, `nodes`, or `depth` budget |
-| Habits | `habit`, naming the construct. The reader detects `nil`, `capitalized-boolean`, `quote`, `reader-macro`, `anonymous-fn-shorthand`, `set-literal`, `threading`, `js-operator`, `js-object-key`, `method-call`, and `namespace-slash`. The checker detects `defn`, `keyword-call`, `argument-order`, `while`, and `loop-without-max`. |
+| Habits | `habit`, naming the construct. The reader detects `nil`, `capitalized-boolean`, `quote`, `reader-macro`, `anonymous-fn-shorthand`, `set-literal`, `threading`, `js-operator`, `js-object-key`, `method-call`, and `namespace-slash`. The checker detects `defn`, `keyword-call`, `keyword-value`, `argument-order`, `assoc`, `let-body`, `while`, and `loop-without-max`. |
 
 A habit diagnostic names the language the construct comes from and gives the Sx form. For
 example, `(:name repo)` gets `Fix: (get repo :name)`.

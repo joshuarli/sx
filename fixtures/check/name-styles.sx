@@ -1,0 +1,23 @@
+; task: dev-dirty-or-ahead
+(let [repos (call catalog.list {:tags []})
+      statuses (par-map {:limit 8}
+                 (fn [repo]
+                   (let [st (call git.status {:repo (get repo :id)})]
+                     {:repo (get repo :id) :status st}))
+                 repos)
+      filtered (filter (fn [item]
+                         (let [st (get item :status)]
+                           (or (get st :dirty)
+                               (match (get st :ahead)
+                                 (some n) (> n 0)
+                                 none false))))
+                       statuses)
+      result (map (fn [item]
+                    (let [st (get item :status)
+                          aheadOpt (get st :ahead)]
+                      {:repo (get item :repo)
+                       :ahead (match aheadOpt
+                                (some n) n
+                                none 0)}))
+                  filtered)]
+  (sort-by (fn [r] (get r :repo)) result))
