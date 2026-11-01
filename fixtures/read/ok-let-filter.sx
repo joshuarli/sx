@@ -1,0 +1,2 @@
+(let [repos (call catalog.list {:tags ["tool"]})]
+  (take 20 (filter (fn [repo] (not (get repo :archived))) repos)))

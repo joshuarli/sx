@@ -1,0 +1,5 @@
+error[habit:capitalized-boolean] 1:5-1:9
+  (if True 1 2)
+      ^^^^
+  Booleans are lowercase.
+  Fix: true

@@ -1,0 +1,5 @@
+error[record-key] 1:2-1:8
+  {"name" 1}
+   ^^^^^^
+  A record field name must be a keyword such as :name.
+  Fix: :name

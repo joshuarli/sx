@@ -1,0 +1,4 @@
+error[habit:quote] 1:8-1:9
+  (count '(1 2 3))
+         ^
+  Sx has no quoting. Write a list literal as [a b c].

@@ -1,0 +1,5 @@
+error[unexpected-close] 1:8-1:9
+  (+ 1 2))
+         ^
+  This ) has no matching opening bracket.
+  Fix: remove it

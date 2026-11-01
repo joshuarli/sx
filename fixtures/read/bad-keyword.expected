@@ -1,0 +1,5 @@
+error[bad-literal] 1:2-1:11
+  {:repoName 1}
+   ^^^^^^^^^
+  :repoName is not a valid keyword. Keywords are lowercase words joined by -.
+  Fix: :repo-name

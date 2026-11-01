@@ -1,0 +1,4 @@
+error[habit:method-call] 1:2-1:14
+  (.toUpperCase s)
+   ^^^^^^^^^^^^
+  Sx has no methods. Call a function with the value as an argument.

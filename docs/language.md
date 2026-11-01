@@ -19,12 +19,16 @@ capability that reads a paginated source returns every page as one result.
 | Token | Form | Notes |
 | --- | --- | --- |
 | Comment | `; text` | Runs to end of line. |
+| Whitespace | space, tab, newline, `,` | Commas are whitespace, as in Clojure. |
 | Boolean | `true`, `false` | |
 | Integer | `-?[0-9]+` | Signed 64-bit. A literal outside that range is rejected. |
 | String | `"..."` | UTF-8. Escapes: `\"`, `\\`, `\n`, `\t`, `\u{HEX}`. |
 | Keyword | `:name` | Record field names only. |
-| Symbol | `name`, `name?` | Lowercase letters, digits, and `-`, starting with a letter. |
-| Qualified symbol | `core.name` | A core function or a capability. Core IDs are one segment. |
+| Symbol | `name`, `name?` | Lowercase words of letters and digits joined by single `-`, starting with a letter. |
+| Operator | `+ - * = not= < <= > >=` | Prelude functions |
+| Wildcard | `_` | Match patterns only |
+| Variant | `OnBranch` | A capital letter, then letters and digits. Enum variants in patterns. |
+| Qualified symbol | `core.name`, `core.Type` | A core function, core type, or capability. Core IDs are one segment. |
 | List | `[a b c]` | |
 | Record | `{:k v ...}` | Field names are unique. |
 | Form | `(head args...)` | |
@@ -230,7 +234,7 @@ Each diagnostic has these parts:
 | Fix | The exact text to write, when one fix is likely |
 | Help | The `sx help NAME` entry to read next |
 
-In text form:
+In text form, where a habit's code is written `habit:CONSTRUCT`:
 
 ```
 error[unknown-field] 4:12-4:17
@@ -255,14 +259,14 @@ The checker's codes are:
 
 | Group | Codes |
 | --- | --- |
-| Reading | `unclosed`, `unexpected-close`, `bad-literal`, `int-range`, `bad-escape`, `duplicate-field` |
+| Reading | `unclosed`, `unexpected-close`, `bad-literal`, `bad-symbol`, `int-range`, `bad-escape`, `record-key`, `record-missing-value`, `duplicate-field`, `empty-program`, `multiple-expressions` |
 | Names | `unknown-name`, `unknown-function`, `unknown-capability`, `unknown-field`, `unknown-variant` |
 | Calls | `arity`, `type-mismatch`, `unresolved-type`, `not-a-record` |
 | Forms | `condition-not-bool`, `branch-mismatch`, `fn-position`, `bad-pattern`, `attempt-operand` |
 | Match | `non-exhaustive`, `unreachable-clause` |
 | Effects | `unauthorized`, `parallel-write`, `par-map-limit` |
 | Size | `too-large`, naming the `source-bytes`, `nodes`, or `depth` budget |
-| Habits | `habit`, naming the construct, for example `defn`, `nil`, `anonymous-fn-shorthand`, `threading`, `keyword-call`, `argument-order` |
+| Habits | `habit`, naming the construct. The reader detects `nil`, `capitalized-boolean`, `quote`, `reader-macro`, `anonymous-fn-shorthand`, `set-literal`, `threading`, `js-operator`, `js-object-key`, `method-call`, and `namespace-slash`. The checker detects `defn`, `keyword-call`, and `argument-order`. |
 
 A habit diagnostic names the language the construct comes from and gives the Sx form. For
 example, `(:name repo)` gets `Fix: (get repo :name)`.

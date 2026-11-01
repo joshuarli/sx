@@ -1,0 +1,5 @@
+error[duplicate-field] 1:7-1:9
+  {:a 1 :a 2}
+        ^^
+  The field :a appears twice in this record.
+  First use: 1:2

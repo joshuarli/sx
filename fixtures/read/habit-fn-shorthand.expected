@@ -1,0 +1,6 @@
+error[habit:anonymous-fn-shorthand] 1:6-1:8
+  (map #(get % :name) repos)
+       ^^
+  Sx has no #(...) shorthand. Write the function with fn and named parameters.
+  Fix: (fn [x] ...)
+  Help: sx help fn

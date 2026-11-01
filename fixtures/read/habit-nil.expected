@@ -1,0 +1,6 @@
+error[habit:nil] 1:10-1:13
+  (if (= x nil) 0 1)
+           ^^^
+  Sx has no nil. A missing value is none, of type Option.
+  Fix: none
+  Help: sx help Option

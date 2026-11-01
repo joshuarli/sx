@@ -1,0 +1,5 @@
+error[habit:threading] 1:2-1:4
+  (-> repos (filter ok?) count)
+   ^^
+  Sx has no threading macros such as ->. Nest the calls, or bind each step with let.
+  Help: sx help let

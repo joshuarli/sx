@@ -1,0 +1,17 @@
+error[bad-symbol] 1:7-1:15
+  (let [repoName "x" my_var 1] repoName)
+        ^^^^^^^^
+  repoName is not a valid name. Names are lowercase words joined by -.
+  Fix: repo-name
+
+error[bad-symbol] 1:20-1:26
+  (let [repoName "x" my_var 1] repoName)
+                     ^^^^^^
+  my_var is not a valid name. Names are lowercase words joined by -.
+  Fix: my-var
+
+error[bad-symbol] 1:30-1:38
+  (let [repoName "x" my_var 1] repoName)
+                               ^^^^^^^^
+  repoName is not a valid name. Names are lowercase words joined by -.
+  Fix: repo-name

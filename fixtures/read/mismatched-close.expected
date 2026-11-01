@@ -1,0 +1,5 @@
+error[unexpected-close] 1:11-1:12
+  (get {:a 1] :a)
+            ^
+  Expected } to close the { at 1:6, found ].
+  Fix: replace ] with }

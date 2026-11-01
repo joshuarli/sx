@@ -1,0 +1,5 @@
+error[habit:js-operator] 1:6-1:8
+  (if (&& a b) 1 2)
+       ^^
+  Sx has no && operator.
+  Fix: and

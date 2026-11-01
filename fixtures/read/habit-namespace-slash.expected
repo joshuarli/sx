@@ -1,0 +1,4 @@
+error[habit:namespace-slash] 1:2-1:10
+  (str/join ", " names)
+   ^^^^^^^^
+  Sx qualifies names with a dot, as in text.join, not with a slash.

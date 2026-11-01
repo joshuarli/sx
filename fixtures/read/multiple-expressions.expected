@@ -1,0 +1,7 @@
+error[multiple-expressions] 2:1-2:8
+  (+ x 1)
+  ^^^^^^^
+  A program is one expression, but this one has 2.
+  Bind intermediate steps with let and end with the result.
+  Fix: (let [a ... b ...] result)
+  Help: sx help let

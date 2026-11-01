@@ -1,0 +1,4 @@
+error[empty-program] 2:1-2:1
+  
+  ^
+  The program is empty. A program is one expression.

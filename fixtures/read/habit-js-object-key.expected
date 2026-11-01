@@ -1,0 +1,5 @@
+error[habit:js-object-key] 1:2-1:7
+  {name: "x"}
+   ^^^^^
+  This looks like a JavaScript object key. Record fields are keywords followed by a value.
+  Fix: {:name value}

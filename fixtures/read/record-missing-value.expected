@@ -1,0 +1,5 @@
+error[record-missing-value] 1:7-1:9
+  {:a 1 :b}
+        ^^
+  The field :b has no value.
+  A record literal alternates field names and values: {:a 1 :b 2}.
