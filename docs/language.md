@@ -10,8 +10,9 @@ A program is one expression. There are no top-level definitions, imports, macros
 recursion. Evaluation is strict, and arguments evaluate left to right, except inside `par` and
 `par-map`.
 
-Every program terminates, because the only iteration is over lists that already exist. A program
-cannot loop until a condition holds, so it cannot poll or follow a pagination cursor. A
+Every program terminates. Iteration runs over lists that already exist, and the only repetition,
+`retry` and `wait-until`, has an attempt count the checker computes from literal options. A
+program cannot loop over an unbounded sequence, so it cannot follow a pagination cursor. A
 capability that reads a paginated source returns every page as one result.
 
 ## Lexical syntax
@@ -22,6 +23,7 @@ capability that reads a paginated source returns every page as one result.
 | Whitespace | space, tab, newline, `,` | Commas are whitespace, as in Clojure. |
 | Boolean | `true`, `false` | |
 | Integer | `-?[0-9]+` | Signed 64-bit. A literal outside that range is rejected. |
+| Duration | `250ms`, `5s`, `2m`, `1h` | Only in `retry` and `wait-until` options. |
 | String | `"..."` | UTF-8. Escapes: `\"`, `\\`, `\n`, `\t`, `\u{HEX}`. |
 | Keyword | `:name` | Record field names only. |
 | Symbol | `name`, `name?` | Lowercase words of letters and digits joined by single `-`, starting with a letter. |
@@ -72,7 +74,9 @@ and on `String`, where strings compare lexicographically by Unicode code point.
 | `(fn [p ...] body)` | Allowed only as a function argument to a prelude function or `par-map`. |
 | `(get r :field)` | `r` is a record with `field`. A missing field is rejected by the checker. |
 | `(call cap.id arg)` | `arg` has the capability's input type. The result has its output type. |
-| `(attempt (call cap.id arg))` | `Result<T, CallError>`. The operand must be a single `call`. |
+| `(attempt e)` | `Result<T, CallError>`, where `e` has type `T`. See [Retries and polling](#retries-and-polling). |
+| `(retry {options} e)` | `T`. Re-evaluates `e` after a failure. See [Retries and polling](#retries-and-polling). |
+| `(wait-until {options} f e)` | `T`. Re-evaluates `e` until `f` returns `true` for its value. |
 | `(par e1 ... en)` | `Tuple<T1, ..., Tn>`. Every branch has only `read` effects. |
 | `(par-map {:limit n} f xs)` | `List<U>`. `n` is an integer literal. `f` has only `read` effects. |
 
@@ -95,6 +99,67 @@ The scrutinee's type determines which variant names are in scope, so patterns ar
 `Option` patterns are `(some x)` and `none`. `Result` patterns are `(ok x)` and `(err e)`. `_`
 matches anything. A `match` without `_` must name every variant. A clause that can never match
 is rejected.
+
+## Retries and polling
+
+These forms follow xsh's `try`, `retry`, and `wait until`. Each does one thing. `retry` and
+`wait-until` repeat, and `attempt` captures. All options are literals, so the checker knows the
+largest number of attempts before the program runs, and the `calls` budget accounts for it.
+
+### attempt
+
+`(attempt e)` evaluates `e`. If a capability call inside `e` fails and nothing inside `e` handled
+it, the result is `(err e)` with that `CallError`. Otherwise the result is `(ok value)`. Errors
+other than `call-failed` pass through, as listed in [Failures](#failures).
+
+### retry
+
+```
+(retry {:delays [1s 2s 4s] :on [Timeout Unavailable]}
+  (call github.ci {:repo repo :sha sha}))
+```
+
+`retry` evaluates `e`, and evaluates it again after each delay while it fails with a retried
+kind. An empty delay list means exactly one attempt, so `[1s 2s 4s]` allows up to four. A failure
+whose kind is not in `:on` ends the form at once, without using a delay. When attempts run out,
+the last failure propagates as if `retry` were not there. Wrap the form in `attempt` to capture
+it.
+
+`:on` lists [`CallError` kinds](#call-errors). Without `:on`, `retry` retries the transient kinds
+`Timeout`, `Unavailable`, and `RateLimited`. It never retries `NotFound`, `PermissionDenied`, or
+`Invalid` unless `:on` names them.
+
+`{:backoff [100ms 5s] :within 30s}` replaces `:delays` with computed delays. The first delay is
+`100ms`, and each later delay doubles, never longer than `5s`. A delay is taken only if the total
+of all delays so far stays within `30s`. Nothing is added at random. `:within` bounds the total
+delay, not wall-clock time. The host enforces wall-clock time separately.
+
+`e` may contain several calls, and each attempt evaluates all of `e` again. A `write` capability
+inside `e` must be declared `idempotent`, because a retry may repeat it. The checker rejects
+`retry` around a non-idempotent write with `retry-write`.
+
+### wait-until
+
+```
+(wait-until {:within 10m :every 15s}
+  (fn [job] (= (get job :state) "done"))
+  (call jobs.status {:id id}))
+```
+
+`wait-until` evaluates `e`, then applies `f` to its value. If `f` returns `true`, the form returns
+that value. Otherwise it waits and evaluates `e` again. `:every` sets a fixed interval, and
+`{:backoff [first cap]}` sets doubling intervals as in `retry`. `:within` is required and bounds
+the total waiting time. When the next wait would exceed it, the form fails with a `CallError` of
+kind `Timeout`, which `attempt` can capture and `retry` can retry. A failed call inside `e` fails
+the form at once. Wrap `e` in `retry` to tolerate it. `e` must have only `read` effects. Intervals
+must be at least `1ms`.
+
+### Delays
+
+A delay is a request like a capability call. The machine suspends with a delay request carrying
+its ID and duration, and the host resumes it after waiting. The machine never reads a clock.
+Fixture hosts resume at once, so tests run in no time and stay deterministic. The trace records
+each delay.
 
 ## Prelude
 
@@ -132,7 +197,8 @@ Text operations other than `str`, `=`, and ordering live in the `text` core, for
 ## Effects and authorization
 
 Each capability declares an ID, an input type, an output type, and an effect class of `read` or
-`write`. Effects are inferred from the program text. Without dynamic dispatch, the set of
+`write`. A `write` capability also declares whether it is `idempotent`, meaning that repeating a
+call with the same input has the same effect as making it once. Effects are inferred from the program text. Without dynamic dispatch, the set of
 capability IDs a program can call is exactly the set of IDs named in its `call` forms.
 
 The host supplies an allow-list of capability IDs for each execution. The checker rejects a
@@ -173,13 +239,29 @@ compare traces sorted by request ID.
 | Error | Cause | Caught by `attempt` |
 | --- | --- | --- |
 | `rejected` | Parse, name, type, effect, or authorization error. Nothing ran. | No |
-| `call-failed` | A capability returned a `CallError` outside `attempt` | Yes |
+| `call-failed` | A capability returned a `CallError`, or `wait-until` timed out, and nothing captured it | Yes |
 | `invalid-host-response` | See [Execution](#execution) | No |
 | `budget-exhausted` | A budget ran out. The error names the budget. | No |
 | `arithmetic` | Overflow, division by zero, negative `take` count | No |
 | `internal` | Interpreter bug | No |
 
-`CallError` is `Record {code: String, message: String}`. The host chooses the codes.
+### Call errors
+
+`CallError` is `Record {kind: CallErrorKind, message: String}`. Programs branch on the kind,
+never on the message. `CallErrorKind` is a closed kernel enum:
+
+| Kind | Meaning | Retried by default |
+| --- | --- | --- |
+| `Timeout` | The operation exceeded its time limit. | Yes |
+| `Unavailable` | The service could not be reached or reported a transient failure. | Yes |
+| `RateLimited` | The service refused the request because of request volume. | Yes |
+| `NotFound` | The target does not exist. | No |
+| `PermissionDenied` | The host or service refused access. | No |
+| `Invalid` | The service rejected the input. | No |
+| `Conflict` | The target changed, or is in a state that prevents the operation. | No |
+| `Failed` | Any other failure. | No |
+
+The host maps each failure to exactly one kind. A failure that fits no other kind is `Failed`.
 
 When a `par` branch fails, the machine waits for the current suspension's responses, then
 reports the failure with the lowest request ID. Effects that already ran are not rolled back.
@@ -262,9 +344,9 @@ The checker's codes are:
 | Reading | `unclosed`, `unexpected-close`, `bad-literal`, `bad-symbol`, `int-range`, `bad-escape`, `record-key`, `record-missing-value`, `duplicate-field`, `empty-program`, `multiple-expressions` |
 | Names | `unknown-name`, `unknown-function`, `unknown-capability`, `unknown-field`, `unknown-variant` |
 | Calls | `arity`, `type-mismatch`, `unresolved-type`, `not-a-record` |
-| Forms | `condition-not-bool`, `branch-mismatch`, `fn-position`, `bad-pattern`, `attempt-operand` |
+| Forms | `condition-not-bool`, `branch-mismatch`, `fn-position`, `bad-pattern`, `bad-option` |
 | Match | `non-exhaustive`, `unreachable-clause` |
-| Effects | `unauthorized`, `parallel-write`, `par-map-limit` |
+| Effects | `unauthorized`, `parallel-write`, `par-map-limit`, `retry-write`, `wait-write` |
 | Size | `too-large`, naming the `source-bytes`, `nodes`, or `depth` budget |
 | Habits | `habit`, naming the construct. The reader detects `nil`, `capitalized-boolean`, `quote`, `reader-macro`, `anonymous-fn-shorthand`, `set-literal`, `threading`, `js-operator`, `js-object-key`, `method-call`, and `namespace-slash`. The checker detects `defn`, `keyword-call`, and `argument-order`. |
 
@@ -299,6 +381,7 @@ The host sets every budget. A program cannot read or raise one.
 | `depth` | Syntax tree nesting |
 | `steps` | Machine steps |
 | `calls` | Total capability requests |
+| `delay` | Total time requested by delays across the run |
 | `concurrency` | Requests in one suspension. A larger `par-map` limit is rejected. |
 | `value-size` | Size of any intermediate or final value |
 | `applications` | Function argument applications |

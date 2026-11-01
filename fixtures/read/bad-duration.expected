@@ -1,0 +1,19 @@
+error[bad-literal] 1:18-1:22
+  (retry {:delays [1.5s 10sec 3days]} (call x.y {}))
+                   ^^^^
+  This is not a duration literal.
+  Durations are a whole number followed by ms, s, m, or h, for example 250ms or 5s.
+  Fix: 1500ms
+
+error[bad-literal] 1:23-1:28
+  (retry {:delays [1.5s 10sec 3days]} (call x.y {}))
+                        ^^^^^
+  This is not a duration literal.
+  Durations are a whole number followed by ms, s, m, or h, for example 250ms or 5s.
+  Fix: 10s
+
+error[bad-literal] 1:29-1:34
+  (retry {:delays [1.5s 10sec 3days]} (call x.y {}))
+                              ^^^^^
+  3days is not a duration.
+  Durations are a whole number followed by ms, s, m, or h, for example 250ms or 5s.

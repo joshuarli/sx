@@ -77,6 +77,17 @@ A diagnostic never fails silently, never shows a Python traceback, and never sto
 error when the checker found more. The format is in
 [docs/language.md](docs/language.md#diagnostics).
 
+### Retries and polling are bounded kernel forms
+
+Agents retry flaky calls and poll for state changes constantly, and JavaScript makes both easy to
+get wrong. Sx takes its forms from xsh: `retry` with an explicit delay list or a capped
+deterministic backoff, `wait-until` with a required deadline, and retry selection by error kind
+instead of by message text. Every option is a literal, so the checker computes the maximum number
+of attempts and programs still always terminate. Sx adds two rules for agents: the default
+`retry` covers only transient kinds, and `retry` refuses to repeat a write that is not declared
+idempotent. Delays are host requests, so the machine never reads a clock and fixture runs take no
+time.
+
 ### The kernel knows no application domain
 
 The kernel owns syntax, types, effects, evaluation, budgets, and the suspension protocol. It
@@ -171,15 +182,14 @@ The corpus has about 30 tasks. Each task has:
 - A JavaScript reference solution that produces the expected value.
 
 The tasks cover filtering and grouping, parallel reads, conditional calls, partial failure
-handled with `attempt`, schema mistakes, composition of two cores, and tasks unrelated to
-repomod. Use repomod-shaped fixture capabilities such as `catalog.list`, `git.status`, and
-`github.ci` for realism, but never call repomod.
+handled with `attempt`, retries of transient failures, polling with a deadline, schema mistakes,
+composition of two cores, and tasks unrelated to repomod. Use repomod-shaped fixture capabilities
+such as `catalog.list`, `git.status`, and `github.ci` for realism, but never call repomod.
 
-Capabilities return complete results, so no task paginates by hand. Include tasks that
-JavaScript should win: string manipulation, arithmetic, and ad hoc logic. Also include a few
-tasks that need a loop with no bound known in advance, such as polling until a state changes. Sx
-cannot express those tasks. They count as Sx failures, and the report lists them separately as
-expressiveness limits.
+Capabilities normally return complete results. Include tasks that JavaScript should win: string
+manipulation, arithmetic, and ad hoc logic. Also include a few tasks that need a loop with no
+bound known in advance, such as following a pagination cursor. Sx cannot express those tasks.
+They count as Sx failures, and the report lists them separately as expressiveness limits.
 
 Split the corpus into a development set of about a third of the tasks and a held-out set of the
 rest. The pilot, diagnostic tuning, and any language revision use only the development set. Only

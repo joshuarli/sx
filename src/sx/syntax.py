@@ -39,6 +39,12 @@ class IntLiteral:
 
 
 @dataclass(frozen=True, slots=True)
+class DurationLiteral:
+    milliseconds: int
+    span: Span
+
+
+@dataclass(frozen=True, slots=True)
 class StringLiteral:
     value: str
     span: Span
@@ -74,7 +80,9 @@ class Form:
     span: Span
 
 
-type Node = Symbol | Keyword | IntLiteral | StringLiteral | BoolLiteral | ListLiteral | RecordLiteral | Form
+type Node = (
+    Symbol | Keyword | IntLiteral | DurationLiteral | StringLiteral | BoolLiteral | ListLiteral | RecordLiteral | Form
+)
 
 
 def show(node: Node) -> str:
@@ -85,6 +93,8 @@ def show(node: Node) -> str:
             return f":{name}"
         case IntLiteral(value=value):
             return str(value)
+        case DurationLiteral(milliseconds=milliseconds):
+            return show_duration(milliseconds)
         case BoolLiteral(value=value):
             return "true" if value else "false"
         case StringLiteral(value=value):
@@ -95,6 +105,16 @@ def show(node: Node) -> str:
             return "{" + " ".join(f":{field.key.name} {show(field.value)}" for field in fields) + "}"
         case Form(items=items):
             return "(" + " ".join(show(item) for item in items) + ")"
+
+
+DURATION_UNITS = (("h", 3_600_000), ("m", 60_000), ("s", 1_000), ("ms", 1))
+
+
+def show_duration(milliseconds: int) -> str:
+    for unit, size in DURATION_UNITS:
+        if milliseconds % size == 0 and (milliseconds != 0 or unit == "ms"):
+            return f"{milliseconds // size}{unit}"
+    raise AssertionError(milliseconds)
 
 
 _STRING_ESCAPES = {'"': '\\"', "\\": "\\\\", "\n": "\\n", "\t": "\\t"}

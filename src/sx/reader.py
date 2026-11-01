@@ -5,7 +5,9 @@ from dataclasses import dataclass, field
 
 from sx.diagnostics import Diagnostic
 from sx.syntax import (
+    DURATION_UNITS,
     BoolLiteral,
+    DurationLiteral,
     Form,
     IntLiteral,
     Keyword,
@@ -27,6 +29,13 @@ _DELIMITERS = frozenset("()[]{}\";")
 _CLOSERS = {"(": ")", "[": "]", "{": "}"}
 
 _INT = re.compile(r"-?[0-9]+")
+_DURATION = re.compile(r"([0-9]+)(ms|s|m|h)")
+_DURATION_LIKE = re.compile(r"(-?[0-9]+(?:\.[0-9]+)?)([a-z]+)")
+_UNIT_SPELLINGS = {
+    "msec": "ms", "millis": "ms", "sec": "s", "secs": "s", "second": "s", "seconds": "s",
+    "min": "m", "mins": "m", "minute": "m", "minutes": "m", "hr": "h", "hrs": "h", "hour": "h", "hours": "h",
+}
+_UNIT_SIZES = dict(DURATION_UNITS)
 _FLOAT = re.compile(r"-?[0-9]+(\.[0-9]*)?([eE][-+]?[0-9]+)?")
 _NAME = r"[a-z][a-z0-9]*(-[a-z0-9]+)*\??"
 _VARIANT = r"[A-Z][A-Za-z0-9]*"
@@ -382,6 +391,17 @@ class _Reader:
                 self.error("int-range", span, f"{text} does not fit in a signed 64-bit Int.")
                 return None
             return IntLiteral(value, span)
+        duration = _DURATION.fullmatch(text)
+        if duration:
+            milliseconds = int(duration.group(1)) * _UNIT_SIZES[duration.group(2)]
+            if milliseconds > INT_MAX:
+                self.error("int-range", span, f"{text} is longer than the largest duration.")
+                return None
+            return DurationLiteral(milliseconds, span)
+        near = _DURATION_LIKE.fullmatch(text)
+        if near:
+            self.bad_duration(near.group(1), near.group(2), span)
+            return None
         if _FLOAT.fullmatch(text):
             self.error("bad-literal", span, "Sx has no floating-point numbers. Use an Int.")
             return None
@@ -429,6 +449,21 @@ class _Reader:
             return Symbol(text, span)
         self.bad_symbol(text, span)
         return None
+
+    def bad_duration(self, amount: str, unit: str, span: Span) -> None:
+        unit = _UNIT_SPELLINGS.get(unit, unit)
+        detail = "Durations are a whole number followed by ms, s, m, or h, for example 250ms or 5s."
+        if unit not in _UNIT_SIZES:
+            self.error("bad-literal", span, f"{amount}{unit} is not a duration.", detail=detail)
+            return
+        if amount.startswith("-"):
+            self.error("bad-literal", span, "A duration cannot be negative.", detail=detail)
+            return
+        milliseconds = float(amount) * _UNIT_SIZES[unit]
+        fix = f"{int(milliseconds)}ms" if milliseconds.is_integer() else None
+        if "." not in amount:
+            fix = f"{amount}{unit}"
+        self.error("bad-literal", span, "This is not a duration literal.", detail=detail, fix=fix)
 
     def bad_symbol(self, text: str, span: Span) -> None:
         if text in {"->", "->>", "some->", "as->", "cond->"}:
