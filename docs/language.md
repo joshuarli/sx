@@ -10,10 +10,9 @@ A program is one expression. There are no top-level definitions, imports, macros
 recursion. Evaluation is strict, and arguments evaluate left to right, except inside `par` and
 `par-map`.
 
-Every program terminates. Iteration runs over lists that already exist, and the only repetition,
-`retry` and `wait-until`, has an attempt count the checker computes from literal options. A
-program cannot loop over an unbounded sequence, so it cannot follow a pagination cursor. A
-capability that reads a paginated source returns every page as one result.
+Every program terminates. Iteration runs over lists that already exist, and every form that
+repeats, `retry`, `wait-until`, and `loop`, takes a literal bound the checker reads before the
+program runs. There is no general recursion and no unbounded loop.
 
 ## Lexical syntax
 
@@ -74,9 +73,10 @@ and on `String`, where strings compare lexicographically by Unicode code point.
 | `(fn [p ...] body)` | Allowed only as a function argument to a prelude function or `par-map`. |
 | `(get r :field)` | `r` is a record with `field`. A missing field is rejected by the checker. |
 | `(call cap.id arg)` | `arg` has the capability's input type. The result has its output type. |
-| `(attempt e)` | `Result<T, CallError>`, where `e` has type `T`. See [Retries and polling](#retries-and-polling). |
-| `(retry {options} e)` | `T`. Re-evaluates `e` after a failure. See [Retries and polling](#retries-and-polling). |
+| `(attempt e)` | `Result<T, CallError>`, where `e` has type `T`. See [Recovery and repetition](#recovery-and-repetition). |
+| `(retry {options} e)` | `T`. Re-evaluates `e` after a failure. |
 | `(wait-until {options} f e)` | `T`. Re-evaluates `e` until `f` returns `true` for its value. |
+| `(loop {:max n} [p1 e1 ...] body)` | The type of `body`'s non-`recur` results. `(recur ...)` repeats `body`. |
 | `(par e1 ... en)` | `Tuple<T1, ..., Tn>`. Every branch has only `read` effects. |
 | `(par-map {:limit n} f xs)` | `List<U>`. `n` is an integer literal. `f` has only `read` effects. |
 
@@ -100,11 +100,11 @@ The scrutinee's type determines which variant names are in scope, so patterns ar
 matches anything. A `match` without `_` must name every variant. A clause that can never match
 is rejected.
 
-## Retries and polling
+## Recovery and repetition
 
-These forms follow xsh's `try`, `retry`, and `wait until`. Each does one thing. `retry` and
-`wait-until` repeat, and `attempt` captures. All options are literals, so the checker knows the
-largest number of attempts before the program runs, and the `calls` budget accounts for it.
+`attempt`, `retry`, and `wait-until` follow xsh's `try`, `retry`, and `wait until`. Each form
+does one thing. `retry`, `wait-until`, and `loop` repeat, and `attempt` captures. All options are
+literals, so the checker knows the largest number of repetitions before the program runs.
 
 ### attempt
 
@@ -153,6 +153,34 @@ the total waiting time. When the next wait would exceed it, the form fails with 
 kind `Timeout`, which `attempt` can capture and `retry` can retry. A failed call inside `e` fails
 the form at once. Wrap `e` in `retry` to tolerate it. `e` must have only `read` effects. Intervals
 must be at least `1ms`.
+
+### loop
+
+```
+(loop {:max 50} [cursor none
+                 events []]
+  (let [page (call events.page {:cursor cursor})
+        all (concat events (get page :items))]
+    (match (get page :next)
+      (some next) (recur next all)
+      none all)))
+```
+
+`loop` binds its names like `let`, then evaluates `body`. `(recur e1 ... en)` evaluates its
+arguments, rebinds the names to them in order, and evaluates `body` again. Any other result of
+`body` is the result of the loop.
+
+- `recur` must be in tail position of the innermost `loop` body, and never inside a `fn`. The
+  checker rejects any other `recur` with `recur-position`.
+- `recur` takes exactly one argument per binding, with that binding's type, or the checker
+  rejects it with `recur-arity` or `type-mismatch`.
+- A binding's type comes from its initial value and from the matching `recur` arguments, so
+  `none` and `[]` work as initial values.
+- `:max` is an integer literal of at least 1 and counts evaluations of `body`. If evaluation
+  number `:max` ends in `recur`, the loop fails with `loop-limit`. Choose `:max` as the largest
+  count the task can need, not as a timeout.
+- The body may call capabilities. Inside a `par` branch or `par-map` function, the usual
+  read-only rule applies.
 
 ### Delays
 
@@ -205,6 +233,12 @@ The host supplies an allow-list of capability IDs for each execution. The checke
 program that names any ID outside the allow-list. A rejected program produces no capability
 request. `sx explain` prints a program's capability set and effect classes without running it.
 
+The allow-list is the first of two checks. The host sees every request's input before it runs
+the request, so it can also refuse one request, for example a file outside a permitted directory.
+A refused request resumes the machine with a `CallError` of kind `PermissionDenied`. `sx explain`
+shows the inputs it can know before running: literal arguments, such as a fixed path, appear in
+its output, and arguments computed at run time do not.
+
 `par` branches and `par-map` functions must have only `read` effects. Read effects in parallel
 branches do not observe one consistent snapshot of the outside world. Determinism holds only for
 fixed responses.
@@ -220,8 +254,10 @@ outcomes.
 - `Suspended(requests, continuation)`: the program needs capability results.
 - `Failed(error)`: the program stopped. See [Failures](#failures).
 
-Each request has an ID derived from its position in the program and, inside `par-map`, its
-element index. IDs never depend on completion order. One suspension holds every request that is
+Each request has an ID derived from its position in the program and from its index in every
+enclosing repetition: the `par-map` element, the `retry` attempt, the `wait-until` round, and the
+`loop` iteration. IDs never depend on completion order, and no two requests in one run share
+one. One suspension holds every request that is
 ready: one per active `par` branch, and up to `limit` for `par-map`.
 
 The host resumes with a response for every request in the suspension. Each response is either an
@@ -241,6 +277,7 @@ compare traces sorted by request ID.
 | `rejected` | Parse, name, type, effect, or authorization error. Nothing ran. | No |
 | `call-failed` | A capability returned a `CallError`, or `wait-until` timed out, and nothing captured it | Yes |
 | `invalid-host-response` | See [Execution](#execution) | No |
+| `loop-limit` | A `loop` reached its `:max` and its body asked to `recur` again | No |
 | `budget-exhausted` | A budget ran out. The error names the budget. | No |
 | `arithmetic` | Overflow, division by zero, negative `take` count | No |
 | `internal` | Interpreter bug | No |
@@ -266,6 +303,17 @@ The host maps each failure to exactly one kind. A failure that fits no other kin
 When a `par` branch fails, the machine waits for the current suspension's responses, then
 reports the failure with the lowest request ID. Effects that already ran are not rolled back.
 
+## Inputs
+
+A host may declare typed inputs for a program, each a name and a type such as
+`owners: List<String>`. The program refers to an input by name, like a `let` binding, and a `let`
+may shadow it. The host supplies a value for every declared input, in the
+[JSON encoding](#values-and-json), before the run starts, and a value that does not match its type
+rejects the run before any request. An undeclared name is an `unknown-name` error. `sx explain`
+lists the inputs a program uses.
+
+In v0 only the host declares inputs. A script file cannot declare its own.
+
 ## Values and JSON
 
 Capability inputs and outputs, program results, and fixtures use one JSON encoding. Decoding
@@ -286,8 +334,9 @@ always knows the expected type, so every encoding below is unambiguous.
 | Core enum, variant with a value | `{"tag": "OnBranch", "value": x}` |
 | Core nominal | The encoding of its base type |
 
-`Option<Option<T>>` has no JSON encoding, because `null` would be ambiguous. The checker rejects
-a capability or program result whose type contains it.
+`Option<T>` has no JSON encoding when `T` itself can encode as `null`, which is when `T` is `Unit`
+or another `Option`. `none` and `(some x)` would both be `null`. The checker rejects a capability
+input or output, a program input, or a program result whose type contains such an `Option`.
 
 Decoding a capability response fails with `invalid-host-response` when a value does not match
 the expected type. A missing field, an extra field, and `null` for a non-`Option` type are all
@@ -344,11 +393,11 @@ The checker's codes are:
 | Reading | `unclosed`, `unexpected-close`, `bad-literal`, `bad-symbol`, `int-range`, `bad-escape`, `record-key`, `record-missing-value`, `duplicate-field`, `empty-program`, `multiple-expressions` |
 | Names | `unknown-name`, `unknown-function`, `unknown-capability`, `unknown-field`, `unknown-variant` |
 | Calls | `arity`, `type-mismatch`, `unresolved-type`, `not-a-record` |
-| Forms | `condition-not-bool`, `branch-mismatch`, `fn-position`, `bad-pattern`, `bad-option` |
+| Forms | `condition-not-bool`, `branch-mismatch`, `fn-position`, `bad-pattern`, `bad-option`, `recur-position`, `recur-arity` |
 | Match | `non-exhaustive`, `unreachable-clause` |
 | Effects | `unauthorized`, `parallel-write`, `par-map-limit`, `retry-write`, `wait-write` |
 | Size | `too-large`, naming the `source-bytes`, `nodes`, or `depth` budget |
-| Habits | `habit`, naming the construct. The reader detects `nil`, `capitalized-boolean`, `quote`, `reader-macro`, `anonymous-fn-shorthand`, `set-literal`, `threading`, `js-operator`, `js-object-key`, `method-call`, and `namespace-slash`. The checker detects `defn`, `keyword-call`, and `argument-order`. |
+| Habits | `habit`, naming the construct. The reader detects `nil`, `capitalized-boolean`, `quote`, `reader-macro`, `anonymous-fn-shorthand`, `set-literal`, `threading`, `js-operator`, `js-object-key`, `method-call`, and `namespace-slash`. The checker detects `defn`, `keyword-call`, `argument-order`, `while`, and `loop-without-max`. |
 
 A habit diagnostic names the language the construct comes from and gives the Sx form. For
 example, `(:name repo)` gets `Fix: (get repo :name)`.

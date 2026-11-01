@@ -9,7 +9,8 @@ JavaScript Code Mode. This is an open empirical question. The plan tests it befo
 formal semantics or a fast runtime.
 
 The language itself is specified in [docs/language.md](docs/language.md). This document covers
-goals, decisions, and the order of work.
+the current campaign: its goals, decisions, and order of work. The longer direction, and what the
+current campaign must keep possible, is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## What success looks like
 
@@ -77,16 +78,17 @@ A diagnostic never fails silently, never shows a Python traceback, and never sto
 error when the checker found more. The format is in
 [docs/language.md](docs/language.md#diagnostics).
 
-### Retries and polling are bounded kernel forms
+### Retries, polling, and loops are bounded kernel forms
 
-Agents retry flaky calls and poll for state changes constantly, and JavaScript makes both easy to
-get wrong. Sx takes its forms from xsh: `retry` with an explicit delay list or a capped
+Agents retry flaky calls, poll for state changes, and follow pagination cursors constantly, and
+JavaScript makes all three easy to get wrong. Sx takes its forms from xsh: `retry` with an explicit delay list or a capped
 deterministic backoff, `wait-until` with a required deadline, and retry selection by error kind
 instead of by message text. Every option is a literal, so the checker computes the maximum number
 of attempts and programs still always terminate. Sx adds two rules for agents: the default
 `retry` covers only transient kinds, and `retry` refuses to repeat a write that is not declared
 idempotent. Delays are host requests, so the machine never reads a clock and fixture runs take no
-time.
+time. A `loop` with `recur` and a required literal `:max` covers pagination and other stateful
+repetition, using the Clojure form models already know, without general recursion.
 
 ### The kernel knows no application domain
 
@@ -172,7 +174,7 @@ This phase tests whether a model can learn the syntax before the checker and mac
 
 #### Task corpus
 
-The corpus has about 30 tasks. Each task has:
+The corpus has about 45 tasks. Each task has:
 
 - A natural-language description.
 - Capability declarations, with input and output types written in the
@@ -186,13 +188,13 @@ handled with `attempt`, retries of transient failures, polling with a deadline, 
 composition of two cores, and tasks unrelated to repomod. Use repomod-shaped fixture capabilities
 such as `catalog.list`, `git.status`, and `github.ci` for realism, but never call repomod.
 
-Capabilities normally return complete results. Include tasks that JavaScript should win: string
-manipulation, arithmetic, and ad hoc logic. Also include a few tasks that need a loop with no
-bound known in advance, such as following a pagination cursor. Sx cannot express those tasks.
-They count as Sx failures, and the report lists them separately as expressiveness limits.
+Include tasks that JavaScript should win: string manipulation, arithmetic, and ad hoc logic.
+Include paginated capabilities as real APIs have them. Do not shape any task around what Sx can
+express. A task that needs a feature Sx v0 lacks, such as an object with arbitrary keys or a
+fractional number, counts as an Sx failure, and the report lists it separately as an
+expressiveness limit.
 
-Split the corpus into a development set of about a third of the tasks and a held-out set of the
-rest. The pilot, diagnostic tuning, and any language revision use only the development set. Only
+Split the corpus into a development set of about 15 tasks and a held-out set of about 30. The pilot, diagnostic tuning, and any language revision use only the development set. Only
 the held-out set decides the Phase 2 gate. No model output on a held-out task informs a change to
 the language, the guide, or the diagnostics.
 
@@ -272,11 +274,16 @@ Build the harness in `bench/codemode` that runs the Phase 0 corpus in two arms.
 
 Tune diagnostics and habit detectors on the development set before the held-out run.
 
+Score each task as the mean over its samples, and compare the arms task by task, so repeated
+samples of one task do not count as independent evidence. Report a bootstrap confidence interval
+over tasks with every result. With about 30 held-out tasks, one task is about 3 percentage points.
+
 **Gate:** On the held-out set, for each model over the pairs it completed, Sx first-attempt
 correctness is no more than 5 percentage points below JavaScript. Sx must also be better on
 either correctness or total tokens per solved task. If the gate fails, revise the language once,
 using only development-set evidence, and rerun the held-out set. If it fails again, stop the
-project.
+project. Passing the gate means the prototype continues. It is not evidence that Sx beats
+JavaScript in general. That claim needs the workflow comparison in the roadmap.
 
 ### Phase 3: Cores and the repomod host
 
@@ -294,7 +301,8 @@ Build the cores and the read-only repomod integration.
 5. `sx-repomod` host: capabilities that wrap repomod's catalog, Git, and cached GitHub reads.
    Policy rules stay in Python behind one read-only `policy.lint` capability. The current time
    reaches programs as a capability result, so tests fix it.
-6. Programs: `discover.sx` and `status-offline.sx`.
+6. Programs: `discover.sx` and `status-offline.sx`. Command-line options such as
+   `discover --owner` reach the program as [inputs](docs/language.md#inputs).
 
 Test parity by running the Python command with `--json` and the Sx program on the same inputs.
 Compare the parsed JSON and the exit status. Text output stays in Python: the host renders the
