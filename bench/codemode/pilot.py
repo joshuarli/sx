@@ -214,6 +214,7 @@ def main() -> None:
     parser.add_argument("--out", type=Path, default=ROOT / ".work" / "pilot" / "runs")
     parser.add_argument("--task", action="append", help="Run only these task ids")
     parser.add_argument("--rescore", action="store_true", help="Score saved replies again without calling the model")
+    parser.add_argument("--show", action="store_true", help="Print saved answers with their status, task by task")
     args = parser.parse_args()
 
     args.out = args.out.resolve()
@@ -230,6 +231,10 @@ def main() -> None:
         if args.task and task["id"] not in args.task:
             continue
         tasks.append(task)
+
+    if args.show:
+        show(args.out, {task["id"] for task in tasks})
+        return
 
     if args.rescore:
         by_id = {task["id"]: task for task in tasks}
@@ -254,6 +259,24 @@ def main() -> None:
             )
         runs = [job.result() for job in jobs]
     report(runs, tasks, args.out)
+
+
+def show(out: Path, task_ids: set[str]) -> None:
+    for task_dir in sorted(path for path in out.iterdir() if path.is_dir() and path.name in task_ids):
+        print(f"## {task_dir.name}")
+        for path in sorted(task_dir.glob("[0-9]*.json")):
+            run = json.loads(path.read_text())
+            if run["error"] is not None:
+                status = f"model error: {run['error']}"
+            elif run["diagnostics"]:
+                status = "read failed: " + ", ".join(run["diagnostics"])
+            else:
+                status = "read ok"
+            unknown = f"; lacks {', '.join(run['unknown'])}" if run["unknown"] else ""
+            print(f"### sample {run['sample']}: {status}{unknown}; tokens {run['tokens']}")
+            print(run["program"])
+            if run["diagnostics"]:
+                print(run["rendered"])
 
 
 def report(runs: list[Run], tasks: list[Json], out: Path) -> None:
