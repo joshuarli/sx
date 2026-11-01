@@ -257,10 +257,13 @@ Build the harness in `bench/codemode` that runs the Phase 0 corpus in two arms.
   runs in a pair use the same model. Report results per model.
 - Define an opencode agent for the probe with every tool disabled, so the model answers with a
   program instead of running commands. Both arms use the same agent.
-- Read token counts from the `step_finish` events in opencode's JSON output. opencode adds its
-  own prompt to every request: a one-line prompt to the default agent reported 9,209 input
-  tokens. Measure the probe agent with an empty task and subtract that baseline, so the reported
-  tokens are the task, the language guide, and the answer.
+- Read token counts from the `step_finish` events in opencode's JSON output. Run opencode with
+  `OPENCODE_CONFIG_DIR` pointing at an empty directory and with `OPENCODE_DISABLE_CLAUDE_CODE`
+  and `OPENCODE_DISABLE_CLAUDE_CODE_SKILLS` set. Otherwise every prompt carries the user's
+  global instructions and skill list, and the model tries to call skills. A one-line prompt cost
+  9,209 input tokens with the default agent, 2,414 with the tool-free agent, and 386 isolated.
+  Subtract the isolated baseline, so the reported tokens are the task, the language guide, and
+  the answer.
 - Run each task several times per arm. Pair the runs. Allow a fixed number of repair attempts,
   feeding back the checker or runtime error.
 - Before the full run, measure the tokens of one paired task and size the corpus and sample count

@@ -1,5 +1,6 @@
 import argparse
 import json
+import os
 import re
 import subprocess
 from collections import Counter
@@ -81,12 +82,27 @@ def task_section(task: Json, cores: Json) -> str:
     return "\n".join(lines)
 
 
-def ask(prompt: str, model: str, workdir: Path) -> tuple[str, dict[str, int], str | None]:
+def isolated_environment(workdir: Path) -> dict[str, str]:
+    config = workdir / "config"
+    config.mkdir(exist_ok=True)
+    return {
+        **os.environ,
+        "PWD": str(workdir),
+        "OPENCODE_CONFIG_DIR": str(config),
+        "OPENCODE_DISABLE_CLAUDE_CODE": "1",
+        "OPENCODE_DISABLE_CLAUDE_CODE_SKILLS": "1",
+    }
+
+
+def ask(prompt: Path, model: str, workdir: Path) -> tuple[str, dict[str, int], str | None]:
+    command = [str(OPENCODE), "run", "--standalone", "--agent", AGENT, "-m", model, "--format", "json"]
     completed = subprocess.run(
-        [str(OPENCODE), "run", "--standalone", "--agent", AGENT, "-m", model, "--format", "json", prompt],
+        [*command, "--file", str(prompt), "Solve the task in the attached file."],
+        stdin=subprocess.DEVNULL,
         capture_output=True,
         text=True,
         cwd=workdir,
+        env=isolated_environment(workdir),
         timeout=600,
         check=False,
     )
@@ -106,6 +122,8 @@ def ask(prompt: str, model: str, workdir: Path) -> tuple[str, dict[str, int], st
                 output=int(usage["output"]),
                 reasoning=int(usage["reasoning"]),
             )
+        elif event["type"] == "tool_use":
+            error = f"the model tried to use the {event['part']['tool']} tool"
         elif event["type"] == "error":
             error = str(event["error"].get("message", json.dumps(event["error"])))
     if completed.returncode != 0 and error is None:
@@ -124,7 +142,7 @@ def extract(reply: str) -> tuple[str, str | None]:
     return body, language
 
 
-def run_one(task: Json, sample: int, model: str, prompt: str, workdir: Path) -> Run:
+def run_one(task: Json, sample: int, model: str, prompt: Path, workdir: Path) -> Run:
     reply, tokens, error = ask(prompt, model, workdir)
     program, fence = extract(reply)
     result = read(program)
@@ -151,6 +169,7 @@ def main() -> None:
     parser.add_argument("--task", action="append", help="Run only these task ids")
     args = parser.parse_args()
 
+    args.out = args.out.resolve()
     workdir = args.out.parent
     workdir.mkdir(parents=True, exist_ok=True)
     (workdir / "opencode.json").write_text(json.dumps(AGENT_CONFIG, indent=2))
@@ -168,9 +187,9 @@ def main() -> None:
     jobs = []
     with ThreadPoolExecutor(max_workers=args.jobs) as pool:
         for task in tasks:
-            prompt = f"{guide}\n\n{task_section(task, cores)}\n"
-            (args.out / task["id"]).mkdir(parents=True, exist_ok=True)
-            (args.out / task["id"] / "prompt.md").write_text(prompt)
+            prompt = args.out / task["id"] / "prompt.md"
+            prompt.parent.mkdir(parents=True, exist_ok=True)
+            prompt.write_text(f"{guide}\n\n{task_section(task, cores)}\n")
             jobs.extend(
                 pool.submit(run_one, task, sample, args.model, prompt, workdir) for sample in range(args.samples)
             )
