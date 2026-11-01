@@ -163,13 +163,19 @@ Build `bench/codemode` to compare Sx against JavaScript Code Mode on identical t
 - Run `opencode-go/muse-spark-1.3-contributor` through `opencode run --format json`. The probe
   uses a weak model on purpose: a language a weak model writes correctly is easy enough for a
   strong one.
+- When the OpenCode Go weekly limit is reached, fall back to `opencode-go/iceman-contributor-free`,
+  which is free and weaker still. Both runs in a pair use the same model. Report results per
+  model, and apply the gate to each model that completed the full corpus.
 - Define an opencode agent for the probe with every tool disabled, so the model answers with a
-  program instead of running commands. Both arms use the same agent, so opencode's own prompt
-  adds the same overhead to each.
+  program instead of running commands. Both arms use the same agent.
+- Read token counts from the `step_finish` events in opencode's JSON output. opencode adds its
+  own prompt to every request: a one-line prompt to the default agent reported 9,209 input
+  tokens. Measure the probe agent with an empty task and subtract that baseline, so the reported
+  tokens are the task, the language guide, and the answer.
 - Run each task several times per arm. Pair the runs. Allow a fixed number of repair attempts,
   feeding back the checker or runtime error.
-- The OpenCode Go plan has a weekly usage limit. Before the full run, measure the tokens of one
-  paired task and size the corpus and sample count to fit the remaining quota.
+- Before the full run, measure the tokens of one paired task and size the corpus and sample count
+  to fit the remaining OpenCode Go quota.
 - Record per run: first-attempt correctness, final correctness, input and output tokens, tokens
   spent on the language guide, repair attempts, static rejections, runtime failures, and
   capability calls, including duplicates.
