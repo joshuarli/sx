@@ -1,7 +1,7 @@
 # Sx language, draft v0
 
-This is the working specification for the Phase 1 interpreter. It changes as the interpreter and
-the Phase 2 probe expose problems. Every change updates this file, the fixtures, and the
+This is the working specification for the Python interpreter. It changes as the syntax pilot, the
+interpreter, and the model probe expose problems. Every change updates this file, the fixtures, and the
 interpreter in the same commit.
 
 ## Programs
@@ -9,6 +9,10 @@ interpreter in the same commit.
 A program is one expression. There are no top-level definitions, imports, macros, quoting, or
 recursion. Evaluation is strict, and arguments evaluate left to right, except inside `par` and
 `par-map`.
+
+Every program terminates, because the only iteration is over lists that already exist. A program
+cannot loop until a condition holds, so it cannot poll or follow a pagination cursor. A
+capability that reads a paginated source returns every page as one result.
 
 ## Lexical syntax
 
@@ -175,6 +179,38 @@ compare traces sorted by request ID.
 
 When a `par` branch fails, the machine waits for the current suspension's responses, then
 reports the failure with the lowest request ID. Effects that already ran are not rolled back.
+
+## Values and JSON
+
+Capability inputs and outputs, program results, and fixtures use one JSON encoding. Decoding
+always knows the expected type, so every encoding below is unambiguous.
+
+| Type | JSON |
+| --- | --- |
+| `Bool` | `true` or `false` |
+| `Int` | An integer in the signed 64-bit range. A fraction, an exponent, or `true` is rejected. |
+| `String` | A string |
+| `Unit` | `null` |
+| `List<T>` | An array |
+| `Tuple<T1, ..., Tn>` | An array of exactly `n` elements |
+| `Option<T>` | `null` for `none`, the encoding of `x` for `(some x)` |
+| `Result<T, E>` | `{"ok": x}` or `{"err": e}` |
+| `Record {k: T, ...}` | An object with exactly the declared fields, named without the colon |
+| Core enum, variant without a value | The variant name as a string, for example `"Missing"` |
+| Core enum, variant with a value | `{"tag": "OnBranch", "value": x}` |
+| Core nominal | The encoding of its base type |
+
+`Option<Option<T>>` has no JSON encoding, because `null` would be ambiguous. The checker rejects
+a capability or program result whose type contains it.
+
+Decoding a capability response fails with `invalid-host-response` when a value does not match
+the expected type. A missing field, an extra field, and `null` for a non-`Option` type are all
+mismatches. Nothing is dropped, defaulted, or converted. The error gives the path to the bad
+value, the expected type, and what was found, for example
+`$.repos[3].name: expected String, found number`.
+
+Encoding writes record fields in declaration order. Comparisons of JSON values, in fixtures and
+in parity tests, ignore object key order.
 
 ## Diagnostics
 

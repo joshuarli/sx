@@ -20,8 +20,8 @@ The prototype succeeds if it shows all of the following:
 2. A program's full set of possible capability calls is known and authorized before execution.
 3. A malformed or unauthorized program never triggers a capability call.
 4. A new core registers without any change to kernel source.
-5. `repomod discover` and `repomod status --offline` run as Sx programs with output identical to
-   the Python commands on the same inputs.
+5. `repomod discover` and `repomod status --offline` run as Sx programs whose results match the
+   Python commands' `--json` output and exit status on the same inputs.
 
 If the model probe in Phase 2 fails its gate, the project stops or changes the language before
 any further phase starts.
@@ -136,29 +136,72 @@ suite runs in an environment where repomod is not installed, which proves the bo
 
 Each phase ends at a gate. Do not start a phase until the previous gate passes.
 
-### Phase 0: Skeleton
+### Phase 0: Skeleton, task corpus, and syntax pilot
 
-Create the uv workspace, ruff and ty configuration, and an empty kernel package with a test
-runner.
+This phase tests whether a model can learn the syntax before the checker and machine exist.
 
-**Gate:** `uv run pytest`, `uv run ruff check`, and `uv run ty check` pass.
+1. Create the uv workspace, ruff and ty configuration, and the kernel package with a test runner.
+2. Write the probe's task corpus in `bench/codemode`. The corpus is described under
+   [Task corpus](#task-corpus). Commit it before any model writes Sx for it. After that commit,
+   held-out tasks do not change.
+3. Write the reader: source text to a syntax tree with source positions. Errors recover, so one
+   bad form does not hide the errors after it.
+4. Write the `sx help` guide by hand from `docs/language.md`. Phase 1 replaces it with the
+   generated one.
+5. Run the pilot. Give `opencode-go/iceman-contributor-free` the guide and each development task,
+   several times per task. Run each answer through the reader, and read every answer by hand.
+6. Change the syntax where the pilot shows a construct models keep getting wrong. Update
+   `docs/language.md` to match.
+
+**Gate:**
+- `uv run pytest`, `uv run ruff check`, and `uv run ty check` pass.
+- Every syntax change from the pilot is in `docs/language.md`.
+- Every mistake that appeared in more than one pilot answer is a reader or checker fixture with
+  its expected diagnostic. These fixtures fail until Phase 1 implements them.
+
+#### Task corpus
+
+The corpus has about 30 tasks. Each task has:
+
+- A natural-language description.
+- Capability declarations, with input and output types written in the
+  [JSON encoding](docs/language.md#values-and-json).
+- Fixture responses for every capability call.
+- The expected final value, as JSON.
+- A JavaScript reference solution that produces the expected value.
+
+The tasks cover filtering and grouping, parallel reads, conditional calls, partial failure
+handled with `attempt`, schema mistakes, composition of two cores, and tasks unrelated to
+repomod. Use repomod-shaped fixture capabilities such as `catalog.list`, `git.status`, and
+`github.ci` for realism, but never call repomod.
+
+Capabilities return complete results, so no task paginates by hand. Include tasks that
+JavaScript should win: string manipulation, arithmetic, and ad hoc logic. Also include a few
+tasks that need a loop with no bound known in advance, such as polling until a state changes. Sx
+cannot express those tasks. They count as Sx failures, and the report lists them separately as
+expressiveness limits.
+
+Split the corpus into a development set of about a third of the tasks and a held-out set of the
+rest. The pilot, diagnostic tuning, and any language revision use only the development set. Only
+the held-out set decides the Phase 2 gate. No model output on a held-out task informs a change to
+the language, the guide, or the diagnostics.
 
 ### Phase 1: Python interpreter
 
-Implement the language in `docs/language.md` in this order:
+Implement the language in `docs/language.md` in this order, on top of the Phase 0 reader:
 
-1. Reader: source text to a syntax tree with source positions. Errors recover, so one bad form
-   does not hide the errors after it.
-2. Checker: name resolution, bidirectional type inference, effect inference, and authorization
+1. Checker: name resolution, bidirectional type inference, effect inference, and authorization
    against a capability allow-list. It reports every error it finds in the
    [diagnostic format](docs/language.md#diagnostics).
-3. Machine: pure evaluation with budgets.
-4. Suspension: `call`, `par`, `par-map`, and `attempt`, with resumption by request ID.
+2. Machine: pure evaluation with budgets.
+3. Suspension: `call`, `par`, `par-map`, and `attempt`, with resumption by request ID.
+4. JSON boundary: decode capability responses and encode results as specified in
+   [Values and JSON](docs/language.md#values-and-json).
 5. Registry: core and capability registration through a public API, with signatures readable
    without invoking anything. Every entry has a one-line description and at least one example.
 6. Habit detectors: recognize forms from Clojure, Scheme, and JavaScript that are not Sx, such as
    `defn`, `nil`, `#(...)`, `->`, `(:key r)`, and reversed `filter` arguments. Each one says what
-   to write instead.
+   to write instead. Start from the mistakes the pilot recorded.
 7. CLI:
    - `sx help` prints the guide.
    - `sx help NAME` prints the full entry for a form, prelude function, core function, type, or
@@ -175,7 +218,7 @@ Cover ill-typed programs, unauthorized capabilities, budget exhaustion, missing,
 unknown response IDs, invalid host results, and responses delivered out of order.
 
 **Gate:**
-- All fixtures pass.
+- All fixtures pass, including the pilot fixtures from Phase 0.
 - A test shows that a program rejected by the checker, or a program that names an unauthorized
   capability, produces no capability request.
 - Every diagnostic code has a fixture that pins its full message.
@@ -184,14 +227,9 @@ unknown response IDs, invalid host results, and responses delivered out of order
 
 ### Phase 2: Model probe against JavaScript
 
-Build `bench/codemode` to compare Sx against JavaScript Code Mode on identical tasks.
+Build the harness in `bench/codemode` that runs the Phase 0 corpus in two arms.
 
-- Write 20 to 30 tasks. Each has a natural-language description, a set of capabilities, fixture
-  responses, and a checker for the final value. Include filtering and grouping, pagination,
-  parallel reads, conditional calls, partial failure handled with `attempt`, schema mistakes,
-  composition of two cores, and tasks unrelated to repomod.
-- Use repomod-shaped fixture capabilities (`catalog.list`, `git.status`, `github.ci`) so the
-  tasks are realistic, but do not call repomod.
+- A run is correct when its final value equals the task's expected JSON value.
 - The Sx arm gets the `sx help` guide and the task's capability entries. Repairs feed back
   `sx check` or runtime diagnostics.
 - The JS arm gets TypeScript declarations for the same tools and runs them as async functions in
@@ -222,9 +260,13 @@ Build `bench/codemode` to compare Sx against JavaScript Code Mode on identical t
   that models repeatedly fail to fix needs a better message. A mistake that appears often with no
   habit detector needs a new detector.
 
-**Gate:** On each model, over the pairs it completed, Sx first-attempt correctness is no more
-than 5 percentage points below JavaScript, and Sx is better on either correctness or total tokens per solved task. If the gate
-fails, revise the language at most once and rerun. If it fails again, stop the project.
+Tune diagnostics and habit detectors on the development set before the held-out run.
+
+**Gate:** On the held-out set, for each model over the pairs it completed, Sx first-attempt
+correctness is no more than 5 percentage points below JavaScript. Sx must also be better on
+either correctness or total tokens per solved task. If the gate fails, revise the language once,
+using only development-set evidence, and rerun the held-out set. If it fails again, stop the
+project.
 
 ### Phase 3: Cores and the repomod host
 
@@ -244,11 +286,14 @@ Build the cores and the read-only repomod integration.
    reaches programs as a capability result, so tests fix it.
 6. Programs: `discover.sx` and `status-offline.sx`.
 
-Test parity by running the Python command and the Sx program on the same inputs and comparing
-JSON output and exit status. Build the inputs from repomod's own test helpers: copied catalogs,
-temporary Git repositories, fake `gh` responses, and a fixed clock.
+Test parity by running the Python command with `--json` and the Sx program on the same inputs.
+Compare the parsed JSON and the exit status. Text output stays in Python: the host renders the
+program's result with repomod's existing formatting code, and Sx never formats terminal text.
+Build the inputs from repomod's own test helpers: copied catalogs, temporary Git repositories,
+fake `gh` responses, and a fixed clock.
 
-**Gate:** Both programs match the Python commands on every parity fixture. The kernel test suite
+**Gate:** Both programs match the Python commands' `--json` output and exit status on every
+parity fixture. The kernel test suite
 passes without repomod installed. repomod's own test suite is unchanged and passes.
 
 ### Phase 4: Lean semantics
