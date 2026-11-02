@@ -12,10 +12,16 @@ only the forms and functions below exist.
 - Lists: `[1 2 3]`
 - Records: `{:name "ada" :age 36}`. Field names are keywords. Commas are optional. Keywords
   only name fields. Use strings, such as `"failing"`, for labels.
-- Tuples: `[1 "a"]`, a bracket literal whose elements have different types.
+- Tuples: `[1 "a"]`, a bracket literal whose elements have different types or that is later
+  taken apart as `[a b]`.
 - Optional values: `(some x)` or `none`. There is no `nil` or `null`. A tool field typed
   `Option<T>` holds `(some x)` or `none`. Wherever an optional is expected, a plain value works
-  too, so `(if found? name none)` is fine.
+  too, so `(if found? name none)` is fine. `(if x then else)` on an optional name `x` tests
+  whether it is present, and inside `then`, `x` is the plain value. `(get r :field default)`
+  reads an optional field, giving `default` for `none`. A record literal may leave out optional
+  fields; they are `none`.
+- Tool enums: write a variant as `Passing`. Where an enum is expected, the string `"Passing"`
+  works too, and an `if` or `match` may return a string in one branch and an enum in another.
 - Results: `(ok x)` or `(err e)`, produced by `attempt`.
 - Durations, only in `retry` and `wait-until` options: `250ms`, `5s`, `2m`, `1h`.
 - Comments start with `;`.
@@ -28,15 +34,15 @@ only the forms and functions below exist.
       _ expr3             ; run for effect, discard the value
       f (fn [x] ...)]     ; a local function, called as (f x)
   body)                   ; exactly one body expression
-(if condition then else)  ; condition must be true or false
+(if condition then else)  ; condition is true or false, or an optional name
 (cond test1 result1 test2 result2 :else other)   ; first true test wins; :else is required
-(get record :field)       ; read a record field
+(get record :field)       ; read a record field; (get record :field default) for an optional
 (call tool.name {:field value})          ; call a tool with a record
 (fn [x] body)             ; only as an argument to map, filter, and the like
 (match value
   (some x) result         ; patterns: (some x) none (ok x) (err e)
   none other              ;           Variant (Variant x) for tool enums
-  _ fallback)             ;           _ matches anything
+  _ fallback)             ;           _ or a name matches anything
 (par expr1 expr2)         ; evaluate tool reads in parallel, returns a tuple
 (let [[a b] (par e1 e2)] body)           ; take a tuple apart
 (par-map {:limit 8} (fn [x] ...) xs)     ; map over a list in parallel, reads only
