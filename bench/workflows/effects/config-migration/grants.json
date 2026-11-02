@@ -1,0 +1,9 @@
+{
+  "fs.read-text": {"roots": ["{{root}}/conf"]},
+  "fs.list": {"roots": ["{{root}}/conf"]},
+  "fs.stat": {"roots": ["{{root}}/conf"]},
+  "fs.write-text": {"roots": ["{{root}}/conf"]},
+  "fs.make-directory": {"roots": ["{{root}}/conf"]},
+  "fs.move": {"roots": ["{{root}}/conf"]},
+  "fs.delete": {"roots": ["{{root}}/conf"]}
+}

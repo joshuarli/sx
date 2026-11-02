@@ -1,0 +1,28 @@
+(def root "{{root}}")
+(def mapping (call fs.read-text {:path (str root "/conf/mapping.json")}))
+(defn service-of [name] (first (text.split name "-")))
+(defn state-of [old target]
+  (match (call fs.stat {:path target})
+    none "free"
+    (some _) (if (= (call fs.read-text {:path old}) (call fs.read-text {:path target})) "same" "different")))
+(defn entry [name]
+  (let [old (str root "/conf/old/" name)
+        target (str root "/" (match (json.get mapping [name]) (some path) path none ""))]
+    {:name name :old old :target target :state (state-of old target)}))
+(defn put [e]
+  (if (= (get e :state) "same")
+    (call fs.delete {:path (get e :old)})
+    (call fs.move {:from (get e :old) :to (get e :target)})))
+(defn migrate [group]
+  (let [service (nth group 0)
+        entries (map entry (nth group 1))]
+    (if (any? (fn [e] (= (get e :state) "different")) entries)
+      {:service service :conflict true :files []}
+      (let [_ (call fs.make-directory {:path (str root "/conf/new/" service)})
+            _ (map put entries)]
+        {:service service :conflict false :files (map (fn [e] (get e :name)) entries)}))))
+(def results (map migrate (group-by service-of (sort-by identity (json.keys mapping [])))))
+(def migrated (filter (fn [r] (not (get r :conflict))) results))
+(def _ (call fs.write-text {:path (str root "/conf/new/MIGRATED.json")
+                            :text (to-json (into-map (map (fn [r] [(get r :service) (get r :files)]) migrated)))}))
+(sort-by identity (map (fn [r] (get r :service)) (filter (fn [r] (get r :conflict)) results)))
