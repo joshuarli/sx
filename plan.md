@@ -232,8 +232,8 @@ such as `catalog.list`, `git.status`, and `github.ci` for realism, but never cal
 Include tasks that JavaScript should win: string manipulation, arithmetic, and ad hoc logic.
 Include paginated capabilities as real APIs have them. Do not shape any task around what Sx can
 express. A task that needs a feature Sx v0 lacks, such as an object with arbitrary keys or a
-fractional number, counts as an Sx failure, and the report lists it separately as an
-expressiveness limit.
+fractional number, is marked `sx-expressible: false`. The gate leaves it out, and the report
+states the share of such tasks as the expressiveness gap.
 
 Split the corpus into a development set of about 15 tasks and a held-out set of about 30. The pilot, diagnostic tuning, and any language revision use only the development set. Only
 the held-out set decides the Phase 2 gate. No model output on a held-out task informs a change to
@@ -320,9 +320,12 @@ Score each task as the mean over its samples, and compare the arms task by task,
 samples of one task do not count as independent evidence. Report a bootstrap confidence interval
 over tasks with every result. With about 30 held-out tasks, one task is about 3 percentage points.
 
-**Gate:** On the held-out set, for each model over the pairs it completed, Sx first-attempt
-correctness is no more than 5 percentage points below JavaScript. Sx must also be better on
-either correctness or total tokens per solved task. If the gate fails, revise the language once,
+**Gate:** On the held-out tasks Sx can express, for each model over the pairs it completed, Sx
+first-attempt correctness is no more than 5 percentage points below JavaScript. Sx must also be
+better on either final correctness or total tokens per solved task. The gate measures whether
+models can write the language, so tasks that need a type Sx v0 lacks stay out of it. The report
+gives the expressiveness gap, the share of held-out tasks Sx cannot express, beside the gate
+result, because it measures the type set rather than the language. If the gate fails, revise the language once,
 using only development-set evidence, and rerun the held-out set. If it fails again, stop the
 project. Passing the gate means the prototype continues. It is not evidence that Sx beats
 JavaScript in general. That claim needs the workflow comparison in the roadmap.
