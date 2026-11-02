@@ -1,0 +1,7 @@
+error[type-mismatch] 2:11-2:62
+  (into-map (vals (call warehouse.levels {:warehouse "north"})))
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  into-map takes a list of [String value] pairs, but this is a List<Int>.
+  Expected: List<Tuple<String, ...>>
+  Found: List<Int>
+  Help: sx help into-map

@@ -1,0 +1,27 @@
+{
+  "description": "Map entries count toward the value-size budget.",
+  "program": "(assoc (assoc (assoc {} \"a\" 1) \"b\" 2) \"c\" 3)",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list",
+    "rows.add",
+    "checks.list",
+    "checks.add",
+    "orders.list",
+    "totals.get",
+    "totals.put"
+  ],
+  "budgets": {
+    "value_size": 3
+  },
+  "responses": [],
+  "expect": {
+    "failed": "budget-exhausted"
+  },
+  "trace": []
+}

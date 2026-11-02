@@ -1,0 +1,6 @@
+error[habit:keyword-value] 2:51-2:57
+  (get (call warehouse.levels {:warehouse "north"}) :pen-b)
+                                                    ^^^^^^
+  A Map is keyed by strings. Keywords only name record fields.
+  Fix: "pen-b"
+  Help: sx help get

@@ -1,0 +1,56 @@
+{
+  "description": "A map in a tool input is sent as an object, whatever order its entries were added in.",
+  "program": "(call totals.put {:totals (assoc (assoc (assoc {} \"m\" 3) \"z\" 1) \"a\" 2)})",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list",
+    "rows.add",
+    "checks.list",
+    "checks.add",
+    "orders.list",
+    "totals.get",
+    "totals.put"
+  ],
+  "responses": [
+    {
+      "capability": "totals.put",
+      "input": {
+        "totals": {
+          "a": 2,
+          "m": 3,
+          "z": 1
+        }
+      },
+      "results": [
+        {
+          "output": null
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": null
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "totals.put",
+      "input": {
+        "totals": {
+          "a": 2,
+          "m": 3,
+          "z": 1
+        }
+      }
+    },
+    {
+      "response": "r:1",
+      "output": null
+    }
+  ]
+}

@@ -1,0 +1,73 @@
+{
+  "description": "Reducing into {} with assoc and a defaulted get builds a map.",
+  "program": "(reduce (fn [acc o] (assoc acc (get o :customer) (+ (get acc (get o :customer) 0) (get o :total)))) {} (call orders.list {}))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list",
+    "rows.add",
+    "checks.list",
+    "checks.add",
+    "orders.list",
+    "totals.get",
+    "totals.put"
+  ],
+  "responses": [
+    {
+      "capability": "orders.list",
+      "input": {},
+      "results": [
+        {
+          "output": [
+            {
+              "customer": "b",
+              "total": 3
+            },
+            {
+              "customer": "a",
+              "total": 4
+            },
+            {
+              "customer": "b",
+              "total": 5
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": {
+      "a": 4,
+      "b": 8
+    }
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "orders.list",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": [
+        {
+          "customer": "b",
+          "total": 3
+        },
+        {
+          "customer": "a",
+          "total": 4
+        },
+        {
+          "customer": "b",
+          "total": 5
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+error[no-encoding] 2:1-2:28
+  (assoc {} "pen-b" (some 4))
+  ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  The program's result is a Map<String, Option<Int>>, which has no JSON encoding, because a null value and a missing key would collide.

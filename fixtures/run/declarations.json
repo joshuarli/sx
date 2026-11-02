@@ -2,7 +2,8 @@
   "types": {
     "Item": "Record {id: String, size: Int}",
     "Row": "Record {name: String, note: Option<String>, hits: Option<Int>}",
-    "Check": "Record {name: String, level: Level}"
+    "Check": "Record {name: String, level: Level}",
+    "Order": "Record {customer: String, total: Int}"
   },
   "enums": {"Level": {"Passing": null, "Failing": null, "Unknown": null}},
   "capabilities": [
@@ -14,6 +15,9 @@
     {"id": "rows.add", "effect": "write", "idempotent": true, "input": "Row", "output": "Unit", "description": "Stores a row."},
     {"id": "checks.list", "effect": "read", "input": "Record {}", "output": "List<Check>", "description": "Lists checks."},
     {"id": "checks.add", "effect": "write", "idempotent": true, "input": "Check", "output": "Unit", "description": "Stores a check."},
+    {"id": "orders.list", "effect": "read", "input": "Record {}", "output": "List<Order>", "description": "Lists orders."},
+    {"id": "totals.get", "effect": "read", "input": "Record {}", "output": "Map<String, Int>", "description": "Reads counts keyed by name."},
+    {"id": "totals.put", "effect": "write", "idempotent": true, "input": "Record {totals: Map<String, Int>}", "output": "Unit", "description": "Stores counts keyed by name."},
     {"id": "job.state", "effect": "read", "input": "Record {id: String}", "output": "String", "description": "Reads a job's state."}
   ]
 }

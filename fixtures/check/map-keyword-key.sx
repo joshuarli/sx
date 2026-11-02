@@ -1,0 +1,2 @@
+; task: dev-stock-totals
+(get (call warehouse.levels {:warehouse "north"}) :pen-b)

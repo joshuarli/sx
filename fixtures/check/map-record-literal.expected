@@ -1,0 +1,8 @@
+error[type-mismatch] 2:49-2:59
+  (= (call warehouse.levels {:warehouse "north"}) {:pen-b 4})
+                                                  ^^^^^^^^^^
+  This is a record, but a Map<String, Int> is needed here.
+  Expected: Map<String, Int>
+  Found: Record {pen-b: Int}
+  A record literal is never a map. Build one with assoc or into-map.
+  Help: sx help assoc

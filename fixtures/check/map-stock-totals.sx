@@ -1,0 +1,7 @@
+; task: dev-stock-totals
+(let [north (call warehouse.levels {:warehouse "north"})
+      south (call warehouse.levels {:warehouse "south"})
+      totals (reduce (fn [acc [sku n]] (assoc acc sku (+ (get acc sku 0) n))) {} (concat (entries north) (entries south)))]
+  (sort-by (fn [r] [(get r :total) (get r :sku)])
+    (filter (fn [r] (< (get r :total) 10))
+      (map (fn [[sku total]] {:sku sku :total total}) (entries totals)))))

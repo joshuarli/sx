@@ -1,0 +1,2 @@
+; task: dev-stock-totals
+(assoc {} "pen-b" (some 4))

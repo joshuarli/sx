@@ -1,0 +1,57 @@
+{
+  "description": "get on a map is optional, and a default makes it the value type.",
+  "program": "(let [m (call totals.get {})] [(get m \"a\") (get m \"q\") (get m \"q\" 0) (get m \"a\" 0)])",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list",
+    "rows.add",
+    "checks.list",
+    "checks.add",
+    "orders.list",
+    "totals.get",
+    "totals.put"
+  ],
+  "responses": [
+    {
+      "capability": "totals.get",
+      "input": {},
+      "results": [
+        {
+          "output": {
+            "z": 1,
+            "a": 2,
+            "m": 3
+          }
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": [
+      2,
+      null,
+      0,
+      2
+    ]
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "totals.get",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": {
+        "z": 1,
+        "a": 2,
+        "m": 3
+      }
+    }
+  ]
+}

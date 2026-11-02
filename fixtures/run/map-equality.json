@@ -1,0 +1,28 @@
+{
+  "description": "Maps are equal when their entries are, whatever order they were added in, and {} equals an empty map.",
+  "program": "[(= (assoc (assoc {} \"a\" 1) \"b\" 2) (into-map [[\"b\" 2] [\"a\" 1]])) (= {} (dissoc (assoc {} \"a\" 1) \"a\")) (not= (assoc {} \"a\" 1) (assoc {} \"a\" 2))]",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list",
+    "rows.add",
+    "checks.list",
+    "checks.add",
+    "orders.list",
+    "totals.get",
+    "totals.put"
+  ],
+  "responses": [],
+  "expect": {
+    "completed": [
+      true,
+      true,
+      true
+    ]
+  },
+  "trace": []
+}

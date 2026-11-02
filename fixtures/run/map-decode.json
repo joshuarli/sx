@@ -1,0 +1,56 @@
+{
+  "description": "A tool's JSON object decodes into a map, and keys come back in ascending order.",
+  "program": "(keys (call totals.get {}))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list",
+    "rows.add",
+    "checks.list",
+    "checks.add",
+    "orders.list",
+    "totals.get",
+    "totals.put"
+  ],
+  "responses": [
+    {
+      "capability": "totals.get",
+      "input": {},
+      "results": [
+        {
+          "output": {
+            "z": 1,
+            "a": 2,
+            "m": 3
+          }
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": [
+      "a",
+      "m",
+      "z"
+    ]
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "totals.get",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": {
+        "z": 1,
+        "a": 2,
+        "m": 3
+      }
+    }
+  ]
+}

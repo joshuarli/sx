@@ -1,0 +1,2 @@
+; task: dev-order-totals
+(reduce (fn [acc o] (assoc acc (get o :customer) (+ (get acc (get o :customer) 0) (count (get o :lines))))) {} (call orders.list {:status "open"}))

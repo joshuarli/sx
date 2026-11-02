@@ -1,0 +1,48 @@
+{
+  "description": "A JSON array where a map is expected is an invalid host response.",
+  "program": "(keys (call totals.get {}))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list",
+    "rows.add",
+    "checks.list",
+    "checks.add",
+    "orders.list",
+    "totals.get",
+    "totals.put"
+  ],
+  "responses": [
+    {
+      "capability": "totals.get",
+      "input": {},
+      "results": [
+        {
+          "output": [
+            "a"
+          ]
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "failed": "invalid-host-response"
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "totals.get",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": [
+        "a"
+      ]
+    }
+  ]
+}

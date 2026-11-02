@@ -1,0 +1,25 @@
+{
+  "description": "A {} that nothing settles is the empty record, so reading a field from it is rejected.",
+  "program": "(let [e {}] (get e :a))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list",
+    "rows.add",
+    "checks.list",
+    "checks.add",
+    "orders.list",
+    "totals.get",
+    "totals.put"
+  ],
+  "responses": [],
+  "expect": {
+    "rejected": [
+      "unknown-field"
+    ]
+  }
+}

@@ -1,0 +1,8 @@
+error[type-mismatch] 2:21-2:22
+  (map (fn [t] (assoc t "severity" "low")) (call tickets.list {:status "open"}))
+                      ^
+  assoc takes a Map here, but this is a record.
+  Expected: Map<String, ...>
+  Found: Ticket
+  A record has fixed fields. Read one with get: (get r :field).
+  Help: sx help assoc

@@ -1,0 +1,4 @@
+error[habit:assoc] 2:15-2:21
+  (map (fn [t] (dissoc t :severity)) (call tickets.list {:status "open"}))
+                ^^^^^^
+  dissoc takes a Map and a string key. For a record, build a new record literal without the field.

@@ -1,0 +1,6 @@
+; task: dev-assignee-index
+(let [tickets (call tickets.list {:status "open"})
+      urgent (filter (fn [t] (or (= (get t :severity) "high") (= (get t :severity) "critical"))) tickets)]
+  (into-map
+    (map (fn [[assignee ts]] [assignee (sort-by (fn [id] id) (map (fn [t] (get t :id)) ts))])
+         (group-by (fn [t] (get t :assignee)) urgent))))

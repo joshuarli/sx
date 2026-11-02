@@ -1,0 +1,87 @@
+{
+  "description": "into-map accepts the output of group-by when the key is a String.",
+  "program": "(into-map (group-by (fn [o] (get o :customer)) (call orders.list {})))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list",
+    "rows.add",
+    "checks.list",
+    "checks.add",
+    "orders.list",
+    "totals.get",
+    "totals.put"
+  ],
+  "responses": [
+    {
+      "capability": "orders.list",
+      "input": {},
+      "results": [
+        {
+          "output": [
+            {
+              "customer": "b",
+              "total": 3
+            },
+            {
+              "customer": "a",
+              "total": 4
+            },
+            {
+              "customer": "b",
+              "total": 5
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": {
+      "a": [
+        {
+          "customer": "a",
+          "total": 4
+        }
+      ],
+      "b": [
+        {
+          "customer": "b",
+          "total": 3
+        },
+        {
+          "customer": "b",
+          "total": 5
+        }
+      ]
+    }
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "orders.list",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": [
+        {
+          "customer": "b",
+          "total": 3
+        },
+        {
+          "customer": "a",
+          "total": 4
+        },
+        {
+          "customer": "b",
+          "total": 5
+        }
+      ]
+    }
+  ]
+}

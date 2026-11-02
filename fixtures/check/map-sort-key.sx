@@ -1,0 +1,2 @@
+; task: dev-stock-totals
+(sort-by (fn [sku] (assoc {} sku 1)) (keys (call warehouse.levels {:warehouse "north"})))

@@ -1,0 +1,2 @@
+; task: dev-assignee-index
+(map (fn [t] (dissoc t :severity)) (call tickets.list {:status "open"}))
