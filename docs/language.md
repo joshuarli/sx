@@ -104,6 +104,14 @@ join to `Record {number: Int, ok: Bool, kind: Option<String>}`, and `(get r :kin
 result. This holds wherever branches join: `if`, `match`, `cond`, and inside lists and tuples.
 Records whose shared fields have types that do not join are still a `branch-mismatch`.
 
+A joined field is optional wherever the join reaches, and Sx does not narrow it by another field. Given
+`(if ok {:id id :known true :entry e} {:id id :known false})`, the test `(get r :known)` does not
+make `(get r :entry)` present, so `(get (get r :entry) :size)` or `(+ 1 (get r :size))` is an error
+when the field is `Option<T>`. The diagnostic, a `not-a-record` or `type-mismatch` on the read, names
+the field, says that the records that reach the read do not all have it, points at a record literal
+that lacks it when one is in the program, and gives the fix:
+`(match (get r :entry) (some entry) ... none ...)`, or a default, `(get r :entry DEFAULT)`.
+
 A record literal checked against a known record type, such as a capability's input or a
 record field of that type, may omit any field whose type is `Option<T>`. The omitted field is `none`, so
 `(call audit.page {})` sends `{"cursor": null}`. Omitting a field that is not optional is a

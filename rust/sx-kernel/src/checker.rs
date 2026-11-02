@@ -545,6 +545,7 @@ struct Coercion<'s> {
     help: Option<String>,
     joining: bool,
     source: Option<&'s Node>,
+    optional_read: Option<(String, String)>,
 }
 
 type Checked = (ir::Node, Type);
@@ -558,6 +559,7 @@ struct Checker<'r> {
     shapes: HashMap<usize, Shape>,
     presence_tests: Vec<PresenceTest>,
     late_sort_keys: Vec<(Type, Span)>,
+    record_literals: Vec<(Span, Vec<String>)>,
     diagnostics: Vec<Diagnostic>,
     effects: Vec<Effects<'r>>,
     capabilities_used: BTreeSet<String>,
@@ -911,7 +913,13 @@ impl<'r> Checker<'r> {
             && let Type::Option(inner) = &found
             && self.trial(inner, &wanted)
         {
-            detail_hint = Some(OPTIONAL_HINT.to_string());
+            match options.optional_read.or_else(|| options.source.and_then(|read| self.optional_read_of(read))) {
+                Some((hint, optional_fix)) => {
+                    detail_hint = Some(hint);
+                    fix = Some(optional_fix);
+                }
+                None => detail_hint = Some(OPTIONAL_HINT.to_string()),
+            }
         }
         if found == INT && wanted == FLOAT {
             detail_hint = detail_hint.or_else(|| Some(INT_TO_FLOAT_HINT.to_string()));
@@ -1400,6 +1408,7 @@ impl<'r> Checker<'r> {
             built.push((f.key.name.clone(), value));
             types.push((f.key.name.clone(), t));
         }
+        self.record_literals.push((span, types.iter().map(|(name, _)| name.clone()).collect()));
         let t = Type::Record(RecordType::plain(types));
         let made = node(Ir::MakeRecord { fields: built }, span);
         if let Type::Map(_) = hint {
@@ -2366,13 +2375,19 @@ impl<'r> Checker<'r> {
             }
             Type::Record(record) => record.clone(),
             other => {
-                let hint = matches!(other, Type::Option(_)).then(|| {
-                    "Match on an optional value before reading its fields: (match x (some r) (get r :field) none ...)."
-                        .to_string()
+                let optional = matches!(other, Type::Option(_));
+                let read = optional.then(|| self.optional_read_of(record_node)).flatten();
+                let hint = optional.then(|| match &read {
+                    Some((hint, _)) => hint.clone(),
+                    None => "Match on an optional value before reading its fields: (match x (some r) (get r :field) none ...)."
+                        .to_string(),
                 });
                 let message = format!("get reads a field from a record, but this is {}.", describe(&self.zonk(other)));
                 self.report(
-                    Diagnostic::new("not-a-record", record_node.span, message).maybe_detail(hint).help("get"),
+                    Diagnostic::new("not-a-record", record_node.span, message)
+                        .maybe_detail(hint)
+                        .maybe_fix(read.map(|(_, fix)| fix))
+                        .help("get"),
                 );
                 return self.placeholder(span);
             }
@@ -2391,7 +2406,10 @@ impl<'r> Checker<'r> {
         };
         let getter = node(Ir::Get { record: Box::new(record_ir), field: key_name.to_string() }, span);
         let Some(default_node) = default_node else {
-            return self.coerce(getter, &field_type, expected, span);
+            let optional_read =
+                matches!(self.resolve(&field_type), Type::Option(_)).then(|| self.optional_field_read(record_node, key_name));
+            let options = Coercion { optional_read, ..Coercion::default() };
+            return self.coerce_with(getter, &field_type, expected, span, options);
         };
         let Type::Option(inner) = self.resolve(&field_type) else {
             let ((default, default_type), effects) = self.collecting(|c| c.check(default_node, None, scope));
@@ -2412,6 +2430,43 @@ impl<'r> Checker<'r> {
             return self.coerce(getter, &field_type, expected, span);
         };
         self.or_default(getter, &inner, default_node, expected, scope, span)
+    }
+
+    fn optional_read_of(&self, read: &Node) -> Option<(String, String)> {
+        let items = form_items(read)?;
+        if items.len() != 3 || symbol(&items[0]) != Some("get") {
+            return None;
+        }
+        Some(self.optional_field_read(&items[1], keyword(&items[2])?))
+    }
+
+    fn record_lacking(&self, field: &str) -> Option<Span> {
+        let has = |names: &[String]| names.iter().any(|name| name == field);
+        self.record_literals.iter().find_map(|(span, names)| {
+            let shares = |other: &[String]| other.iter().any(|name| names.contains(name));
+            let lacks = !has(names)
+                && self.record_literals.iter().any(|(other_span, other)| other_span != span && has(other) && shares(other));
+            lacks.then_some(*span)
+        })
+    }
+
+    fn optional_field_read(&self, record: &Node, field: &str) -> (String, String) {
+        let shown = show(record);
+        let why = match self.record_lacking(field) {
+            Some(at) => format!(
+                "The records that reach this point do not all have :{field}: the record at {}:{} has none.",
+                at.start.line, at.start.column
+            ),
+            None => format!(
+                "The field :{field} is optional: a tool declares it optional, or the records that reach this point do not all have it."
+            ),
+        };
+        let hint = format!(
+            "{why}\nSx does not narrow a field by a flag such as :known, so testing a flag does not make :{field} present.\n\
+             Match on it, or give get a default: (get {shown} :{field} DEFAULT)."
+        );
+        let binder = if is_reserved(field) { "value" } else { field };
+        (hint, format!("(match (get {shown} :{field}) (some {binder}) ... none ...)"))
     }
 
     fn or_default<'a>(
@@ -4108,6 +4163,7 @@ fn elaborate(
         shapes: HashMap::new(),
         presence_tests: Vec::new(),
         late_sort_keys: Vec::new(),
+        record_literals: Vec::new(),
         diagnostics: Vec::new(),
         effects: Vec::new(),
         capabilities_used: BTreeSet::new(),

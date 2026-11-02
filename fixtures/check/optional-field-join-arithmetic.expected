@@ -1,0 +1,10 @@
+error[type-mismatch] 7:13-7:28
+           (+ (get cur :size) 1)))
+              ^^^^^^^^^^^^^^^
+  This is an Option<Int>, but an Int is needed here.
+  Expected: Int
+  Found: Option<Int>
+  The records that reach this point do not all have :size: the record at 6:20 has none.
+  Sx does not narrow a field by a flag such as :known, so testing a flag does not make :size present.
+  Match on it, or give get a default: (get cur :size DEFAULT).
+  Fix: (match (get cur :size) (some size) ... none ...)

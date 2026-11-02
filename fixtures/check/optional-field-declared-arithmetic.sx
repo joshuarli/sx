@@ -1,0 +1,4 @@
+; declarations: fixtures/run/declarations.json
+; python: no
+(let [row (first (call rows.list {}))]
+  (+ (get row :hits) 1))

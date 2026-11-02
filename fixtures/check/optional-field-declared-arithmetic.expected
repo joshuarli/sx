@@ -1,0 +1,10 @@
+error[type-mismatch] 4:6-4:21
+    (+ (get row :hits) 1))
+       ^^^^^^^^^^^^^^^
+  This is an Option<Int>, but an Int is needed here.
+  Expected: Int
+  Found: Option<Int>
+  The field :hits is optional: a tool declares it optional, or the records that reach this point do not all have it.
+  Sx does not narrow a field by a flag such as :known, so testing a flag does not make :hits present.
+  Match on it, or give get a default: (get row :hits DEFAULT).
+  Fix: (match (get row :hits) (some hits) ... none ...)

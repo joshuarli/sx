@@ -1,0 +1,8 @@
+; declarations: fixtures/run/declarations.json
+; python: no
+(map (fn [id]
+       (let [cur (if (= id "a")
+                   {:id id :known true :size 3}
+                   {:id id :known false})]
+         (+ (get cur :size) 1)))
+     ["a" "b"])

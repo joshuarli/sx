@@ -1,0 +1,9 @@
+error[not-a-record] 8:17-8:33
+             (get (get cur :entry) :size)
+                  ^^^^^^^^^^^^^^^^
+  get reads a field from a record, but this is an Option<Item>.
+  The records that reach this point do not all have :entry: the record at 6:20 has none.
+  Sx does not narrow a field by a flag such as :known, so testing a flag does not make :entry present.
+  Match on it, or give get a default: (get cur :entry DEFAULT).
+  Fix: (match (get cur :entry) (some entry) ... none ...)
+  Help: sx help get
