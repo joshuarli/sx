@@ -1,0 +1,31 @@
+(let [create (fn [report]
+               (get (retry {:delays [100ms 100ms] :on [RateLimited]} (call export.create {:report report})) :id))
+      run-job (fn [report]
+                (let [id (create report)]
+                  (match (attempt (wait-until {:backoff [50ms 200ms] :within 1500ms}
+                                    (fn [s] (or (= (get s :status) "ready") (= (get s :status) "failed")))
+                                    (call export.status {:id id})))
+                    (ok s) {:id id :state (get s :status) :parts (get s :parts 0) :bytes (get s :bytes 0)}
+                    (err _) {:id id :state "timeout" :parts 0 :bytes 0})))
+      numbers (fn [n] (loop {:max 50} [i 1 acc []]
+                        (if (> i n) acc (recur (+ i 1) (concat acc [i])))))
+      handle (fn [report]
+               (let [first-try (run-job report)
+                     retried (= (get first-try :state) "failed")
+                     job (if retried (run-job report) first-try)
+                     jobs (if retried 2 1)]
+                 (if (= (get job :state) "ready")
+                   (let [texts (par-map {:limit 2}
+                                        (fn [n] (get (retry {:delays [50ms 50ms] :on [Unavailable]}
+                                                       (call export.part {:id (get job :id) :n n}))
+                                                     :text))
+                                        (numbers (get job :parts)))
+                         body (text.join "" texts)]
+                     (if (= (text.length body) (get job :bytes))
+                       (let [_ (call fs.write-text {:path (str "{{root}}/exports/" report ".csv") :text body})]
+                         {:report report :outcome "written" :jobs jobs :parts (get job :parts) :bytes (text.length body)})
+                       {:report report :outcome "corrupt" :jobs jobs :parts (get job :parts) :bytes 0}))
+                   {:report report :outcome (get job :state) :jobs jobs :parts 0 :bytes 0})))
+      reports (map handle ["summary" "detail" "audit" "ledger"])]
+  {:reports reports
+   :written (count (filter (fn [r] (= (get r :outcome) "written")) reports))})

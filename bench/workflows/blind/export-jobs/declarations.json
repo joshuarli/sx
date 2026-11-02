@@ -1,0 +1,30 @@
+{
+  "packs": ["fs"],
+  "capabilities": [
+    {
+      "id": "export.create",
+      "http": {"method": "POST", "url": "{{reports_origin}}/exports", "query": []},
+      "input": "Record {report: String}",
+      "output": "Record open {id: String}",
+      "effect": "write",
+      "idempotent": false,
+      "description": "Creates an export job for a report and returns the job's id."
+    },
+    {
+      "id": "export.status",
+      "http": {"method": "GET", "url": "{{reports_origin}}/exports/{id}", "query": []},
+      "input": "Record {id: String}",
+      "output": "Record open {status: String, parts: Option<Int>, bytes: Option<Int>}",
+      "effect": "read",
+      "description": "Returns the status of a job: queued, running, ready, or failed. A ready job also has its number of parts and its size in bytes."
+    },
+    {
+      "id": "export.part",
+      "http": {"method": "GET", "url": "{{reports_origin}}/exports/{id}/parts/{n}", "query": []},
+      "input": "Record {id: String, n: Int}",
+      "output": "Record open {text: String}",
+      "effect": "read",
+      "description": "Returns the text of one part of a ready job."
+    }
+  ]
+}

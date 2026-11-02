@@ -1,0 +1,6 @@
+{
+  "export.create": {"origins": ["{{reports_origin}}"], "methods": ["POST"]},
+  "export.status": {"origins": ["{{reports_origin}}"], "methods": ["GET"]},
+  "export.part": {"origins": ["{{reports_origin}}"], "methods": ["GET"]},
+  "fs.write-text": {"roots": ["{{root}}/exports"]}
+}

@@ -1,0 +1,14 @@
+The reporting service at `{{reports_origin}}` builds exports as background jobs. Download four reports, `summary`, `detail`, `audit`, and `ledger`, one report after another in that order, into the directory `{{root}}/exports`, which already exists.
+
+For each report:
+
+1. Create a job with the `export.create` tool, which takes the `report` name and returns the job's `id`. The service sometimes refuses with "rate limited" (HTTP 429), which means no job was created: ask again after waiting 100 milliseconds, and once more after another 100 milliseconds if it is refused again. Do not ask again after any other failure, and never create a job that you do not need.
+2. Watch the job with the `export.status` tool, which returns a `status` of `queued`, `running`, `ready`, or `failed`. When the status is `ready`, the answer also has the number of `parts` and the exact size `bytes` of the export. Ask for the status right after the job is created, and again after each wait: 50 milliseconds, then 100 milliseconds, then 200 milliseconds, and 200 milliseconds after each later request, as long as the total of the waits stays within 1500 milliseconds. A wait that would take the total past 1500 milliseconds is not made; the job has `timeout`. Stop asking as soon as the status is `ready` or `failed`.
+3. When the job `failed`, create one new job for the same report and watch it as in step 2. If that one fails too, the report's outcome is `failed`. A job that timed out is not retried: the report's outcome is `timeout`.
+4. When a job is `ready`, download its parts with the `export.part` tool, which takes the job's `id` and the part number `n` (from 1 to `parts`) and returns the part's `text`. At most 2 downloads may be in flight at once, and each part is downloaded once. The service sometimes answers "unavailable" (HTTP 503) for a part: ask for that part again after waiting 50 milliseconds, and once more after another 50 milliseconds if it fails again; do not repeat after any other failure.
+5. Join the texts of the parts in the order of their numbers, with nothing added between them. When the joined text has exactly `bytes` characters (all text is ASCII), write it to `{{root}}/exports/REPORT.csv`, with `REPORT` the report's name, replacing any file already there; the outcome is `written`. Otherwise the export is `corrupt`: write nothing and leave any existing file alone.
+
+Return a JSON object with these fields:
+
+- `reports`: one object `{"report": NAME, "outcome": OUTCOME, "jobs": JOBS, "parts": PARTS, "bytes": BYTES}` for each report in the order above, where `OUTCOME` is `written`, `corrupt`, `timeout`, or `failed`, `JOBS` is the number of jobs you created for it, `PARTS` is the number of parts of the job that was `ready` (0 when no job was), and `BYTES` is the number of characters written (0 when nothing was written)
+- `written`: the number of reports with the outcome `written`
