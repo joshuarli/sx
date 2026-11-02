@@ -156,6 +156,14 @@ def sx_guide(workflow: Workflow, sandbox: Sandbox, *, notes: bool) -> str:
     return completed.stdout
 
 
+def inferred_note(report: Json) -> str:
+    edits = report.get("inferred_closers", [])
+    if not edits:
+        return ""
+    shown = "; ".join(f'line {e["line"]} wrote "{e["written"]}" used "{e["used"]}"' for e in edits)
+    return f"\nThe brackets did not balance, so closers were inferred from indentation: {shown}"
+
+
 def run_sx(workflow: Workflow, sandbox: Sandbox, program: str) -> ArmRun:
     with tempfile.TemporaryDirectory(dir=scratch()) as directory:
         files = Files(workflow, sandbox, Path(directory))
@@ -170,7 +178,8 @@ def run_sx(workflow: Workflow, sandbox: Sandbox, program: str) -> ArmRun:
         seconds = time.perf_counter() - started
         if completed.returncode == SX_EXITS["rejected"]:
             diagnostics = json.loads(completed.stdout)["diagnostics"]
-            rendered = sx_output(["check", *arguments]).stdout
+            checked = sx_output(["check", *arguments])
+            rendered = checked.stdout + checked.stderr
             labels = [label(d) for d in diagnostics]
             return ArmRun(
                 "sx", "rejected", None, rendered, rendered, [], seconds, seconds, labels, explain, completed.stdout
@@ -182,7 +191,7 @@ def run_sx(workflow: Workflow, sandbox: Sandbox, program: str) -> ArmRun:
     if report["outcome"] == "failed":
         failure = report["failure"]
         where = f" at {show_span(failure['span'])}" if failure["span"] is not None else ""
-        message = f"The program failed{where} with {failure['kind']}: {failure['message']}"
+        message = f"The program failed{where} with {failure['kind']}: {failure['message']}{inferred_note(report)}"
         return ArmRun(
             "sx", "failed", None, message, message, calls, seconds, seconds,
             explain=explain, transcript=completed.stdout,

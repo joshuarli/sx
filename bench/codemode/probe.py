@@ -237,7 +237,8 @@ def evaluate_sx(task: Json, code: str, wanted_delays: list[int]) -> Verdict:
         completed = sx_run(["run", *arguments, "--responses", str(responses_file), "--format", "json"])
         if completed.returncode == SX_EXITS["rejected"]:
             diagnostics = json.loads(completed.stdout)["diagnostics"]
-            rendered = sx_run(["check", *arguments]).stdout
+            checked = sx_run(["check", *arguments])
+            rendered = checked.stdout + checked.stderr
             return "rejected", "", rendered, [label(d) for d in diagnostics], 0, 0
         if completed.returncode not in (SX_EXITS["ok"], SX_EXITS["failed"]):
             raise RuntimeError(f"sx run exited {completed.returncode}: {completed.stderr.strip()}")
