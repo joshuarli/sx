@@ -1,0 +1,5 @@
+{
+  "accounts.page": {"origins": ["{{billing_origin}}"], "methods": ["GET"]},
+  "accounts.usage": {"origins": ["{{billing_origin}}"], "methods": ["GET"]},
+  "fs.write-text": {"roots": ["{{root}}"]}
+}

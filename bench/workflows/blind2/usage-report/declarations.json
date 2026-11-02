@@ -1,0 +1,21 @@
+{
+  "packs": ["fs"],
+  "capabilities": [
+    {
+      "id": "accounts.page",
+      "http": {"method": "GET", "url": "{{billing_origin}}/v2/accounts", "query": ["limit", "offset"]},
+      "input": "Record {limit: Int, offset: Int}",
+      "output": "Record open {items: List<Record open {id: String, name: String, plan: String}>, total: Int}",
+      "effect": "read",
+      "description": "Returns one page of accounts and the total number of accounts."
+    },
+    {
+      "id": "accounts.usage",
+      "http": {"method": "GET", "url": "{{billing_origin}}/v2/accounts/{id}/usage", "query": []},
+      "input": "Record {id: String}",
+      "output": "Record open {requests: Int, errors: Int}",
+      "effect": "read",
+      "description": "Returns the number of requests and of failed requests of one account."
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+(let [fetch-page (fn [offset]
+                   (retry {:delays [30ms 60ms] :on [RateLimited Unavailable]}
+                     (call accounts.page {:limit 20 :offset offset})))
+      listed (loop {:max 10} [offset 0 acc []]
+               (let [page (fetch-page offset)
+                     all (concat acc (get page :items))]
+                 (if (< (+ offset 20) (get page :total)) (recur (+ offset 20) all) all)))
+      measured (par-map {:limit 4}
+                        (fn [a]
+                          (match (attempt (retry {:delays [30ms 60ms] :on [RateLimited Unavailable]}
+                                            (call accounts.usage {:id (get a :id)})))
+                            (ok u) {:id (get a :id) :name (get a :name) :plan (get a :plan) :state "ok"
+                                    :requests (get u :requests) :errors (get u :errors)}
+                            (err e) {:id (get a :id) :name (get a :name) :plan (get a :plan)
+                                     :state (match (get e :kind) NotFound "closed" _ "unreachable")
+                                     :requests 0 :errors 0}))
+                        listed)
+      ids (fn [state] (sort-by identity (map (fn [m] (get m :id)) (filter (fn [m] (= (get m :state) state)) measured))))
+      ranked (sort-by (fn [m] [(- 0 (get m :rate)) (- 0 (get m :requests)) (get m :id)])
+                      (map (fn [m] {:id (get m :id) :name (get m :name) :plan (get m :plan)
+                                    :requests (get m :requests) :errors (get m :errors)
+                                    :rate (if (= (get m :requests) 0) 0 (quot (* (get m :errors) 1000) (get m :requests)))})
+                           (filter (fn [m] (= (get m :state) "ok")) measured)))
+      top (take 10 ranked)
+      cell (fn [name]
+             (if (or (text.contains? name ",") (text.contains? name "\""))
+               (str "\"" (text.replace name "\"" "\"\"") "\"")
+               name))
+      row (fn [m] (text.join "," [(get m :id) (cell (get m :name)) (get m :plan)
+                                  (text.from-int (get m :requests)) (text.from-int (get m :errors)) (text.from-int (get m :rate))]))
+      _ (call fs.write-text {:path "{{root}}/usage.csv"
+                             :text (str (text.join "\n" (concat ["id,name,plan,requests,errors,rate"] (map row top))) "\n")})]
+  {:listed (count listed)
+   :closed (ids "closed")
+   :unreachable (ids "unreachable")
+   :requests (reduce + 0 (map (fn [m] (get m :requests)) ranked))
+   :top (map (fn [m] {:id (get m :id) :rate (get m :rate)}) top)})
