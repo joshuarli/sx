@@ -147,10 +147,9 @@ suite runs in an environment where repomod is not installed, which proves the bo
 
 ## Status
 
-Phase 0 and Phase 1 have passed their gates. Phase 2 failed its gate twice: on the first
-held-out run, and again after the one allowed revision. By this plan's rule that stops the
-project. The owner had already directed work to continue through Phase 4 and to stop for review
-before the Rust port, so work continued, and the owner decides at that review whether Sx goes on.
+Phase 0 and Phase 1 have passed their gates. Phase 2 failed twice on the first held-out set, the
+second time after its one allowed revision, and then passed on a fresh blind held-out set. The
+owner decides at the review before the Rust port whether that pass is enough to continue.
 
 **Phase 0.** The syntax pilot ran on the development set and drove one language revision.
 
@@ -284,6 +283,21 @@ the same freeze rule.
 New Muse Spark answers after these changes, one sample: development 16 of 17 and the retired set
 22 of 24 at first attempt, all correct at final. The retired set informed the changes, so this is
 not a gate result. The fresh set's gate run used commit 8027f85.
+
+**Phase 2 fresh held-out result.** Muse Spark, standard guide, the 28 expressible tasks of the
+fresh set, two samples, written by an agent whose tasks the language designer never read:
+
+| Arm | First attempt | Final | Attempts | First prompt | Reasoning per trial | Tokens per solved task |
+| --- | --- | --- | --- | --- | --- | --- |
+| TypeScript | 96.4% | 96.4% | 1.00 | 456 | 2,228 | 3,176 |
+| Sx at 8027f85 | 94.6% | 98.2% | 1.04 | 2,382 | 2,561 | 5,420 |
+
+Sx minus TypeScript is -1.8 points at first attempt (95% interval -7.1 to +3.6) and +1.8 at final
+(0.0 to +5.4). The gate passes: first attempt is within 5 points, and final correctness is
+better. The final margin is one trial, so the pass rests on the first-attempt bound more than on
+a real lead. Sx still costs 1.7 times the tokens per solved task; its first prompt is 1,926 tokens longer
+than TypeScript's, mostly the guide. The expressiveness gap is 2 of 30. The fresh set's answers stay
+unread, so it can serve once more as a gate after a future revision.
 
 Out of the revision: `Map` and dynamic keys (`assoc`, `keys`), which also make up the
 expressiveness gap, belong to the type-set work in the roadmap.
