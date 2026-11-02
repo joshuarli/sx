@@ -207,6 +207,20 @@ class Effects:
     calls: list[EffectCall] = field(default_factory=list)
 
 
+def always_recurs(node: ir.Node) -> bool:
+    match node:
+        case ir.Recur():
+            return True
+        case ir.Let(body=body) | ir.LocalFunction(body=body) | ir.Coerce(value=body):
+            return always_recurs(body)
+        case ir.If(then=then, otherwise=otherwise):
+            return always_recurs(then) and always_recurs(otherwise)
+        case ir.Match(clauses=clauses):
+            return all(always_recurs(body) for _, body in clauses)
+        case _:
+            return False
+
+
 def float_fix(source: Node | None) -> str | None:
     if source is None or (isinstance(source, Symbol) and source.name.startswith("#")):
         return None
@@ -2006,6 +2020,13 @@ class _Checker:
                 body, t = self.check(node.items[3], expected, inner)
         finally:
             self.tail = saved
+        if always_recurs(body):
+            self.error(
+                "loop-no-result", node.items[3].span,
+                "This loop body always ends in recur, so the loop has no result and can only fail with loop-limit.",
+                detail="Give the body a branch that does not recur, such as (if done? result (recur ...)).",
+                help="loop",
+            )
         return ir.Loop(maximum, tuple(binders), tuple(initial), body, span), t
 
     def form_recur(self, node: Form, scope: Mapping[str, Binding]) -> tuple[ir.Node, Type]:

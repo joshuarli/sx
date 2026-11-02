@@ -1,0 +1,19 @@
+{
+  "description": "A loop whose body always ends in recur has no result, so the checker rejects it.",
+  "program": "(loop {:max 3} [n 0] (recur (+ n 1)))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state"
+  ],
+  "responses": [],
+  "expect": {
+    "rejected": [
+      "loop-no-result"
+    ]
+  },
+  "trace": []
+}
