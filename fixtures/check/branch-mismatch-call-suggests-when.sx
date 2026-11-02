@@ -1,0 +1,5 @@
+; declarations: fixtures/run/declarations.json
+; python: no
+(def failed true)
+(def sent (if failed (call mail.send {:to "ops"}) 0))
+sent

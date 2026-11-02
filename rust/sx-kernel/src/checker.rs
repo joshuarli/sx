@@ -1047,10 +1047,14 @@ impl<'r> Checker<'r> {
                         show_type(&self.zonk(&target)),
                         show_type(&self.zonk(t))
                     );
-                    self.report(
-                        Diagnostic::new("branch-mismatch", *span, message)
-                            .detail("Every branch of an if or match must return the same type."),
-                    );
+                    let calls = branches.iter().any(|(node, _, _)| matches!(node.kind, Ir::Call { .. }));
+                    let detail = if calls {
+                        "Every branch of an if or match must return the same type. To call a tool only when a test \
+                         holds, write (when test (call ...)), which is (some result) or none."
+                    } else {
+                        "Every branch of an if or match must return the same type."
+                    };
+                    self.report(Diagnostic::new("branch-mismatch", *span, message).detail(detail));
                     return (branches.into_iter().map(|(n, _, _)| n).collect(), target);
                 }
             }

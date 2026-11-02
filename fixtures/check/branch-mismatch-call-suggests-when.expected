@@ -1,0 +1,5 @@
+error[branch-mismatch] 4:51-4:52
+  (def sent (if failed (call mail.send {:to "ops"}) 0))
+                                                    ^
+  The branches return different types: Unit and Int.
+  Every branch of an if or match must return the same type. To call a tool only when a test holds, write (when test (call ...)), which is (some result) or none.

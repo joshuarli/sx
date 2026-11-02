@@ -553,6 +553,19 @@ struct Tally {
     codes: BTreeSet<String>,
 }
 
+const RUST_ONLY_HINTS: [&str; 1] =
+    [" To call a tool only when a test holds, write (when test (call ...)), which is (some result) or none."];
+
+fn as_python_renders(checked: Checked) -> Checked {
+    match checked {
+        Checked::Rejected { codes, rendered } => {
+            let rendered = RUST_ONLY_HINTS.iter().fold(rendered, |text, hint| text.replace(hint, ""));
+            Checked::Rejected { codes, rendered }
+        }
+        other => other,
+    }
+}
+
 fn is_frozen_refusal(codes: &[String], rendered: &str) -> bool {
     codes == ["multiple-expressions"] || rendered.contains("is always present, so get takes no default for it")
 }
@@ -575,6 +588,7 @@ fn compare(label: &str, cases: &[Case]) -> (Tally, Vec<String>) {
     let mut tally = Tally { compared: cases.len(), ..Tally::default() };
     for (case, python) in cases.iter().zip(&python) {
         let (rust, _) = rust_check(case);
+        let rust = as_python_renders(rust);
         match (&rust, python) {
             (Checked::Crashed(message), _) => {
                 failures.push(format!("{}: Rust crashed: {message}\n{}", case.name, case.source));
