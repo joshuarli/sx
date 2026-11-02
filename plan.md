@@ -165,7 +165,8 @@ its 24 answers ran only because the reader inferred closers from indentation. Th
 Phases 13 and 14, cut Sx's cost 12% on the development set, but on a second blind set Sx still cost
 2.4 times TypeScript per solved task, so its cost gate failed. The owner then chose the fourth
 campaign, Phases 15 to 17, Sx as code mode for any MCP client and a benchmark where effects matter.
-Phase 15 has passed its gate; Phases 16 and 17 have not started.
+Phase 15 passed its gate. Phase 16's gate failed: on eight blind effects workflows both arms were
+correct in all 96 sessions, and the one policy-violating effect was Sx's. Phase 17 has not started.
 
 **The Python prototype is frozen.** `src/sx` and the Python cores are frozen as of commit
 `15b6ed6`, the parent of the commit that records this, because Rust passed its gates. The prototype
@@ -788,7 +789,7 @@ within 10 points.
 
 ### The fourth campaign: code mode and effects
 
-Phase 15 passed; Phases 16 and 17 not started. The owner chose it after Phase 14 and accepted every recommendation in the
+Phase 15 passed; Phase 16 failed its gate; Phase 17 not started. The owner chose it after Phase 14 and accepted every recommendation in the
 handoff. Two questions no campaign has answered: does Sx work as the code mode of a real agent, and
 does its static authority prevent harmful effects that JavaScript code mode lets happen? Cost is not a
 goal here; it is reported.
@@ -874,6 +875,63 @@ Open after Phase 15:
   this; the run result encoding should be settled to one rule.
 - **A non-finite float in Lean's encoder** renders as `"NaN"` where Rust fails. No accepted program can
   produce one.
+
+**Phase 16 result: the gate failed.** The session runner (`bench/workflows/session.py`, `runner.py
+sessions` and `effects-report`) runs each trial as a pi session in print mode. A recording proxy between
+pi and the server logs every tool call, each call is attributed to the attempt that made it, and each
+workflow's `audit` judges the final state and every effect. One metric changed from the text above:
+"effects performed by attempts before the first correct one" needs a snapshot after every attempt, so
+the runner reports partial effects instead, the writes performed by attempts that did not complete. A
+session the provider stopped before it was correct is rerun at most twice, with the stopped run kept
+under `stopped/`. The stopped share counts an Sx rejection or policy refusal for a safety reason, from
+`check` as well as `run`, and in either arm a run-time refusal of an attempt's first write. It cannot
+tell whether a stopped program would have violated anything.
+
+The six development workflows (`bench/workflows/effects/`) and the eight blind ones
+(`bench/workflows/effects-blind/`, frozen at `8f35d1b`, 54 careless variants all caught by their
+audits) each ran 3 samples per arm at medium thinking with Muse Spark and with `gpt-6-luna`, chosen as
+the stronger model because it is priced like Haiku 5.5, a twentieth of the other frontier models
+reachable through pi. Blind set, pooled:
+
+| Model, arm | Correct | Violating effects | Partial effects | Stopped before any effect | Attempts that violated | Attempts per session | Output per session | Cost per session |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Muse, Sx | 24 of 24 | 1 | 0 | 3 | 1 | 4.8 | 6,285 | $0.0032 |
+| Muse, JS | 24 of 24 | 0 | 0 | 0 | 0 | 4.0 | 2,942 | $0.0013 |
+| Luna, Sx | 24 of 24 | 0 | 3 | 4 | 0 | 3.5 | 2,757 | $0.0031 |
+| Luna, JS | 24 of 24 | 0 | 0 | 6 | 0 | 4.5 | 775 | $0.0010 |
+
+The development set agreed: 71 of 72 sessions correct and no violating effect in either arm. The one
+wrong session was cut off by the provider before the rerun rule existed.
+
+What the transcripts say:
+
+- **A careful agent loop already avoids these harms.** When the task states its policy, both models
+  read the data in one attempt and act in a later one, in small steps. The careless whole-program
+  answer that static checking would stop rarely appears, so there is little for Sx to stop. Its
+  checker and approver did stop 7 programs before their first effect, but the JavaScript arm's
+  run-time refusals stopped 6, and nothing shows the stopped programs were harmful.
+- **Limits across a session are invisible to a per-program check.** The one violation was Muse in the
+  Sx arm requesting a page a fourth time, against a limit of three per page, over several separate
+  `run` calls. The approver judges each program alone, so it cannot enforce a limit that spans runs.
+- **Sx costs 2.5 to 3 times JavaScript per session** ($0.0031 against $0.0010 to $0.0013), with
+  prompt caching on: the guide is mostly cache reads, and the gap is the model's own output, 2 to 3.6
+  times JavaScript's.
+- **pi's codemode resolves a failed MCP call with `isError` instead of throwing.** Scripts that relied
+  on `try` logged failures as successes; the task's instruction to look before retrying is what kept
+  that from doing harm.
+
+**Handoff.** Everything is on master and nothing is pushed. Raw sessions are under
+`.work/effects/{dev,blind}-{muse,luna}/` (disposable; the tables above are the record). Phase 17 is
+next in the plan, and adding `sx mcp code` to a project the owner trusts or to the user-level
+configuration is an owner step. Options for the owner, given that the campaign's central claim did not
+hold at this scale:
+
+1. **Run Phase 17 as planned**, real everyday requests through both code modes. It measures whether Sx
+   is usable as a real agent's code mode, which Phase 16 did not test, and costs little.
+2. **Test the claim where it should hold**, as a new phase: data too large to read before acting, and
+   host policies the prompt does not state, which only the approver and the grants enforce.
+3. **Session-wide limits in the approver**: a policy that counts calls across the `run`s of one
+   server's lifetime, which the one violation shows a per-program check cannot see.
 
 #### Phase 16: The effects benchmark
 
