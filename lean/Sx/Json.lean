@@ -435,4 +435,53 @@ partial def jsonEq (a b : Json) : Bool :=
     xs.length == ys.length && (xs.zip ys).all fun ((k, x), (k', y)) => k == k' && jsonEq x y
   | _, _ => false
 
+def zeros (n : Nat) : String := String.ofList (List.replicate n '0')
+
+def numberChar (c : Char) : Bool := c.isDigit || c == '-' || c == '+' || c == '.' || c == 'e' || c == 'E'
+
+def expandExponent (token : String) : String :=
+  match token.toList.span (fun c => c != 'e' && c != 'E') with
+  | (_, []) => token
+  | (mant, _ :: exp) =>
+    let neg := mant.head? == some '-'
+    let digits := (if neg then mant.drop 1 else mant)
+    let (whole, frac) := digits.span (· != '.')
+    let frac := frac.drop 1
+    match (String.ofList exp).toInt? with
+    | none => token
+    | some e =>
+      if e > 400 || e < -400 then token else
+      let all := String.ofList (whole ++ frac)
+      let sign := if neg then "-" else ""
+      if all.all (· == '0') then sign ++ "0.0"
+      else
+        let point : Int := whole.length + e
+        let text :=
+          if point ≤ 0 then
+            "0." ++ zeros point.natAbs ++ all
+          else
+            let p := point.toNat
+            if p ≥ all.length then all ++ zeros (p - all.length) ++ ".0"
+            else String.ofList (all.toList.take p) ++ "." ++ String.ofList (all.toList.drop p)
+        let (w, f) := text.toList.span (· != '.')
+        let w := String.ofList (w.dropWhile (· == '0'))
+        sign ++ (if w.isEmpty then "0" else w) ++ String.ofList f
+
+partial def expandExponents (cs : List Char) (inString escaped : Bool) (out : String) : String :=
+  match cs with
+  | [] => out
+  | c :: rest =>
+    if inString then
+      if escaped then expandExponents rest true false (out.push c)
+      else if c == '\\' then expandExponents rest true true (out.push c)
+      else expandExponents rest (c != '"') false (out.push c)
+    else if c == '"' then expandExponents rest true false (out.push c)
+    else if c.isDigit || c == '-' then
+      let (token, after) := cs.span numberChar
+      expandExponents after false false (out ++ expandExponent (String.ofList token))
+    else expandExponents rest false false (out.push c)
+
+def parseJsonText (text : String) : Except String Json :=
+  Json.parse (expandExponents text.toList false false "")
+
 end Sx

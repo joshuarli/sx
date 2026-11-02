@@ -1,0 +1,43 @@
+{
+  "description": "A tool output written 1e2 is not an Int, because Int rejects a fraction and an exponent.",
+  "program": "(call store.get {:id \"a\"})",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get"
+  ],
+  "responses": [
+    {
+      "capability": "store.get",
+      "input": {
+        "id": "a"
+      },
+      "results": [
+        {
+          "output": {
+            "id": "a",
+            "size": 1e2
+          }
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "failed": "invalid-host-response"
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "store.get",
+      "input": {
+        "id": "a"
+      }
+    },
+    {
+      "response": "r:1",
+      "output": {
+        "id": "a",
+        "size": 1e2
+      }
+    }
+  ]
+}
