@@ -70,7 +70,7 @@ def bundle() -> tuple[dict[str, Any], int]:
         if path.name == "declarations.json":
             continue
         case = json.loads(path.read_text())
-        if "rejected" in case["expect"] or "steps" in case:
+        if "rejected" in case["expect"] or "steps" in case or case.get("python") is False:
             continue
         corpus.append(
             {

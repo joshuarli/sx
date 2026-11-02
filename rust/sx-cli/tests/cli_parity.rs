@@ -7,6 +7,9 @@ use sx_kernel::help::entry_names;
 use sx_kernel::json::{Json, Layout, dumps, parse};
 use sx_kernel::registry::Registry;
 
+mod common;
+use common::{json_case_runs_in_python, source_runs_in_python};
+
 const CORE_IDS: [&str; 4] = ["text", "semver", "git", "github"];
 
 fn root() -> PathBuf {
@@ -459,7 +462,7 @@ fn run_fixture_cases() -> Vec<Case> {
             continue;
         }
         let fixture = parse(&fs::read_to_string(&path).expect("fixture")).expect("fixture json");
-        if fixture.get("steps").is_some() || fixture.get("budgets").is_some() {
+        if fixture.get("steps").is_some() || fixture.get("budgets").is_some() || !json_case_runs_in_python(&fixture) {
             continue;
         }
         let name = stem(&path);
@@ -494,6 +497,9 @@ fn check_fixture_cases() -> Vec<Case> {
     let mut cases = Vec::new();
     for path in sorted_files("fixtures/check", "sx") {
         let source = fs::read_to_string(&path).expect("fixture source");
+        if !source_runs_in_python(&source) {
+            continue;
+        }
         let mut lines = source.split('\n');
         let Some(declarations) = lines.next().and_then(|line| line.strip_prefix("; declarations: ")) else {
             continue;

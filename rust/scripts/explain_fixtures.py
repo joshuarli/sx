@@ -14,6 +14,8 @@ def main(target: Path) -> int:
     target.mkdir(parents=True, exist_ok=True)
     for path in sorted(p for p in FIXTURES.glob("*.json") if p.name != "declarations.json"):
         case = json.loads(path.read_text())
+        if case.get("python") is False:
+            continue
         program = target / f"{path.stem}.sx"
         program.write_text(case["program"])
         declarations = str(FIXTURES / case["declarations"])

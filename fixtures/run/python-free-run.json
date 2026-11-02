@@ -1,0 +1,44 @@
+{
+  "description": "A case marked python: false, which Rust and Lean must pass and Python is not asked to run.",
+  "python": false,
+  "program": "(get (call store.get {:id \"a\"}) :size)",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get"
+  ],
+  "responses": [
+    {
+      "capability": "store.get",
+      "input": {
+        "id": "a"
+      },
+      "results": [
+        {
+          "output": {
+            "id": "a",
+            "size": 7
+          }
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": 7
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "store.get",
+      "input": {
+        "id": "a"
+      }
+    },
+    {
+      "response": "r:1",
+      "output": {
+        "id": "a",
+        "size": 7
+      }
+    }
+  ]
+}

@@ -5,6 +5,7 @@ from typing import cast
 
 import pytest
 from cores import task_registry as declared_registry
+from fixture_marks import source_runs_in_python
 
 from sx.checker import check
 from sx.diagnostics import render
@@ -14,7 +15,7 @@ from sx.registry import Registry, load_declarations
 ROOT = Path(__file__).parent.parent
 FIXTURES = ROOT / "fixtures" / "check"
 BENCH = ROOT / "bench" / "codemode"
-PROGRAMS = sorted(FIXTURES.glob("*.sx"))
+PROGRAMS = sorted(path for path in FIXTURES.glob("*.sx") if source_runs_in_python(path.read_text()))
 TASK_HEADER = "; task: "
 RUN_DECLARATIONS_HEADER = "; declarations: fixtures/run/declarations.json"
 ALLOW_HEADER = "; allow: "

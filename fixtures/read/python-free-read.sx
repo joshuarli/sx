@@ -1,0 +1,2 @@
+; python: no
+(get (call store.get {:id "a"}) :size)

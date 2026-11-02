@@ -1,8 +1,10 @@
 import json
+import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 from sx.checker import Budgets
 from sx.export import export_program
@@ -13,6 +15,8 @@ ROOT = Path(__file__).resolve().parent.parent
 LEAN = ROOT / "lean"
 FIXTURES = ROOT / "fixtures" / "run"
 SCRATCH = ROOT / ".work" / "tmp" / "agree"
+KERNEL_ENVIRONMENT = "SX_KERNEL"
+KERNEL_BUILD = "cargo build --release --manifest-path rust/Cargo.toml -p sx-cli"
 
 
 def lake() -> str:
@@ -20,6 +24,33 @@ def lake() -> str:
     if found is None:
         raise SystemExit("agree.py: lake is not on PATH. Install elan and add ~/.elan/bin to PATH.")
     return found
+
+
+def rust_kernel() -> Path:
+    configured = os.environ.get(KERNEL_ENVIRONMENT)
+    if configured is not None:
+        return Path(configured)
+    for profile in ("release", "debug"):
+        candidate = ROOT / "rust" / "target" / profile / "sx"
+        if candidate.is_file():
+            return candidate
+    raise SystemExit(
+        f"agree.py: a fixture marked python: false needs the Rust sx. Run `{KERNEL_BUILD}` or set {KERNEL_ENVIRONMENT}."
+    )
+
+
+def rust_ir(case: dict[str, Any], stem: str) -> Path | None:
+    program = SCRATCH / f"{stem}.sx"
+    program.write_text(case["program"])
+    command = [rust_kernel(), "check", program, "--declarations", FIXTURES / case["declarations"], "--emit", "ir"]
+    for capability in case["allow"]:
+        command += ["--allow", capability]
+    emitted = subprocess.run(command, capture_output=True, text=True, check=False)
+    if emitted.returncode != 0:
+        return None
+    ir = SCRATCH / f"{stem}.ir.json"
+    ir.write_text(emitted.stdout)
+    return ir
 
 
 def retry_write_twins(binary: Path) -> tuple[int, list[str]]:
@@ -34,7 +65,7 @@ def retry_write_twins(binary: Path) -> tuple[int, list[str]]:
     twins = 0
     for path in sorted(p for p in FIXTURES.glob("*.json") if p.name != "declarations.json"):
         case = json.loads(path.read_text())
-        if "retry-write" not in case["expect"].get("rejected", []):
+        if case.get("python") is False or "retry-write" not in case["expect"].get("rejected", []):
             continue
         checked = compile_source(case["program"], registry, allowed=frozenset(case["allow"]))
         assert checked.program is not None, f"{path.stem}: the twin must check once its writes are idempotent"
@@ -71,15 +102,20 @@ def main() -> int:
     compared, pure_compared, rejected, disagreements, unchecked = 0, 0, [], [], []
     for path in sorted(p for p in FIXTURES.glob("*.json") if p.name != "declarations.json"):
         case = json.loads(path.read_text())
-        registry = Registry()
-        load_declarations(registry, json.loads((FIXTURES / case["declarations"]).read_text()))
-        budgets = Budgets(**case.get("budgets", {}))
-        checked = compile_source(case["program"], registry, allowed=frozenset(case["allow"]), budgets=budgets)
-        if checked.program is None:
+        if case.get("python") is False:
+            ir = rust_ir(case, path.stem)
+        else:
+            registry = Registry()
+            load_declarations(registry, json.loads((FIXTURES / case["declarations"]).read_text()))
+            budgets = Budgets(**case.get("budgets", {}))
+            checked = compile_source(case["program"], registry, allowed=frozenset(case["allow"]), budgets=budgets)
+            ir = None
+            if checked.program is not None:
+                ir = SCRATCH / f"{path.stem}.ir.json"
+                ir.write_text(json.dumps(export_program(checked.program, {})))
+        if ir is None:
             rejected.append(path.stem)
             continue
-        ir = SCRATCH / f"{path.stem}.ir.json"
-        ir.write_text(json.dumps(export_program(checked.program, {})))
         checked_by_lean = subprocess.run([binary, "check", ir], capture_output=True, text=True, check=False)
         if checked_by_lean.returncode != 0:
             unchecked.append((path.stem, checked_by_lean.stderr.strip()))

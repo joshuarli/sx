@@ -1,13 +1,14 @@
 from pathlib import Path
 
 import pytest
+from fixture_marks import source_runs_in_python
 
 from sx.diagnostics import render
 from sx.reader import read
 from sx.syntax import show
 
 FIXTURES = Path(__file__).parent.parent / "fixtures" / "read"
-PROGRAMS = sorted(FIXTURES.glob("*.sx"))
+PROGRAMS = sorted(path for path in FIXTURES.glob("*.sx") if source_runs_in_python(path.read_text()))
 
 
 def outcome(source: str) -> str:

@@ -1,0 +1,4 @@
+; declarations: fixtures/run/declarations.json
+; allow: store.get
+; python: no
+(get (call store.get {:id "a"}) :size)

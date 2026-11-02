@@ -154,6 +154,9 @@ fn every_accepted_run_fixture_matches_outcome_and_trace() {
     let mut failures = Vec::new();
     for path in cases() {
         let case = read_json(&path);
+        if case.get("python").and_then(Json::as_bool) == Some(false) {
+            continue;
+        }
         if case.get("expect").and_then(|e| e.get("rejected")).is_some() {
             rejected += 1;
             continue;

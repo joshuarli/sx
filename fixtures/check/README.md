@@ -18,3 +18,14 @@ Otherwise every capability the task declares is authorized.
 
 `test_every_specified_diagnostic_code_has_a_pinned_fixture` fails when a code listed in
 [docs/language.md](../../docs/language.md#diagnostics) has no fixture here or in `fixtures/read`.
+
+## Programs that Python does not check
+
+A fixture for a feature that only Rust and Lean implement carries the header line `; python: no`.
+The line is the last header line: it follows the `; task:` or `; declarations:` line, and the
+`; allow:` line when there is one. Python's fixture tests do not collect a marked fixture. The
+Rust check test compares its rendered diagnostics with the `.expected` file, as for every fixture.
+The command-line comparison against Python skips it.
+
+A reader treats the whole file as the program, so the header lines are comments in it and a
+diagnostic's line numbers count them.

@@ -15,6 +15,9 @@ use sx_kernel::json::{Json, Layout, dumps, parse, python_equal};
 use sx_kernel::machine::{Machine, Outcome, Response};
 use sx_kernel::registry::{Registry, load_declarations};
 
+mod common;
+use common::{json_case_runs_in_python, source_runs_in_python};
+
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
@@ -401,9 +404,27 @@ fn run_rust(program: &sx_kernel::ir::Program, case: &RunCase) -> Result<(), Stri
     Ok(())
 }
 
+fn judge_alone(case: &RunCase) -> Result<(), String> {
+    let (rust, program) = rust_check(&case.case);
+    let wanted = case.fixture.get("expect").and_then(|e| e.get("rejected"));
+    match (&rust, program) {
+        (Checked::Accepted { .. }, Some(program)) if wanted.is_none() => run_rust(&program, case),
+        (Checked::Rejected { codes, .. }, _) => {
+            let listed = Json::Array(codes.iter().map(|c| Json::string(c.as_str())).collect());
+            if wanted.is_some_and(|w| python_equal(w, &listed)) {
+                Ok(())
+            } else {
+                Err(format!("codes {codes:?} are not the fixture's"))
+            }
+        }
+        _ => Err(format!("rust {rust:?} but the fixture expects {:?}", case.fixture.get("expect").map(shown))),
+    }
+}
+
 #[test]
 fn every_run_fixture_checks_exports_and_runs_as_python_does() {
-    let cases = run_cases();
+    let (cases, alone): (Vec<RunCase>, Vec<RunCase>) =
+        run_cases().into_iter().partition(|c| json_case_runs_in_python(&c.fixture));
     let plain: Vec<Case> = cases.iter().map(|c| c.case.clone()).collect();
     let python = python_checks("run", &plain);
     let mut failures = Vec::new();
@@ -436,8 +457,25 @@ fn every_run_fixture_checks_exports_and_runs_as_python_does() {
             _ => failures.push(format!("{name}: rust {rust:?} but python {python:?}")),
         }
     }
-    eprintln!("{accepted} accepted and {rejected} rejected run fixtures compared");
-    assert!(failures.is_empty(), "{} of {} differ:\n{}", failures.len(), cases.len(), failures.join("\n"));
+    for case in &alone {
+        if let Err(problem) = judge_alone(case) {
+            failures.push(format!("{}: {problem}", case.case.name));
+        }
+    }
+    eprintln!(
+        "{accepted} accepted and {rejected} rejected run fixtures compared, {} marked python: false judged by their own expectations",
+        alone.len()
+    );
+    assert!(failures.is_empty(), "{} of {} differ:\n{}", failures.len(), cases.len() + alone.len(), failures.join("\n"));
+}
+
+#[test]
+fn only_a_leading_comment_line_marks_a_source_as_python_free() {
+    assert!(!source_runs_in_python("; python: no\n1"));
+    assert!(!source_runs_in_python("; task: t\n; allow: a.b\n; python: no\n(+ 1 2)"));
+    assert!(source_runs_in_python("; task: t\n(+ 1 2)\n; python: no"));
+    assert!(source_runs_in_python("; task: t\n1"));
+    assert!(source_runs_in_python("; python: nope\n1"));
 }
 
 const PYTHON_CRASHES: [&str; 1] = ["RecursionError"];

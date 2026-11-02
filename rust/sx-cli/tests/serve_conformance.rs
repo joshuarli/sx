@@ -12,6 +12,9 @@ use sx_kernel::json::{Json, Layout, dumps, parse, python_equal};
 use sx_kernel::machine::Request;
 use sx_kernel::registry::{Registry, load_declarations};
 
+mod common;
+use common::json_case_runs_in_python;
+
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
@@ -242,7 +245,7 @@ fn span_list(span: &Json) -> Json {
     Json::Array(vec![number("start", "line"), number("start", "column"), number("end", "line"), number("end", "column")])
 }
 
-fn compare(case: &Json, reply: &Json, python: &Json) -> Result<(), String> {
+fn compare(case: &Json, reply: &Json, python: Option<&Json>) -> Result<(), String> {
     let expected = case.get("expect").expect("expect");
     match kind(reply) {
         "completed" => {
@@ -256,9 +259,12 @@ fn compare(case: &Json, reply: &Json, python: &Json) -> Result<(), String> {
             if !python_equal(trace, &wanted_trace) {
                 return Err(format!("trace {} != {}", shown(trace), shown(&wanted_trace)));
             }
-            let python_value = python.get("completed").ok_or_else(|| format!("Python did not complete: {}", shown(python)))?;
-            if !python_equal(value, python_value) {
-                return Err(format!("value {} != Python's {}", shown(value), shown(python_value)));
+            if let Some(python) = python {
+                let python_value =
+                    python.get("completed").ok_or_else(|| format!("Python did not complete: {}", shown(python)))?;
+                if !python_equal(value, python_value) {
+                    return Err(format!("value {} != Python's {}", shown(value), shown(python_value)));
+                }
             }
         }
         "failed" => {
@@ -278,7 +284,9 @@ fn compare(case: &Json, reply: &Json, python: &Json) -> Result<(), String> {
                 ("span", span_list(failure.get("span").expect("span"))),
                 ("request", failure.get("request").cloned().expect("request")),
             ]);
-            if !python_equal(&detail, python) {
+            if let Some(python) = python
+                && !python_equal(&detail, python)
+            {
                 return Err(format!("failure {} != Python's {}", shown(&detail), shown(python)));
             }
         }
@@ -314,9 +322,13 @@ fn every_run_fixture_gives_the_same_outcome_and_trace_through_the_protocol() {
         let stem = path.file_stem().and_then(|s| s.to_str()).expect("fixture name");
         let declarations = read_json(&root().join("fixtures/run").join(case.get("declarations").and_then(Json::as_str).expect("declarations")));
         let is_rejected = case.get("expect").and_then(|e| e.get("rejected")).is_some();
-        let python = if is_rejected { Json::Null } else { read_json(&outcomes.join(format!("{stem}.outcome.json"))) };
+        let python = if is_rejected || !json_case_runs_in_python(&case) {
+            None
+        } else {
+            Some(read_json(&outcomes.join(format!("{stem}.outcome.json"))))
+        };
         let mut kernel = Kernel::spawn();
-        let result = drive(&mut kernel, &case, &declarations).and_then(|reply| compare(&case, &reply, &python));
+        let result = drive(&mut kernel, &case, &declarations).and_then(|reply| compare(&case, &reply, python.as_ref()));
         let status = kernel.finish();
         match result {
             Err(problem) => failures.push(format!("{stem}: {problem}")),
@@ -338,6 +350,9 @@ fn explain_reports_what_python_reports_for_every_run_fixture() {
     let mut kernel = Kernel::spawn();
     for path in cases() {
         let case = read_json(&path);
+        if !json_case_runs_in_python(&case) {
+            continue;
+        }
         let stem = path.file_stem().and_then(|s| s.to_str()).expect("fixture name");
         let declarations = read_json(&root().join("fixtures/run").join(case.get("declarations").and_then(Json::as_str).expect("declarations")));
         let python = read_json(&explained.join(format!("{stem}.explain.json")));

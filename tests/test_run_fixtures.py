@@ -11,7 +11,11 @@ from sx.program import compile_source
 from sx.registry import Registry, load_declarations
 
 FIXTURES = Path(__file__).parent.parent / "fixtures" / "run"
-CASES = sorted(p for p in FIXTURES.glob("*.json") if p.name != "declarations.json")
+CASES = sorted(
+    p
+    for p in FIXTURES.glob("*.json")
+    if p.name != "declarations.json" and json.loads(p.read_text()).get("python") is not False
+)
 
 
 def response(entry: dict[str, Any]) -> Response:
