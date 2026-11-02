@@ -686,7 +686,8 @@ core with the levels it has reached. `--format json` gives the same for a host. 
 command registers no cores, because cores are Python packages that a host registers. A host
 embeds the command with `sx.cli.main(argv, new_registry)`, where `new_registry` builds its
 registry, so `sx-repomod help text` and `sx-repomod cores` answer for the cores that host
-registers.
+registers. The Rust `sx` also registers the built-in cores that a declarations file lists under
+`cores`.
 
 A core reports the evidence that exists for it, level by level, and never a single "verified"
 flag. A level that has no evidence says `none`.
