@@ -1,0 +1,9 @@
+name = "sx"
+defaultTargets = ["Sx", "sx-ref"]
+
+[[lean_lib]]
+name = "Sx"
+
+[[lean_exe]]
+name = "sx-ref"
+root = "Main"
