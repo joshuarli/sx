@@ -84,6 +84,11 @@ fn call(fixture: &Fixture, name: &str, arguments: &Json) -> Outcome {
                 ("internal", Json::Int(7)),
             ]))
         }
+        "variants" => structured(Json::object([
+            ("shape", Json::object([("tag", Json::string("Circle")), ("value", Json::Float(2.5))])),
+            ("outcome", Json::object([("ok", Json::Int(3))])),
+            ("fail", Json::object([("err", Json::string("nope"))])),
+        ])),
         "profile" => structured(Json::object([("name", Json::string("ada")), ("bio", Json::Null)])),
         "echo_args" => {
             let seen = dumps(arguments, Layout::Spaced).unwrap_or_default();

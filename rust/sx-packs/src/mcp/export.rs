@@ -8,6 +8,11 @@ use super::server::NotServed;
 pub const WRAPPED_KEY: &str = "result";
 pub const RESULT_META: &str = "sx/result";
 pub const WRAPPED_META: &str = "wrapped";
+pub const ONE_OF: &str = "oneOf";
+pub const TAG_KEY: &str = "tag";
+pub const VALUE_KEY: &str = "value";
+pub const OK_KEY: &str = "ok";
+pub const ERR_KEY: &str = "err";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Shape {
@@ -57,8 +62,14 @@ fn nullable(inner: Json) -> Json {
 fn tagged(tag: &str, payload: Json) -> Json {
     Json::object([
         ("type", Json::string("object")),
-        ("properties", Json::object([("tag", Json::object([("type", Json::string("string")), ("enum", strings([tag]))])), ("value", payload)])),
-        ("required", strings(["tag", "value"])),
+        (
+            "properties",
+            Json::object([
+                (TAG_KEY, Json::object([("type", Json::string("string")), ("enum", strings([tag]))])),
+                (VALUE_KEY, payload),
+            ]),
+        ),
+        ("required", strings([TAG_KEY, VALUE_KEY])),
         ("additionalProperties", Json::Bool(false)),
     ])
 }
@@ -70,6 +81,48 @@ fn keyed(key: &str, payload: Json) -> Json {
         ("required", strings([key])),
         ("additionalProperties", Json::Bool(false)),
     ])
+}
+
+fn is_closed_object(option: &Json, names: &[&str]) -> bool {
+    let (Json::Object(entries), Some(Json::Object(properties))) = (option, option.get("properties")) else {
+        return false;
+    };
+    let required: Vec<&str> = option.get("required").and_then(Json::as_array).unwrap_or(&[]).iter().filter_map(Json::as_str).collect();
+    entries.len() == 4
+        && option.get("type").and_then(Json::as_str) == Some("object")
+        && matches!(option.get("additionalProperties"), Some(Json::Bool(false)))
+        && properties.len() == names.len()
+        && names.iter().all(|name| properties.iter().any(|(held, _)| held == name))
+        && required.len() == names.len()
+        && names.iter().all(|name| required.contains(name))
+}
+
+pub fn untagged(option: &Json) -> Option<(&str, &Json)> {
+    if !is_closed_object(option, &[TAG_KEY, VALUE_KEY]) {
+        return None;
+    }
+    let marker = option.get("properties")?.get(TAG_KEY)?;
+    let Json::Object(entries) = marker else { return None };
+    let names = marker.get("enum")?.as_array()?;
+    let [tag] = names else { return None };
+    let tag = tag.as_str()?;
+    let plain = entries.len() == 2 && marker.get("type").and_then(Json::as_str) == Some("string");
+    (plain && !tag.is_empty()).then_some((tag, option.get("properties")?.get(VALUE_KEY)?))
+}
+
+pub fn unkeyed<'j>(option: &'j Json, key: &str) -> Option<&'j Json> {
+    if !is_closed_object(option, &[key]) {
+        return None;
+    }
+    option.get("properties")?.get(key)
+}
+
+pub fn plain_variants(option: &Json) -> Option<Vec<&str>> {
+    let Json::Object(entries) = option else { return None };
+    if entries.len() != 2 || option.get("type").and_then(Json::as_str) != Some("string") {
+        return None;
+    }
+    option.get("enum")?.as_array()?.iter().map(Json::as_str).collect()
 }
 
 fn enumeration(variants: &[(String, Option<Type>)], side: Side) -> Result<Json, String> {
@@ -87,7 +140,7 @@ fn enumeration(variants: &[(String, Option<Type>)], side: Side) -> Result<Json, 
             options.push(tagged(name, schema(payload, side)?));
         }
     }
-    Ok(Json::object([("oneOf", Json::Array(options))]))
+    Ok(Json::object([(ONE_OF, Json::Array(options))]))
 }
 
 fn record(fields: &[(String, Type)], open: bool, side: Side) -> Result<Json, String> {
@@ -140,8 +193,8 @@ pub fn schema(ty: &Type, side: Side) -> Result<Json, String> {
         }
         Type::Option(inner) => Ok(nullable(schema(inner, side)?)),
         Type::Result(ok, err) => Ok(Json::object([(
-            "oneOf",
-            Json::Array(vec![keyed("ok", schema(ok, side)?), keyed("err", schema(err, side)?)]),
+            ONE_OF,
+            Json::Array(vec![keyed(OK_KEY, schema(ok, side)?), keyed(ERR_KEY, schema(err, side)?)]),
         )])),
         Type::Record(found) => record(&found.fields, found.open, side),
         Type::Enum(found) => enumeration(&found.variants, side),

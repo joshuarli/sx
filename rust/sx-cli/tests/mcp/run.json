@@ -643,6 +643,148 @@
       "annotations": {
         "readOnlyHint": true
       }
+    },
+    {
+      "name": "variants",
+      "description": "Returns a payload enum and a Result.",
+      "inputSchema": {
+        "type": "object"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "shape": {
+            "oneOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "Dot"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "tag": {
+                    "type": "string",
+                    "enum": [
+                      "Circle"
+                    ]
+                  },
+                  "value": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "tag",
+                  "value"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "tag": {
+                    "type": "string",
+                    "enum": [
+                      "Square"
+                    ]
+                  },
+                  "value": {
+                    "type": "object",
+                    "properties": {
+                      "side": {
+                        "type": "integer"
+                      },
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "Big",
+                          "Small"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "side",
+                      "kind"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "tag",
+                  "value"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "outcome": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "ok": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "ok"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "err": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "err"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "fail": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "ok": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "ok"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "err": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "err"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          }
+        },
+        "required": [
+          "shape",
+          "outcome",
+          "fail"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true
+      }
     }
   ]
 }

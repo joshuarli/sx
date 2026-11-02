@@ -3,6 +3,8 @@ use std::sync::Arc;
 use sx_kernel::json::Json;
 use sx_kernel::types::{BOOL, EnumType, FLOAT, INT, RecordType, STRING, Type, encodable_problem};
 
+use super::export::{ERR_KEY, OK_KEY, ONE_OF, plain_variants, unkeyed, untagged};
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Side {
     Input,
@@ -49,7 +51,7 @@ const ANNOTATIONS: &[&str] = &[
 ];
 
 const STRUCTURE: &[&str] =
-    &["type", "properties", "required", "additionalProperties", "items", "prefixItems", "enum", "anyOf", "$ref"];
+    &["type", "properties", "required", "additionalProperties", "items", "prefixItems", "enum", "anyOf", ONE_OF, "$ref"];
 
 fn skip<T>(reason: impl Into<String>) -> Result<T, Skip> {
     Err(Skip(reason.into()))
@@ -173,6 +175,12 @@ impl<'j> Mapper<'j> {
             }
             return self.nullable(options);
         }
+        if let Some(options) = schema.get(ONE_OF) {
+            if let Some((key, _)) = entries.iter().find(|(key, _)| key != ONE_OF && STRUCTURE.contains(&key.as_str())) {
+                return skip(format!("{ONE_OF} beside {key}"));
+            }
+            return self.one_of(options);
+        }
         let (kind, nullable) = kind_of(schema)?;
         if kind != "string" && schema.get("enum").is_some() {
             return skip("enum on a type other than string");
@@ -228,6 +236,56 @@ impl<'j> Mapper<'j> {
             Type::Option(_) => skip("a nullable schema is nullable twice"),
             ty => Ok(Type::Option(Box::new(ty))),
         }
+    }
+
+    fn one_of(&mut self, options: &'j Json) -> Result<Type, Skip> {
+        let foreign = || {
+            skip(format!(
+                "{ONE_OF} is not an enum with payloads or a Result in the form sx mcp export writes, so it has no Sx type"
+            ))
+        };
+        let Some(options) = options.as_array() else {
+            return foreign();
+        };
+        if let [first, second] = options
+            && let (Some(ok), Some(err)) = (unkeyed(first, OK_KEY), unkeyed(second, ERR_KEY))
+        {
+            let ok = self.child("Ok".to_string(), ok)?;
+            let err = self.child("Err".to_string(), err)?;
+            return Ok(Type::Result(Box::new(ok), Box::new(err)));
+        }
+        let mut variants: Vec<(String, Option<Type>)> = Vec::new();
+        let mut payloads = Vec::new();
+        for (at, option) in options.iter().enumerate() {
+            if at == 0
+                && let Some(names) = plain_variants(option)
+            {
+                if names.iter().any(|name| name.is_empty()) {
+                    return skip("enum holds a value that is not a non-empty string");
+                }
+                variants.extend(names.into_iter().map(|name| (name.to_string(), None)));
+            } else if let Some((tag, payload)) = untagged(option) {
+                payloads.push((tag, payload));
+            } else {
+                return foreign();
+            }
+        }
+        if payloads.is_empty() {
+            return foreign();
+        }
+        for (tag, payload) in payloads {
+            let payload = self.child(pascal(tag), payload)?;
+            variants.push((tag.to_string(), Some(payload)));
+        }
+        for (at, (name, _)) in variants.iter().enumerate() {
+            if variants.iter().take(at).any(|(held, _)| held == name) {
+                return skip(format!("enum lists {name} twice"));
+            }
+        }
+        let name = format!("{}{}", self.prefix, self.path.concat());
+        let found = Arc::new(EnumType { name, variants });
+        self.enums.push(found.clone());
+        Ok(Type::Enum(found))
     }
 
     fn enumeration(&mut self, values: &Json) -> Result<Type, Skip> {

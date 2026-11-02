@@ -119,18 +119,13 @@ def test_arguments_that_do_not_fit_the_input_type_are_invalid_and_unknown_tools_
     assert unknown["error"]["code"] == -32602
 
 
-def test_importing_the_server_reads_back_every_capability_but_those_with_payload_enum_outputs(
+def test_importing_the_server_reads_back_every_capability_with_its_input_and_effect(
     tmp_path: Path, fleet: Fleet
 ) -> None:
     imported = json.loads(sx("mcp", "import", "--name", "repomod", "--", *server_command(tmp_path)))
     by_id = {capability["id"]: capability for capability in imported["capabilities"]}
-    payload_enum_outputs = {"git.status", "github.cached-ci"}
-    assert set(by_id) == {
-        f"mcp-repomod.{row[0].replace('.', '-')}" for row in CAPABILITIES if row[0] not in payload_enum_outputs
-    }
+    assert set(by_id) == {f"mcp-repomod.{row[0].replace('.', '-')}" for row in CAPABILITIES}
     for capability_id, input_type, _, _ in CAPABILITIES:
-        if capability_id in payload_enum_outputs:
-            continue
         capability = by_id[f"mcp-repomod.{capability_id.replace('.', '-')}"]
         assert capability["effect"] == "read"
         assert capability["input"] == input_type
@@ -140,14 +135,12 @@ def test_importing_the_server_reads_back_every_capability_but_those_with_payload
     assert by_id["mcp-repomod.catalog-owner"]["output"] == "String"
 
 
-def test_sx_mcp_code_runs_a_program_over_the_server(tmp_path: Path, fleet: Fleet) -> None:
-    imported = sx("mcp", "import", "--name", "repomod", "--", *server_command(tmp_path))
-    (tmp_path / "declarations.json").write_text(imported)
-    (tmp_path / "grants.json").write_text(json.dumps({"mcp-repomod.catalog-select": None}))
-    (tmp_path / "policy.json").write_text(
-        json.dumps({"capabilities": ["mcp-repomod.catalog-select"], "computed_inputs": []})
+def run_over_server(tmp_path: Path, program: str, allowed: list[str]) -> dict[str, Any]:
+    (tmp_path / "declarations.json").write_text(
+        sx("mcp", "import", "--name", "repomod", "--", *server_command(tmp_path))
     )
-    program = "(count (get (call mcp-repomod.catalog-select {:repos [] :tags [\"fork\"]}) :result))"
+    (tmp_path / "grants.json").write_text(json.dumps(dict.fromkeys(allowed)))
+    (tmp_path / "policy.json").write_text(json.dumps({"capabilities": allowed}))
     command = [
         kernel(),
         "mcp",
@@ -166,7 +159,39 @@ def test_sx_mcp_code_runs_a_program_over_the_server(tmp_path: Path, fleet: Fleet
         result = client.tool("run", {"program": program})
         assert client.close() == 0
     assert result["isError"] is False, result
+    structured: dict[str, Any] = result["structuredContent"]
+    return structured
+
+
+def test_sx_mcp_code_runs_a_program_over_the_server(tmp_path: Path, fleet: Fleet) -> None:
+    program = "(count (get (call mcp-repomod.catalog-select {:repos [] :tags [\"fork\"]}) :result))"
+    report = run_over_server(tmp_path, program, ["mcp-repomod.catalog-select"])
     expected = in_process(fleet).call("catalog.select", {"repos": [], "tags": ["fork"]})
-    assert result["structuredContent"]["result"] == len(expected) == 2
-    trace = result["structuredContent"]["trace"]
-    assert [call["capability"] for call in trace if "capability" in call] == ["mcp-repomod.catalog-select"]
+    assert report["result"] == len(expected) == 2
+    assert [call["capability"] for call in report["trace"] if "capability" in call] == ["mcp-repomod.catalog-select"]
+
+
+GIT_STATUS_TAGS = (
+    '(match (get (call mcp-repomod.git-status {:repo "REPO"}) :result)\n'
+    '  Missing "Missing" (Invalid m) "Invalid" (OriginMismatch o) "OriginMismatch"\n'
+    '  (Detached h) "Detached" (OnBranch b) "OnBranch")'
+)
+
+
+@pytest.mark.parametrize(
+    ("repo", "tag"),
+    [
+        ("acme/clean", "OnBranch"),
+        ("acme/wrong-origin", "OriginMismatch"),
+        ("acme/detached", "Detached"),
+        ("acme/plain", "Invalid"),
+        ("acme/gone", "Missing"),
+    ],
+)
+def test_sx_mcp_code_decodes_a_payload_enum_result_from_the_server(
+    repo: str, tag: str, tmp_path: Path, fleet: Fleet
+) -> None:
+    program = GIT_STATUS_TAGS.replace("REPO", repo)
+    report = run_over_server(tmp_path, program, ["mcp-repomod.git-status"])
+    expected = in_process(fleet).call("git.status", {"repo": repo})
+    assert report["result"] == (expected if isinstance(expected, str) else expected["tag"]) == tag

@@ -1193,9 +1193,12 @@ than `byte` and `binary`) are ignored: the server enforces them. Any other keywo
 | `object` with no `properties` and an `additionalProperties` schema | `Map<String, V>` |
 | `object` with neither, as the whole `inputSchema` | `Record {}` |
 | `type` list or `anyOf` of exactly one schema and `null` | `Option<T>` |
+| `oneOf` of an optional plain `string` enum and `{"tag", "value"}` objects, as `sx mcp export` writes an enum with payloads | a new enum with the plain variants first and then each tagged variant with its payload type, named by the property path |
+| `oneOf` of `{"ok": T}` and `{"err": E}`, in that order | `Result<T, E>` |
 | local `$ref` to `#/$defs/NAME` or `#/definitions/NAME` | the definition, inlined, when it does not recurse |
 
-A tool is skipped, with its reason on standard error, for `oneOf`, `allOf`, `not`, `anyOf` that is not
+A tool is skipped, with its reason on standard error, for any other `oneOf` (each object in the two forms
+above is closed and has exactly those properties), `allOf`, `not`, `anyOf` that is not
 the nullable pattern, `patternProperties`, `const`, `if`/`then`/`else`, `contentEncoding`,
 `format: byte`, any keyword not listed above (including `nullable`), a boolean schema, a recursive,
 remote, or dangling `$ref`, a `type` list that is not one type and `null`, a free-form nested `object`, an
@@ -1346,7 +1349,7 @@ effect, and the idempotence of every tool whose types the import table can read:
 `Record {result: T}`, and a `Unit` or zero-length tuple makes the importer skip the tool, because
 `type: null` alone has no Sx type. `Bytes` is skipped, because `contentEncoding` is not on the whitelist. An
 open input record imports closed, because every imported input is. Enums are renamed from the tool and the
-property path.
+property path, and the variants of an enum with payloads come back plain variants first.
 
 **`describe`.** Prints `{"enums", "types", "capabilities"}`: the capabilities `serve` would list with
 `id`, `effect`, `idempotent`, `description`, `input`, and `output` as Sx type strings, and the enums and named
@@ -1368,9 +1371,10 @@ A capability that has no JSON Schema or a valid tool name is left out and named 
 (`not exporting ID: REASON`), and the exit status is 0, where `serve` makes it a usage error. The `tools`
 list is a saved `tools/list` result, so `sx mcp import --name NAME --tools FILE` reads it, and it reads back
 what importing `sx mcp serve` reads back, with the same four differences as the **Round trip** paragraph. A
-tool whose input or output holds an enum with payloads or a `Result` is exported, because the types table
-above covers it, and skipped by import, because a `oneOf` has no Sx type there; a program run through
-`sx mcp import` cannot call it.
+tool whose types hold an enum with payloads or a `Result` imports too, because the importer reads the two `oneOf`
+forms of the types table. The enum comes back with its plain variants first, then the tagged ones, whatever
+order the original listed them, and its payload types come back with it. A result decodes as the kernel decodes
+any value of the type, so `structuredContent` in this encoding becomes the Sx value.
 
 ### Sx as the code mode of an MCP client
 

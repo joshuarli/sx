@@ -176,7 +176,13 @@ fn build(server: &str, tool: &Json, name: &str, member: &str) -> Result<Built, S
 }
 
 fn enum_declaration(found: &EnumType) -> Json {
-    Json::Object(found.variants.iter().map(|(variant, _)| (variant.clone(), Json::Null)).collect())
+    Json::Object(
+        found
+            .variants
+            .iter()
+            .map(|(variant, payload)| (variant.clone(), payload.as_ref().map_or(Json::Null, |payload| Json::string(show_type(payload)))))
+            .collect(),
+    )
 }
 
 pub fn import(server: &str, tools: &[Json]) -> Result<Imported, ImportError> {

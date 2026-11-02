@@ -364,6 +364,23 @@ fn run_calls_a_proxied_mcp_server_next_to_native_tools() {
 }
 
 #[test]
+fn run_decodes_a_proxied_payload_enum_and_results_into_sx_values() {
+    let policy = r#"{"capabilities": ["mcp-fx.variants"]}"#;
+    let sandbox = Sandbox::new("variants", true, r#"{"mcp-fx.variants": null}"#, policy);
+    let mut client = sandbox.client();
+    let source = program_for(
+        &sandbox,
+        "(let [r (call mcp-fx.variants {})]\n  {:shape (match (get r :shape) Dot \"dot\" (Circle radius) (str \"circle \" radius) (Square s) (str \"square \" (get s :side)))\n   :outcome (match (get r :outcome) (ok n) n (err e) -1)\n   :fail (match (get r :fail) (ok n) \"ok\" (err e) e)})",
+    );
+    let reply = client.program("run", &source);
+    assert!(!reply.is_error, "{}", shown(&reply.structured));
+    let result = reply.structured.get("result").expect("result");
+    assert_eq!(string_at(result, &["shape"]), "circle 2.5");
+    assert_eq!(result.get("outcome").and_then(Json::as_i64), Some(3));
+    assert_eq!(string_at(result, &["fail"]), "nope");
+}
+
+#[test]
 fn run_supplies_declared_inputs_to_the_program() {
     let sandbox = Sandbox::new("inputs", false, FS_GRANTS, OPEN_POLICY);
     let mut client = sandbox.client();

@@ -257,7 +257,10 @@ const ROUND_TRIP: &str = r#"{
   "enums": {
     "mcp-rt.RtEchoInputMode": {"Fast": null, "Slow": null},
     "mcp-rt.RtEchoInputNestedKind": {"A": null, "B": null},
-    "mcp-rt.RtEchoOutputState": {"Ok": null, "Bad": null}
+    "mcp-rt.RtEchoOutputState": {"Ok": null, "Bad": null},
+    "mcp-rt.RtShapeOutputNestedOk": {"Yes": null, "No": null},
+    "mcp-rt.RtShapeOutputShapeSquareKind": {"Big": null, "Small": null},
+    "mcp-rt.RtShapeOutputShape": {"Dot": null, "Line": null, "Circle": "Float", "Square": "Record {side: Int, kind: mcp-rt.RtShapeOutputShapeSquareKind}", "Maybe": "Option<Int>"}
   },
   "capabilities": [
     {"id": "rt.echo", "effect": "write",
@@ -268,6 +271,10 @@ const ROUND_TRIP: &str = r#"{
      "http": {"method": "GET", "url": "http://127.0.0.1:9/peek/{id}", "query": ["verbose"]},
      "input": "Record {id: Int, verbose: Option<Bool>}",
      "output": "Record open {value: String, size: Option<Int>}"},
+    {"id": "rt.shape", "effect": "read",
+     "http": {"method": "GET", "url": "http://127.0.0.1:9/shape/{id}"},
+     "input": "Record {id: Int}",
+     "output": "Record {shape: mcp-rt.RtShapeOutputShape, outcome: Result<Int, String>, nested: Result<mcp-rt.RtShapeOutputNestedOk, Record {code: Int}>}"},
     {"id": "rt.put", "effect": "write", "idempotent": true,
      "http": {"method": "PUT", "url": "http://127.0.0.1:9/put"},
      "input": "Record {key: String, value: String}",
@@ -279,6 +286,7 @@ const ROUND_TRIP_GRANTS: &str = r#"{
   "rt.echo": {"origins": ["http://127.0.0.1:9"], "methods": ["POST"]},
   "rt.peek": {"origins": ["http://127.0.0.1:9"], "methods": ["GET"]},
   "rt.put": {"origins": ["http://127.0.0.1:9"], "methods": ["PUT"]},
+  "rt.shape": {"origins": ["http://127.0.0.1:9"], "methods": ["GET"]},
   "fs.read-text": {"roots": ["ROOT"]},
   "fs.write-text": {"roots": ["ROOT"]}
 }"#;
@@ -302,7 +310,12 @@ fn importing_what_sx_serves_reproduces_the_declared_types() {
             .cloned()
             .unwrap_or_else(|| panic!("{id} is not declared"))
     };
-    for (id, imported_id) in [("rt.echo", "mcp-rt.rt-echo"), ("rt.peek", "mcp-rt.rt-peek"), ("rt.put", "mcp-rt.rt-put")] {
+    for (id, imported_id) in [
+        ("rt.echo", "mcp-rt.rt-echo"),
+        ("rt.peek", "mcp-rt.rt-peek"),
+        ("rt.put", "mcp-rt.rt-put"),
+        ("rt.shape", "mcp-rt.rt-shape"),
+    ] {
         let (original, round) = (find(&declared, id), find(&imported, imported_id));
         for key in ["input", "output", "effect"] {
             assert_eq!(shown(original.get(key).expect(key)), shown(round.get(key).expect(key)), "{id} {key}");
@@ -313,6 +326,8 @@ fn importing_what_sx_serves_reproduces_the_declared_types() {
             "{id} idempotent"
         );
     }
+    let enums = |declarations: &Json| declarations.get("enums").and_then(|all| all.get("mcp-rt.RtShapeOutputShape")).map(shown);
+    assert_eq!(enums(&imported), enums(&declared), "payload enum variants and payload types");
     let read = find(&imported, "mcp-rt.fs-read-text");
     assert_eq!(read.get("output").and_then(Json::as_str), Some("String"));
     assert_eq!(shown(read.get("mcp").expect("mcp")), r#"{"server": "rt", "tool": "fs.read-text", "result": "text"}"#);
@@ -451,7 +466,12 @@ fn importing_an_exported_listing_reads_back_what_importing_the_server_reads() {
     }
     let declared = json(&fs::read_to_string(w.base.join("declarations.json")).expect("declarations"));
     let original = |id: &str| capabilities(&declared).into_iter().find(|c| id_of(c) == id).expect("declared");
-    for (id, imported) in [("rt.echo", "mcp-rt.rt-echo"), ("rt.peek", "mcp-rt.rt-peek"), ("rt.put", "mcp-rt.rt-put")] {
+    for (id, imported) in [
+        ("rt.echo", "mcp-rt.rt-echo"),
+        ("rt.peek", "mcp-rt.rt-peek"),
+        ("rt.put", "mcp-rt.rt-put"),
+        ("rt.shape", "mcp-rt.rt-shape"),
+    ] {
         let read_back = listed.iter().find(|c| id_of(c) == imported).expect("imported");
         for key in ["input", "output", "effect"] {
             assert_eq!(shown(original(id).get(key).expect(key)), shown(read_back.get(key).expect(key)), "{id} {key}");
@@ -474,4 +494,41 @@ fn export_names_a_capability_it_cannot_describe_and_lists_the_rest() {
     assert_eq!(tools.len(), 1);
     assert_eq!(tools[0].get("name").and_then(Json::as_str), Some("demo.echo"));
     assert!(stderr.contains("not exporting demo.bare"), "{stderr}");
+}
+
+#[test]
+fn a_oneof_that_export_does_not_write_is_still_skipped() {
+    let tagged = |extra: &str| {
+        format!(
+            r#"{{"type": "object", "properties": {{"tag": {{"type": "string", "enum": ["A"]}}, "value": {{"type": "integer"}}{extra}}}, "required": ["tag", "value"], "additionalProperties": false}}"#
+        )
+    };
+    let keyed = |key: &str| {
+        format!(r#"{{"type": "object", "properties": {{"{key}": {{"type": "integer"}}}}, "required": ["{key}"], "additionalProperties": false}}"#)
+    };
+    let output = |one_of: &str| format!(r#"{{"type": "object", "properties": {{"v": {{"oneOf": {one_of}}}}}, "required": ["v"], "additionalProperties": false}}"#);
+    let cases = [
+        ("mixed_types", output(r#"[{"type": "string"}, {"type": "integer"}]"#)),
+        ("extra_property", output(&format!("[{}]", tagged(r#", "note": {"type": "string"}"#)))),
+        ("err_first", output(&format!("[{}, {}]", keyed("err"), keyed("ok")))),
+        ("result_of_one", output(&format!("[{}]", keyed("ok")))),
+        ("plain_after_tagged", output(&format!(r#"[{}, {{"type": "string", "enum": ["B"]}}]"#, tagged("")))),
+        ("not_a_list", output(r#"{"type": "string"}"#)),
+    ];
+    let tools: Vec<String> = cases
+        .iter()
+        .map(|(name, schema)| {
+            format!(r#"{{"name": "{name}", "inputSchema": {{"type": "object"}}, "outputSchema": {schema}, "annotations": {{"readOnlyHint": true}}}}"#)
+        })
+        .collect();
+    let w = Workspace::new("foreign-one-of", "{}", "{}");
+    fs::write(w.base.join("tools.json"), format!(r#"{{"tools": [{}]}}"#, tools.join(", "))).expect("tools");
+    let path = w.base.join("tools.json").to_str().expect("UTF-8 path").to_string();
+    let done = Command::new(SX).args(["mcp", "import", "--name", "fx", "--tools", &path]).output().expect("sx runs");
+    let stderr = String::from_utf8_lossy(&done.stderr).into_owned();
+    assert_eq!(done.status.code(), Some(0), "{stderr}");
+    for (name, _) in cases {
+        assert!(stderr.contains(&format!("skipped {name}: outputSchema: oneOf is not an enum with payloads or a Result")), "{name}: {stderr}");
+    }
+    assert!(stderr.contains("imported 0 tools, skipped 6"), "{stderr}");
 }

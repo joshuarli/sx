@@ -1,4 +1,4 @@
-sx mcp import: skipped skip_one_of: inputSchema: uses oneOf, which has no Sx type
+sx mcp import: skipped skip_one_of: inputSchema: oneOf is not an enum with payloads or a Result in the form sx mcp export writes, so it has no Sx type
 sx mcp import: skipped skip_any_of: inputSchema: anyOf is not the nullable pattern of one schema and null
 sx mcp import: skipped skip_all_of: inputSchema: uses allOf, which has no Sx type
 sx mcp import: skipped skip_not: inputSchema: uses not, which has no Sx type
