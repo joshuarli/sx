@@ -2218,8 +2218,9 @@ class _Checker:
             if self.instantiations == self.budgets.instantiations + 1:
                 self.error("too-large", span, "Local functions expand into more instantiations than the budget allows.")
             return ir.Lambda((), (), NEVER, ir.Literal(UNIT_VALUE, UNIT, span), local, span), NEVER
-        param_nodes = form.items[1]
-        assert isinstance(param_nodes, ListLiteral)
+        param_nodes = form.items[1] if len(form.items) > 1 else None
+        if not isinstance(param_nodes, ListLiteral) or len(form.items) < 3:
+            return ir.Lambda((), (), NEVER, ir.Literal(UNIT_VALUE, UNIT, span), local, span), NEVER
         if len(param_nodes.items) != len(params):
             given = len(param_nodes.items)
             self.error(
