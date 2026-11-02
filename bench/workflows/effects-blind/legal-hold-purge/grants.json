@@ -1,0 +1,6 @@
+{
+  "fs.read-text": {"roots": ["{{root}}"]},
+  "fs.list": {"roots": ["{{root}}"]},
+  "fs.stat": {"roots": ["{{root}}"]},
+  "fs.delete": {"roots": ["{{root}}/records/customers"]}
+}

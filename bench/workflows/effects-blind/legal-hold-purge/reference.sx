@@ -1,0 +1,23 @@
+(let [customers "{{root}}/records/customers"
+      request (call fs.read-text {:path "{{root}}/requests/erasure-2026-11.json"})
+      ids (map (fn [i] (match (json.get request ["customers" i]) (some v) v none ""))
+               (json.keys request ["customers"]))
+      names (fn [path directories]
+              (map (fn [e] (get e :name))
+                   (filter (fn [e] (= (= (get e :kind) "Directory") directories)) (call fs.list {:path path}))))
+      erase (fn [id]
+              (let [dir (str customers "/" id)]
+                (if (any? (fn [e] (= (get e :name) ".hold")) (call fs.list {:path dir}))
+                  {:id id :held true}
+                  (let [_ (map (fn [name] (call fs.delete {:path (str dir "/" name)})) (names dir false))
+                        _ (map (fn [sub]
+                                 (let [subdir (str dir "/" sub)
+                                       _ (map (fn [name] (call fs.delete {:path (str subdir "/" name)}))
+                                              (names subdir false))]
+                                   (call fs.delete {:path subdir})))
+                               (names dir true))
+                        _ (call fs.delete {:path dir})]
+                    {:id id :held false}))))
+      outcomes (map erase ids)]
+  {:erased (map (fn [o] (get o :id)) (filter (fn [o] (not (get o :held))) outcomes))
+   :held (map (fn [o] (get o :id)) (filter (fn [o] (get o :held)) outcomes))})
