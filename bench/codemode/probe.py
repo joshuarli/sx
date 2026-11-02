@@ -389,7 +389,7 @@ def measure_guides(model: str, thinking: str, out: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Compare Sx and TypeScript on the probe tasks.")
-    parser.add_argument("--split", choices=["development", "held-out"], default="development")
+    parser.add_argument("--split", choices=["development", "held-out", "fresh"], default="development")
     parser.add_argument("--model", default="opencode-go/muse-spark-1.3-contributor")
     parser.add_argument("--thinking", default="medium")
     parser.add_argument("--samples", type=int, default=2)

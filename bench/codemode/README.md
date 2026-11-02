@@ -14,8 +14,8 @@ responses, and compares its result with `expected`.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `id` | string | Same as the directory name. Development tasks start with `dev-`, held-out tasks with `held-`. |
-| `split` | `"development"` or `"held-out"` | Which set the task belongs to |
+| `id` | string | Same as the directory name. Development tasks start with `dev-`, held-out tasks with `held-`, fresh tasks with `fresh-`. |
+| `split` | `"development"`, `"held-out"`, or `"fresh"` | Which set the task belongs to |
 | `kinds` | list of strings | What the task exercises, from [Kinds](#kinds) |
 | `domain` | `"repomod"` or `"other"` | Whether the task uses repository and CI tools |
 | `sx-expressible` | boolean | `false` when any declared type uses `Float` or `Bytes`, otherwise `true`. Sx has `Map<String, T>`, so a task whose types use only `Map` is `true`. |
