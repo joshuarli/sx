@@ -8,7 +8,7 @@ use sx_kernel::types::{BOOL, CallErrorKind, INT, RecordType, STRING, Type, UNIT,
 use sx_kernel::values::{RecordValue, Value, decode, encode};
 
 use super::origin::{Origin, Url, encode_component};
-use super::scope::{self, Scope, check_endpoint, prepare, scope_type};
+use super::scope::{self, Scope, check_endpoint, hide_secrets, prepare, resolve, scope_type};
 use super::transport::{Headers, Limits, Outgoing, send, status_kind};
 use crate::Failure;
 use crate::declaration::{required, string_of, unknown_keys};
@@ -112,7 +112,10 @@ impl EndpointBinder for EndpointLoader {
         let endpoint = declared.endpoint;
         let origin = endpoint.origin.clone();
         let method = endpoint.method.clone();
-        let check = ScopeCheck::new(prepare, move |scope, _input| check_endpoint(scope, &origin, &method));
+        let headers = endpoint.headers.clone();
+        let check = ScopeCheck::new(prepare, move |scope, _input| check_endpoint(scope, &origin, &method, &headers))
+            .resolving(resolve)
+            .showing(hide_secrets);
         let id = endpoint.id.clone();
         registry
             .add_checked_capability(declared.capability, check)
@@ -383,6 +386,7 @@ impl Endpoint {
         let denied = |reason: String| Failure::new(CallErrorKind::PermissionDenied, reason);
         let scope = Scope::of(scope_value).map_err(denied)?;
         scope.permits(&self.origin, &self.method).map_err(denied)?;
+        scope.permits_headers(&self.origin, self.headers.names()).map_err(denied)?;
         let url = Url { origin: self.origin.clone(), target: self.target(input)? };
         let body = self.body_of(input)?;
         let reply = send(

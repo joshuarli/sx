@@ -137,6 +137,10 @@ A grant lists origins and methods, `check` rejects a literal call outside them w
 denied request never opens a socket. Redirects are followed only inside the grant, at most 5 times.
 Status codes map to call error kinds by a closed table (`404` is `NotFound`, `429` is `RateLimited`,
 `5xx` is `Unavailable`), and one 30 second deadline and an 8 MiB body cap bound every request.
+A grant can also inject headers per origin, such as `"headers": {"https://api.example.com": {"authorization": {"env": "API_TOKEN"}}}`:
+the host adds them to every request, reading `{"env": NAME}` from its environment when the grant loads, and
+the program never sees them in a value, a trace, `explain`, or an error. A request that sets the same header
+is denied.
 [docs/language.md](docs/language.md#the-http-pack) has the origin rules, the endpoint format, and the table.
 
 ## The sqlite pack

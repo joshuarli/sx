@@ -465,7 +465,7 @@ value that does not decode to the declared type.
 
 The kernel never interprets a scope. The pack that implements a scoped capability registers two
 functions. One prepares a scope when the grant is loaded, for example by canonicalizing directories,
-and its error is a usage error. The other is the scope check, a function from the prepared scope and
+and its error is a usage error. A pack may also register a resolver that rewrites the written scope before it decodes, which the http pack uses to read `{"env": NAME}`, and a function that shows a granted scope in a diagnostic with its secrets hidden. The other is the scope check, a function from the prepared scope and
 a request's input to allowed, or denied with a reason. The check runs in two places:
 
 - **Before the run.** When a call's input is known before the run, the checker applies the check and
@@ -655,7 +655,7 @@ the two can redirect it.
 ### The http pack
 
 A declarations file registers it with `"packs": ["http"]`. It declares two capabilities, each with the scope
-type `Record {origins: List<String>, methods: List<String>}`:
+type `Record {origins: List<String>, methods: List<String>, headers: Map<String, Map<String, String>>}`:
 
 | Capability | Input | Output | Effect |
 | --- | --- | --- | --- |
@@ -685,6 +685,33 @@ is a usage error:
   `https://a.example` and `https://a.example:443` are one origin. An empty port, `0`, and a port above
   65535 are refused.
 - An origin has no userinfo, path, query, or fragment, not even a trailing `/`.
+
+**Credentials.** `headers` is optional in a grants file and maps an origin to the headers the host adds to
+every request sent to that origin, such as `{"https://api.example.com": {"authorization": "Bearer ..."}}`.
+The program never holds them:
+
+- A value may be written `{"env": "NAME"}`, which reads the host's environment variable when the grant
+  loads. A variable that is not set, not UTF-8, or named with `=` or NUL is a usage error, and the error names
+  the variable, never a value. `sx serve` reads its own environment when the host's `grants` arrive.
+- Each origin is normalized as in `origins` and must be one of them, and an origin may appear once. A
+  header name follows the client's header rules above, is lowercased, and appears once per origin. A value
+  must be a non-empty valid header value. Any violation is a usage error that does not echo a value.
+- The header is added when the request is sent, to the first request and to every redirect hop, according
+  to the origin of that hop. It is in no request value, so it is in no trace, `explain` output, `check`
+  diagnostic (a diagnostic shows a granted scope with every value as `[hidden]`), or error message. A redirect
+  to another granted origin carries that origin's headers and none of the program's, and a redirect that
+  leaves the grant is not followed.
+- A request whose headers include one the grant injects for its origin is denied, whichever way the
+  name is cased: `PermissionDenied` at run time with a reason that names the header and no value. For a typed
+  endpoint, the declared `headers` take the place of the program's, and a declared header the grant also
+  injects (an endpoint with a JSON body sets `content-type`) is `out-of-scope` before the run when the endpoint
+  is called with a literal input. A raw call's `headers` map is never a literal, so only the run-time denial
+  covers it. A program therefore cannot override a credential, and the denial confirms that a credential
+  exists for the header name the program tried, and nothing more.
+- A response that echoes an injected value back, in its body or its headers, has that value replaced
+  with `[redacted]` before the program or an error message sees it, as does the part of a value after its
+  first space of at least 8 bytes, so `Bearer TOKEN` is hidden whole and as `TOKEN`. This catches a server
+  that returns the request's headers, and not one that transforms them (base64, JSON escaping).
 
 A request is allowed only when its URL's normalized origin is in `origins` and its method, compared
 exactly and case-sensitively (`get` is not `GET`), is in `methods`. The URL is parsed by the same rules
@@ -769,6 +796,7 @@ every other embedding of the declaration loader, refuses an entry with an `http`
 | --- | --- |
 | The request is denied by the grant | `PermissionDenied` |
 | A header is invalid or reserved | `Invalid` |
+| A header the grant injects for the origin is set by the request | `PermissionDenied` |
 | Connection refused, unreachable, or reset while connecting; DNS failure | `Unavailable` |
 | A connect, write, header, or body read, or the whole request, exceeds the timeout | `Timeout` |
 | A TLS handshake or certificate failure | `Failed` |
@@ -804,8 +832,10 @@ budget does not bound a request.
 
 **What the scope does not do.** It names origins, not addresses: a granted name can resolve to any
 address, a private one included, so grant an origin only for a name you trust, and the pack does not
-defend against DNS rebinding. It does not look at headers, paths, or bodies, and it cannot stop a granted
-method from doing harm on a granted origin.
+defend against DNS rebinding. It does not look at the program's headers, paths, or bodies, except to refuse the headers the grant
+injects, and it cannot stop a granted method from doing harm on a granted origin. A granted origin receives
+its credential on every request, including any request the program can build with a granted method, so grant a
+credential only to an origin and methods the program may use it for.
 
 ### The sqlite pack
 
@@ -824,6 +854,10 @@ not idempotent. It runs one or more statements, such as `CREATE TABLE` and `CREA
 transaction, so a failing statement undoes the earlier ones, and it creates the database file when it is
 missing. A statement that has parameters or returns rows is a failure, since this capability binds and
 returns nothing. A literal `database` outside the grant is rejected by `check` with `out-of-scope`.
+
+`sx serve` binds statement declarations as it binds endpoints, so its checker and `check-scope` judge them, and the
+host that answers the requests must perform them under the rules here. A loader that binds neither refuses an entry
+with an `sqlite` key.
 
 **Typed statements.** A declarations file declares a statement as an ordinary capability by giving a
 `capabilities` entry a `sqlite` object:
