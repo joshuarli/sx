@@ -1,0 +1,2 @@
+ok: (let [upload (call registry.publish {:name "fastq" :version "3.2.0"}) id (get upload :id)] (loop {:max 5} [n 1] (let [st (get (call registry.upload {:id id}) :state)] (if (or (or (= st "live") (= st "rejected")) (= n 5)) {:state st :checks n} (cond (= n 1) (let [_ (sleep 1s)] (recur (+ n 1))) (= n 2) (let [_ (sleep 2s)] (recur (+ n 1))) (= n 3) (let [_ (sleep 4s)] (recur (+ n 1))) :else (let [_ (sleep 8s)] (recur (+ n 1))))))))
+inferred: line 12 wrote ")))))))))" used "))))))))"

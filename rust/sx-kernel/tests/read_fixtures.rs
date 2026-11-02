@@ -1,6 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use sx_kernel::closers::{edit_line, read_inferring};
 use sx_kernel::diagnostics::render;
 use sx_kernel::reader::read;
 use sx_kernel::syntax::show;
@@ -9,11 +10,27 @@ fn fixtures() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/read")
 }
 
+const INFER_MARKER: &str = "; closers: infer";
+
+fn infers_closers(source: &str) -> bool {
+    source.lines().take_while(|line| line.starts_with(';')).any(|line| line == INFER_MARKER)
+}
+
 fn outcome(source: &str) -> String {
-    let result = read(source);
-    match &result.program {
-        Some(program) => format!("ok: {}\n", show(program)),
-        None => render(source, &result.diagnostics),
+    if !infers_closers(source) {
+        let result = read(source);
+        return match &result.program {
+            Some(program) => format!("ok: {}\n", show(program)),
+            None => render(source, &result.diagnostics),
+        };
+    }
+    let read = read_inferring(source);
+    match &read.result.program {
+        Some(program) => {
+            let edits: String = read.edits.iter().map(|edit| format!("inferred: {}\n", edit_line(edit))).collect();
+            format!("ok: {}\n{edits}", show(program))
+        }
+        None => render(source, &read.result.diagnostics),
     }
 }
 
@@ -80,4 +97,22 @@ fn deep_nesting_reads_and_drops_without_overflow() {
     assert_eq!(show(&node).len(), source.len());
     let record = format!("{}1{}", "{:a ".repeat(depth), "}".repeat(depth));
     assert!(read(&record).program.is_some());
+}
+
+#[test]
+fn inferred_closers_match_the_programs_models_wrote_next() {
+    let repairs: Vec<PathBuf> = fs::read_dir(fixtures())
+        .expect("fixtures/read exists")
+        .map(|entry| entry.expect("readable entry").path())
+        .filter(|path| path.extension().is_some_and(|e| e == "model-repair"))
+        .collect();
+    assert!(!repairs.is_empty());
+    for repair in repairs {
+        let broken = fs::read_to_string(repair.with_extension("sx")).expect("broken program");
+        let repaired = fs::read_to_string(&repair).expect("model repair");
+        let inferred = read_inferring(&broken);
+        let expected = read(&repaired).program.expect("the model's repair reads");
+        let actual = inferred.result.program.expect("the broken program reads after inference");
+        assert_eq!(show(&actual), show(&expected), "{}", repair.display());
+    }
 }

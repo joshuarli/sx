@@ -1,0 +1,8 @@
+; python: no
+; closers: infer
+(let [f (fn [x]
+    (let [y x]
+      (if y
+        (g y)
+        x))]
+  (f 2))

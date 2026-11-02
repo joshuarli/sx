@@ -1,0 +1,11 @@
+error[unexpected-close] 3:10-3:11
+  (let [a 1) b]
+           ^
+  Expected ] to close the [ at 3:6, found ).
+  Fix: replace ) with ]
+
+error[unexpected-close] 3:13-3:14
+  (let [a 1) b]
+              ^
+  This ] is one too many: the ( at 3:1 is still open, because the next line is indented inside it.
+  Fix: remove it

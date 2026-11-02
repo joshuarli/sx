@@ -43,7 +43,7 @@ fn is_pattern_escape(c: char) -> bool {
         || matches!(c, '.' | '+' | '*' | '?' | '(' | ')' | '[' | ']' | '{' | '}' | '|' | '^' | '$' | '-' | '/')
 }
 
-fn closer_of(opener: char) -> Option<char> {
+pub(crate) fn closer_of(opener: char) -> Option<char> {
     match opener {
         '(' => Some(')'),
         '[' => Some(']'),
@@ -56,11 +56,11 @@ fn unit_size(unit: &str) -> Option<i64> {
     DURATION_UNITS.iter().find(|(u, _)| *u == unit).map(|(_, size)| *size)
 }
 
-fn indent(line: &str) -> usize {
+pub(crate) fn indent(line: &str) -> usize {
     line.chars().count() - unicode::lstrip_chars(line, " \t").chars().count()
 }
 
-fn is_blank(line: &str) -> bool {
+pub(crate) fn is_blank(line: &str) -> bool {
     let text = unicode::strip_space(line);
     text.is_empty() || text.starts_with(';')
 }

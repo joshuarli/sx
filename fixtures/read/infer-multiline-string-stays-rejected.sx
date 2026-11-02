@@ -1,0 +1,5 @@
+; python: no
+; closers: infer
+(let [a "one
+two"]
+  (str a)

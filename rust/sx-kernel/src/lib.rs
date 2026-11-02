@@ -3,6 +3,7 @@
 pub mod authority;
 pub mod budgets;
 pub mod checker;
+pub mod closers;
 pub mod definitions;
 pub mod diagnostics;
 pub mod explain;

@@ -1,0 +1,34 @@
+; python: no
+; closers: infer
+(let [dir "/srv/work/manifests"
+      entries (call fs.list {:path dir})
+      names (map (fn [e] (get e :name)) entries)
+      yaml-names (filter (fn [n] (and (text.ends-with? n ".yaml") (not (= n "legacy.yaml")))) names)
+      sorted (sort-by (fn [n] n) yaml-names)]
+  (loop {:max 10000} [remaining sorted
+                      updated []
+                      skipped []]
+    (if (= (count remaining) 0)
+      {:updated updated :skipped skipped}
+      (let [fname (first remaining)
+            fpath (str dir "/" fname)
+            content (call fs.read-text {:path fpath})
+            owner-opt (yaml.get content ["metadata" "owner"])
+            is-frozen (match owner-opt (some o) (= o "frozen") _ false)]
+        (if is-frozen
+          (recur (rest remaining) updated (concat skipped [fname]))
+          (let [old-version (match (yaml.get content ["metadata" "version"]) (some v) v _ "")
+                parts (text.split old-version ".")
+                major (nth parts 0)
+                minor (nth parts 1)
+                patch-str (nth parts 2)
+                patch-int (match (text.to-int patch-str) (some i) i _ 0)
+                new-patch-str (text.from-int (+ patch-int 1))
+                new-version (str major "." minor "." new-patch-str)
+                u1 (yaml.set content ["metadata" "version"] new-version)
+                tag-needs (match (yaml.get content ["spec" "image" "tag"]) (some t) (= t old-version) _ false)
+                u2 (if tag-needs (yaml.set u1 ["spec" "image" "tag"] new-version) u1)
+                rep-needs (match (yaml.get content ["spec" "replicas"]) (some r) (match (text.to-int r) (some i) (< i 2) _ false) _ false)
+                u3 (if rep-needs (yaml.set u2 ["spec" "replicas"] "2") u2)
+                _ (call fs.write-text {:path fpath :text u3})]
+            (recur (rest remaining) (concat updated [{:file fname :version new-version}]) skipped))))))))

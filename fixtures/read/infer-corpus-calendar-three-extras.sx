@@ -1,0 +1,57 @@
+; python: no
+; closers: infer
+(let [day "2026-03-02"
+      persons ["ana" "ben" "chen" "dara"]
+      avails (par-map {:limit 4} (fn [p] (call mcp-calendar.get-availability {:person p :day day})) persons)
+      infos (map (fn [a] (let [wh (get a :working_hours {:start 540 :end 1020})]
+        {:person (get a :person) :ws (get wh :start) :we (get wh :end) :busy (get a :busy)})) avails)
+      info-of (fn [p] (first (filter (fn [i] (= (get i :person) p)) infos)))
+      all-starts (loop {:max 200} [t 0 acc []]
+        (if (> t 1440)
+          acc
+          (recur (+ t 15) (concat acc [t]))))
+      is-free (fn [s e attendees booked]
+        (and (all? (fn [p] (let [info (info-of p)]
+          (and (>= s (get info :ws)) (<= e (get info :we))))) attendees)
+          (and (not (any? (fn [p] (let [info (info-of p)]
+            (any? (fn [b] (and (< s (get b :end)) (< (get b :start) e))) (get info :busy)))) attendees))
+            (not (any? (fn [b] (and (any? (fn [p] (contains? (get b :attendees) p)) attendees)
+              (and (< s (get b :end)) (< (get b :start) e)))) booked)))))
+      cands-of (fn [attendees len booked]
+        (filter (fn [s] (is-free s (+ s len) attendees booked)) all-starts))
+      cands1 (cands-of ["ana" "ben" "chen"] 60 [])
+      res1 (loop {:max 5} [i 0 refused 0]
+        (let [s (nth cands1 i)
+              e (+ s 60)
+              tried (attempt (call mcp-calendar.book-meeting {:title "Planning" :day day :start s :end e :attendees ["ana" "ben" "chen"]}))] 
+          (match tried
+            (ok r) {:meeting (get r :meeting) :refused refused}
+            (err e2) (recur (+ i 1) (+ refused 1))))))
+      booked1 [(get res1 :meeting)]
+      cands2 (cands-of ["ben" "chen" "dara"] 45 booked1)
+      res2 (loop {:max 5} [i 0 refused 0]
+        (let [s (nth cands2 i)
+              e (+ s 45)
+              tried (attempt (call mcp-calendar.book-meeting {:title "Design review" :day day :start s :end e :attendees ["ben" "chen" "dara"]}))] 
+          (match tried
+            (ok r) {:meeting (get r :meeting) :refused refused}
+            (err e2) (recur (+ i 1) (+ refused 1))))))
+      booked2 (concat booked1 [(get res2 :meeting)])
+      cands3 (cands-of ["ana" "ben"] 30 booked2)
+      res3 (loop {:max 5} [i 0 refused 0]
+        (let [s (nth cands3 i)
+              e (+ s 30)
+              tried (attempt (call mcp-calendar.book-meeting {:title "Retro" :day day :start s :end e :attendees ["ana" "ben"]}))] 
+          (match tried
+            (ok r) {:meeting (get r :meeting) :refused refused}
+            (err e2) (recur (+ i 1) (+ refused 1))))))
+      m1 (get res1 :meeting)
+      m2 (get res2 :meeting)
+      m3 (get res3 :meeting)
+      room1 (match (get m1 :room) (some r) r none none)
+      room2 (match (get m2 :room) (some r) r none none)
+      room3 (match (get m3 :room) (some r) r none none)
+      out1 {:title "Planning" :id (get m1 :id) :start (get m1 :start) :end (get m1 :end) :room room1 :refused (get res1 :refused)}
+      out2 {:title "Design review" :id (get m2 :id) :start (get m2 :start) :end (get m2 :end) :room room2 :refused (get res2 :refused)}
+      out3 {:title "Retro" :id (get m3 :id) :start (get m3 :start) :end (get m3 :end) :room room3 :refused (get res3 :refused)}]
+  {:meetings [out1 out2 out3]})

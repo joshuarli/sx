@@ -1,0 +1,7 @@
+; python: no
+; closers: infer
+(let [rows [{:id 1} {:id 2}]]
+  (loop {:max 10} [i 0 acc []]
+    (if (= i (count rows))
+      acc
+      (recur (+ i 1) (concat acc [(get (nth rows i) :id)])))))))))

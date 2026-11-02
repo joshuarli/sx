@@ -1,0 +1,4 @@
+; python: no
+; closers: infer
+(let [a nil]
+  (f a)

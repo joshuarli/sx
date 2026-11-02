@@ -1,0 +1,4 @@
+; python: no
+; closers: infer
+(f 1
+(g 2)

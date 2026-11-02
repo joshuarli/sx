@@ -19,7 +19,7 @@ use sx_kernel::types::Type;
 use sx_kernel::values::{Value, decode};
 
 mod common;
-use common::{json_case_runs_in_python, source_runs_in_python};
+use common::{json_case_runs_in_python, source_infers_closers, source_runs_in_python};
 
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")

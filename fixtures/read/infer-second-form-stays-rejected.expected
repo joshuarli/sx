@@ -1,0 +1,6 @@
+error[unclosed] 3:1-3:2
+  (f 1
+  ^
+  This ( is never closed.
+  Line 4 is indented like a new form, not inside this (.
+  Fix: add ) at the end of line 3
