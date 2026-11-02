@@ -1,0 +1,4 @@
+[
+  {"capability": "metrics.uptime", "input": {"host": "db1"}, "results": [{"output": {"name": "db1", "seconds": 40}}]},
+  {"capability": "metrics.uptime", "input": {"host": "db2"}, "results": [{"error": {"kind": "Timeout", "message": "no answer"}}]}
+]

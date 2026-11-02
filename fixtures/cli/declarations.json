@@ -1,0 +1,8 @@
+{
+  "types": {"Host": "Record {name: String, seconds: Int}"},
+  "inputs": {"hosts": "List<String>"},
+  "capabilities": [
+    {"id": "metrics.uptime", "effect": "read", "input": "Record {host: String}", "output": "Host", "description": "Reads a host's uptime."},
+    {"id": "pager.alert", "effect": "write", "idempotent": false, "input": "Record {host: String}", "output": "Unit", "description": "Pages the on-call engineer about a host."}
+  ]
+}

@@ -1,0 +1,6 @@
+(par-map {:limit 4}
+  (fn [h]
+    (match (attempt (call metrics.uptime {:host h}))
+      (ok m) (get m :seconds)
+      (err e) -1))
+  hosts)

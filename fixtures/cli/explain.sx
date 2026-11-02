@@ -1,0 +1,2 @@
+(let [db (call metrics.uptime {:host "db1"})]
+  (map (fn [h] (call metrics.uptime {:host h})) hosts))
