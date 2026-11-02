@@ -37,6 +37,11 @@ const UNIT_SPELLINGS: &[(&str, &str)] = &[
 ];
 const THREADING: &[&str] = &["->", "->>", "some->", "as->", "cond->"];
 
+fn is_pattern_escape(c: char) -> bool {
+    matches!(c, 'd' | 'D' | 'w' | 'W' | 's' | 'S' | 'b' | 'B' | 'A' | 'z' | 'p' | 'P')
+        || matches!(c, '.' | '+' | '*' | '?' | '(' | ')' | '[' | ']' | '{' | '}' | '|' | '^' | '$' | '-' | '/')
+}
+
 fn closer_of(opener: char) -> Option<char> {
     match opener {
         '(' => Some(')'),
@@ -602,6 +607,7 @@ impl<'a> Reader<'a> {
         let start = self.position();
         self.advance();
         match self.peek() {
+            Some('"') => self.pattern_string(start),
             Some('(') => {
                 self.advance();
                 let span = Span::new(start, self.position());
@@ -646,6 +652,34 @@ impl<'a> Reader<'a> {
         }
     }
 
+    fn pattern_string(&mut self, start: Position) {
+        self.advance();
+        let mut text = String::new();
+        loop {
+            let Some(c) = self.advance() else {
+                let marker = Span::new(start, Position { line: start.line, column: start.column + 2 });
+                self.error(Diagnostic::new("unclosed", marker, "This pattern string is never closed."));
+                return;
+            };
+            match c {
+                '"' => {
+                    let span = Span::new(start, self.position());
+                    self.emit(Node { kind: NodeKind::String(text), span });
+                    return;
+                }
+                '\\' => match self.advance() {
+                    Some('"') => text.push('"'),
+                    Some(escaped) => {
+                        text.push('\\');
+                        text.push(escaped);
+                    }
+                    None => text.push('\\'),
+                },
+                _ => text.push(c),
+            }
+        }
+    }
+
     fn string(&mut self) {
         let start = self.position();
         self.advance();
@@ -680,13 +714,18 @@ impl<'a> Reader<'a> {
                 }
                 _ => {
                     let shown: String = escaped.map(String::from).unwrap_or_default();
+                    let detail = if escaped.is_some_and(is_pattern_escape) {
+                        "Escapes: \\\" \\\\ \\n \\r \\t \\u{HEX}. For a regular expression, write #\"...\" so backslashes stay, as in #\"\\d+\"."
+                    } else {
+                        "Escapes: \\\" \\\\ \\n \\r \\t \\u{HEX}"
+                    };
                     self.error(
                         Diagnostic::new(
                             "bad-escape",
                             Span::new(escape_start, self.position()),
                             format!("\\{shown} is not a string escape."),
                         )
-                        .detail("Escapes: \\\" \\\\ \\n \\r \\t \\u{HEX}"),
+                        .detail(detail),
                     );
                 }
             }

@@ -1,0 +1,2 @@
+; python: no
+(re.test #"say \"hi\"\\" "x")

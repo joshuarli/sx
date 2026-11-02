@@ -1,0 +1,10 @@
+error[unclosed] 2:10-2:12
+  (re.test #"\d+ x)
+           ^^
+  This pattern string is never closed.
+
+error[unclosed] 2:1-2:2
+  (re.test #"\d+ x)
+  ^
+  This ( is never closed.
+  Fix: add ) at the end of the program

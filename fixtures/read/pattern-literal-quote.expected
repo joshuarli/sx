@@ -1,0 +1,1 @@
+ok: (re.test "say \"hi\"\\\\" "x")

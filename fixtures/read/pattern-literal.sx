@@ -1,0 +1,2 @@
+; python: no
+(re.find #"main\.c:(\d+):(\d+): error: (.*)" "x")

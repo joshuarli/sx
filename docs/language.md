@@ -26,6 +26,7 @@ program runs. There is no general recursion and no unbounded loop.
 | Float | `1.5`, `-0.25`, `2e3`, `1.5E-7` | Digits with a fraction, an exponent, or both. `1` is an Int. A literal beyond the finite 64-bit range, such as `1e999`, is rejected. |
 | Duration | `250ms`, `5s`, `2m`, `1h` | Only in `retry` and `wait-until` options and as the argument of `sleep`. |
 | String | `"..."` | UTF-8. Escapes: `\"`, `\\`, `\n`, `\r`, `\t`, `\u{HEX}`. |
+| Pattern string | `#"..."` | A String whose text is taken as is: backslashes stay, so `#"\d+"` is the four characters `\d+`. Only `\"` is an escape, and it stands for `"`. For regular expressions; see [The re core](#the-re-core). A Rust-only form. |
 | Keyword | `:name` | Record field names only. Same characters as a symbol. |
 | Symbol | `name`, `repo-id`, `repoId`, `ahead_count`, `ok?`, `acc'` | A lowercase letter, then letters, digits, `-`, and `_`, then optionally `?` or primes. |
 | Operator | `+ - * / = not= < <= > >=` | Prelude functions |
