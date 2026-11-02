@@ -53,11 +53,16 @@ class MatchVariant:
 
 
 @dataclass(frozen=True, slots=True)
+class MatchLiteral:
+    value: Value
+
+
+@dataclass(frozen=True, slots=True)
 class MatchAny:
     binder: Binder
 
 
-type MatchPattern = MatchSome | MatchNone | MatchOk | MatchErr | MatchVariant | MatchAny
+type MatchPattern = MatchSome | MatchNone | MatchOk | MatchErr | MatchVariant | MatchLiteral | MatchAny
 
 
 @dataclass(frozen=True, slots=True)

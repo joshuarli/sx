@@ -1,0 +1,20 @@
+{
+  "description": "Integer, string, and boolean literals are match patterns that test equality with the scrutinee.",
+  "program": "[(map (fn [n] (match n -1 \"neg\" 0 \"zero\" 1 \"one\" other (str \"many \" other))) [-1 0 1 7]) (match \"b\" \"a\" 1 \"b\" 2 _ 0) (match (= 1 2) true \"yes\" false \"no\")]",
+  "declarations": "declarations.json",
+  "allow": [],
+  "responses": [],
+  "expect": {
+    "completed": [
+      [
+        "neg",
+        "zero",
+        "one",
+        "many 7"
+      ],
+      2,
+      "no"
+    ]
+  },
+  "trace": []
+}

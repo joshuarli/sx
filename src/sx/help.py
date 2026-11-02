@@ -35,8 +35,9 @@ FORMS = (
           '(cond (> 1 2) "big" (> 3 2) "medium" :else "small")', '"medium"'),
     entry("match", "(match value pattern result ...)", "Chooses the first clause whose pattern matches. "
           "Patterns: (some x) none (ok x) (err e) Variant (Variant x) _, or a name that binds the "
-          "whole value like _.",
-          "(match (some 3) (some n) (+ n 1) none 0)", "4"),
+          "whole value like _. An integer, string, or boolean literal matches an equal value; true and false "
+          "together cover Bool, and other literals need a final _.",
+          '[(match (some 3) (some n) (+ n 1) none 0) (match 2 1 "one" 2 "two" _ "many")]', '[4 "two"]'),
     entry("fn", "(fn [param ...] body)", "A function, as an argument to map, filter, and the like, "
           "or as the value of a let binding.", "(map (fn [x] (+ x 1)) [1 2])", "[2 3]"),
     entry("get", "(get record :field [default]) or (get map \"key\" [default])", "Reads a record field, or a map "

@@ -826,6 +826,8 @@ def match_value(pattern: ir.MatchPattern, value: Value, env: Env | None) -> tupl
             return (bind(env, binder, value),)
         case ir.MatchNone():
             return (env,) if isinstance(value, NoneValue) else None
+        case ir.MatchLiteral(value=literal):
+            return (env,) if same(value, literal) else None
         case ir.MatchSome(inner=inner):
             return match_value(inner, value.value, env) if isinstance(value, SomeValue) else None
         case ir.MatchOk(inner=inner):

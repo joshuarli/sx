@@ -210,6 +210,16 @@ toward the type of the `match`. Any other clause that can never match is rejecte
 itself, so it has type `Option<T>` in a match on an optional. Only a final `_` after `none`
 narrows.
 
+An integer (including a negative one), string, or boolean literal is a pattern that matches when
+the scrutinee equals it: `(match n 1 "one" 2 "two" _ "many")`. The scrutinee's type must be the
+literal's type, `Int`, `String`, or `Bool`. Any other scrutinee, such as an `Option<Int>` or an
+enum, makes the literal a `bad-pattern`, and for a string that names a variant of the enum the fix
+is the variant name. `true` and `false` together cover `Bool`, so a `match` with both needs no `_`.
+No other set of literals covers its type, so a `match` on an `Int` or `String` needs a final `_` or
+name, or it is `non-exhaustive`. A literal repeated in a later clause is `unreachable-clause`. A
+literal is also allowed inside `(some ...)`, `(ok ...)`, `(err ...)`, and `(Variant ...)`, where it
+never covers the case, so `(some 1)` needs a `(some x)` or `_` clause after it.
+
 When the scrutinee is a bare name of type `Option<T>` and a `none` clause comes before a final `_`
 clause, the `_` clause sees that name as the inner value, of type `T`:
 

@@ -49,7 +49,7 @@ from sx.types import (
     encodable_problem,
     show_type,
 )
-from sx.values import NONE_VALUE, UNIT_VALUE, MapValue, VariantValue
+from sx.values import NONE_VALUE, UNIT_VALUE, MapValue, VariantValue, show_value
 
 SPECIAL_FORMS = frozenset({
     "let", "if", "cond", "match", "fn", "get", "call", "attempt", "retry", "wait-until", "loop", "recur", "par",
@@ -1324,6 +1324,8 @@ class _Checker:
                 return [name if payload is None else f"({name} x)" for name, payload in variants if name not in covered]
             case Never():
                 return []
+            case _ if resolved == BOOL:
+                return [name for name in ("true", "false") if f"Bool:{name}" not in covered]
             case _:
                 return ["every other value; end with _"]
 
@@ -1333,6 +1335,8 @@ class _Checker:
         resolved = self.resolve(t)
         if isinstance(node, Symbol) and node.name == "_":
             return ir.MatchAny(ir.Discard()), dict(scope), set(), True
+        if isinstance(node, IntLiteral | StringLiteral | BoolLiteral):
+            return self.literal_pattern(node, t, scope)
         if isinstance(node, Symbol) and node.name == "none":
             if self.is_open(resolved):
                 resolved = OptionType(self.fresh())
@@ -1409,7 +1413,24 @@ class _Checker:
                 return self.pattern_mismatch(node, t, scope)
         self.error(
             "bad-pattern", node.span, f"{show(node)} is not a match pattern.",
-            detail="Patterns: (some x) none (ok x) (err e) Variant (Variant x) _", help="match",
+            detail="Patterns: (some x) none (ok x) (err e) Variant (Variant x) 1 \"text\" true _", help="match",
+        )
+        return ir.MatchAny(ir.Discard()), dict(scope), set(), False
+
+    def literal_pattern(
+        self, node: IntLiteral | StringLiteral | BoolLiteral, t: Type, scope: Mapping[str, Binding],
+    ) -> tuple[ir.MatchPattern, dict[str, Binding], set[str], bool]:
+        literal_type = INT if isinstance(node, IntLiteral) else STRING if isinstance(node, StringLiteral) else BOOL
+        key = f"{literal_type.name}:{show_value(node.value)}"
+        if isinstance(self.resolve(t), Never) or self.trial(t, literal_type):
+            return ir.MatchLiteral(node.value), dict(scope), {key}, True
+        resolved = self.resolve(t)
+        fix = None
+        if isinstance(node, StringLiteral) and isinstance(resolved, EnumType) and resolved.has(node.value):
+            fix = node.value
+        self.error(
+            "bad-pattern", node.span, f"{show(node)} cannot match {describe(self.zonk(t))}.",
+            detail=f"The value is {show_type(self.zonk(t))}.", fix=fix, help="match",
         )
         return ir.MatchAny(ir.Discard()), dict(scope), set(), False
 

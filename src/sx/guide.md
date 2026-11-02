@@ -43,7 +43,7 @@ only the forms and functions below exist.
 (match value
   (some x) result         ; patterns: (some x) none (ok x) (err e)
   none other              ;           Variant (Variant x) for tool enums
-  _ fallback)             ;           _ or a name matches anything
+  _ fallback)             ;           _ or a name matches anything; 1 "a" true match equal values
 (par expr1 expr2)         ; evaluate tool reads in parallel, returns a tuple
 (let [[a b] (par e1 e2)] body)           ; take a tuple apart
 (par-map {:limit 8} (fn [x] ...) xs)     ; map over a list in parallel, reads only
