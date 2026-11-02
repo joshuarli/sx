@@ -21,13 +21,23 @@ A definition is a form before the final expression:
 ```
 
 `(def name expr)` binds a value, and `(defn name [params] body)` binds a local function, exactly as
-`(fn [params] body)` does in a `let` binding. The program means the same as one `let` that binds the
-definitions in order around the final expression, so a later form sees the names of the earlier ones, a
-`defn` body sees only the names before it and not its own name, and a later definition of the same name
-shadows the earlier one. `name` follows the rules of a `let` binding: `_` runs `expr` for its effect and binds
-nothing, a tuple pattern takes a value apart, and a form name is a `reserved-name` error for a `defn` but may name
-a `def` value. A `defn` takes one body expression and no docstring. `sx explain` and `--emit ir` see only the `let`.
-Definitions before a `script` form move into its body, so they see its inputs.
+`(fn [params] body)` does in a `let` binding. `name` follows the rules of a `let` binding: `_` runs `expr` for its
+effect and binds nothing, a tuple pattern takes a value apart, and a form name is a `reserved-name` error for a `defn`
+but may name a `def` value. A `defn` takes one body expression and no docstring.
+`sx explain` and `--emit ir` see only the `let`. Definitions before a `script` form move into its body, so they see
+its inputs.
+
+Definitions may come in any order, as function declarations do in TypeScript. A `defn` body may use a `defn` or a
+`def` that is written after it, and a `def` may use a `defn` that is written after it. A `def` may not use a later
+`def`, because `def`s run in source order and may have effects. The program means the same as one `let` that binds
+the definitions in an order where each comes after everything it uses, and where the `def`s keep their source order;
+a program that has no use of a later definition keeps its source order exactly. A use of a name means the nearest
+earlier definition of that name, when there is one, so a later definition of the same name shadows the earlier one
+only for what follows it and moving a `defn` never changes which definition it reads. Only top-level definitions
+hoist: a `let` binding is visible only after its own binding. A cycle among definitions is an error that names the
+cycle, because Sx has no recursion: `unknown-function` when functions call each other, and `unknown-name` when the
+cycle runs through a `def`, for example `(def a (f))`, `(defn f [] b)`, `(def b 1)`, where `a` needs `f`, `f` needs
+`b`, and `b` runs after `a`. A `defn` that calls itself is `unknown-function`, "cannot call itself".
 
 A definition is allowed only at the top level, before the final expression. Anywhere else, `def` and
 `defn` are the `defn` habit, with a fix that points to `let`. A form before the final expression that is not

@@ -1,0 +1,15 @@
+{
+  "description": "A definition that reads a name keeps the earlier definition of that name even when a later defn moves it, and a later redefinition runs after it.",
+  "python": false,
+  "program": "(def n 1) (defn f [] (+ n (g))) (def n 2) (defn g [] 10) [(f) n]",
+  "declarations": "declarations.json",
+  "allow": [],
+  "responses": [],
+  "expect": {
+    "completed": [
+      11,
+      2
+    ]
+  },
+  "trace": []
+}

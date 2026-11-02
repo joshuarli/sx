@@ -1,0 +1,11 @@
+; declarations: fixtures/run/declarations.json
+; allow: store.get store.list
+; python: no
+(def items (call store.list {}))
+(defn describe [id] (label (size-of id)))
+(defn label [n] (str "size " n))
+(defn size-of [id] (get (call store.get {:id id}) :size))
+(defn scaled [x] (* x factor))
+(def factor 3)
+(def labels (map describe items))
+{:labels labels :scaled (scaled 4)}

@@ -150,7 +150,7 @@ const UNDOCUMENTED_FORMS: [&str; 2] = ["when", "do"];
 const WHEN_HINT: &str = "when is optional: none when its test is false. Use if with an else value, or match on it: (match x (some v) ... none ...).";
 const MAX_REPEATS: usize = 10_000;
 
-fn is_special_form(name: &str) -> bool {
+pub(crate) fn is_special_form(name: &str) -> bool {
     SPECIAL_FORMS.contains(&name)
 }
 
@@ -225,7 +225,7 @@ fn first_upper(name: &str) -> bool {
     name.chars().next().is_some_and(char::is_uppercase)
 }
 
-fn is_plain_name(name: &str) -> bool {
+pub(crate) fn is_plain_name(name: &str) -> bool {
     name.strip_prefix('_').unwrap_or(name).chars().next().is_some_and(char::is_lowercase)
 }
 

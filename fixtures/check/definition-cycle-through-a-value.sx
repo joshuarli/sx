@@ -1,0 +1,6 @@
+; declarations: fixtures/run/declarations.json
+; python: no
+(def shown (render 1))
+(defn render [x] (+ x offset))
+(def offset 2)
+shown

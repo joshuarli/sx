@@ -1,3 +1,7 @@
+mod order;
+
+use order::{Definition, order};
+
 use crate::diagnostics::Diagnostic;
 use crate::syntax::{Items, Node, NodeKind, Span, show};
 
@@ -104,13 +108,20 @@ pub fn assemble(mut forms: Vec<Node>) -> Result<Node, Vec<Diagnostic>> {
     let (Some(first), Some(last)) = (forms.first().map(|f| f.span), forms.last().map(|f| f.span)) else {
         return if diagnostics.is_empty() { Ok(result) } else { Err(diagnostics) };
     };
-    let mut bindings = Vec::new();
+    let mut definitions = Vec::new();
     for form in forms {
         if !is_definition(&form) {
             diagnostics.push(misplaced(&form));
-        } else if let Some((name, value)) = define(form, &mut diagnostics) {
-            bindings.extend([name, value]);
+        } else {
+            let is_function = head(&form) == Some("defn");
+            if let Some((name, value)) = define(form, &mut diagnostics) {
+                definitions.push(Definition::new(is_function, name, value));
+            }
         }
+    }
+    let mut bindings = Vec::new();
+    for definition in order(definitions, &mut diagnostics) {
+        bindings.extend([definition.name, definition.value]);
     }
     if !diagnostics.is_empty() {
         diagnostics.sort_by_key(|d| (d.span.start.line, d.span.start.column));

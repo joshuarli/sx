@@ -1,0 +1,4 @@
+error[unknown-function] 3:10-3:15
+  (let [a (twice 1)
+           ^^^^^
+  twice is not a function or form Sx knows.

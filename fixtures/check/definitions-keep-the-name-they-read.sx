@@ -1,0 +1,7 @@
+; declarations: fixtures/run/declarations.json
+; python: no
+(def n 1)
+(defn f [] (+ n (g)))
+(def n 2)
+(defn g [] 10)
+[(f) n]

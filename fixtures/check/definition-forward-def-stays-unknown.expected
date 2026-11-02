@@ -1,0 +1,4 @@
+error[unknown-name] 3:15-3:19
+  (def total (+ base 1))
+                ^^^^
+  base is not defined here.

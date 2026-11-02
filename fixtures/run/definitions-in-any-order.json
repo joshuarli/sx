@@ -1,0 +1,103 @@
+{
+  "description": "A defn may use a defn or a def that comes after it; defs still run in source order, and the calls happen where the defs that make them run.",
+  "python": false,
+  "program": "(def items (call store.list {})) (defn describe [id] (label (size-of id))) (defn label [n] (str \"size \" n)) (defn size-of [id] (get (call store.get {:id id}) :size)) (defn scaled [x] (* x factor)) (def factor 3) (def labels (map describe items)) {:labels labels :scaled (scaled 4)}",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list"
+  ],
+  "responses": [
+    {
+      "capability": "store.list",
+      "input": {},
+      "results": [
+        {
+          "output": [
+            "a",
+            "b"
+          ]
+        }
+      ]
+    },
+    {
+      "capability": "store.get",
+      "input": {
+        "id": "a"
+      },
+      "results": [
+        {
+          "output": {
+            "id": "a",
+            "size": 7
+          }
+        }
+      ]
+    },
+    {
+      "capability": "store.get",
+      "input": {
+        "id": "b"
+      },
+      "results": [
+        {
+          "output": {
+            "id": "b",
+            "size": 9
+          }
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": {
+      "labels": [
+        "size 7",
+        "size 9"
+      ],
+      "scaled": 12
+    }
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "store.list",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "request": "r:2",
+      "capability": "store.get",
+      "input": {
+        "id": "a"
+      }
+    },
+    {
+      "response": "r:2",
+      "output": {
+        "id": "a",
+        "size": 7
+      }
+    },
+    {
+      "request": "r:3",
+      "capability": "store.get",
+      "input": {
+        "id": "b"
+      }
+    },
+    {
+      "response": "r:3",
+      "output": {
+        "id": "b",
+        "size": 9
+      }
+    }
+  ]
+}

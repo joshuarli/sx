@@ -1,0 +1,5 @@
+; declarations: fixtures/run/declarations.json
+; python: no
+(def total (+ base 1))
+(def base 2)
+total

@@ -1,0 +1,7 @@
+error[unknown-function] 4:37-4:44
+  (defn is-odd [n] (if (= n 0) false (is-even (- n 1))))
+                                      ^^^^^^^
+  is-even and is-odd call each other, and Sx has no recursion.
+  is-even uses is-odd, is-odd uses is-even.
+  Repeat with loop and :max, or map over a list that already exists.
+  Help: sx help loop

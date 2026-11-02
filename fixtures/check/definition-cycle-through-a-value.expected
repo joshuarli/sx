@@ -1,0 +1,7 @@
+error[unknown-name] 5:6-5:12
+  (def offset 2)
+       ^^^^^^
+  shown, render, and offset need each other, so none of them can come first.
+  shown uses render, render uses offset, offset runs after shown, because definitions that are not functions run in source order.
+  Define the value before the code that runs the function, or pass it to the function as an argument.
+  Help: sx help defn
