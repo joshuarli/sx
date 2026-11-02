@@ -1,0 +1,43 @@
+{
+  "description": "A wait-until predicate named by a local function sees the bindings where it was defined, not where it is used.",
+  "program": "(let [s \"done\" p (fn [v] (= v s)) s \"other\"] (attempt (wait-until {:within 2ms :every 1ms} p (call job.state {:id \"a\"}))))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state"
+  ],
+  "responses": [
+    {
+      "capability": "job.state",
+      "input": {
+        "id": "a"
+      },
+      "results": [
+        {
+          "output": "done"
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": {
+      "ok": "done"
+    }
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "job.state",
+      "input": {
+        "id": "a"
+      }
+    },
+    {
+      "response": "r:1",
+      "output": "done"
+    }
+  ]
+}

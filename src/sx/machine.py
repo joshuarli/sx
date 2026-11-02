@@ -502,13 +502,8 @@ class Machine:
                 if isinstance(found, LocalScope):
                     raise _TerminalError(Failure(FailureKind.INTERNAL, f"{name} is a local function used as a value."))
                 fiber.returning = found
-            case ir.Lambda(params=params, body=body, captured=captured):
-                closure_env = env
-                if captured is not None:
-                    scope = lookup(env, captured)
-                    assert isinstance(scope, LocalScope)
-                    closure_env = scope.env
-                fiber.returning = Closure(params, body, closure_env)
+            case ir.Lambda():
+                fiber.returning = closure(node, env)
             case ir.Let(value=value):
                 fiber.stack.append(LetFrame(node, env))
                 fiber.node, fiber.env = value, env
@@ -584,7 +579,7 @@ class Machine:
             case WaitFrame(node=node, env=env):
                 predicate = node.predicate
                 fiber.stack.append(WaitCheckFrame(frame, plain(value)))
-                self.apply(fiber, Closure(predicate.params, predicate.body, env), (plain(value),), node.span)
+                self.apply(fiber, closure(predicate, env), (plain(value),), node.span)
             case WaitCheckFrame(wait=wait, value=checked):
                 self.wait_again(fiber, wait, checked, value is True)
             case EachFrame():
@@ -761,6 +756,14 @@ class Machine:
             return
         fiber.stack.append(frame)
         self.apply(fiber, closure, each_args(frame), span)
+
+
+def closure(function: ir.Lambda, env: Env | None) -> Closure:
+    if function.captured is None:
+        return Closure(function.params, function.body, env)
+    scope = lookup(env, function.captured)
+    assert isinstance(scope, LocalScope)
+    return Closure(function.params, function.body, scope.env)
 
 
 def invalid(message: str, request: str) -> Failure:
