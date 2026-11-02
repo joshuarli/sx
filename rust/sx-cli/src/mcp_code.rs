@@ -167,7 +167,7 @@ impl CodeServer {
     fn describe(&self, tool: Tool) -> String {
         let purpose = match tool {
             Tool::Check => {
-                "Check a program written in Sx, the language described below, and perform no effect. Returns the \
+                "Check a program written in Sx and perform no effect. Returns the \
                  diagnostics when the program does not check. When it checks, returns its explain report, every tool \
                  it can call with each literal input and that input's scope verdict, and whether the approval policy \
                  would let it run. Use it to repair a program before running it."
@@ -180,7 +180,13 @@ impl CodeServer {
                  not undone when a later call fails."
             }
         };
-        format!("{purpose}\n\n{}\n\n{}", self.policy.describe(), self.guide.trim_end())
+        match tool {
+            Tool::Check => format!(
+                "{purpose} The language and its tools are described in the run tool's description.\n\n{}",
+                self.policy.describe()
+            ),
+            Tool::Run => format!("{purpose}\n\n{}\n\n{}", self.policy.describe(), self.guide.trim_end()),
+        }
     }
 
     fn listing(&self) -> Vec<Json> {

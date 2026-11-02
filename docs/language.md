@@ -1357,8 +1357,9 @@ needs one of its tools, once for each `run`.
 
 **Tools.** Both take `program`, the program text, and reject any other argument. `run` also takes `inputs`,
 an object from each declared input name to its JSON value (a script's header inputs, or the `inputs` of the
-declarations). Both descriptions carry the output of `sx guide` for the server's declarations and grants,
-and a summary of the policy, so a client learns the language and what will be refused from `tools/list`.
+declarations). Both descriptions carry a summary of the policy, and `run`'s also carries the output of
+`sx guide` for the server's declarations and grants, once, so a client learns the language and what will be
+refused from `tools/list`.
 Each result has one text block for a reader and `structuredContent` for a program. `isError` is true when
 the program did not or would not run to completion: it does not check, the policy refuses it, or a call
 failed. A tool name the server does not offer and non-object `arguments` are the JSON-RPC error `-32602`.

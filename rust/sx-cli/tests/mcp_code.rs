@@ -265,7 +265,7 @@ fn program_for(sandbox: &Sandbox, source: &str) -> String {
 }
 
 #[test]
-fn the_server_offers_check_and_run_and_each_describes_the_guide_for_its_grants() {
+fn the_server_offers_check_and_run_and_lists_the_guide_for_its_grants_once() {
     let sandbox = Sandbox::new("listing", false, FS_GRANTS, OPEN_POLICY);
     let guide = Command::new(SX)
         .args(["guide", "--declarations", &sandbox.at("declarations.json"), "--grants", &sandbox.at("grants.json")])
@@ -277,9 +277,11 @@ fn the_server_offers_check_and_run_and_each_describes_the_guide_for_its_grants()
     let tools = client.list();
     let names: Vec<&str> = tools.iter().map(|tool| string_at(tool, &["name"])).collect();
     assert_eq!(names, ["check", "run"]);
-    for tool in &tools {
-        let description = string_at(tool, &["description"]);
-        assert!(description.contains(&guide), "the {} description lacks the guide", string_at(tool, &["name"]));
+    let descriptions: Vec<&str> = tools.iter().map(|tool| string_at(tool, &["description"])).collect();
+    assert_eq!(descriptions.iter().filter(|description| description.contains(&guide)).count(), 1, "{descriptions:?}");
+    assert!(descriptions.get(1).is_some_and(|run| run.contains(&guide)), "the run description lacks the guide");
+    assert!(descriptions.first().is_some_and(|check| check.contains("the run tool's description")), "{descriptions:?}");
+    for description in &descriptions {
         assert!(description.contains("fs.read-text, fs.write-text"), "{description}");
     }
     let required = tools.iter().map(|tool| shown(tool.get("inputSchema").expect("schema"))).collect::<Vec<_>>();

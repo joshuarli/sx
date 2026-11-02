@@ -256,8 +256,8 @@ serves two tools. `check` checks a program and returns its diagnostics, or its `
 policy's verdict, with no effect. `run` checks, explains, and applies the approval policy `P`, a JSON file of
 the capabilities a program may call, which of them may take an input the checker cannot see, and a limit on
 write call sites; only then does it run the program against the native packs and the one MCP server after
-`--`, and return the result, every call made, and any inferred closers. Both tool descriptions carry `sx guide`
-for the declarations and grants. A refused program performs nothing. The rules are in
+`--`, and return the result, every call made, and any inferred closers. The `run` tool's description carries
+`sx guide` for the declarations and grants. A refused program performs nothing. The rules are in
 [docs/language.md](docs/language.md#sx-as-the-code-mode-of-an-mcp-client).
 
 ## Verify
