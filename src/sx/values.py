@@ -266,3 +266,30 @@ def encode(value: Value, t: Type) -> object:
 def iterate(value: Value) -> Iterator[Value]:
     assert isinstance(value, ListValue)
     return iter(value.items)
+
+
+def show_value(value: Value) -> str:
+    match value:
+        case bool():
+            return "true" if value else "false"
+        case int():
+            return str(value)
+        case str():
+            escaped = value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\t", "\\t")
+            return f'"{escaped.replace(chr(13), chr(92) + "r")}"'
+        case UnitValue():
+            return "unit"
+        case ListValue(items=items) | TupleValue(items=items):
+            return "[" + " ".join(show_value(item) for item in items) + "]"
+        case RecordValue(fields=fields):
+            return "{" + " ".join(f":{name} {show_value(v)}" for name, v in fields) + "}"
+        case SomeValue(value=inner):
+            return f"(some {show_value(inner)})"
+        case NoneValue():
+            return "none"
+        case OkValue(value=inner):
+            return f"(ok {show_value(inner)})"
+        case ErrValue(value=inner):
+            return f"(err {show_value(inner)})"
+        case VariantValue(variant=variant, payload=payload):
+            return variant if payload is None else f"({variant} {show_value(payload)})"

@@ -12,6 +12,7 @@ from cores import task_registry
 
 from sx.checker import check
 from sx.diagnostics import render
+from sx.help import guide, tool_listing
 from sx.host import FixtureHost, UnexpectedCallError, run
 from sx.machine import Completed, Failed
 from sx.reader import read
@@ -56,41 +57,11 @@ class Run:
     outcome: str
 
 
-def task_section(task: Json, cores: Json) -> str:
-    lines = ["## Your task", "", task["description"], ""]
-    if task.get("types"):
-        lines += ["Types:", *(f"  {name} = {definition}" for name, definition in task["types"].items()), ""]
-    if task.get("enums"):
-        lines.append("Enums (match on their variants):")
-        for name, variants in task["enums"].items():
-            shown = " | ".join(
-                variant if payload is None else f"({variant} {payload})" for variant, payload in variants.items()
-            )
-            lines.append(f"  {name} = {shown}")
-        lines.append("")
-    lines.append("Tools:")
-    for capability in task["capabilities"]:
-        effect = capability["effect"]
-        if effect == "write":
-            effect += ", idempotent" if capability["idempotent"] else ", not idempotent"
-        lines.append(f"  (call {capability['id']} {capability['input']}) -> {capability['output']}   [{effect}]")
-        lines.append(f"      {capability['description']}")
-    lines.append("")
-    functions = [f for f in cores["functions"] if f["name"].split(".")[0] in task.get("cores", [])]
-    if functions:
-        lines.append("Functions:")
-        lines += [
-            f"  {name} = {definition}"
-            for name, definition in cores["types"].items()
-            if name.split(".")[0] in task["cores"]
-        ]
-        for function in functions:
-            params = " ".join(function["params"])
-            lines.append(f"  ({function['name']} {params}) -> {function['output']}   {function['description']}")
-        lines.append("")
-    lines.append("Reply with one Sx program in a ```sx code block, and nothing else.")
-    return "\n".join(lines)
-
+def task_section(task: Json) -> str:
+    registry = task_registry(task)
+    listing = tool_listing(registry, [c["id"] for c in task["capabilities"]], task.get("cores", []))
+    reply = "Reply with one Sx program in a ```sx code block, and nothing else."
+    return "\n".join(["## Your task", "", task["description"], "", listing, reply])
 
 def ask(prompt: Path, model: str, thinking: str, workdir: Path) -> tuple[str, dict[str, int], str | None]:
     command = [str(PI), "-p", "--mode", "json", *PI_ISOLATION, "--model", model, "--thinking", thinking]
@@ -271,7 +242,6 @@ def main() -> None:
     args.out = args.out.resolve()
     workdir = args.out.parent
     workdir.mkdir(parents=True, exist_ok=True)
-    guide = (BENCH / "guide.md").read_text()
     cores = json.loads((BENCH / "cores.json").read_text())
     tasks = []
     for path in sorted((BENCH / "tasks").glob("*/task.json")):
@@ -304,7 +274,7 @@ def main() -> None:
         for task in tasks:
             prompt = args.out / task["id"] / "prompt.md"
             prompt.parent.mkdir(parents=True, exist_ok=True)
-            prompt.write_text(f"{guide}\n\n{task_section(task, cores)}\n")
+            prompt.write_text(f"{guide()}\n\n{task_section(task)}\n")
             settings = (args.model, args.thinking, prompt, workdir, cores)
             jobs.extend(pool.submit(run_one, task, sample, *settings) for sample in range(args.samples))
         runs = [job.result() for job in jobs]

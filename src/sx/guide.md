@@ -89,6 +89,8 @@ Names of active users, alphabetical:
          (filter (fn [u] (get u :active)) users))))
 ```
 
+Result: `["ada" "lin"]`
+
 Each host's uptime, or `-1` when the lookup fails:
 
 ```sx
@@ -99,6 +101,8 @@ Each host's uptime, or `-1` when the lookup fails:
       (err e) {:host host :uptime -1}))
   ["db1" "db2" "web1"])
 ```
+
+Result: `[{:host "db1" :uptime 100} {:host "db2" :uptime 200} {:host "web1" :uptime -1}]`
 
 Total size of every file across numbered pages:
 
@@ -111,3 +115,5 @@ Total size of every file across numbered pages:
       (+ total size)
       (recur (+ page 1) (+ total size)))))
 ```
+
+Result: `35`

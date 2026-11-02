@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,6 +40,7 @@ class ResultType:
 @dataclass(frozen=True, slots=True)
 class RecordType:
     fields: tuple[tuple[str, Type], ...]
+    name: str | None = field(default=None, compare=False)
 
     def field(self, name: str) -> Type | None:
         for field_name, field_type in self.fields:
@@ -110,16 +111,24 @@ def show_type(t: Type) -> str:
             return f"Option<{show_type(inner)}>"
         case ResultType(ok=ok, err=err):
             return f"Result<{show_type(ok)}, {'CallError' if err == CALL_ERROR else show_type(err)}>"
-        case RecordType(fields=fields):
+        case RecordType(name=name):
             if t == CALL_ERROR:
                 return "CallError"
-            return "Record {" + ", ".join(f"{name}: {show_type(ft)}" for name, ft in fields) + "}"
+            if name is not None:
+                return name
+            return show_definition(t)
         case EnumType(name=name) | NominalType(name=name):
             return name
         case Variable():
             return "?"
         case Never():
             return "Never"
+
+
+def show_definition(t: Type) -> str:
+    if isinstance(t, RecordType):
+        return "Record {" + ", ".join(f"{name}: {show_type(ft)}" for name, ft in t.fields) + "}"
+    return show_type(t)
 
 
 class TypeSyntaxError(ValueError):

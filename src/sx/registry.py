@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable, Iterable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from typing import Any, cast
 
-from sx.types import EnumType, Type, TypeSyntaxError, parse_type
+from sx.types import EnumType, RecordType, Type, TypeSyntaxError, parse_type
 from sx.values import Value
 
 CORE_ID = re.compile(r"[a-z][a-z0-9]*(-[a-z0-9]+)*")
@@ -124,6 +124,10 @@ class Registry:
             raise RegistryError(str(error)) from error
 
 
+def with_name(name: str, t: Type) -> Type:
+    return replace(t, name=name) if isinstance(t, RecordType) else t
+
+
 def load_declarations(registry: Registry, declarations: Mapping[str, Any]) -> None:
     enums = cast(Mapping[str, Mapping[str, str | None]], declarations.get("enums", {}))
     for name, variants in enums.items():
@@ -142,14 +146,14 @@ def load_declarations(registry: Registry, declarations: Mapping[str, Any]) -> No
         progressed = False
         for name, definition in list(pending.items()):
             try:
-                registry.add_type(name, registry.parse(definition))
+                registry.add_type(name, with_name(name, registry.parse(definition)))
             except RegistryError:
                 continue
             del pending[name]
             progressed = True
         if not progressed:
             name, definition = next(iter(pending.items()))
-            registry.add_type(name, registry.parse(definition))
+            registry.add_type(name, with_name(name, registry.parse(definition)))
     for entry in declarations.get("capabilities", []):
         registry.add_capability(
             Capability(
@@ -167,7 +171,9 @@ def signatures_core(
     core_id: str, entries: Iterable[Mapping[str, Any]], types: Mapping[str, str], registry: Registry
 ) -> Core:
     core_types = {
-        name: registry.parse(definition) for name, definition in types.items() if name.startswith(f"{core_id}.")
+        name: with_name(name, registry.parse(definition))
+        for name, definition in types.items()
+        if name.startswith(f"{core_id}.")
     }
     named = {**registry.types, **core_types}
 
