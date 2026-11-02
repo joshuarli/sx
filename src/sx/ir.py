@@ -267,6 +267,12 @@ class WaitUntil:
 
 
 @dataclass(frozen=True, slots=True)
+class Sleep:
+    milliseconds: int
+    span: Span
+
+
+@dataclass(frozen=True, slots=True)
 class Loop:
     maximum: int
     binders: tuple[Binder, ...]
@@ -298,7 +304,7 @@ class ParMap:
 type Node = (
     Literal | Variable | Let | LocalFunction | If | Match | Lambda | ApplyLocal | Prelude | CoreCall | Call | Get
     | MakeRecord | MakeList | MakeTuple | MakeBracket | MakeEmptyBrace | Wrap | MakeVariant | Coerce | Attempt | Retry
-    | WaitUntil | Loop | Recur | Par | ParMap
+    | WaitUntil | Sleep | Loop | Recur | Par | ParMap
 )
 
 

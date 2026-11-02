@@ -1,0 +1,3 @@
+; task: dev-failing-ci
+(let [wait 10]
+  (sleep wait))

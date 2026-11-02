@@ -1,0 +1,17 @@
+{
+  "description": "A sleep of 0ms issues no request.",
+  "program": "(let [_ (sleep 0ms)] 1)",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state"
+  ],
+  "responses": [],
+  "expect": {
+    "completed": 1
+  },
+  "trace": []
+}

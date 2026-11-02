@@ -22,7 +22,7 @@ program runs. There is no general recursion and no unbounded loop.
 | Whitespace | space, tab, newline, `,` | Commas are whitespace, as in Clojure. |
 | Boolean | `true`, `false` | |
 | Integer | `-?[0-9]+` | Signed 64-bit. A literal outside that range is rejected. |
-| Duration | `250ms`, `5s`, `2m`, `1h` | Only in `retry` and `wait-until` options. |
+| Duration | `250ms`, `5s`, `2m`, `1h` | Only in `retry` and `wait-until` options and as the argument of `sleep`. |
 | String | `"..."` | UTF-8. Escapes: `\"`, `\\`, `\n`, `\r`, `\t`, `\u{HEX}`. |
 | Keyword | `:name` | Record field names only. Same characters as a symbol. |
 | Symbol | `name`, `repo-id`, `repoId`, `ahead_count`, `ok?`, `acc'` | A lowercase letter, then letters, digits, `-`, and `_`, then optionally `?` or primes. |
@@ -41,7 +41,7 @@ program runs. There is no general recursion and no unbounded loop.
 | `Bool` | `true`, `false` |
 | `Int` | Signed 64-bit integers |
 | `String` | UTF-8 strings |
-| `Unit` | One value, returned by capabilities with no result |
+| `Unit` | One value, returned by capabilities with no result and by `sleep` |
 | `List<T>` | Ordered, finite |
 | `Tuple<T1, ..., Tn>` | Produced by `par`, `group-by`, and bracket literals of mixed types or used as tuples |
 | `Option<T>` | `(some x)`, `none` |
@@ -142,6 +142,7 @@ by element. A map is not a sort key.
 | `(attempt e)` | `Result<T, CallError>`, where `e` has type `T`. See [Recovery and repetition](#recovery-and-repetition). |
 | `(retry {options} e)` | `T`. Re-evaluates `e` after a failure. |
 | `(wait-until {options} f e)` | `T`. Re-evaluates `e` until `f` returns `true` for its value. |
+| `(sleep d)` | `Unit`. `d` is a duration literal. Waits that long. See [sleep](#sleep). |
 | `(loop {:max n} [p1 e1 ...] body)` | The type of `body`'s non-`recur` results. `(recur ...)` repeats `body`. |
 | `(par e1 ... en)` | `Tuple<T1, ..., Tn>`. Every branch has only `read` effects. |
 | `(par-map {:limit n} f xs)` | `List<U>`. `n` is an integer literal. `f` has only `read` effects. |
@@ -293,6 +294,21 @@ kind `Timeout`, which `attempt` can capture and `retry` can retry. A failed call
 the form at once. Wrap `e` in `retry` to tolerate it. `e` must have only `read` effects. Intervals
 must be at least `1ms`.
 
+### sleep
+
+```
+(let [_ (sleep 10s)
+      job (call jobs.status {:id id})]
+  job)
+```
+
+`(sleep d)` waits for `d` and returns `Unit`. `d` must be a duration literal, like every other
+duration, so `sx explain` can show it. Bind the result to `_` to run it as a step. `sleep` issues
+the same [delay request](#delays) as a `retry` delay or a `wait-until` interval, adds its duration
+to the `delay` budget, and works inside `par` branches and `par-map` functions, where each fiber
+waits on its own. A `sleep` of `0ms` issues no request. To poll until a condition holds, use
+`wait-until`; `sleep` waits once.
+
 ### loop
 
 ```
@@ -323,7 +339,7 @@ arguments, rebinds the names to them in order, and evaluates `body` again. Any o
 
 ### Delays
 
-A delay is a request like a capability call. The machine suspends with a delay request carrying
+A delay is a request like a capability call, issued for a `retry` delay, a `wait-until` interval, or a `sleep`. The machine suspends with a delay request carrying
 its ID and duration, and the host resumes it after waiting. The machine never reads a clock.
 Fixture hosts resume at once, so tests run in no time and stay deterministic. The trace records
 each delay.

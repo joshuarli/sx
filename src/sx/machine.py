@@ -526,6 +526,11 @@ class Machine:
             case ir.WaitUntil(body=body):
                 fiber.stack.append(WaitFrame(node, env))
                 fiber.node, fiber.env = body, env
+            case ir.Sleep(milliseconds=milliseconds, span=span):
+                if milliseconds == 0:
+                    fiber.returning = UNIT_VALUE
+                else:
+                    self.request_delay(fiber, milliseconds, span)
             case ir.Par(branches=branches, span=span):
                 frame = JoinFrame(span, len(branches), as_tuple=True)
                 fiber.stack.append(frame)

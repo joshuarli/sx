@@ -34,6 +34,7 @@ from sx.types import (
     REFUSAL_KINDS,
     STRING,
     TRANSIENT_KINDS,
+    UNIT,
     EnumType,
     ListType,
     MapType,
@@ -53,7 +54,7 @@ from sx.values import NONE_VALUE, UNIT_VALUE, MapValue, VariantValue, show_value
 
 SPECIAL_FORMS = frozenset({
     "let", "if", "cond", "match", "fn", "get", "call", "attempt", "retry", "wait-until", "loop", "recur", "par",
-    "par-map", "some", "ok", "err",
+    "par-map", "some", "ok", "err", "sleep",
 })
 HIGHER_ORDER = frozenset({"map", "filter", "keep", "any?", "all?", "reduce", "sort-by", "distinct-by", "group-by"})
 PRELUDE = frozenset({
@@ -691,7 +692,10 @@ class _Checker:
             case BoolLiteral(value=value, span=span):
                 return self.coerce(ir.Literal(value, span), BOOL, expected, span)
             case DurationLiteral(span=span):
-                self.error("bad-literal", span, "A duration only appears in retry and wait-until options.")
+                self.error(
+                    "bad-literal", span,
+                    "A duration only appears in retry and wait-until options, and as the argument of sleep.",
+                )
                 return self.placeholder(span)
             case Keyword(name=name, span=span):
                 self.habit(
@@ -989,6 +993,8 @@ class _Checker:
                 return self.form_retry(node, expected, scope)
             case "wait-until":
                 return self.form_wait_until(node, expected, scope)
+            case "sleep":
+                return self.form_sleep(node, expected, scope)
             case "par":
                 return self.form_par(node, expected, scope)
             case "par-map":
@@ -1861,6 +1867,19 @@ class _Checker:
                 )
         predicate, _ = self.function_argument(node.items[2], [t], BOOL, "wait-until", scope)
         return ir.WaitUntil(intervals, predicate, body, span), t
+
+    def form_sleep(self, node: Form, expected: Type | None, scope: Mapping[str, Binding]) -> tuple[ir.Node, Type]:
+        span = node.span
+        if not self.arity(node, 1, 1, "duration"):
+            return self.placeholder(span)
+        duration = node.items[1]
+        if not isinstance(duration, DurationLiteral):
+            self.error(
+                "bad-option", duration.span, "sleep takes a duration literal such as 10s.",
+                detail="A duration is written with a unit: 250ms, 5s, 2m, or 1h.", help="sleep",
+            )
+            return self.placeholder(span)
+        return self.coerce(ir.Sleep(duration.milliseconds, span), UNIT, expected, span)
 
     def form_loop(self, node: Form, expected: Type | None, scope: Mapping[str, Binding]) -> tuple[ir.Node, Type]:
         span = node.span

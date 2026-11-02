@@ -60,6 +60,9 @@ FORMS = (
           "Evaluates the expression until the function returns true for its value, and returns that value. "
           "It fails with kind Timeout after :within.",
           '(wait-until {:within 1m :every 5s} (fn [s] (= s "done")) (call job.state {:id "j1"}))', '"done"'),
+    entry("sleep", "(sleep 10s)", "Waits the literal duration and returns Unit, as one delay request. Bind it to _ "
+          "to run it as a step. A duration of 0ms waits for nothing.",
+          '(let [_ (sleep 10s)] "rested")', '"rested"'),
     entry("loop", "(loop {:max 20} [name value ...] body)", "Binds like let and evaluates the body. "
           "(recur value ...) as its last step runs the body again with new values, at most :max times.",
           "(loop {:max 10} [n 0 total 0] (if (= n 4) total (recur (+ n 1) (+ total n))))", "6"),
@@ -227,8 +230,8 @@ It looks like Clojure, but only the forms and functions below exist.
 Values: true false, integers (no fractions), "strings", [lists], {:field value} records (keywords
 only name fields), [1 "a"] tuples (mixed types), (some x) and none (no nil; a plain value works
 where an optional is expected), (ok x) and (err e). Durations such as 250ms 5s 2m 1h appear only in
-retry and wait-until options. Names may be kebab-case, camelCase, or snake_case. Comments start
-with ;.
+retry and wait-until options and as the argument of sleep. Names may be kebab-case, camelCase, or
+snake_case. Comments start with ;.
 """
 
 

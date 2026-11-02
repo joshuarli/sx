@@ -24,7 +24,7 @@ only the forms and functions below exist.
   works too, and an `if` or `match` may return a string in one branch and an enum in another.
 - Branches may return records with different fields; a field only some write is optional.
 - Results: `(ok x)` or `(err e)`, produced by `attempt`.
-- Durations, only in `retry` and `wait-until` options: `250ms`, `5s`, `2m`, `1h`.
+- Durations, only in `retry`, `wait-until`, and `sleep`: `250ms`, `5s`, `2m`, `1h`.
 - Comments start with `;`.
 
 ## Forms
@@ -51,6 +51,7 @@ only the forms and functions below exist.
 (retry {:delays [1s 2s 4s]} expr)        ; run again after a transient failure
 (retry {:backoff [100ms 5s] :within 30s :on [Timeout]} expr)
 (wait-until {:within 2m :every 5s} (fn [v] done?) expr)
+(sleep 10s)                ; wait a literal duration, as one step: [_ (sleep 10s)]
 (loop {:max 20} [x init y init2]         ; bounded loop
   (if (done? x) result (recur next-x next-y)))
 ```
