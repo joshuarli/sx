@@ -147,18 +147,21 @@ suite runs in an environment where repomod is not installed, which proves the bo
 
 ## Status
 
-Phase 0 has passed its gate and waits for the owner's checkpoint review: the held-out tasks, and
-the open decisions below. The syntax pilot ran two rounds of 60 answers each from
+Phase 0 has passed its gate, and the owner approved the checkpoint and Phase 1. The owner
+accepted the held-out tasks without changes, so no reviewer outside the agent that wrote them has
+read them. They stay unseen by any model until Phase 2. The syntax pilot ran two rounds of 60 answers each from
 `opencode-go/iceman-contributor-free` on the development set. Judged by hand against the spec,
 about 42% of the first round's answers would check and produce the expected value. After the
 language revision in commit `78dc4fd`, about 82% of the second round's would. No checker existed
 yet, so these are estimates.
 
-Open decisions:
+Decided at the checkpoint:
 
 - Keywords used as values, such as `{:kind :unknown}`, appeared in both rounds despite the guide.
-  They stay errors with a habit diagnostic until Phase 2 shows whether that diagnostic repairs
-  them in one attempt.
+  They stay errors with a habit diagnostic. Phase 2 records whether that diagnostic repairs them
+  in one attempt, and a poor repair rate reopens the question.
+
+Open:
 - Watch items from one answer each: omitting an `Option` field from a record literal, a bare
   symbol as a catch-all `match` pattern, and branches returning records with different fields.
 
