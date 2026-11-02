@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import random
+import struct
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -1157,8 +1158,63 @@ class Gen:
         wrap = self.pick(["{}", "(entries (into-map {}))", "(into-map {})", "(flatten {})", "(first {})", "(count {})"])
         return wrap.format(program)
 
+    def random_float(self) -> str:
+        roll = self.rng.random()
+        if roll < 0.3:
+            return self.float_literal()
+        if roll < 0.6:
+            value = self.rng.uniform(-1000, 1000)
+        elif roll < 0.8:
+            value = self.rng.random() * 10 ** self.rng.randint(-320, 308) * self.rng.choice([-1, 1])
+        else:
+            value = struct.unpack("<d", self.rng.getrandbits(64).to_bytes(8, "little"))[0]
+            if value != value or value in {float("inf"), float("-inf")}:
+                value = 0.5
+        text = repr(float(value)).replace("e+", "e")
+        return text if "." in text or "e" in text else text + ".0"
+
+    def number(self, ty: Ty, depth: int) -> str:
+        if depth <= 0 or self.chance(0.25):
+            return self.random_float() if ty == FLOAT else self.int_literal()
+        a, b = self.number(ty, depth - 1), self.number(ty, depth - 1)
+        if ty == FLOAT:
+            return self.pick(
+                [
+                    f"(+ {a} {b})", f"(- {a} {b})", f"(* {a} {b})", f"(/ {a} {b})", f"(- {a})",
+                    f"(float {self.number(INT, depth - 1)})",
+                ]
+            )
+        return self.pick(
+            [
+                f"(+ {a} {b})", f"(- {a} {b})", f"(* {a} {b})", f"(quot {a} {b})", f"(rem {a} {b})", f"(- {a})",
+                f"(round {self.number(FLOAT, depth - 1)})", f"(floor {self.number(FLOAT, depth - 1)})",
+                f"(ceil {self.number(FLOAT, depth - 1)})", f"(count [{a} {b}])",
+            ]
+        )
+
+    def numeric_program(self) -> str:
+        ty = self.pick([INT, FLOAT])
+        count = self.rng.randint(1, 4)
+        items = []
+        for _ in range(count):
+            kind = self.rng.random()
+            if kind < 0.5:
+                items.append(self.number(ty, self.rng.randint(1, 3)))
+            elif kind < 0.7:
+                comparison = self.pick(["<", "<=", ">", ">=", "=", "not="])
+                items.append(f"({comparison} {self.number(ty, 1)} {self.number(ty, 1)})")
+            else:
+                items.append(f"(str {self.number(ty, 2)} {self.number(self.pick([INT, FLOAT]), 1)})")
+        if count == 1:
+            return items[0]
+        if self.chance(0.3):
+            return f"(sort-by (fn [x] x) [{' '.join(self.number(ty, 1) for _ in range(count + 1))}])"
+        return "[" + " ".join(items) + "]"
+
     def program(self) -> str:
         if self.chance(0.1):
             return self.poly_program()
+        if self.chance(0.1):
+            return self.numeric_program()
         ty = self.rand_ty(2)
         return self.expr(ty, Ctx(depth=self.rng.choice([3, 4, 4, 5, 5, 6, 6, 7])))
