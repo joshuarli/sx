@@ -308,6 +308,11 @@ retired sets scored 37 of 41 at first attempt against 38 of 41 for `standard`, b
 tokens per solved task (4,773 against 4,602 on development, 7,996 against 6,429 on the retired
 set), because Muse Spark reasons more when the guide says less. `standard` stays.
 
+**Data model before the Rust port.** `Map`, `Float`, `Bytes`, and open record declarations
+landed ahead of the roadmap's campaign 2, so the port implements one language instead of
+chasing it. `Float` came before `Decimal` because the only types both held-out sets lacked were
+`Float` and, in the first set, `Map` and `Bytes`.
+
 Out of the revision: `Map` and dynamic keys (`assoc`, `keys`), which also make up the
 expressiveness gap, belong to the type-set work in the roadmap.
 
