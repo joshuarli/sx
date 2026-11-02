@@ -1,0 +1,32 @@
+{
+  "packs": ["fs"],
+  "cores": ["text", "re", "json"],
+  "capabilities": [
+    {
+      "id": "rooms.bookings",
+      "http": {"method": "GET", "url": "{{rooms_origin}}/bookings", "query": []},
+      "input": "Record {}",
+      "output": "List<Record open {id: String, room: String, start: String, end: String, owner: String}>",
+      "effect": "read",
+      "description": "Lists every booking of the day with its room, its start and end times as HH:MM, and its owner."
+    },
+    {
+      "id": "rooms.book",
+      "http": {"method": "POST", "url": "{{rooms_origin}}/bookings", "query": []},
+      "input": "Record {room: String, start: String, end: String, owner: String}",
+      "output": "Record open {id: String}",
+      "effect": "write",
+      "idempotent": false,
+      "description": "Books a room for an owner between two times and returns the booking id. The service refuses a booking that overlaps another booking of the same room with a 409."
+    },
+    {
+      "id": "rooms.cancel",
+      "http": {"method": "DELETE", "url": "{{rooms_origin}}/bookings/{id}", "query": []},
+      "input": "Record {id: String}",
+      "output": "Unit",
+      "effect": "write",
+      "idempotent": true,
+      "description": "Cancels one booking by its id."
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+(let [raw (call fs.read-text {:path "{{root}}/requests/rooms.txt"})
+      lines (filter (fn [l] (not= (text.trim l) "")) (text.split raw "\n"))
+      existing (call rooms.bookings {})
+      handle (fn [line]
+               (let [fields (text.split (first (text.split line " | ")) " ")
+                     verb (nth fields 0)]
+                 (cond
+                   (= verb "BOOK")
+                   (match (attempt (call rooms.book {:room (nth fields 1)
+                                                      :start (nth fields 2)
+                                                      :end (nth fields 3)
+                                                      :owner (nth fields 4)}))
+                     (ok _) "booked"
+                     (err _) "skipped")
+                   (= verb "CANCEL")
+                   (let [id (nth fields 1)
+                         mine (filter (fn [b] (and (= (get b :id) id) (= (get b :owner) (nth fields 2)))) existing)]
+                     (if (= (count mine) 0)
+                       "skipped"
+                       (let [_ (call rooms.cancel {:id id})] "cancelled")))
+                   :else "skipped")))]
+  (map handle lines))

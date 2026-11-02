@@ -1,0 +1,5 @@
+{
+  "capabilities": ["fs.read-text", "rooms.bookings", "rooms.book", "rooms.cancel"],
+  "computed_inputs": ["rooms.book", "rooms.cancel"],
+  "max_write_sites": 2
+}

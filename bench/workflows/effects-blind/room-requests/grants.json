@@ -1,0 +1,6 @@
+{
+  "fs.read-text": {"roots": ["{{root}}/requests"]},
+  "rooms.bookings": {"origins": ["{{rooms_origin}}"], "methods": ["GET"]},
+  "rooms.book": {"origins": ["{{rooms_origin}}"], "methods": ["POST"]},
+  "rooms.cancel": {"origins": ["{{rooms_origin}}"], "methods": ["DELETE"]}
+}
