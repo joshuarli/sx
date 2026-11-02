@@ -35,7 +35,7 @@ def freeze_python_clock(monkeypatch: pytest.MonkeyPatch, now: int = NOW) -> None
 def run_python(
     argv: Sequence[str], catalog: Catalog, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> Run:
-    monkeypatch.setattr("repomod.cmd.common._catalog", lambda: catalog)
+    monkeypatch.setattr("repomod.cmd.common.default_catalog", lambda: catalog)
     freeze_python_clock(monkeypatch)
     code = repomod.cli.main(list(argv))
     captured = capsys.readouterr()

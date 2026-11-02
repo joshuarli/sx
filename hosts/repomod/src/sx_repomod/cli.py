@@ -68,13 +68,15 @@ def main(argv: Sequence[str] | None = None, environment: Environment | None = No
     if arguments and arguments[0] in SX_COMMANDS:
         return run_sx_command(arguments)
     args = parser().parse_args(arguments)
+    from repomod.cmd.discover import render_discover
+
     from sx_repomod import render
 
     if args.command == "discover":
         result = execute(DISCOVER, {"owners": args.owner}, environment)
         if result is None:
             return EXIT_FAILED
-        (render.discover_json if args.json else render.discover_text)(result)
+        render_discover(result["owners"], result["uncatalogued"], result["missing"], as_json=args.json)
         return 0
     inputs: dict[str, object] = {
         "repos": args.repo,

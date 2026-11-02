@@ -41,7 +41,7 @@ class CapabilityError(Exception):
 
 @dataclass(slots=True)
 class Environment:
-    load_catalog: Callable[[], Catalog] = common._catalog
+    load_catalog: Callable[[], Catalog] = common.default_catalog
     clock: Callable[[], float] = time.time
 
 
@@ -129,7 +129,7 @@ class Capabilities:
         return Path(catalog.root, *parts)
 
     def catalog_select(self, payload: Json) -> Json:
-        selected = common._select(self.catalog(), payload["repos"], payload["tags"])
+        selected = common.select_repositories(self.catalog(), payload["repos"], payload["tags"])
         return [{"id": str(r.id), "owner": r.id.owner} for r in selected]
 
     def catalog_owner(self, payload: Json) -> Json:
@@ -137,13 +137,13 @@ class Capabilities:
 
     def github_owner_repos(self, payload: Json) -> Json:
         owners = {owner.casefold() for owner in payload["owners"]}
-        return github._discover_owner(payload["owner"], owners)
+        return github.discover_owner(payload["owner"], owners)
 
     def clock_now(self, payload: Json) -> Json:
         return int(self.environment.clock() * 1000)
 
     def git_status(self, payload: Json) -> Json:
-        _, status = status_command._checkout_status(self.catalog(), self.repository(payload["repo"]))
+        _, status = status_command.checkout_status(self.catalog(), self.repository(payload["repo"]))
         return checkout_json(status)
 
     def git_oldest_unpushed(self, payload: Json) -> Json:
@@ -153,7 +153,7 @@ class Capabilities:
         return branch_checked_out_time(self.checkout_path(payload["repo"]), payload["branch"])
 
     def repo_todo_items(self, payload: Json) -> Json:
-        return status_command._todo_item_count(self.checkout_path(payload["repo"]))
+        return status_command.todo_item_count(self.checkout_path(payload["repo"]))
 
     def github_cached_ci(self, payload: Json) -> Json:
         repository = self.repository(payload["repo"])
