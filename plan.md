@@ -598,6 +598,32 @@ three needs Sx could not meet and designed around: writing JSON text (the `json`
 creating, moving, or deleting files (`fs` has none of these, so one workflow grants `/bin/mkdir`,
 `/bin/mv`, and `/bin/rm`), and date arithmetic. The sample is one model, 3 samples, 8 workflows.
 
+**Phase 13: where the cost went.** The twelve development workflows, 3 samples, Muse Spark, the
+Phase 12 binary. Cost is dollars at the provider's prices (input $0.10, output $0.20 per million, no
+prompt caching), per solved task.
+
+| Condition | First attempt | Final | Prompt | Output | Reasoning | Cost per solved task |
+| --- | --- | --- | --- | --- | --- | --- |
+| Sx, frozen guide, medium thinking | 33 of 36 | 35 of 36 | 7,431 | 7,297 | 6,415 | $0.00227 |
+| The same, run again | 34 of 36 | 35 of 36 | 6,919 | 7,403 | 6,467 | $0.00223 |
+| Slim guide (no TypeScript table, cores as function lists) | 33 of 36 | 34 of 36 | 5,160 | 7,650 | 6,765 | $0.00217 |
+| "The host checks the whole program before anything runs, so write directly" | 33 of 36 | 35 of 36 | 7,119 | 6,473 | 5,636 | $0.00206 |
+| That sentence, and no checklist | 36 of 36 | 36 of 36 | 6,410 | 6,518 | 5,666 | $0.00194 |
+| Slim, that sentence, and no checklist | 33 of 36 | 36 of 36 | 5,229 | 7,766 | 6,803 | $0.00208 |
+| Sx, frozen guide, low thinking | 29 of 36 | 34 of 36 | 7,717 | 3,026 | 2,196 | $0.00146 |
+| TypeScript, medium thinking | 36 of 36 | 36 of 36 | 1,078 | 5,952 | 4,815 | $0.00130 |
+| TypeScript, low thinking | 34 of 35 | 34 of 35 | 1,077 | 2,317 | 1,258 | $0.00059 |
+
+The repeated baseline moved cost by 2%. Cutting the guide saved prompt tokens but lengthened reasoning
+by about as much, so the TypeScript table and the core prose pay for themselves. The checklist cost
+reasoning and bought nothing. Telling the model that a rejected program costs only another try cut
+reasoning by an eighth. Together these two lower cost 14%, short of the gate's quarter, and `sx guide`
+now ends with that sentence in place of the checklist. Low thinking cuts Sx's cost by a third but
+costs 11 points of first attempts, while TypeScript loses almost nothing at low thinking, so at equal
+settings the gap widens from 1.7 to 2.5 times. The remaining dev gap is mostly the prompt: Sx's
+reasoning is now within a fifth of TypeScript's here, and its 6,400 prompt tokens are a third of
+its cost.
+
 **The repomod track passed.** repomod gained `default_catalog`, `select_repositories`, `print_json`,
 `discover_owner`, `checkout_status`, `todo_item_count`, `status_text`, and `render_discover`, and
 `sx-repomod` calls them. repomod's suite gives 595 passed and 1 skipped, ruff and ty pass, and the 36
