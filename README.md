@@ -124,7 +124,9 @@ programs are mutated into mostly invalid source, to prove that no input crashes 
 
 Runs are seeded: `--seed S --count N --start K` always produces the same programs, whatever `--jobs` is.
 Findings land in `.work/tmp/fuzz/findings/SEED-INDEX/`. The run prints how many accepted programs contain
-and execute each IR class. It needs the Lean build and `lake` on `PATH`.
+and execute each IR class. `CoreCall` stays at zero because Lean has no cores, and the checker settles
+`MakeBracket` and `MakeEmptyBrace` away and never builds `MakeVariant`. The run needs the Lean build
+and `lake` on `PATH`.
 
 ```sh
 (cd lean && lake build)
@@ -134,7 +136,7 @@ uv run python -m tests.fuzz --seed 7 --show 123
 uv run python -m tests.fuzz --seed 7 --minimize 123
 ```
 
-`--fast` is the quick slice: 300 programs with a fixed seed, about 10 seconds, exit status 0 when nothing
+`--fast` is the quick slice: 300 programs with a fixed seed, a few seconds, exit status 0 when nothing
 disagrees. `--triage N` also minimizes up to N findings per kind.
 
 ## Run the syntax pilot

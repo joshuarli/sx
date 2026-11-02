@@ -69,8 +69,11 @@ class Case:
 def make_case(seed: str, index: int, known: Registry, mutate_rate: float) -> Case:
     rng = random.Random(f"{seed}:{index}")
     budgets: dict[str, int] = {}
-    if rng.random() < 0.25:
-        for name in rng.sample(sorted(BUDGET_RANGES), rng.choice([1, 1, 2])):
+    if rng.random() < 0.3:
+        names = rng.sample(sorted(BUDGET_RANGES), rng.choice([1, 1, 2]))
+        if rng.random() < 0.4 and "steps" not in names:
+            names.append("steps")
+        for name in names:
             low, high = BUDGET_RANGES[name]
             budgets[name] = rng.randint(low, high)
     budgets.setdefault("steps", FUZZ_STEPS)
