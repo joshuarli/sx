@@ -115,6 +115,7 @@ class Sandbox:
         scratch.mkdir(parents=True, exist_ok=True)
         self.root = Path(tempfile.mkdtemp(prefix="workflow-", dir=scratch)).resolve()
         self.variables: dict[str, str] = {}
+        self.kept: dict[str, object] = {}
         self.services: dict[str, Service] = {}
         self.reset()
 
@@ -125,10 +126,22 @@ class Sandbox:
             else:
                 child.unlink()
         self.variables = {"root": str(self.root)}
+        self.kept.clear()
         for name, service in self.services.items():
             service.requests.clear()
             service.peak = 0
             self.variables[f"{name}_origin"] = service.origin
+
+    def hold(self, name: str, value: object) -> None:
+        if name in self.kept:
+            raise ValueError(f"the sandbox already holds {name!r}")
+        self.kept[name] = value
+
+    def held[T](self, name: str, kind: type[T]) -> T:
+        value = self.kept[name]
+        if not isinstance(value, kind):
+            raise TypeError(f"the sandbox holds {name!r} as {type(value).__name__}, not {kind.__name__}")
+        return value
 
     def define(self, name: str, value: str) -> None:
         if name in self.variables:

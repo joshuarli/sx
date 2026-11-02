@@ -1,0 +1,30 @@
+{
+  "enums": {"InvoiceStatus": {"open": null, "paid": null}},
+  "capabilities": [
+    {
+      "id": "payments.invoices",
+      "http": {"method": "GET", "url": "{{pay_origin}}/invoices", "query": []},
+      "input": "Record {}",
+      "output": "List<Record open {id: String, customer: String, amount_cents: Int, status: InvoiceStatus}>",
+      "effect": "read",
+      "description": "Lists every invoice with its customer, its amount in cents, and whether it is open or paid."
+    },
+    {
+      "id": "payments.charges",
+      "http": {"method": "GET", "url": "{{pay_origin}}/charges", "query": ["invoice"]},
+      "input": "Record {invoice: String}",
+      "output": "List<Record open {id: String, invoice: String, amount_cents: Int}>",
+      "effect": "read",
+      "description": "Lists the charges the ledger holds for one invoice."
+    },
+    {
+      "id": "payments.charge",
+      "http": {"method": "POST", "url": "{{pay_origin}}/charges", "query": []},
+      "input": "Record {invoice: String, amount_cents: Int}",
+      "output": "Record open {id: String}",
+      "effect": "write",
+      "idempotent": false,
+      "description": "Charges an invoice for an amount in cents and returns the id of the charge. Every successful call adds a charge to the ledger."
+    }
+  ]
+}

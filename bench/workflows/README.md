@@ -151,6 +151,100 @@ as `arguments`, and the result is read like this:
 The run report holds the result or the error, every call with its time and outcome, `startupMs`
 for connecting, and `elapsedMs` for the program. The runner also times the whole `bun` process.
 
+## The effects set and the session runner
+
+`effects/` holds workflows where a wrong effect costs something, and `runner.py sessions` measures them in
+real pi sessions, not in a draft-and-repair loop. Both arms are pi in print mode with no built-in
+tools, the same model, thinking level, and task text; every effect is recorded and audited.
+
+```sh
+uv run python bench/workflows/runner.py reference --set effects
+uv run python bench/workflows/runner.py sessions --set effects --arm both --model MODEL --thinking medium \
+  --samples 3 --jobs 2 --out .work/effects/run1
+uv run python bench/workflows/runner.py effects-report --set effects --out .work/effects/run1
+uv run pytest -q tests/test_effects.py
+```
+
+`reference` runs each workflow's `reference.sx` through `sx mcp code`'s `run` tool and its
+`reference.js`, a pi-codemode-style script, through `harness/codemode.ts`, a Bun shim with the
+`tools.mcp__tools__NAME(args)` and `text()` globals of pi's `codemode` over `sx mcp serve`. Both go
+through the recorder and the audit, and the command exits 1 unless the audit finds the reference
+correct with no violating effect. `sessions` writes one directory per session,
+`OUT/WORKFLOW/ARM-SAMPLE/`, and refuses to reuse one.
+
+**The wiring.** A session runs in `project/` under its directory, with `.pi/mcp.json` written by the runner
+and `pi -p --mode json --approve --no-session --no-extensions -e builtin:mcp --no-skills --no-context-files
+--no-prompt-templates --offline --model M --thinking T PROMPT`, standard input closed.
+
+| Arm | Server in `.pi/mcp.json` (exposure `direct`) | The model's tools |
+| --- | --- | --- |
+| `sx` | `sx-code`: `sx mcp code --declarations D --grants G --policy P` | `--tools 'mcp__sx_code__*'`: `check` and `run`. `run`'s description holds `sx guide`, behavior notes included. |
+| `js` | `tools`: `sx mcp serve --declarations D --grants G`, the same declarations and grants | `-e builtin:codemode --tools 'codemode,mcp__tools__*'` with `codemode.mode: "only"` in `.pi/settings.json`: `codemode` is the only declared tool, and its description lists every served tool with its TypeScript declaration. pi's codemode has no type check. `--append-system-prompt` gives the arm `sx guide --notes`, the facts about the tools that the Sx arm reads in its guide. |
+
+Where a fact differs between the arms: the Sx arm's tool description states the approval policy, and the JS
+arm has no approver; `task.md` states the same policy in words for both.
+
+**The recorder.** `recorder.py`, standard library only, sits between pi and the server in both arms. It
+forwards JSON-RPC both ways and appends each `tools/call` request and response to `proxy.jsonl` with
+`time.time_ns()`. In the Sx arm it therefore holds every `check` and `run` with the program and the full
+result; in the JS arm it holds every tool call a script made.
+
+**Attribution.** The runner stamps each line of pi's JSON event stream with its arrival (`events.jsonl`).
+A tool execution is a window from its `tool_execution_start` to its `tool_execution_end`. In the Sx arm, a
+recorded `run` or `check` belongs to the execution with the same tool and program text whose window holds
+it. In the JS arm, a script's tool calls are executions of their own with `parentToolCallId`, so a recorded
+call belongs to the script whose nested execution has the same tool and arguments, and its time must fall
+in that script's window. A call that fits no execution, or falls outside its window, makes the session
+`not audited` rather than being guessed.
+
+**Records.** `session.json` holds, for the audit and the report:
+
+- Attempts: one per model invocation of `check`, `run`, or `codemode`, with the program text and a
+  status. Sx: `rejected` with the diagnostic codes, `refused` with the policy refusal kinds, `completed`,
+  `failed`, or `checked` for a `check` that passed. JS: `completed` or `failed`.
+- Effects: one per tool call, with the attempt, the capability, the input, the outcome (`ok` or the call
+  error kind), and the class (`read` or `write`) from the declarations. In the Sx arm they come from the
+  `run` result's trace; `check` performs none.
+- The audit: `workflow.audit(sandbox, effects)` returns a verdict (is the final state correct?) and the
+  violations, each naming the effect, by its index in the effect list, that broke a stated policy. A
+  workflow judges them from its service ledgers and file tree, so a violation counts however the effect
+  came about and whether or not the attempt completed.
+- Usage from pi's assistant messages: turns, input, output, and cache-read tokens, and cost.
+
+**Metrics.** Per arm and workflow, over samples:
+
+| Column | Meaning |
+| --- | --- |
+| Correct | Sessions whose audit verdict is correct |
+| Violating effects, Sessions with a violation | Effects the audit names, and sessions with at least one |
+| Partial effects | Write effects performed by attempts that did not complete. A write the service refused (`RateLimited`, `NotFound`, `PermissionDenied`, `Invalid`, `Conflict`) was not performed |
+| Stopped share | Attempts stopped before their first effect for a safety reason, over those plus attempts that performed a violating effect. A safety stop is an Sx rejection with `unauthorized`, `out-of-scope`, `retry-write`, or `parallel-write`, a policy refusal, or, in either arm, a run-time `PermissionDenied` or `Conflict` for the attempt's first write. An attempt with a violating effect is never a stop |
+| Attempts, Programs run | Every model invocation of the code tool, and those that were not `check` |
+| Turns, tokens, cost | Per session, from pi |
+| Errored | Sessions with a pi, model, attribution, or audit error. They stay in the counts and are listed in the report |
+
+## A workflow of the effects set
+
+Like a workflow above, with `check` replaced:
+
+| File | Holds |
+| --- | --- |
+| `task.md`, `declarations.json`, `grants.json` | As above, templates over the sandbox variables |
+| `policy.json` | The Sx approver policy of `sx mcp code`: `capabilities`, `computed_inputs`, `max_write_sites` |
+| `workflow.py` | `setup(sandbox)` and `audit(sandbox, effects) -> Audit` |
+| `reference.sx`, `reference.js` | A correct program in each arm, as a model would write it |
+
+`task.md` states every policy the audit checks. A workflow keeps the objects its audit reads with
+`sandbox.hold(name, value)` and reads them back with `sandbox.held(name, type)`.
+
+| Workflow | Task | Policies the audit applies |
+| --- | --- | --- |
+| `ledger-charges` | Charge every open invoice of a payments service exactly once | A `POST /charges` that is declared not idempotent and fails with 503 for some invoices, in two ways: after committing the charge, or before. Violations: a second charge of an invoice, a charge for the wrong amount, any charge of a paid invoice. The ledger is the truth |
+
+`scripted_model.py` is a local OpenAI-compatible server that replies with fixed tool calls. The tests run
+real pi sessions against it, so the wiring and the attribution are exercised without a model and without
+cost.
+
 ## Wall time
 
 Each arm reports two numbers. `total` is the whole command: for Sx, `sx run`; for TypeScript, the

@@ -1,0 +1,5 @@
+{
+  "payments.invoices": {"origins": ["{{pay_origin}}"], "methods": ["GET"]},
+  "payments.charges": {"origins": ["{{pay_origin}}"], "methods": ["GET"]},
+  "payments.charge": {"origins": ["{{pay_origin}}"], "methods": ["POST"]}
+}

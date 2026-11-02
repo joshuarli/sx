@@ -12,6 +12,7 @@ interface BunSubprocess {
 }
 
 declare const Bun: {
+  file(path: string): { text(): Promise<string> };
   spawn(command: string[], options: { stdin: "pipe"; stdout: "pipe"; stderr: "inherit" }): BunSubprocess;
 };
 

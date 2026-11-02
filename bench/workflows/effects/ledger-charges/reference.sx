@@ -1,0 +1,11 @@
+(let [invoices (call payments.invoices {})
+      open (filter (fn [i] (= (get i :status) "open")) invoices)
+      charge (fn [i]
+               (let [id (get i :id)
+                     cents (get i :amount_cents)]
+                 (match (attempt (call payments.charge {:invoice id :amount_cents cents}))
+                   (ok _) id
+                   (err _) (let [held (call payments.charges {:invoice id})
+                                 _ (when (= (count held) 0) (call payments.charge {:invoice id :amount_cents cents}))]
+                             id))))]
+  (map charge open))

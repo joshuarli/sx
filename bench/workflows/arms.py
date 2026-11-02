@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import paths
-from definition import ToolServer, Workflow
+from definition import Spec, ToolServer, Workflow
 from probe import FEEDBACK_LINES, SX_EXITS, TSC, TSCONFIG, label, show_span, sx_binary
 from sandbox import SCRATCH, Sandbox
 from typescript import declarations as typescript_declarations
@@ -77,7 +77,7 @@ def imported_tools(server: ToolServer) -> Json:
 
 
 class Files:
-    def __init__(self, workflow: Workflow, sandbox: Sandbox, directory: Path) -> None:
+    def __init__(self, workflow: Spec, sandbox: Sandbox, directory: Path) -> None:
         self.directory = directory
         self.server = workflow.tool_server(sandbox)
         declarations = workflow.declarations_json(sandbox)
@@ -128,7 +128,7 @@ def scratch() -> Path:
     return SCRATCH
 
 
-def described_for(workflow: Workflow, sandbox: Sandbox) -> Json:
+def described_for(workflow: Spec, sandbox: Sandbox) -> Json:
     with tempfile.TemporaryDirectory(dir=scratch()) as directory:
         return described(Files(workflow, sandbox, Path(directory)))
 
@@ -146,7 +146,7 @@ def sx_listing(workflow: Workflow, sandbox: Sandbox) -> str:
     return "\n\n".join(shown)
 
 
-def sx_guide(workflow: Workflow, sandbox: Sandbox, *, notes: bool) -> str:
+def sx_guide(workflow: Spec, sandbox: Sandbox, *, notes: bool) -> str:
     with tempfile.TemporaryDirectory(dir=scratch()) as directory:
         files = Files(workflow, sandbox, Path(directory))
         arguments = ["guide", "--declarations", str(files.declarations), "--grants", str(files.grants)]

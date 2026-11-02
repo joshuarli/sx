@@ -1,0 +1,5 @@
+{
+  "capabilities": ["payments.invoices", "payments.charges", "payments.charge"],
+  "computed_inputs": ["payments.charges", "payments.charge"],
+  "max_write_sites": 2
+}
