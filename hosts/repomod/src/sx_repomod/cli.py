@@ -18,13 +18,14 @@ EXIT_FAILED = 2
 def parser() -> argparse.ArgumentParser:
     root = argparse.ArgumentParser(
         prog="sx-repomod",
-        description="Run repomod's discover and status --offline as Sx programs. "
+        description="Run repomod's discover and status --offline as Sx programs, or serve its capabilities over MCP. "
         f"{', '.join(SX_COMMANDS)} are the sx commands, with this host's registry.",
     )
     commands = root.add_subparsers(dest="command", required=True)
     discover = commands.add_parser("discover", help="compare GitHub owner repositories against catalogued entries")
     discover.add_argument("--owner", action="append", default=[])
     discover.add_argument("--json", action="store_true")
+    commands.add_parser("mcp", help="serve the read-only capabilities as an MCP server on stdio")
     status = commands.add_parser("status", help="show failures and lint findings from cached data")
     status.add_argument("--offline", action="store_true", required=True)
     status.add_argument("--repo", action="append", default=[])
@@ -55,6 +56,19 @@ def execute(program: Program, inputs: dict[str, object], environment: Environmen
     return outcome.result
 
 
+def serve_mcp(environment: Environment | None) -> int:
+    from sx_repomod.capabilities import Capabilities
+    from sx_repomod.mcp_server import Server, export_listing, serve
+
+    try:
+        server = Server(Capabilities(environment), export_listing())
+    except KernelError as failure:
+        print(f"sx-repomod: the Rust kernel failed: {failure}", file=sys.stderr)
+        return EXIT_FAILED
+    serve(server, sys.stdin, sys.stdout)
+    return 0
+
+
 def run_sx_command(arguments: list[str]) -> int:
     try:
         return list_cores(arguments[1:]) if arguments[0] == "cores" else delegate(arguments)
@@ -68,6 +82,8 @@ def main(argv: Sequence[str] | None = None, environment: Environment | None = No
     if arguments and arguments[0] in SX_COMMANDS:
         return run_sx_command(arguments)
     args = parser().parse_args(arguments)
+    if args.command == "mcp":
+        return serve_mcp(environment)
     from repomod.cmd.discover import render_discover
 
     from sx_repomod import render

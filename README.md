@@ -305,6 +305,17 @@ adds to the host's declarations, and may list more built-in `cores`. The host re
 and assurance from the binary's `sx help CORE`. `sx-repomod` imports neither the Python kernel nor the
 Python cores. The parity tests import them only to compare with the frozen Python commands.
 
+`sx-repomod mcp` serves the host's read-only capabilities as an MCP server on standard input and
+output, one call at a time, so a client that is not Sx, or `sx mcp code` through `sx mcp import`, calls
+them. Its `tools/list` is the output of `sx mcp export` over the host's declarations, and a call performs
+the same capability the programs use; a failure is an `isError` result with the call error kind. Tools whose
+output is an enum with payloads (`git.status`, `github.cached-ci`) are listed, and `sx mcp import` skips them.
+
+```sh
+uv run sx-repomod mcp
+sx mcp import --name repomod -- uv run sx-repomod mcp > repomod.json
+```
+
 The parity tests build copied catalogs, temporary Git repositories, fake `gh` responses, and a
 fixed clock from repomod's own test helpers, run the Python command and the program on the same
 inputs, and compare the parsed JSON, the text, and the exit status:

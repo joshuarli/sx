@@ -1367,7 +1367,10 @@ lists capabilities the binary does not perform natively, which `serve` leaves ou
 A capability that has no JSON Schema or a valid tool name is left out and named on standard error
 (`not exporting ID: REASON`), and the exit status is 0, where `serve` makes it a usage error. The `tools`
 list is a saved `tools/list` result, so `sx mcp import --name NAME --tools FILE` reads it, and it reads back
-what importing `sx mcp serve` reads back, with the same four differences as the **Round trip** paragraph.
+what importing `sx mcp serve` reads back, with the same four differences as the **Round trip** paragraph. A
+tool whose input or output holds an enum with payloads or a `Result` is exported, because the types table
+above covers it, and skipped by import, because a `oneOf` has no Sx type there; a program run through
+`sx mcp import` cannot call it.
 
 ### Sx as the code mode of an MCP client
 
