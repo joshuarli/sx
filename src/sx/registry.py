@@ -76,6 +76,10 @@ class Registry:
                 raise RegistryError(f"function {function.name!r} must be named {core.id}.NAME")
             if function.name in self._functions:
                 raise RegistryError(f"function {function.name!r} is already registered")
+            if not function.description.strip():
+                raise RegistryError(f"function {function.name!r} needs a one-line description")
+            if function.example is None:
+                raise RegistryError(f"function {function.name!r} needs an example with its result")
             self._functions[function.name] = function
         self._cores[core.id] = core
 
@@ -85,6 +89,8 @@ class Registry:
             raise RegistryError(f"capability id {capability.id!r} must be NAMESPACE.NAME")
         if capability.id in self._capabilities:
             raise RegistryError(f"capability {capability.id!r} is already registered")
+        if not capability.description.strip():
+            raise RegistryError(f"capability {capability.id!r} needs a one-line description")
         if capability.effect is Effect.READ and capability.idempotent:
             raise RegistryError(f"capability {capability.id!r} is a read, so idempotent does not apply")
         self._capabilities[capability.id] = capability

@@ -14,8 +14,8 @@
     {"name": "text.contains?", "params": ["String", "String"], "output": "Bool", "description": "True when the second string occurs in the first.", "example": ["(text.contains? \"hello\" \"ell\")", "true"]},
     {"name": "text.replace", "params": ["String", "String", "String"], "output": "String", "description": "Replaces every occurrence of the second string with the third.", "example": ["(text.replace \"a-b-c\" \"-\" \"+\")", "\"a+b+c\""]},
     {"name": "text.from-int", "params": ["Int"], "output": "String", "description": "Writes an Int in decimal.", "example": ["(text.from-int -42)", "\"-42\""]},
-    {"name": "text.to-int", "params": ["String"], "output": "Option<Int>", "description": "Reads a decimal Int, or none if the string is not one.", "example": ["(text.to-int \"17\")", "17"]},
-    {"name": "semver.parse", "params": ["String"], "output": "Option<semver.Version>", "description": "Reads MAJOR.MINOR.PATCH, or none if the string is not exactly that.", "example": ["(semver.parse \"1.4.2\")", "{:major 1 :minor 4 :patch 2}"]},
+    {"name": "text.to-int", "params": ["String"], "output": "Option<Int>", "description": "Reads a decimal Int, or none if the string is not one.", "example": ["(text.to-int \"17\")", "(some 17)"]},
+    {"name": "semver.parse", "params": ["String"], "output": "Option<semver.Version>", "description": "Reads MAJOR.MINOR.PATCH, or none if the string is not exactly that.", "example": ["(semver.parse \"1.4.2\")", "(some {:major 1 :minor 4 :patch 2})"]},
     {"name": "semver.compare", "params": ["semver.Version", "semver.Version"], "output": "Int", "description": "-1, 0, or 1 as the first version is lower, equal, or higher.", "example": ["(semver.compare {:major 1 :minor 0 :patch 0} {:major 0 :minor 9 :patch 9})", "1"]},
     {"name": "semver.show", "params": ["semver.Version"], "output": "String", "description": "Writes a version as MAJOR.MINOR.PATCH.", "example": ["(semver.show {:major 2 :minor 0 :patch 1})", "\"2.0.1\""]}
   ]

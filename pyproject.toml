@@ -20,9 +20,10 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["bench/codemode"]
 
 [tool.ty.environment]
-root = ["src", "tests", "bench"]
+root = ["src", "tests", "bench", "bench/codemode"]
 python-version = "3.15"
 python-platform = "darwin"
 
