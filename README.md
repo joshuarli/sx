@@ -67,7 +67,29 @@ declarations file and registers those built-in cores, where the Python command r
 validates declarations more strictly than Python's duck typing does, for example `"types": []`.
 `rust/sx-cli/tests/cli_parity.rs` runs every `tests/test_cli.py` scenario, every `fixtures/cli`
 combination, every help entry, and the argument and file error paths through both commands and compares
-stdout, stderr, and exit status.
+stdout, stderr, and exit status. Python's help for `check`, `explain`, and `run` predates `--grants`, so
+the comparison substitutes the Rust help text for it.
+
+## Grants and the fs pack
+
+The Rust binary also grants scoped authority, which Python never had. A declarations file lists
+`"packs": ["fs"]` to register the `fs` capabilities, and `--grants FILE` names a JSON object that maps
+each granted capability to its scope, or to `null` for a capability that declares none. `--allow ID`
+still grants a capability without a scope.
+
+```sh
+echo '{"packs": ["fs"]}' > fs.json
+echo '{"fs.read-text": {"roots": ["/srv/notes"]}, "fs.list": {"roots": ["/srv/notes"]}}' > grants.json
+sx check notes.sx --declarations fs.json --grants grants.json
+sx explain notes.sx --declarations fs.json --grants grants.json
+sx run notes.sx --declarations fs.json --grants grants.json
+```
+
+`check` rejects a call whose literal path the grant does not cover, with `out-of-scope`. `explain` shows
+each call site's verdict, or `checked per request` for a computed path. `run` with `--grants` and no
+`--responses` reads and writes the files for real, and refuses each out-of-scope request with
+`PermissionDenied` before it touches the file system. With `--responses` it answers from the recorded
+responses, after the same refusal. [docs/language.md](docs/language.md#grants-and-scopes) has the rules.
 
 ## Verify
 

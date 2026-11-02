@@ -438,21 +438,119 @@ Each capability declares an ID, an input type, an output type, and an effect cla
 call with the same input has the same effect as making it once. Effects are inferred from the program text. Without dynamic dispatch, the set of
 capability IDs a program can call is exactly the set of IDs named in its `call` forms.
 
-The host supplies an allow-list of capability IDs for each execution. The checker rejects a
-program that names any ID outside the allow-list. A rejected program produces no capability
-request. `sx explain` prints a program's capability set and effect classes without running it.
-
-The allow-list is the first of two checks. The host sees every request's input before it runs
-the request, so it can also refuse one request, for example a file outside a permitted directory.
-A refused request resumes the machine with a `CallError` of kind `PermissionDenied`. `sx explain`
-shows the inputs it can know before running: literal arguments, such as a fixed path, appear in
-its output, and arguments computed at run time do not.
+The host grants authority for each execution, and a program never names its own. The checker
+rejects a program that names any capability the host has not granted, with `unauthorized`. A
+rejected program produces no capability request. `sx explain` prints a program's capability set,
+effect classes, and call sites without running it.
 
 `par` branches and `par-map` functions must have only `read` effects. Read effects in parallel
 branches do not observe one consistent snapshot of the outside world. Determinism holds only for
 fixed responses.
 
 Pure core functions have no effects. The registry rejects a core whose signature declares one.
+
+### Grants and scopes
+
+A capability may declare a scope type, a record in the declaration type language, such as
+`Record {roots: List<String>}` for files. An execution's authority is a set of grants. Each grant maps
+a capability ID to a scope value of that type, or to no scope for a capability that declares none.
+The granted IDs are the allow-list. Granting a scoped capability without a scope is a usage error,
+never an implicit "everything", and so is a scope for a capability that declares none, or a scope
+value that does not decode to the declared type.
+
+The kernel never interprets a scope. The pack that implements a scoped capability registers two
+functions. One prepares a scope when the grant is loaded, for example by canonicalizing directories,
+and its error is a usage error. The other is the scope check, a function from the prepared scope and
+a request's input to allowed, or denied with a reason. The check runs in two places:
+
+- **Before the run.** When a call's input is known before the run, the checker applies the check and
+  rejects a denied call with `out-of-scope`. An input is known when it is built only from literals:
+  a `Bool`, `Int`, `Float`, or `String` literal, or a record or list literal of known values. Any
+  other input, including a name bound to a literal, is computed, and only the run-time check sees it.
+- **During the run.** The host applies the check to every request before performing it, and refuses
+  a denied one with a `CallError` of kind `PermissionDenied` whose message is the reason. That is a
+  refusal kind, so the operation never took effect and the retry rules treat it as not performed.
+
+A capability declared in a declarations file may name its scope type with `"scope"`, but no check
+comes with it: the kernel passes the scope to the host, which must check each request itself. The
+checker cannot judge such a call, and `explain` reports it as checked per request.
+
+`sx explain` lists every call site under its capability. For a capability that declares a scope it
+adds the verdict: `allowed` or `denied: REASON` for a known input, `checked per request` for a computed
+one, and `not granted` when the host granted nothing. `--format json` gives each tool a `verdicts`
+list in the order of its `inputs`, each `{"verdict": "allowed"}`, `{"verdict": "denied", "reason": TEXT}`,
+`{"verdict": "checked per request"}`, or `{"verdict": "not granted"}`. A tool without a scope has no
+`verdicts` field. `explain` checks the program against every declared capability and never rejects it
+for a scope.
+
+`sx check`, `sx explain`, and `sx run` take `--grants FILE`, a JSON object from capability ID to scope
+value or `null`, and `--allow ID` for a capability without a scope. Either may name a capability; the
+grants are their union.
+
+### The fs pack
+
+A declarations file registers a pack by listing it under `"packs"`, as it does cores under `"cores"`.
+The `fs` pack declares these capabilities, each with the scope type `Record {roots: List<String>}`:
+
+| Capability | Input | Output | Effect |
+| --- | --- | --- | --- |
+| `fs.read-text` | `{path: String}` | `String` | read |
+| `fs.read-bytes` | `{path: String}` | `Bytes` | read |
+| `fs.list` | `{path: String}` | `List<fs.Entry>` | read |
+| `fs.stat` | `{path: String}` | `Option<fs.Stat>` | read |
+| `fs.write-text` | `{path: String, text: String}` | `Unit` | write, idempotent |
+
+`fs.Kind` is the enum `File | Directory | Symlink | Other`. `fs.Entry` is `Record {name: String, kind: fs.Kind}`,
+and `fs.list` returns entries sorted by name, without following symlinks, so a link is `Symlink`.
+`fs.Stat` is `Record {kind: fs.Kind, size: Int}`. `fs.stat` follows symlinks, as path resolution does,
+and returns `none` when nothing is at the path. `fs.read-text` fails with `Invalid` when the file is
+not UTF-8. A read of anything but a regular file is `Invalid`. `fs.write-text` replaces the file with
+a temporary file in the same directory: it writes, syncs, renames, and syncs the directory, keeping
+an existing file's mode. A reader sees the old contents or the new, never a mix.
+
+Every root must be an absolute path to an existing directory. Granting loads each root and
+canonicalizes it, following symlinks, so a symlinked root grants its target, and a missing root, a
+root that is not a directory, and an empty root list are usage errors.
+
+A request path passes the scope check by these rules:
+
+1. It is absolute and contains no NUL character. Empty segments, as in `//`, are ignored.
+2. It is resolved by canonicalizing its longest existing prefix, following every symlink, and
+   appending the rest. `.` and `..` in the existing part resolve on the file system. In the rest,
+   which does not exist yet, they are refused. A prefix that ends in a symlink whose target does not
+   exist is refused, and so is one that cannot be resolved, such as a symlink loop.
+3. The resolved path must lie inside a canonical root, comparing whole path components, never string
+   prefixes: `/data-old` is not inside `/data`.
+4. For `fs.write-text`, the parent directory is resolved by the same rules and must lie inside a root,
+   so a root itself is never written. The final component must not be `.` or `..`, and must not be an
+   existing symlink, even one that points inside a root.
+
+On a case-insensitive file system, such as the default APFS on macOS, canonicalizing returns each
+existing component with its stored case, so `/Data/notes` and `/data/notes` resolve to the same path,
+and the containment test compares that path. APFS also refuses a name that is not valid UTF-8, so such
+a file cannot exist there. On Linux it can, and `fs.list` of a directory holding one fails with
+`Invalid`, because a `String` cannot hold the name.
+
+Operating-system failures map to call error kinds by a closed table: not found is `NotFound`;
+permission denied is `PermissionDenied`; is a directory, not a directory, directory not empty,
+invalid argument, name too long, and a symlink met where none is followed are `Invalid`; anything
+else is `Failed`. A `fs.write-text` that renamed its file but could not sync the directory fails with
+`Failed`, because the write took effect.
+
+A scope protects against the program, not against another local process. The check resolves a path,
+and the operation then uses the resolved path, so a process that rewrites the tree between the two
+can redirect it. The pack narrows the window where the standard library allows: it opens the final
+component with `O_NOFOLLOW`, so a symlink swapped in there fails instead of being followed, opens
+reads with `O_NONBLOCK` and refuses anything but a regular file, so a FIFO cannot block it, and
+creates the temporary file with `O_EXCL`. An intermediate directory swapped for a symlink is not
+detected. A denied request is never opened, read, written, or created, but resolving its path reads
+the metadata of the path's existing prefix.
+
+`sx run FILE --grants FILE` without `--responses` performs granted pack capabilities through a
+native host, which drives the machine, performs each suspension's requests concurrently, so never
+more than the `concurrency` budget, and waits for real on delays. A program that calls a capability
+no pack implements is a usage error before the run starts. With `--responses`, `sx run` answers from
+the recorded responses as before, after refusing out-of-scope requests the same way.
 
 ## Execution
 
@@ -602,15 +700,17 @@ Host to kernel:
 
 | `type` | Fields | Meaning |
 | --- | --- | --- |
-| `start` | `program`, `allow`, optional `declarations`, `inputs`, `budgets` | Check the program and run it. `allow` is the list of authorized capability IDs. `inputs` maps each declared input name to its value. `budgets` maps budget names (`steps`, `calls`, `delay_ms`, `source_bytes`, `nodes`, `depth`, `concurrency`, `value_size`, `applications`, `instantiations`) to counts. |
-| `explain` | `program`, optional `declarations`, `allow` | Check the program against every declared capability and report its authority without running it. |
+| `start` | `program`, `allow` or `grants` or both, optional `declarations`, `inputs`, `budgets` | Check the program and run it. `allow` lists capability IDs granted without a scope, and `grants` is the object `--grants` reads, from capability ID to scope value or `null`. See [Grants and scopes](#grants-and-scopes). `inputs` maps each declared input name to its value. `budgets` maps budget names (`steps`, `calls`, `delay_ms`, `source_bytes`, `nodes`, `depth`, `concurrency`, `value_size`, `applications`, `instantiations`) to counts. |
+| `explain` | `program`, optional `declarations`, `allow`, `grants` | Check the program against every declared capability and report its authority and scope verdicts without running it. |
+| `check-scope` | `id` | While requests are outstanding, ask for the scope verdict of the call request `id`, under the running execution's grants. |
 | `respond` | `responses` | Answer outstanding requests. Each response is `{"id": ID, "output": VALUE}` or `{"id": ID, "error": {"kind": KIND, "message": TEXT}}`. |
 | `cancel` | none | Stop answering. The machine resumes with the responses it has, so every unanswered request fails the run with `invalid-host-response`. |
 
 `declarations` is the object that `sx` reads with `--declarations`: `enums`, `types`,
 `capabilities`, and `inputs` (names mapped to type text). It also takes `cores`, a list of core
 IDs that the kernel registers before the rest, so a capability can name a core type such as
-`git.Checkout`. The kernel binary links the `text`, `semver`, `git`, and `github` cores.
+`git.Checkout`, and `packs`, a list of capability packs registered after the cores. The kernel
+binary links the `text`, `semver`, `git`, and `github` cores and the `fs` pack.
 
 Kernel to host:
 
@@ -620,23 +720,29 @@ Kernel to host:
 | `requests` | `requests` | The run is suspended. Each request is `{"id", "kind": "call", "capability", "input"}` or `{"id", "kind": "delay", "milliseconds"}`. A delay is answered with `"output": null` once the host has waited. |
 | `completed` | `value`, `trace` | The program finished. `value` is the result and `trace` the [trace](#execution). |
 | `failed` | `failure`, `trace` | The program stopped. `failure` is `{"kind", "message", "span", "request"}`, where `span` and `request` may be `null`. |
-| `explained` | `tools`, `inputs`, `result` | For each capability the program can call: `id`, `effect` (`read`, `write, idempotent`, or `write, not idempotent`), `allowed`, and the literal `inputs` of its calls, with `"computed at run time"` for arguments the program computes. Also the inputs the program uses and its result type. Same as `sx explain --format json`. |
+| `explained` | `tools`, `inputs`, `result` | For each capability the program can call: `id`, `effect` (`read`, `write, idempotent`, or `write, not idempotent`), `allowed`, and the literal `inputs` of its calls, with `"computed at run time"` for arguments the program computes, and for a capability with a scope, `verdicts`. Also the inputs the program uses and its result type. Same as `sx explain --format json`. |
+| `scope-verdict` | `id`, `verdict`, and `reason` when denied | The answer to `check-scope`: `allowed`, `denied` with the pack's reason, or `unchecked` when the capability's scope came from a declarations file, so no registered check can judge it and the host must. |
 | `error` | `code`, `message` | The message was not valid, so the kernel did nothing with it. |
 
 After `requests` the host answers in any order, in as many `respond` messages as it likes, with
 any subset each time. The kernel resumes the machine once every outstanding request has a
 response, or as soon as a response names an unknown or repeated ID, which fails the run with
 `invalid-host-response` as [Execution](#execution) says. Another `requests` message, or the end of
-the run, follows. While requests are outstanding the kernel reads only `respond`, `cancel`, and
-`explain`. An `error` message does not end the execution: the host may send a corrected message.
+the run, follows. While requests are outstanding the kernel reads only `respond`, `cancel`,
+`check-scope`, and `explain`. A host applies the run-time scope check by sending `check-scope` for
+each call before performing it, and answering a denied one with a `PermissionDenied` error that
+carries the reason. An `error` message does not end the execution: the host may send a corrected message.
 If the input ends first, the kernel sends an `end-of-input` error and exits with status 1.
 
 Error codes: `malformed-json` (not JSON, not UTF-8, or nested too deeply),
 `line-too-long`, `invalid-message` (not an object, no or unknown `type`, a missing, unknown, or
 mistyped field, or a response that is not exactly one of `output` and `error`),
-`unsupported-version`, `unexpected-message` (a `respond` or `cancel` with nothing outstanding, or a
-`start` while one is), `invalid-declarations`, `unknown-capability` (`allow` names a capability the
-declarations do not define), `invalid-input` (a missing, undeclared, or mistyped input, which
+`unsupported-version`, `unexpected-message` (a `respond`, `cancel`, or `check-scope` with nothing
+outstanding, a `check-scope` that names no outstanding call, or a `start` while one is),
+`invalid-declarations`, `unknown-capability` (`allow` or `grants` names a capability the
+declarations do not define), `invalid-grants` (`grants` is not an object, a scoped capability has no
+scope or an unscoped one has one, a scope does not decode, or a pack refuses it, such as a missing
+root), `invalid-input` (a missing, undeclared, or mistyped input, which
 rejects the run before any request), `invalid-budget`, `end-of-input`, and `internal` (a kernel
 bug, after which the execution is abandoned and the session continues).
 
@@ -714,7 +820,7 @@ The checker's codes are:
 | Calls | `arity`, `type-mismatch`, `unresolved-type`, `not-a-record`, `no-encoding` |
 | Forms | `condition-not-bool`, `missing-else`, `branch-mismatch`, `fn-position`, `bad-pattern`, `bad-option`, `recur-position`, `recur-arity`, `loop-no-result` |
 | Match | `non-exhaustive`, `unreachable-clause` |
-| Effects | `unauthorized`, `parallel-write`, `par-map-limit`, `retry-write`, `wait-write` |
+| Effects | `unauthorized`, `out-of-scope`, `parallel-write`, `par-map-limit`, `retry-write`, `wait-write` |
 | Size | `too-large`, naming the `source-bytes`, `nodes`, or `depth` budget |
 | Habits | `habit`, naming the construct. The reader detects `nil`, `capitalized-boolean`, `quote`, `reader-macro`, `anonymous-fn-shorthand`, `set-literal`, `threading`, `js-operator`, `js-object-key`, `method-call`, and `namespace-slash`. The checker detects `defn`, `keyword-call`, `keyword-value`, `argument-order`, `assoc`, `let-body`, `while`, and `loop-without-max`. |
 
@@ -734,7 +840,7 @@ at the form that failed.
 examples. `sx help NAME` prints one entry, where `NAME` is a form, a prelude function, a qualified
 core function or type, or a capability. An entry has:
 
-- The signature, and for capabilities, the effect class.
+- The signature, and for capabilities, the effect class and any scope type.
 - A one-sentence description.
 - At least one example with its result.
 
