@@ -31,6 +31,7 @@ from sx.types import (
     CALL_ERROR_KINDS,
     INT,
     NEVER,
+    REFUSAL_KINDS,
     STRING,
     TRANSIENT_KINDS,
     EnumType,
@@ -174,9 +175,16 @@ class LoopContext:
     count: int
 
 
+@dataclass(frozen=True, slots=True)
+class EffectCall:
+    capability: Capability
+    span: Span
+    depth: int
+
+
 @dataclass(slots=True)
 class Effects:
-    calls: list[tuple[Capability, Span]] = field(default_factory=list)
+    calls: list[EffectCall] = field(default_factory=list)
 
 
 def article(text: str) -> str:
@@ -202,6 +210,12 @@ def edit_distance(a: str, b: str) -> int:
 def closest(name: str, candidates: Sequence[str]) -> str | None:
     scored = sorted((edit_distance(name, c), c) for c in candidates if c != name)
     return scored[0][1] if scored and scored[0][0] <= 2 else None
+
+
+def name_list(names: Sequence[str]) -> str:
+    if len(names) <= 2:
+        return " and ".join(names)
+    return ", ".join(names[:-1]) + ", and " + names[-1]
 
 
 def head_name(node: Node) -> str | None:
@@ -277,6 +291,7 @@ class _Checker:
         self.instantiating: list[str] = []
         self.instantiations = 0
         self.sort_key_owner: Form | None = None
+        self.repeat_depth = 0
 
     def error(self, code: str, span: Span, message: str, **extra: str | None) -> None:
         self.diagnostics.append(Diagnostic(code=code, span=span, message=message, **extra))
@@ -643,6 +658,14 @@ class _Checker:
             yield effects
         finally:
             self.effects.pop()
+
+    @contextmanager
+    def repeated(self) -> Generator[None]:
+        self.repeat_depth += 1
+        try:
+            yield
+        finally:
+            self.repeat_depth -= 1
 
     @contextmanager
     def outside_tail(self) -> Generator[None]:
@@ -1587,7 +1610,7 @@ class _Checker:
         else:
             argument, _ = self.check(argument_node, capability.input, scope)
         for effects in self.effects:
-            effects.calls.append((capability, span))
+            effects.calls.append(EffectCall(capability, span, self.repeat_depth))
         self.capabilities_used.add(capability.id)
         return self.coerce(ir.Call(capability, argument, span), capability.output, expected, span)
 
@@ -1712,16 +1735,46 @@ class _Checker:
                         delays = self.backoff(pair[0], pair[1], within)
             if "on" in options:
                 kinds = self.kinds(options["on"]) or kinds
+        depth = self.repeat_depth
         with self.collecting() as effects:
             body, t = self.check(node.items[2], expected, scope)
-        for capability, call_span in effects.calls:
-            if capability.effect is Effect.WRITE and not capability.idempotent:
-                self.error(
-                    "retry-write", call_span,
-                    f"retry may repeat {capability.id}, which is a write that is not idempotent.",
-                    detail="Retry only reads and idempotent writes.", help="retry",
-                )
+        self.check_retried_writes(effects, kinds, depth)
         return ir.Retry(delays, frozenset(kinds), body, span), t
+
+    def check_retried_writes(self, effects: Effects, kinds: frozenset[str], depth: int) -> None:
+        unknown = [kind for kind in CALL_ERROR_KINDS if kind in kinds and kind not in REFUSAL_KINDS]
+        for index, call in enumerate(effects.calls):
+            capability = call.capability
+            if capability.effect is not Effect.WRITE or capability.idempotent:
+                continue
+            owner = f"retry may repeat {capability.id}, which is a write that is not idempotent"
+            if unknown:
+                allowed = [kind for kind in CALL_ERROR_KINDS if kind in kinds and kind in REFUSAL_KINDS]
+                detail = (
+                    f"Only the kinds {name_list(REFUSAL_KINDS)} mean the service did not perform the operation."
+                )
+                fix = None
+                if allowed:
+                    fix = f":on [{' '.join(allowed)}]"
+                    detail += f"\nHere {fix} alone would be allowed."
+                self.error(
+                    "retry-write", call.span,
+                    f"{owner}, and {name_list(unknown)} leave{'s' if len(unknown) == 1 else ''} it unknown "
+                    "whether the write happened.",
+                    detail=detail, fix=fix, help="retry",
+                )
+            elif call.depth > depth:
+                self.error(
+                    "retry-write", call.span,
+                    f"{owner}, because it can run more than once inside this retry.",
+                    detail="Put the retry inside the fn, around the single write.", help="retry",
+                )
+            elif index < len(effects.calls) - 1:
+                self.error(
+                    "retry-write", call.span,
+                    f"{owner}, because a call after it can be refused once the write has taken effect.",
+                    detail="Retry the write alone, or make it the last call in the retried expression.", help="retry",
+                )
 
     def kinds(self, node: Node) -> frozenset[str] | None:
         if (
@@ -1774,7 +1827,8 @@ class _Checker:
                     intervals = self.backoff(pair[0], pair[1], within)
         with self.collecting() as effects:
             body, t = self.check(node.items[3], expected, scope)
-        for capability, call_span in effects.calls:
+        for call in effects.calls:
+            capability, call_span = call.capability, call.span
             if capability.effect is Effect.WRITE:
                 self.error(
                     "wait-write", call_span,
@@ -1825,7 +1879,8 @@ class _Checker:
                 types.append(value_type)
         saved, self.tail = self.tail, LoopContext(types, len(types))
         try:
-            body, t = self.check(node.items[3], expected, inner)
+            with self.repeated():
+                body, t = self.check(node.items[3], expected, inner)
         finally:
             self.tail = saved
         return ir.Loop(maximum, tuple(binders), tuple(initial), body, span), t
@@ -1877,7 +1932,8 @@ class _Checker:
         return self.coerce(ir.Par(tuple(branches), node.span), TupleType(tuple(types)), expected, node.span)
 
     def read_only(self, effects: Effects, form: str) -> None:
-        for capability, call_span in effects.calls:
+        for call in effects.calls:
+            capability, call_span = call.capability, call.span
             if capability.effect is Effect.WRITE:
                 self.error(
                     "parallel-write", call_span,
@@ -1940,14 +1996,18 @@ class _Checker:
             assert isinstance(node, Form)
             if not self.check_fn_shape(node):
                 return ir.Lambda((), ir.Literal(UNIT_VALUE, span), None, span), NEVER
-            return self.instantiate(node, params, expected_return, who, scope, None)
+            with self.repeated():
+                return self.instantiate(node, params, expected_return, who, scope, None)
         if isinstance(node, Symbol):
             binding = scope.get(node.name)
             if isinstance(binding, FunctionBinding):
                 if node.name in self.instantiating:
                     self.error("unknown-function", span, f"{node.name} cannot call itself. Sx has no recursion.")
                     return ir.Lambda((), ir.Literal(UNIT_VALUE, span), None, span), NEVER
-                lambda_ir, t = self.instantiate(binding.form, params, expected_return, who, binding.scope, node.name)
+                with self.repeated():
+                    lambda_ir, t = self.instantiate(
+                        binding.form, params, expected_return, who, binding.scope, node.name,
+                    )
                 return lambda_ir, t
             if binding is None and (node.name in PRELUDE or self.registry.function(node.name) is not None):
                 return self.named_function(node, params, expected_return, who, scope)

@@ -253,7 +253,19 @@ delay, not wall-clock time. The host enforces wall-clock time separately.
 
 `e` may contain several calls, and each attempt evaluates all of `e` again. A `write` capability
 inside `e` must be declared `idempotent`, because a retry may repeat it. The checker rejects
-`retry` around a non-idempotent write with `retry-write`.
+`retry` around a non-idempotent write with `retry-write`, with one exception: a non-idempotent
+write may be retried when `:on` is given and every kind in it is a refusal kind, `RateLimited`,
+`NotFound`, `PermissionDenied`, `Invalid`, or `Conflict`, because a refusal means the service did
+not perform the operation. `Timeout`, `Unavailable`, and `Failed` leave the outcome unknown, so a
+retry that includes any of them, including the default kinds, stays `retry-write`. The message
+names those kinds, and when refusal kinds are among those retried it shows the `:on` list that
+would be allowed, such as `:on [RateLimited]`.
+
+A repeat after a refusal is safe only if the write has not already taken effect in an earlier
+attempt. So the exception holds only when the write is the last call in `e` in source order and
+does not sit inside a `fn` or `loop` body within `e`. Otherwise a later call, or a later run of the
+same call, could be refused after the write took effect, and the retry would repeat it. That is
+also `retry-write`. Put the `retry` around the single write, inside the `fn` if there is one.
 
 ### wait-until
 
@@ -432,6 +444,12 @@ never on the message. `CallErrorKind` is a closed kernel enum:
 | `Failed` | Any other failure. | No |
 
 The host maps each failure to exactly one kind. A failure that fits no other kind is `Failed`.
+
+`RateLimited`, `NotFound`, `PermissionDenied`, `Invalid`, and `Conflict` are the refusal kinds.
+A host reports a refusal kind only when the operation did not take effect. A host that cannot be
+sure, such as after a dropped connection or a response it could not read, reports `Timeout`,
+`Unavailable`, or `Failed`. The checker relies on this to allow `retry` of a write that is not
+idempotent on refusal kinds only. See [retry](#retry).
 
 When a branch of `par` or `par-map` fails, the form fails with the failure of the lowest-numbered
 failed branch, once every fiber has run as far as it can without new responses. Its other branches

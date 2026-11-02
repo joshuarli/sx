@@ -22,7 +22,7 @@ only the forms and functions below exist.
   fields; they are `none`.
 - Tool enums: write a variant as `Passing`. Where an enum is expected, the string `"Passing"`
   works too, and an `if` or `match` may return a string in one branch and an enum in another.
-- Branches may return records with different fields: a field only some write is optional, `none` in the rest.
+- Branches may return records with different fields; a field only some write is optional.
 - Results: `(ok x)` or `(err e)`, produced by `attempt`.
 - Durations, only in `retry` and `wait-until` options: `250ms`, `5s`, `2m`, `1h`.
 - Comments start with `;`.
@@ -57,7 +57,8 @@ only the forms and functions below exist.
 
 - `retry` evaluates `expr` again after each delay while it fails with a retried kind. Without
   `:on` it retries `Timeout`, `Unavailable`, and `RateLimited`. When the delays run out, the last
-  failure ends the program. Wrap the `retry` in `attempt` to handle that failure instead.
+  failure ends the program. Wrap the `retry` in `attempt` to handle that failure instead. Retry
+  a write that is not idempotent only with refusal kinds: `:on [RateLimited]`, not `Timeout`.
 - `wait-until` evaluates `expr`, and repeats after each interval until the function returns
   `true` for its value, then returns that value. It fails with kind `Timeout` after `:within`.
 - `loop` binds like `let`. `(recur v1 v2 ...)`, as the last step of the body, runs the body again

@@ -1,0 +1,8 @@
+error[retry-write] 2:58-2:111
+  (retry {:delays [1s] :on [Timeout RateLimited Conflict]} (call mail.send {:to "ops@example.com" :subject "x"}))
+                                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  retry may repeat mail.send, which is a write that is not idempotent, and Timeout leaves it unknown whether the write happened.
+  Only the kinds RateLimited, NotFound, PermissionDenied, Invalid, and Conflict mean the service did not perform the operation.
+  Here :on [RateLimited Conflict] alone would be allowed.
+  Fix: :on [RateLimited Conflict]
+  Help: sx help retry

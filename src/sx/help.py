@@ -50,8 +50,11 @@ FORMS = (
           '(attempt (call metrics.uptime {:host "gone"}))', '(err {:kind NotFound :message "no such host"})'),
     entry("retry", "(retry {:delays [1s 2s]} expression)", "Evaluates the expression again after each delay "
           "while it fails with a transient kind: Timeout, Unavailable, or RateLimited. :on [Kind ...] chooses "
-          "the kinds, and {:backoff [100ms 5s] :within 30s} computes doubling delays.",
-          '(get (retry {:delays [1s 2s]} (call metrics.uptime {:host "flaky"})) :seconds)', "60"),
+          "the kinds, and {:backoff [100ms 5s] :within 30s} computes doubling delays. A write that is not "
+          "idempotent may be retried only when :on names refusal kinds alone: RateLimited, NotFound, "
+          "PermissionDenied, Invalid, Conflict.",
+          '(let [up (retry {:delays [1s 2s]} (call metrics.uptime {:host "flaky"})) '
+          '_ (retry {:delays [1s] :on [RateLimited]} (call chat.post {:text "hi"}))] (get up :seconds))', "60"),
     entry("wait-until", "(wait-until {:within 2m :every 5s} (fn [v] done?) expression)",
           "Evaluates the expression until the function returns true for its value, and returns that value. "
           "It fails with kind Timeout after :within.",
@@ -178,6 +181,8 @@ EXAMPLE_DECLARATIONS: Mapping[str, Any] = {
          "output": "Record {files: List<File>, last: Bool}", "description": "Reads one page of files."},
         {"id": "job.state", "effect": "read", "input": "Record {id: String}", "output": "String",
          "description": "Reads a job's state."},
+        {"id": "chat.post", "effect": "write", "idempotent": False, "input": "Record {text: String}",
+         "output": "Unit", "description": "Posts one chat message."},
     ],
 }
 
@@ -199,6 +204,8 @@ EXAMPLE_RESPONSES: tuple[Mapping[str, Any], ...] = (
         "files": [{"bytes": 10}, {"bytes": 20}], "last": False}}]},
     {"capability": "storage.files", "input": {"page": 2}, "results": [{"output": {
         "files": [{"bytes": 5}], "last": True}}]},
+    {"capability": "chat.post", "input": {"text": "hi"}, "results": [
+        {"error": {"kind": "RateLimited", "message": "slow down"}}, {"output": None}]},
     {"capability": "job.state", "input": {"id": "j1"}, "results": [{"output": "running"}, {"output": "done"}]},
 )
 

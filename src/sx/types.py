@@ -100,6 +100,7 @@ CALL_ERROR_KINDS = (
     "Timeout", "Unavailable", "RateLimited", "NotFound", "PermissionDenied", "Invalid", "Conflict", "Failed",
 )
 TRANSIENT_KINDS = frozenset({"Timeout", "Unavailable", "RateLimited"})
+REFUSAL_KINDS = ("RateLimited", "NotFound", "PermissionDenied", "Invalid", "Conflict")
 CALL_ERROR_KIND = EnumType("CallErrorKind", tuple((kind, None) for kind in CALL_ERROR_KINDS))
 CALL_ERROR = RecordType((("kind", CALL_ERROR_KIND), ("message", STRING)))
 
