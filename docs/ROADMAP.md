@@ -61,15 +61,16 @@ and bounded, and each has a campaign that addresses it:
    function, and every core boundary adds conversions, especially between nominal types such as
    `RepoId`. That cost grows with the core count. Lazy discovery in campaign 3 and shared data
    shapes address it, and neither is designed yet.
-4. **Logic that no core covers has nowhere good to live.** Sx has no named local functions and no
-   recursion, so ad hoc logic is written inline and repeated. The probe's string, arithmetic, and
-   ad hoc logic tasks measure this. Named local functions are the likeliest first gap the
-   evidence shows, ahead of `Map`.
+4. **Logic that no core covers has nowhere good to live.** Local functions exist, bound in
+   `let` and typed at each call site, but there is no recursion, so a recursive algorithm must be
+   written as a bounded `loop`. No probe task has needed more yet.
 
 ## Risks to the project
 
-- **Whether models write Sx reliably is unmeasured.** Everything else depends on it, which is why
-  the model probe comes before formal semantics and the Rust port.
+- **Whether models write Sx reliably was measured once, narrowly.** On a fresh blind set, Muse
+  Spark wrote Sx correctly at first attempt 94.6% of the time against 96.4% for TypeScript, at 1.7
+  times the tokens per solved task. That is one model, 28 tasks, and two samples. A second model
+  and the campaign 2 workflows are the next evidence.
 - **Adoption is harder than the technology.** Agent hosts already run model code in JavaScript
   isolates that work well enough. The MCP importer is the most likely entry point: a host points
   Sx at the tools it already exposes and gains authority checks and replay without rewriting
@@ -78,6 +79,43 @@ and bounded, and each has a campaign that addresses it:
 - **Growth erodes the advantage.** Every form added for coverage costs guide tokens and model
   reliability, which is the edge Sx has over JavaScript. The rule that a new form needs evidence
   protects the project's main claim, not a style preference.
+
+## What the model probe taught
+
+These findings come from the Phase 2 probe and its two held-out sets, recorded in plan.md's
+Status. They should shape every later language decision.
+
+**Strictness cost more than syntax.** Almost every rejected first attempt was a program a
+TypeScript or Clojure programmer would call correct: testing an optional in an `if`, joining
+records whose branches set different fields, writing `(str "n=" 3)`, passing a string where an
+enum was expected. Bracket errors were rare for the stronger model. The revisions that worked
+accepted such a habit wherever it has exactly one safe meaning, and kept rejecting the rest with a
+diagnostic that names the fix. First attempts on the fresh set rose to within two points of
+TypeScript without changing the S-expression surface.
+
+**A development set written beside the language overstates transfer.** The stronger model
+scored 93% on the development set and 71 to 77% on the first held-out set. Tasks written by the
+language designer exercise what the designer already handled. Held-out tasks must come from an
+author who never shows them to the designer, and a held-out set that has spent its revision
+becomes development evidence, replaced by a fresh blind set.
+
+**Accepting a habit shrinks the guide.** A rule a model already follows needs no teaching. After
+the habit revisions, the guide lost 20% of its tokens by dropping such rules, and first-attempt
+correctness held.
+
+**A shorter guide is not a cheaper one.** With the one-page cheat sheet instead of the guide, the
+model reasoned more, and total tokens per solved task rose. Output, the expensive side, is within
+7% of TypeScript. The remaining premium is the guide, a fixed input prefix that a host can cache.
+
+**Effect-aware rules can say more than a general-purpose language.** `retry` around a write that
+is not idempotent is rejected, except when every retried kind is a refusal such as `RateLimited`
+and the write is the last call, because a refused request did not take effect. TypeScript cannot
+express that distinction, and one held-out task needed it.
+
+**A second implementation finds bugs the first one's tests miss.** Writing the Lean reference
+semantics from the specification exposed two Python bugs that every Python fixture passed: reused
+request IDs across two `par` forms on one fiber, and a local predicate that saw call-site
+bindings. The Rust port should be checked against both.
 
 ## Alternatives to rule out
 
