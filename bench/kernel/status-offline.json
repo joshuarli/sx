@@ -1,0 +1,2126 @@
+{
+ "inputs": {
+  "only-dirty": false,
+  "only-failed": false,
+  "refresh": false,
+  "repos": [],
+  "tags": []
+ },
+ "responses": [
+  {
+   "capability": "catalog.select",
+   "input": {
+    "repos": [],
+    "tags": []
+   },
+   "results": [
+    {
+     "output": [
+      {
+       "id": "acme/ahead",
+       "owner": "acme"
+      },
+      {
+       "id": "acme/behind",
+       "owner": "acme"
+      },
+      {
+       "id": "acme/clean",
+       "owner": "acme"
+      },
+      {
+       "id": "acme/detached",
+       "owner": "acme"
+      },
+      {
+       "id": "acme/dirty",
+       "owner": "acme"
+      },
+      {
+       "id": "acme/diverged",
+       "owner": "acme"
+      },
+      {
+       "id": "acme/forked",
+       "owner": "acme"
+      },
+      {
+       "id": "acme/forked-old",
+       "owner": "acme"
+      },
+      {
+       "id": "acme/gone",
+       "owner": "acme"
+      },
+      {
+       "id": "acme/linked",
+       "owner": "acme"
+      },
+      {
+       "id": "acme/plain",
+       "owner": "acme"
+      },
+      {
+       "id": "acme/stale-topic",
+       "owner": "acme"
+      },
+      {
+       "id": "acme/topic",
+       "owner": "acme"
+      },
+      {
+       "id": "acme/uncached",
+       "owner": "acme"
+      },
+      {
+       "id": "acme/wrong-origin",
+       "owner": "acme"
+      },
+      {
+       "id": "joshuarli/dotfiles",
+       "owner": "joshuarli"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "clock.now",
+   "input": {},
+   "results": [
+    {
+     "output": 1800000000000
+    }
+   ]
+  },
+  {
+   "capability": "policy.lint",
+   "input": {
+    "repos": [
+     "acme/ahead",
+     "acme/behind",
+     "acme/clean",
+     "acme/detached",
+     "acme/dirty",
+     "acme/diverged",
+     "acme/forked",
+     "acme/forked-old",
+     "acme/gone",
+     "acme/linked",
+     "acme/plain",
+     "acme/stale-topic",
+     "acme/topic",
+     "acme/uncached",
+     "acme/wrong-origin",
+     "joshuarli/dotfiles"
+    ]
+   },
+   "results": [
+    {
+     "output": [
+      {
+       "code": null,
+       "column": null,
+       "file": ".github/workflows/lint.yml",
+       "fixable": true,
+       "kind": "violation",
+       "line": null,
+       "message": "add a lint workflow that runs make lint",
+       "repository": "acme/ahead",
+       "rule": "gha-lint-workflow",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": "Makefile",
+       "fixable": false,
+       "kind": "violation",
+       "line": null,
+       "message": "add a root Makefile with a lint target so the lint workflow can run make lint",
+       "repository": "acme/ahead",
+       "rule": "make-lint-target",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": null,
+       "fixable": false,
+       "kind": "operational",
+       "line": null,
+       "message": "cannot run /private/var/folders/h5/z5h1tjvn4hv1h02qfyvjsmg80000gp/T/pytest-of-josh/pytest-95/test_record_the_status_program0/home/.local/bin/mdtool: [Errno 2] No such file or directory: '/private/var/folders/h5/z5h1tjvn4hv1h02qfyvjsmg80000gp/T/pytest-of-josh/pytest-95/test_record_the_status_program0/home/.local/bin/mdtool'",
+       "repository": "acme/ahead",
+       "rule": "mdtool",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": null,
+       "fixable": false,
+       "kind": "violation",
+       "line": null,
+       "message": "add project metadata or an understandable build entry point",
+       "repository": "acme/ahead",
+       "rule": "repo-template",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": ".github/workflows/lint.yml",
+       "fixable": true,
+       "kind": "violation",
+       "line": null,
+       "message": "add a lint workflow that runs make lint",
+       "repository": "acme/behind",
+       "rule": "gha-lint-workflow",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": "Makefile",
+       "fixable": false,
+       "kind": "violation",
+       "line": null,
+       "message": "add a root Makefile with a lint target so the lint workflow can run make lint",
+       "repository": "acme/behind",
+       "rule": "make-lint-target",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": null,
+       "fixable": false,
+       "kind": "operational",
+       "line": null,
+       "message": "cannot run /private/var/folders/h5/z5h1tjvn4hv1h02qfyvjsmg80000gp/T/pytest-of-josh/pytest-95/test_record_the_status_program0/home/.local/bin/mdtool: [Errno 2] No such file or directory: '/private/var/folders/h5/z5h1tjvn4hv1h02qfyvjsmg80000gp/T/pytest-of-josh/pytest-95/test_record_the_status_program0/home/.local/bin/mdtool'",
+       "repository": "acme/behind",
+       "rule": "mdtool",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": null,
+       "fixable": false,
+       "kind": "violation",
+       "line": null,
+       "message": "add project metadata or an understandable build entry point",
+       "repository": "acme/behind",
+       "rule": "repo-template",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": ".github/workflows/lint.yml",
+       "fixable": true,
+       "kind": "violation",
+       "line": null,
+       "message": "add a lint workflow that runs make lint",
+       "repository": "acme/clean",
+       "rule": "gha-lint-workflow",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": "Makefile",
+       "fixable": false,
+       "kind": "violation",
+       "line": null,
+       "message": "add a root Makefile with a lint target so the lint workflow can run make lint",
+       "repository": "acme/clean",
+       "rule": "make-lint-target",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": null,
+       "fixable": false,
+       "kind": "operational",
+       "line": null,
+       "message": "cannot run /private/var/folders/h5/z5h1tjvn4hv1h02qfyvjsmg80000gp/T/pytest-of-josh/pytest-95/test_record_the_status_program0/home/.local/bin/mdtool: [Errno 2] No such file or directory: '/private/var/folders/h5/z5h1tjvn4hv1h02qfyvjsmg80000gp/T/pytest-of-josh/pytest-95/test_record_the_status_program0/home/.local/bin/mdtool'",
+       "repository": "acme/clean",
+       "rule": "mdtool",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": null,
+       "fixable": false,
+       "kind": "violation",
+       "line": null,
+       "message": "add project metadata or an understandable build entry point",
+       "repository": "acme/clean",
+       "rule": "repo-template",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": ".github/workflows/lint.yml",
+       "fixable": true,
+       "kind": "violation",
+       "line": null,
+       "message": "add a lint workflow that runs make lint",
+       "repository": "acme/detached",
+       "rule": "gha-lint-workflow",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": "Makefile",
+       "fixable": false,
+       "kind": "violation",
+       "line": null,
+       "message": "add a root Makefile with a lint target so the lint workflow can run make lint",
+       "repository": "acme/detached",
+       "rule": "make-lint-target",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": null,
+       "fixable": false,
+       "kind": "operational",
+       "line": null,
+       "message": "cannot run /private/var/folders/h5/z5h1tjvn4hv1h02qfyvjsmg80000gp/T/pytest-of-josh/pytest-95/test_record_the_status_program0/home/.local/bin/mdtool: [Errno 2] No such file or directory: '/private/var/folders/h5/z5h1tjvn4hv1h02qfyvjsmg80000gp/T/pytest-of-josh/pytest-95/test_record_the_status_program0/home/.local/bin/mdtool'",
+       "repository": "acme/detached",
+       "rule": "mdtool",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": null,
+       "fixable": false,
+       "kind": "violation",
+       "line": null,
+       "message": "add project metadata or an understandable build entry point",
+       "repository": "acme/detached",
+       "rule": "repo-template",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": ".github/workflows/lint.yml",
+       "fixable": true,
+       "kind": "violation",
+       "line": null,
+       "message": "add a lint workflow that runs make lint",
+       "repository": "acme/dirty",
+       "rule": "gha-lint-workflow",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": "Makefile",
+       "fixable": false,
+       "kind": "violation",
+       "line": null,
+       "message": "add a root Makefile with a lint target so the lint workflow can run make lint",
+       "repository": "acme/dirty",
+       "rule": "make-lint-target",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": null,
+       "fixable": false,
+       "kind": "operational",
+       "line": null,
+       "message": "cannot run /private/var/folders/h5/z5h1tjvn4hv1h02qfyvjsmg80000gp/T/pytest-of-josh/pytest-95/test_record_the_status_program0/home/.local/bin/mdtool: [Errno 2] No such file or directory: '/private/var/folders/h5/z5h1tjvn4hv1h02qfyvjsmg80000gp/T/pytest-of-josh/pytest-95/test_record_the_status_program0/home/.local/bin/mdtool'",
+       "repository": "acme/dirty",
+       "rule": "mdtool",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": null,
+       "fixable": false,
+       "kind": "violation",
+       "line": null,
+       "message": "add project metadata or an understandable build entry point",
+       "repository": "acme/dirty",
+       "rule": "repo-template",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": ".github/workflows/lint.yml",
+       "fixable": true,
+       "kind": "violation",
+       "line": null,
+       "message": "add a lint workflow that runs make lint",
+       "repository": "acme/diverged",
+       "rule": "gha-lint-workflow",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": "Makefile",
+       "fixable": false,
+       "kind": "violation",
+       "line": null,
+       "message": "add a root Makefile with a lint target so the lint workflow can run make lint",
+       "repository": "acme/diverged",
+       "rule": "make-lint-target",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": null,
+       "fixable": false,
+       "kind": "operational",
+       "line": null,
+       "message": "cannot run /private/var/folders/h5/z5h1tjvn4hv1h02qfyvjsmg80000gp/T/pytest-of-josh/pytest-95/test_record_the_status_program0/home/.local/bin/mdtool: [Errno 2] No such file or directory: '/private/var/folders/h5/z5h1tjvn4hv1h02qfyvjsmg80000gp/T/pytest-of-josh/pytest-95/test_record_the_status_program0/home/.local/bin/mdtool'",
+       "repository": "acme/diverged",
+       "rule": "mdtool",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": null,
+       "fixable": false,
+       "kind": "violation",
+       "line": null,
+       "message": "add project metadata or an understandable build entry point",
+       "repository": "acme/diverged",
+       "rule": "repo-template",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": ".github/workflows/lint.yml",
+       "fixable": true,
+       "kind": "violation",
+       "line": null,
+       "message": "add a lint workflow that runs make lint",
+       "repository": "acme/forked",
+       "rule": "gha-lint-workflow",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": "Makefile",
+       "fixable": false,
+       "kind": "violation",
+       "line": null,
+       "message": "add a root Makefile with a lint target so the lint workflow can run make lint",
+       "repository": "acme/forked",
+       "rule": "make-lint-target",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": null,
+       "fixable": false,
+       "kind": "violation",
+       "line": null,
+       "message": "add project metadata or an understandable build entry point",
+       "repository": "acme/forked",
+       "rule": "repo-template",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": ".github/workflows/lint.yml",
+       "fixable": true,
+       "kind": "violation",
+       "line": null,
+       "message": "add a lint workflow that runs make lint",
+       "repository": "acme/forked-old",
+       "rule": "gha-lint-workflow",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": "Makefile",
+       "fixable": false,
+       "kind": "violation",
+       "line": null,
+       "message": "add a root Makefile with a lint target so the lint workflow can run make lint",
+       "repository": "acme/forked-old",
+       "rule": "make-lint-target",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": null,
+       "fixable": false,
+       "kind": "violation",
+       "line": null,
+       "message": "add project metadata or an understandable build entry point",
+       "repository": "acme/forked-old",
+       "rule": "repo-template",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": null,
+       "fixable": false,
+       "kind": "operational",
+       "line": null,
+       "message": "rule could not complete: [Errno 2] No such file or directory: '/private/var/folders/h5/z5h1tjvn4hv1h02qfyvjsmg80000gp/T/pytest-of-josh/pytest-95/test_record_the_status_program0/fleet/acme/gone'",
+       "repository": "acme/gone",
+       "rule": "generated-artifacts",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": ".github/workflows/lint.yml",
+       "fixable": true,
+       "kind": "violation",
+       "line": null,
+       "message": "add a lint workflow that runs make lint",
+       "repository": "acme/gone",
+       "rule": "gha-lint-workflow",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": null,
+       "fixable": false,
+       "kind": "operational",
+       "line": null,
+       "message": "rule could not complete: git symbolic-ref failed: [Errno 2] No such file or directory: PosixPath('/private/var/folders/h5/z5h1tjvn4hv1h02qfyvjsmg80000gp/T/pytest-of-josh/pytest-95/test_record_the_status_program0/fleet/acme/gone')",
+       "repository": "acme/gone",
+       "rule": "gha-triggers",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": null,
+       "fixable": false,
+       "kind": "operational",
+       "line": null,
+       "message": "rule could not complete: [Errno 2] No such file or directory: '/private/var/folders/h5/z5h1tjvn4hv1h02qfyvjsmg80000gp/T/pytest-of-josh/pytest-95/test_record_the_status_program0/fleet/acme/gone'",
+       "repository": "acme/gone",
+       "rule": "javascript-project",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": null,
+       "fixable": false,
+       "kind": "operational",
+       "line": null,
+       "message": "rule could not complete: [Errno 2] No such file or directory: '/private/var/folders/h5/z5h1tjvn4hv1h02qfyvjsmg80000gp/T/pytest-of-josh/pytest-95/test_record_the_status_program0/fleet/acme/gone'",
+       "repository": "acme/gone",
+       "rule": "language-tags",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": "Makefile",
+       "fixable": false,
+       "kind": "violation",
+       "line": null,
+       "message": "add a root Makefile with a lint target so the lint workflow can run make lint",
+       "repository": "acme/gone",
+       "rule": "make-lint-target",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": null,
+       "fixable": false,
+       "kind": "operational",
+       "line": null,
+       "message": "cannot run /private/var/folders/h5/z5h1tjvn4hv1h02qfyvjsmg80000gp/T/pytest-of-josh/pytest-95/test_record_the_status_program0/home/.local/bin/mdtool: [Errno 2] No such file or directory: PosixPath('/private/var/folders/h5/z5h1tjvn4hv1h02qfyvjsmg80000gp/T/pytest-of-josh/pytest-95/test_record_the_status_program0/fleet/acme/gone')",
+       "repository": "acme/gone",
+       "rule": "mdtool",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": null,
+       "fixable": false,
+       "kind": "operational",
+       "line": null,
+       "message": "cannot list formatter policy files: git ls-files failed: [Errno 2] No such file or directory: PosixPath('/private/var/folders/h5/z5h1tjvn4hv1h02qfyvjsmg80000gp/T/pytest-of-josh/pytest-95/test_record_the_status_program0/fleet/acme/gone')",
+       "repository": "acme/gone",
+       "rule": "no-formatters",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": ".git",
+       "fixable": false,
+       "kind": "violation",
+       "line": null,
+       "message": "checkout has no .git metadata",
+       "repository": "acme/gone",
+       "rule": "repo-integrity",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": null,
+       "fixable": false,
+       "kind": "violation",
+       "line": null,
+       "message": "add a human-written README",
+       "repository": "acme/gone",
+       "rule": "repo-template",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": null,
+       "fixable": false,
+       "kind": "violation",
+       "line": null,
+       "message": "add project metadata or an understandable build entry point",
+       "repository": "acme/gone",
+       "rule": "repo-template",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": null,
+       "fixable": false,
+       "kind": "operational",
+       "line": null,
+       "message": "cannot resolve canonical checkout: checkout path contains a symlink: /private/var/folders/h5/z5h1tjvn4hv1h02qfyvjsmg80000gp/T/pytest-of-josh/pytest-95/test_record_the_status_program0/fleet/acme/linked",
+       "repository": "acme/linked",
+       "rule": "repo-integrity",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": null,
+       "fixable": false,
+       "kind": "operational",
+       "line": null,
+       "message": "rule could not complete: fatal: not a git repository (or any of the parent directories): .git",
+       "repository": "acme/plain",
+       "rule": "generated-artifacts",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": ".github/workflows/lint.yml",
+       "fixable": true,
+       "kind": "violation",
+       "line": null,
+       "message": "add a lint workflow that runs make lint",
+       "repository": "acme/plain",
+       "rule": "gha-lint-workflow",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": "Makefile",
+       "fixable": false,
+       "kind": "violation",
+       "line": null,
+       "message": "add a root Makefile with a lint target so the lint workflow can run make lint",
+       "repository": "acme/plain",
+       "rule": "make-lint-target",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": null,
+       "fixable": false,
+       "kind": "operational",
+       "line": null,
+       "message": "cannot run /private/var/folders/h5/z5h1tjvn4hv1h02qfyvjsmg80000gp/T/pytest-of-josh/pytest-95/test_record_the_status_program0/home/.local/bin/mdtool: [Errno 2] No such file or directory: '/private/var/folders/h5/z5h1tjvn4hv1h02qfyvjsmg80000gp/T/pytest-of-josh/pytest-95/test_record_the_status_program0/home/.local/bin/mdtool'",
+       "repository": "acme/plain",
+       "rule": "mdtool",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": null,
+       "fixable": false,
+       "kind": "operational",
+       "line": null,
+       "message": "cannot list formatter policy files: fatal: not a git repository (or any of the parent directories): .git",
+       "repository": "acme/plain",
+       "rule": "no-formatters",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": ".git",
+       "fixable": false,
+       "kind": "violation",
+       "line": null,
+       "message": "checkout has no .git metadata",
+       "repository": "acme/plain",
+       "rule": "repo-integrity",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": null,
+       "fixable": false,
+       "kind": "violation",
+       "line": null,
+       "message": "add project metadata or an understandable build entry point",
+       "repository": "acme/plain",
+       "rule": "repo-template",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": null,
+       "fixable": false,
+       "kind": "violation",
+       "line": null,
+       "message": "document package metadata and public API",
+       "repository": "acme/plain",
+       "rule": "repo-template",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": ".github/workflows/lint.yml",
+       "fixable": true,
+       "kind": "violation",
+       "line": null,
+       "message": "add a lint workflow that runs make lint",
+       "repository": "acme/stale-topic",
+       "rule": "gha-lint-workflow",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": "Makefile",
+       "fixable": false,
+       "kind": "violation",
+       "line": null,
+       "message": "add a root Makefile with a lint target so the lint workflow can run make lint",
+       "repository": "acme/stale-topic",
+       "rule": "make-lint-target",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": null,
+       "fixable": false,
+       "kind": "operational",
+       "line": null,
+       "message": "cannot run /private/var/folders/h5/z5h1tjvn4hv1h02qfyvjsmg80000gp/T/pytest-of-josh/pytest-95/test_record_the_status_program0/home/.local/bin/mdtool: [Errno 2] No such file or directory: '/private/var/folders/h5/z5h1tjvn4hv1h02qfyvjsmg80000gp/T/pytest-of-josh/pytest-95/test_record_the_status_program0/home/.local/bin/mdtool'",
+       "repository": "acme/stale-topic",
+       "rule": "mdtool",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": null,
+       "fixable": false,
+       "kind": "violation",
+       "line": null,
+       "message": "add project metadata or an understandable build entry point",
+       "repository": "acme/stale-topic",
+       "rule": "repo-template",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": ".github/workflows/lint.yml",
+       "fixable": true,
+       "kind": "violation",
+       "line": null,
+       "message": "add a lint workflow that runs make lint",
+       "repository": "acme/topic",
+       "rule": "gha-lint-workflow",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": "Makefile",
+       "fixable": false,
+       "kind": "violation",
+       "line": null,
+       "message": "add a root Makefile with a lint target so the lint workflow can run make lint",
+       "repository": "acme/topic",
+       "rule": "make-lint-target",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": null,
+       "fixable": false,
+       "kind": "operational",
+       "line": null,
+       "message": "cannot run /private/var/folders/h5/z5h1tjvn4hv1h02qfyvjsmg80000gp/T/pytest-of-josh/pytest-95/test_record_the_status_program0/home/.local/bin/mdtool: [Errno 2] No such file or directory: '/private/var/folders/h5/z5h1tjvn4hv1h02qfyvjsmg80000gp/T/pytest-of-josh/pytest-95/test_record_the_status_program0/home/.local/bin/mdtool'",
+       "repository": "acme/topic",
+       "rule": "mdtool",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": null,
+       "fixable": false,
+       "kind": "violation",
+       "line": null,
+       "message": "add project metadata or an understandable build entry point",
+       "repository": "acme/topic",
+       "rule": "repo-template",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": ".github/workflows/lint.yml",
+       "fixable": true,
+       "kind": "violation",
+       "line": null,
+       "message": "add a lint workflow that runs make lint",
+       "repository": "acme/uncached",
+       "rule": "gha-lint-workflow",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": "Makefile",
+       "fixable": false,
+       "kind": "violation",
+       "line": null,
+       "message": "add a root Makefile with a lint target so the lint workflow can run make lint",
+       "repository": "acme/uncached",
+       "rule": "make-lint-target",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": null,
+       "fixable": false,
+       "kind": "operational",
+       "line": null,
+       "message": "cannot run /private/var/folders/h5/z5h1tjvn4hv1h02qfyvjsmg80000gp/T/pytest-of-josh/pytest-95/test_record_the_status_program0/home/.local/bin/mdtool: [Errno 2] No such file or directory: '/private/var/folders/h5/z5h1tjvn4hv1h02qfyvjsmg80000gp/T/pytest-of-josh/pytest-95/test_record_the_status_program0/home/.local/bin/mdtool'",
+       "repository": "acme/uncached",
+       "rule": "mdtool",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": null,
+       "fixable": false,
+       "kind": "violation",
+       "line": null,
+       "message": "add project metadata or an understandable build entry point",
+       "repository": "acme/uncached",
+       "rule": "repo-template",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": ".github/workflows/lint.yml",
+       "fixable": true,
+       "kind": "violation",
+       "line": null,
+       "message": "add a lint workflow that runs make lint",
+       "repository": "acme/wrong-origin",
+       "rule": "gha-lint-workflow",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": "Makefile",
+       "fixable": false,
+       "kind": "violation",
+       "line": null,
+       "message": "add a root Makefile with a lint target so the lint workflow can run make lint",
+       "repository": "acme/wrong-origin",
+       "rule": "make-lint-target",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": null,
+       "fixable": false,
+       "kind": "operational",
+       "line": null,
+       "message": "cannot run /private/var/folders/h5/z5h1tjvn4hv1h02qfyvjsmg80000gp/T/pytest-of-josh/pytest-95/test_record_the_status_program0/home/.local/bin/mdtool: [Errno 2] No such file or directory: '/private/var/folders/h5/z5h1tjvn4hv1h02qfyvjsmg80000gp/T/pytest-of-josh/pytest-95/test_record_the_status_program0/home/.local/bin/mdtool'",
+       "repository": "acme/wrong-origin",
+       "rule": "mdtool",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": null,
+       "fixable": false,
+       "kind": "violation",
+       "line": null,
+       "message": "add project metadata or an understandable build entry point",
+       "repository": "acme/wrong-origin",
+       "rule": "repo-template",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": ".github/workflows/lint.yml",
+       "fixable": true,
+       "kind": "violation",
+       "line": null,
+       "message": "add a lint workflow that runs make lint",
+       "repository": "joshuarli/dotfiles",
+       "rule": "gha-lint-workflow",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": "Makefile",
+       "fixable": false,
+       "kind": "violation",
+       "line": null,
+       "message": "add a root Makefile with a lint target so the lint workflow can run make lint",
+       "repository": "joshuarli/dotfiles",
+       "rule": "make-lint-target",
+       "severity": "error"
+      },
+      {
+       "code": null,
+       "column": null,
+       "file": null,
+       "fixable": false,
+       "kind": "operational",
+       "line": null,
+       "message": "cannot run /private/var/folders/h5/z5h1tjvn4hv1h02qfyvjsmg80000gp/T/pytest-of-josh/pytest-95/test_record_the_status_program0/home/.local/bin/mdtool: [Errno 2] No such file or directory: '/private/var/folders/h5/z5h1tjvn4hv1h02qfyvjsmg80000gp/T/pytest-of-josh/pytest-95/test_record_the_status_program0/home/.local/bin/mdtool'",
+       "repository": "joshuarli/dotfiles",
+       "rule": "mdtool",
+       "severity": "error"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "capability": "git.status",
+   "input": {
+    "repo": "acme/ahead"
+   },
+   "results": [
+    {
+     "output": {
+      "tag": "OnBranch",
+      "value": {
+       "branch": "main",
+       "head": {
+        "ahead": 2,
+        "behind": 0,
+        "staged": 0,
+        "unstaged": 0,
+        "untracked": 0,
+        "upstream": "origin/main"
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "capability": "git.status",
+   "input": {
+    "repo": "acme/forked-old"
+   },
+   "results": [
+    {
+     "output": {
+      "tag": "OnBranch",
+      "value": {
+       "branch": "main",
+       "head": {
+        "ahead": 0,
+        "behind": 0,
+        "staged": 0,
+        "unstaged": 0,
+        "untracked": 0,
+        "upstream": "origin/main"
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "capability": "git.status",
+   "input": {
+    "repo": "acme/dirty"
+   },
+   "results": [
+    {
+     "output": {
+      "tag": "OnBranch",
+      "value": {
+       "branch": "main",
+       "head": {
+        "ahead": 0,
+        "behind": 0,
+        "staged": 1,
+        "unstaged": 1,
+        "untracked": 1,
+        "upstream": "origin/main"
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "capability": "git.status",
+   "input": {
+    "repo": "acme/behind"
+   },
+   "results": [
+    {
+     "output": {
+      "tag": "OnBranch",
+      "value": {
+       "branch": "main",
+       "head": {
+        "ahead": 0,
+        "behind": 1,
+        "staged": 0,
+        "unstaged": 0,
+        "untracked": 0,
+        "upstream": "origin/main"
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "capability": "git.status",
+   "input": {
+    "repo": "acme/forked"
+   },
+   "results": [
+    {
+     "output": {
+      "tag": "OnBranch",
+      "value": {
+       "branch": "main",
+       "head": {
+        "ahead": 0,
+        "behind": 0,
+        "staged": 0,
+        "unstaged": 0,
+        "untracked": 0,
+        "upstream": "origin/main"
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "capability": "git.status",
+   "input": {
+    "repo": "acme/clean"
+   },
+   "results": [
+    {
+     "output": {
+      "tag": "OnBranch",
+      "value": {
+       "branch": "main",
+       "head": {
+        "ahead": 0,
+        "behind": 0,
+        "staged": 0,
+        "unstaged": 0,
+        "untracked": 0,
+        "upstream": "origin/main"
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "capability": "git.status",
+   "input": {
+    "repo": "acme/diverged"
+   },
+   "results": [
+    {
+     "output": {
+      "tag": "OnBranch",
+      "value": {
+       "branch": "main",
+       "head": {
+        "ahead": 1,
+        "behind": 1,
+        "staged": 0,
+        "unstaged": 0,
+        "untracked": 0,
+        "upstream": "origin/main"
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "capability": "git.status",
+   "input": {
+    "repo": "acme/detached"
+   },
+   "results": [
+    {
+     "output": {
+      "tag": "Detached",
+      "value": {
+       "ahead": null,
+       "behind": null,
+       "staged": 0,
+       "unstaged": 0,
+       "untracked": 0,
+       "upstream": null
+      }
+     }
+    }
+   ]
+  },
+  {
+   "capability": "github.cached-ci",
+   "input": {
+    "now": 1800000000000,
+    "refresh": false,
+    "repo": "acme/ahead"
+   },
+   "results": [
+    {
+     "output": {
+      "tag": "Cached",
+      "value": {
+       "age-seconds": 99,
+       "default-branch": "main",
+       "sha": "0123456789abcdef0123456789abcdef01234567",
+       "state": "Pending",
+       "workflows": [
+        {
+         "name": "CI",
+         "state": "Pending",
+         "url": null
+        }
+       ]
+      }
+     }
+    }
+   ]
+  },
+  {
+   "capability": "github.cached-ci",
+   "input": {
+    "now": 1800000000000,
+    "refresh": false,
+    "repo": "acme/forked-old"
+   },
+   "results": [
+    {
+     "output": {
+      "tag": "NotCached",
+      "value": "no cached CI result"
+     }
+    }
+   ]
+  },
+  {
+   "capability": "github.cached-ci",
+   "input": {
+    "now": 1800000000000,
+    "refresh": false,
+    "repo": "acme/forked"
+   },
+   "results": [
+    {
+     "output": {
+      "tag": "Cached",
+      "value": {
+       "age-seconds": 100,
+       "default-branch": "main",
+       "sha": "0123456789abcdef0123456789abcdef01234567",
+       "state": "Passed",
+       "workflows": [
+        {
+         "name": "Lint",
+         "state": "Passed",
+         "url": null
+        },
+        {
+         "name": "Test",
+         "state": "Failed",
+         "url": null
+        }
+       ]
+      }
+     }
+    }
+   ]
+  },
+  {
+   "capability": "github.cached-ci",
+   "input": {
+    "now": 1800000000000,
+    "refresh": false,
+    "repo": "acme/detached"
+   },
+   "results": [
+    {
+     "output": {
+      "tag": "Cached",
+      "value": {
+       "age-seconds": 100,
+       "default-branch": "main",
+       "sha": "0123456789abcdef0123456789abcdef01234567",
+       "state": "NoChecks",
+       "workflows": []
+      }
+     }
+    }
+   ]
+  },
+  {
+   "capability": "github.cached-ci",
+   "input": {
+    "now": 1800000000000,
+    "refresh": false,
+    "repo": "acme/behind"
+   },
+   "results": [
+    {
+     "output": {
+      "tag": "Cached",
+      "value": {
+       "age-seconds": 100,
+       "default-branch": "main",
+       "sha": "0123456789abcdef0123456789abcdef01234567",
+       "state": "Unknown",
+       "workflows": [
+        {
+         "name": "CI",
+         "state": "Passed",
+         "url": null
+        }
+       ]
+      }
+     }
+    }
+   ]
+  },
+  {
+   "capability": "github.cached-ci",
+   "input": {
+    "now": 1800000000000,
+    "refresh": false,
+    "repo": "acme/diverged"
+   },
+   "results": [
+    {
+     "output": {
+      "tag": "Cached",
+      "value": {
+       "age-seconds": 100,
+       "default-branch": "main",
+       "sha": "0123456789abcdef0123456789abcdef01234567",
+       "state": "Stale",
+       "workflows": null
+      }
+     }
+    }
+   ]
+  },
+  {
+   "capability": "github.cached-ci",
+   "input": {
+    "now": 1800000000000,
+    "refresh": false,
+    "repo": "acme/clean"
+   },
+   "results": [
+    {
+     "output": {
+      "tag": "Cached",
+      "value": {
+       "age-seconds": 100,
+       "default-branch": "main",
+       "sha": "0123456789abcdef0123456789abcdef01234567",
+       "state": "Passed",
+       "workflows": [
+        {
+         "name": "CI",
+         "state": "Passed",
+         "url": "https://ci/1"
+        },
+        {
+         "name": "Lint",
+         "state": "Skipped",
+         "url": null
+        }
+       ]
+      }
+     }
+    }
+   ]
+  },
+  {
+   "capability": "github.cached-ci",
+   "input": {
+    "now": 1800000000000,
+    "refresh": false,
+    "repo": "acme/dirty"
+   },
+   "results": [
+    {
+     "output": {
+      "tag": "Cached",
+      "value": {
+       "age-seconds": 100,
+       "default-branch": "main",
+       "sha": "0123456789abcdef0123456789abcdef01234567",
+       "state": "Failed",
+       "workflows": [
+        {
+         "name": "CI",
+         "state": "Failed",
+         "url": "https://ci/2"
+        }
+       ]
+      }
+     }
+    }
+   ]
+  },
+  {
+   "capability": "github.cached-upstream",
+   "input": {
+    "now": 1800000000000,
+    "repo": "acme/detached"
+   },
+   "results": [
+    {
+     "output": null
+    }
+   ]
+  },
+  {
+   "capability": "github.cached-upstream",
+   "input": {
+    "now": 1800000000000,
+    "repo": "acme/behind"
+   },
+   "results": [
+    {
+     "output": null
+    }
+   ]
+  },
+  {
+   "capability": "github.cached-upstream",
+   "input": {
+    "now": 1800000000000,
+    "repo": "acme/forked"
+   },
+   "results": [
+    {
+     "output": {
+      "age-seconds": 50,
+      "ahead-by": 1,
+      "behind-by": 3,
+      "parent": "up/stream",
+      "parent-branch": "main",
+      "parent-sha": "0123456789abcdef0123456789abcdef01234567",
+      "state": "Diverged"
+     }
+    }
+   ]
+  },
+  {
+   "capability": "github.cached-upstream",
+   "input": {
+    "now": 1800000000000,
+    "repo": "acme/dirty"
+   },
+   "results": [
+    {
+     "output": {
+      "age-seconds": 5,
+      "ahead-by": 2,
+      "behind-by": 0,
+      "parent": "up/dirty",
+      "parent-branch": null,
+      "parent-sha": null,
+      "state": "Ahead"
+     }
+    }
+   ]
+  },
+  {
+   "capability": "github.cached-upstream",
+   "input": {
+    "now": 1800000000000,
+    "repo": "acme/clean"
+   },
+   "results": [
+    {
+     "output": {
+      "age-seconds": 7,
+      "ahead-by": 0,
+      "behind-by": 0,
+      "parent": "up/clean",
+      "parent-branch": "trunk",
+      "parent-sha": null,
+      "state": "Identical"
+     }
+    }
+   ]
+  },
+  {
+   "capability": "git.oldest-unpushed",
+   "input": {
+    "repo": "acme/ahead"
+   },
+   "results": [
+    {
+     "output": 1799222400
+    }
+   ]
+  },
+  {
+   "capability": "git.oldest-unpushed",
+   "input": {
+    "repo": "acme/diverged"
+   },
+   "results": [
+    {
+     "output": 1799913600
+    }
+   ]
+  },
+  {
+   "capability": "git.branch-since",
+   "input": {
+    "branch": "main",
+    "repo": "acme/forked-old"
+   },
+   "results": [
+    {
+     "output": null
+    }
+   ]
+  },
+  {
+   "capability": "repo.todo-items",
+   "input": {
+    "repo": "acme/dirty"
+   },
+   "results": [
+    {
+     "output": 0
+    }
+   ]
+  },
+  {
+   "capability": "repo.todo-items",
+   "input": {
+    "repo": "acme/behind"
+   },
+   "results": [
+    {
+     "output": 0
+    }
+   ]
+  },
+  {
+   "capability": "repo.todo-items",
+   "input": {
+    "repo": "acme/forked"
+   },
+   "results": [
+    {
+     "output": 0
+    }
+   ]
+  },
+  {
+   "capability": "repo.todo-items",
+   "input": {
+    "repo": "acme/detached"
+   },
+   "results": [
+    {
+     "output": 0
+    }
+   ]
+  },
+  {
+   "capability": "github.cached-upstream",
+   "input": {
+    "now": 1800000000000,
+    "repo": "acme/ahead"
+   },
+   "results": [
+    {
+     "output": null
+    }
+   ]
+  },
+  {
+   "capability": "repo.todo-items",
+   "input": {
+    "repo": "acme/clean"
+   },
+   "results": [
+    {
+     "output": 2
+    }
+   ]
+  },
+  {
+   "capability": "github.cached-upstream",
+   "input": {
+    "now": 1800000000000,
+    "repo": "acme/diverged"
+   },
+   "results": [
+    {
+     "output": null
+    }
+   ]
+  },
+  {
+   "capability": "github.cached-upstream",
+   "input": {
+    "now": 1800000000000,
+    "repo": "acme/forked-old"
+   },
+   "results": [
+    {
+     "output": null
+    }
+   ]
+  },
+  {
+   "capability": "repo.todo-items",
+   "input": {
+    "repo": "acme/ahead"
+   },
+   "results": [
+    {
+     "output": 0
+    }
+   ]
+  },
+  {
+   "capability": "repo.todo-items",
+   "input": {
+    "repo": "acme/forked-old"
+   },
+   "results": [
+    {
+     "output": 0
+    }
+   ]
+  },
+  {
+   "capability": "repo.todo-items",
+   "input": {
+    "repo": "acme/diverged"
+   },
+   "results": [
+    {
+     "output": 0
+    }
+   ]
+  },
+  {
+   "capability": "git.status",
+   "input": {
+    "repo": "acme/linked"
+   },
+   "results": [
+    {
+     "output": {
+      "tag": "Invalid",
+      "value": "checkout path contains a symlink: /private/var/folders/h5/z5h1tjvn4hv1h02qfyvjsmg80000gp/T/pytest-of-josh/pytest-95/test_record_the_status_program0/fleet/acme/linked"
+     }
+    }
+   ]
+  },
+  {
+   "capability": "git.status",
+   "input": {
+    "repo": "acme/plain"
+   },
+   "results": [
+    {
+     "output": {
+      "tag": "Invalid",
+      "value": "directory is not a valid Git checkout"
+     }
+    }
+   ]
+  },
+  {
+   "capability": "git.status",
+   "input": {
+    "repo": "acme/gone"
+   },
+   "results": [
+    {
+     "output": "Missing"
+    }
+   ]
+  },
+  {
+   "capability": "git.status",
+   "input": {
+    "repo": "acme/stale-topic"
+   },
+   "results": [
+    {
+     "output": {
+      "tag": "OnBranch",
+      "value": {
+       "branch": "repomod/fix/example",
+       "head": {
+        "ahead": null,
+        "behind": null,
+        "staged": 0,
+        "unstaged": 0,
+        "untracked": 0,
+        "upstream": null
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "capability": "git.status",
+   "input": {
+    "repo": "acme/topic"
+   },
+   "results": [
+    {
+     "output": {
+      "tag": "OnBranch",
+      "value": {
+       "branch": "topic",
+       "head": {
+        "ahead": null,
+        "behind": null,
+        "staged": 0,
+        "unstaged": 0,
+        "untracked": 0,
+        "upstream": null
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "capability": "github.cached-ci",
+   "input": {
+    "now": 1800000000000,
+    "refresh": false,
+    "repo": "acme/gone"
+   },
+   "results": [
+    {
+     "output": {
+      "tag": "Cached",
+      "value": {
+       "age-seconds": 100,
+       "default-branch": "main",
+       "sha": "0123456789abcdef0123456789abcdef01234567",
+       "state": "Passed",
+       "workflows": [
+        {
+         "name": "CI",
+         "state": "Passed",
+         "url": null
+        }
+       ]
+      }
+     }
+    }
+   ]
+  },
+  {
+   "capability": "github.cached-ci",
+   "input": {
+    "now": 1800000000000,
+    "refresh": false,
+    "repo": "acme/stale-topic"
+   },
+   "results": [
+    {
+     "output": {
+      "tag": "NotCached",
+      "value": "no cached CI result"
+     }
+    }
+   ]
+  },
+  {
+   "capability": "github.cached-ci",
+   "input": {
+    "now": 1800000000000,
+    "refresh": false,
+    "repo": "acme/plain"
+   },
+   "results": [
+    {
+     "output": {
+      "tag": "NotCached",
+      "value": "no cached CI result"
+     }
+    }
+   ]
+  },
+  {
+   "capability": "github.cached-ci",
+   "input": {
+    "now": 1800000000000,
+    "refresh": false,
+    "repo": "acme/topic"
+   },
+   "results": [
+    {
+     "output": {
+      "tag": "Cached",
+      "value": {
+       "age-seconds": 100,
+       "default-branch": "main",
+       "sha": "0123456789abcdef0123456789abcdef01234567",
+       "state": "Passed",
+       "workflows": [
+        {
+         "name": "Release",
+         "state": "Cancelled",
+         "url": "https://ci/3"
+        }
+       ]
+      }
+     }
+    }
+   ]
+  },
+  {
+   "capability": "github.cached-ci",
+   "input": {
+    "now": 1800000000000,
+    "refresh": false,
+    "repo": "acme/linked"
+   },
+   "results": [
+    {
+     "output": {
+      "tag": "NotCached",
+      "value": "no cached CI result"
+     }
+    }
+   ]
+  },
+  {
+   "capability": "git.status",
+   "input": {
+    "repo": "joshuarli/dotfiles"
+   },
+   "results": [
+    {
+     "output": {
+      "tag": "OnBranch",
+      "value": {
+       "branch": "main",
+       "head": {
+        "ahead": null,
+        "behind": null,
+        "staged": 0,
+        "unstaged": 0,
+        "untracked": 0,
+        "upstream": null
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "capability": "git.status",
+   "input": {
+    "repo": "acme/wrong-origin"
+   },
+   "results": [
+    {
+     "output": {
+      "tag": "OriginMismatch",
+      "value": {
+       "branch": "main",
+       "error": "origin does not match the catalogued GitHub repository",
+       "head": {
+        "ahead": 0,
+        "behind": 0,
+        "staged": 0,
+        "unstaged": 0,
+        "untracked": 0,
+        "upstream": "origin/main"
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "capability": "git.status",
+   "input": {
+    "repo": "acme/uncached"
+   },
+   "results": [
+    {
+     "output": {
+      "tag": "OnBranch",
+      "value": {
+       "branch": "main",
+       "head": {
+        "ahead": 0,
+        "behind": 0,
+        "staged": 0,
+        "unstaged": 0,
+        "untracked": 0,
+        "upstream": "origin/main"
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "capability": "github.cached-upstream",
+   "input": {
+    "now": 1800000000000,
+    "repo": "acme/gone"
+   },
+   "results": [
+    {
+     "output": null
+    }
+   ]
+  },
+  {
+   "capability": "github.cached-ci",
+   "input": {
+    "now": 1800000000000,
+    "refresh": false,
+    "repo": "joshuarli/dotfiles"
+   },
+   "results": [
+    {
+     "output": {
+      "tag": "Cached",
+      "value": {
+       "age-seconds": 100,
+       "default-branch": "main",
+       "sha": "0123456789abcdef0123456789abcdef01234567",
+       "state": "Neutral",
+       "workflows": [
+        {
+         "name": "CI",
+         "state": "Neutral",
+         "url": null
+        }
+       ]
+      }
+     }
+    }
+   ]
+  },
+  {
+   "capability": "github.cached-upstream",
+   "input": {
+    "now": 1800000000000,
+    "repo": "acme/plain"
+   },
+   "results": [
+    {
+     "output": null
+    }
+   ]
+  },
+  {
+   "capability": "github.cached-upstream",
+   "input": {
+    "now": 1800000000000,
+    "repo": "acme/linked"
+   },
+   "results": [
+    {
+     "output": null
+    }
+   ]
+  },
+  {
+   "capability": "github.cached-ci",
+   "input": {
+    "now": 1800000000000,
+    "refresh": false,
+    "repo": "acme/wrong-origin"
+   },
+   "results": [
+    {
+     "output": {
+      "tag": "Cached",
+      "value": {
+       "age-seconds": 100,
+       "default-branch": "main",
+       "sha": "0123456789abcdef0123456789abcdef01234567",
+       "state": "Unknown",
+       "workflows": [
+        {
+         "name": "CI",
+         "state": "Passed",
+         "url": null
+        }
+       ]
+      }
+     }
+    }
+   ]
+  },
+  {
+   "capability": "github.cached-ci",
+   "input": {
+    "now": 1800000000000,
+    "refresh": false,
+    "repo": "acme/uncached"
+   },
+   "results": [
+    {
+     "output": {
+      "tag": "NotCached",
+      "value": "no cached CI result"
+     }
+    }
+   ]
+  },
+  {
+   "capability": "git.branch-since",
+   "input": {
+    "branch": "topic",
+    "repo": "acme/topic"
+   },
+   "results": [
+    {
+     "output": 1799740800
+    }
+   ]
+  },
+  {
+   "capability": "git.branch-since",
+   "input": {
+    "branch": "repomod/fix/example",
+    "repo": "acme/stale-topic"
+   },
+   "results": [
+    {
+     "output": 1798963200
+    }
+   ]
+  },
+  {
+   "capability": "github.cached-upstream",
+   "input": {
+    "now": 1800000000000,
+    "repo": "acme/stale-topic"
+   },
+   "results": [
+    {
+     "output": null
+    }
+   ]
+  },
+  {
+   "capability": "github.cached-upstream",
+   "input": {
+    "now": 1800000000000,
+    "repo": "acme/wrong-origin"
+   },
+   "results": [
+    {
+     "output": null
+    }
+   ]
+  },
+  {
+   "capability": "github.cached-upstream",
+   "input": {
+    "now": 1800000000000,
+    "repo": "joshuarli/dotfiles"
+   },
+   "results": [
+    {
+     "output": null
+    }
+   ]
+  },
+  {
+   "capability": "github.cached-upstream",
+   "input": {
+    "now": 1800000000000,
+    "repo": "acme/topic"
+   },
+   "results": [
+    {
+     "output": {
+      "age-seconds": 0,
+      "ahead-by": 0,
+      "behind-by": 4,
+      "parent": "up/topic",
+      "parent-branch": null,
+      "parent-sha": null,
+      "state": "Unknown"
+     }
+    }
+   ]
+  },
+  {
+   "capability": "git.branch-since",
+   "input": {
+    "branch": "main",
+    "repo": "acme/uncached"
+   },
+   "results": [
+    {
+     "output": null
+    }
+   ]
+  },
+  {
+   "capability": "repo.todo-items",
+   "input": {
+    "repo": "acme/topic"
+   },
+   "results": [
+    {
+     "output": 0
+    }
+   ]
+  },
+  {
+   "capability": "repo.todo-items",
+   "input": {
+    "repo": "acme/stale-topic"
+   },
+   "results": [
+    {
+     "output": 0
+    }
+   ]
+  },
+  {
+   "capability": "repo.todo-items",
+   "input": {
+    "repo": "joshuarli/dotfiles"
+   },
+   "results": [
+    {
+     "output": 0
+    }
+   ]
+  },
+  {
+   "capability": "repo.todo-items",
+   "input": {
+    "repo": "acme/wrong-origin"
+   },
+   "results": [
+    {
+     "output": 0
+    }
+   ]
+  },
+  {
+   "capability": "github.cached-upstream",
+   "input": {
+    "now": 1800000000000,
+    "repo": "acme/uncached"
+   },
+   "results": [
+    {
+     "output": null
+    }
+   ]
+  },
+  {
+   "capability": "repo.todo-items",
+   "input": {
+    "repo": "acme/uncached"
+   },
+   "results": [
+    {
+     "output": 0
+    }
+   ]
+  }
+ ]
+}

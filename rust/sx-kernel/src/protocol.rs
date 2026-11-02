@@ -306,10 +306,6 @@ fn literal_json(node: &Node) -> Option<Json> {
     }
 }
 
-fn lambda_body<'a>(lambda: &'a crate::ir::Lambda, out: &mut Vec<&'a Node>) {
-    out.push(&lambda.body);
-}
-
 fn children<'a>(node: &'a Node) -> Vec<&'a Node> {
     let mut out: Vec<&'a Node> = Vec::new();
     match &node.kind {
@@ -321,9 +317,9 @@ fn children<'a>(node: &'a Node) -> Vec<&'a Node> {
             out.push(&arms.scrutinee);
             out.extend(arms.clauses.iter().map(|(_, body)| body));
         }
-        NodeKind::Lambda(lambda) => lambda_body(lambda, &mut out),
+        NodeKind::Lambda(lambda) => out.push(&lambda.body),
         NodeKind::ApplyLocal { function, args, .. } => {
-            lambda_body(function, &mut out);
+            out.push(&function.body);
             out.extend(args);
         }
         NodeKind::Prelude { args, .. } | NodeKind::CoreCall { args, .. } | NodeKind::Recur { args } => out.extend(args),
@@ -338,7 +334,7 @@ fn children<'a>(node: &'a Node) -> Vec<&'a Node> {
         NodeKind::Attempt { body } => out.push(body),
         NodeKind::Retry(retry) => out.push(&retry.body),
         NodeKind::WaitUntil(wait) => {
-            lambda_body(&wait.predicate, &mut out);
+            out.push(&wait.predicate.body);
             out.push(&wait.body);
         }
         NodeKind::Loop(repeat) => {
@@ -347,7 +343,7 @@ fn children<'a>(node: &'a Node) -> Vec<&'a Node> {
         }
         NodeKind::Par { branches } => out.extend(branches),
         NodeKind::ParMap { function, items, .. } => {
-            lambda_body(function, &mut out);
+            out.push(&function.body);
             out.push(items);
         }
     }
@@ -397,16 +393,16 @@ pub fn explain_report(program: &Program, allowed: &BTreeSet<String>) -> Json {
     ])
 }
 
-struct Declared {
-    registry: Registry,
-    inputs: BTreeMap<String, Type>,
+pub struct Declared {
+    pub registry: Registry,
+    pub inputs: BTreeMap<String, Type>,
 }
 
 fn invalid_declarations(message: impl Into<String>) -> ProtocolError {
     ProtocolError::new(ErrorCode::InvalidDeclarations, message)
 }
 
-fn declare(declarations: &Json, library: &dyn CoreLibrary) -> Result<Declared, ProtocolError> {
+pub fn declare(declarations: &Json, library: &dyn CoreLibrary) -> Result<Declared, ProtocolError> {
     let mut registry = Registry::new();
     match declarations.get("cores") {
         None => {}
