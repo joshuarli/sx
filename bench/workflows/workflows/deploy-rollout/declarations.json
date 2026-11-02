@@ -1,0 +1,30 @@
+{
+  "capabilities": [
+    {
+      "id": "deploy.start",
+      "http": {"method": "POST", "url": "{{deploy_origin}}/deployments", "query": []},
+      "input": "Record {service: String, version: String}",
+      "output": "Record open {id: String}",
+      "effect": "write",
+      "idempotent": false,
+      "description": "Starts a deployment of a version of a service and returns its id."
+    },
+    {
+      "id": "deploy.status",
+      "http": {"method": "GET", "url": "{{deploy_origin}}/deployments/{id}", "query": []},
+      "input": "Record {id: String}",
+      "output": "Record open {status: String}",
+      "effect": "read",
+      "description": "Returns the status of a deployment: running, done, or failed."
+    },
+    {
+      "id": "deploy.rollback",
+      "http": {"method": "POST", "url": "{{deploy_origin}}/deployments/{id}/rollback", "query": []},
+      "input": "Record {id: String}",
+      "output": "Record open {status: String}",
+      "effect": "write",
+      "idempotent": false,
+      "description": "Rolls back a failed deployment."
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+(let [table [["api" "1.4.0"] ["web" "2.1.0"] ["worker" "0.9.3"] ["billing" "3.0.0"] ["search" "1.1.1"]]
+      started (map (fn [[service version]]
+                     {:service service
+                      :id (get (retry {:delays [100ms 100ms] :on [RateLimited]}
+                                 (call deploy.start {:service service :version version}))
+                               :id)})
+                   table)
+      watched (par-map {:limit 5}
+                       (fn [d]
+                         (match (attempt (wait-until {:within 1s :every 100ms}
+                                           (fn [s] (not= (get s :status) "running"))
+                                           (call deploy.status {:id (get d :id)})))
+                           (ok s) {:service (get d :service) :id (get d :id) :outcome (get s :status)}
+                           (err _) {:service (get d :service) :id (get d :id) :outcome "timeout"}))
+                       started)
+      finished (map (fn [w]
+                      (if (= (get w :outcome) "failed")
+                        (let [_ (call deploy.rollback {:id (get w :id)})]
+                          {:service (get w :service) :id (get w :id) :outcome "rolled-back"})
+                        w))
+                    watched)
+      tally (fn [outcome] (count (filter (fn [d] (= (get d :outcome) outcome)) finished)))]
+  {:deployments finished
+   :done (tally "done")
+   :rolled_back (tally "rolled-back")
+   :timed_out (tally "timeout")})

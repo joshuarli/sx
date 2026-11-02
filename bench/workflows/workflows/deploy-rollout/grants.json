@@ -1,0 +1,5 @@
+{
+  "deploy.start": {"origins": ["{{deploy_origin}}"], "methods": ["POST"]},
+  "deploy.status": {"origins": ["{{deploy_origin}}"], "methods": ["GET"]},
+  "deploy.rollback": {"origins": ["{{deploy_origin}}"], "methods": ["POST"]}
+}
