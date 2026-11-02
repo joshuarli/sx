@@ -1,0 +1,10 @@
+{
+  "description": "A sum whose digits carry into a power of ten still fits in 38 digits.",
+  "python": false,
+  "program": "(let [d (fn [s] (match (decimal.parse s) (some x) x none (decimal.from-int 0)))] (decimal.add (d \"9999999999999999999999999999999999999.5\") (d \"0.5\")))",
+  "declarations": "declarations/decimal.json",
+  "allow": [],
+  "expect": {
+    "completed": "10000000000000000000000000000000000000"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "description": "A string that is not a decimal literal is refused with its path.",
+  "python": false,
+  "program": "(script {:inputs {:prices \"List<decimal.Decimal>\"}} prices)",
+  "declarations": "declarations/decimal.json",
+  "allow": [],
+  "inputs": {
+    "prices": [
+      "1.5",
+      "1e3"
+    ]
+  },
+  "expect": {
+    "invalid-input": "$prices[1]: expected decimal.Decimal, found a string that is not valid"
+  }
+}

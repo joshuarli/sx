@@ -1,0 +1,15 @@
+{
+  "description": "A required input with no value is refused before the run.",
+  "python": false,
+  "program": "(script {:inputs {:owners \"List<String>\" :limit \"Int\"}} (take limit owners))",
+  "declarations": "declarations.json",
+  "allow": [],
+  "inputs": {
+    "owners": [
+      "a"
+    ]
+  },
+  "expect": {
+    "invalid-input": "the script needs a value for input limit"
+  }
+}

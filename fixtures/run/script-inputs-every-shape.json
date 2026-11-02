@@ -1,0 +1,40 @@
+{
+  "description": "Inputs decode to records, maps, tuples, options, and results through the type-directed decoder.",
+  "python": false,
+  "program": "(script {:inputs {:row \"Record {name: String, hits: Option<Int>}\" :totals \"Map<String, Int>\" :pair \"Tuple<Int, String>\" :verdict \"Result<Int, String>\" :ratio \"Float\" :flag \"Bool\" :blob \"Bytes\"}} {:name (get row :name) :hits (get row :hits) :a (get totals \"a\" 0) :n (first pair) :s (nth pair 1) :v (match verdict (ok n) n (err e) 0) :r (* ratio 2.0) :f (not flag) :len (count blob)})",
+  "declarations": "declarations.json",
+  "allow": [],
+  "inputs": {
+    "row": {
+      "name": "x",
+      "hits": 4
+    },
+    "totals": {
+      "a": 7,
+      "b": 8
+    },
+    "pair": [
+      3,
+      "t"
+    ],
+    "verdict": {
+      "ok": 5
+    },
+    "ratio": 1.5,
+    "flag": true,
+    "blob": "AQID"
+  },
+  "expect": {
+    "completed": {
+      "name": "x",
+      "hits": 4,
+      "a": 7,
+      "n": 3,
+      "s": "t",
+      "v": 5,
+      "r": 3.0,
+      "f": false,
+      "len": 3
+    }
+  }
+}

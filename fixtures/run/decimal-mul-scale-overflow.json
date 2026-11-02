@@ -1,0 +1,10 @@
+{
+  "description": "A product with more than 38 fractional digits stops the program with arithmetic.",
+  "python": false,
+  "program": "(let [d (fn [s] (match (decimal.parse s) (some x) x none (decimal.from-int 0)))] (decimal.mul (d \"0.00000000000000000001\") (d \"0.00000000000000000001\")))",
+  "declarations": "declarations/decimal.json",
+  "allow": [],
+  "expect": {
+    "failed": "arithmetic"
+  }
+}

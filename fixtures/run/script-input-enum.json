@@ -1,0 +1,13 @@
+{
+  "description": "A declared enum is a valid input type.",
+  "python": false,
+  "program": "(script {:inputs {:level \"Level\"}} (match level Passing 1 Failing 2 Unknown 3))",
+  "declarations": "declarations.json",
+  "allow": [],
+  "inputs": {
+    "level": "Failing"
+  },
+  "expect": {
+    "completed": 2
+  }
+}

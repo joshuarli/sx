@@ -1,0 +1,6 @@
+error[input-type] 3:27-3:40
+  (script {:inputs {:owners "List<String"}}
+                            ^^^^^^^^^^^^^
+  The type of input :owners, "List<String", does not parse.
+  Parser: type 'List<String' ends early
+  Help: sx help script

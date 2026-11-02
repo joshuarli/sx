@@ -1,0 +1,13 @@
+{
+  "description": "An integer input beyond 64 bits is refused.",
+  "python": false,
+  "program": "(script {:inputs {:n \"Int\"}} n)",
+  "declarations": "declarations.json",
+  "allow": [],
+  "inputs": {
+    "n": 9223372036854775808
+  },
+  "expect": {
+    "invalid-input": "$n: expected Int, found an integer outside the signed 64-bit range"
+  }
+}

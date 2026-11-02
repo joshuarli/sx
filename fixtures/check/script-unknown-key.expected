@@ -1,0 +1,6 @@
+error[script-key] 3:29-3:35
+  (script {:inputs {:n "Int"} :allow ["store.get"]} n)
+                              ^^^^^^
+  A script header has no key :allow.
+  Keys: :inputs
+  Help: sx help script

@@ -1,0 +1,38 @@
+{
+  "description": "A decimal a capability returns is validated and canonicalized.",
+  "python": false,
+  "program": "(call price.get {:sku \"a\"})",
+  "declarations": "declarations/decimal.json",
+  "allow": [
+    "price.get"
+  ],
+  "responses": [
+    {
+      "capability": "price.get",
+      "input": {
+        "sku": "a"
+      },
+      "results": [
+        {
+          "output": "12.50"
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": "12.5"
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "price.get",
+      "input": {
+        "sku": "a"
+      }
+    },
+    {
+      "response": "r:1",
+      "output": "12.50"
+    }
+  ]
+}

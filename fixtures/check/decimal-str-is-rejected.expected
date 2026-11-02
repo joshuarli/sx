@@ -1,0 +1,7 @@
+error[type-mismatch] 3:6-3:26
+  (str (decimal.from-int 1))
+       ^^^^^^^^^^^^^^^^^^^^
+  str joins strings, integers, floats, booleans, and enum values, but this is a decimal.Decimal.
+  Expected: String
+  Found: decimal.Decimal
+  Help: sx help str

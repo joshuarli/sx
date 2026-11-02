@@ -1,0 +1,4 @@
+; declarations: fixtures/run/declarations.json
+; python: no
+(script {:inputs {:owners "List<String>" :limit "Int" :note "Option<String>" :level "Level"}}
+  {:n (count owners) :first (take limit owners) :note note :level level})

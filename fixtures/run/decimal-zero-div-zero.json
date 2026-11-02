@@ -1,0 +1,10 @@
+{
+  "description": "Zero divided by zero is also division by zero.",
+  "python": false,
+  "program": "(decimal.div (decimal.from-int 0) (decimal.from-int 0) 2 Down)",
+  "declarations": "declarations/decimal.json",
+  "allow": [],
+  "expect": {
+    "failed": "arithmetic"
+  }
+}

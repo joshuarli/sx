@@ -1,0 +1,6 @@
+error[input-type] 3:26-3:43
+  (script {:inputs {:price "decimal.Decimal"}}
+                           ^^^^^^^^^^^^^^^^^
+  The type of input :price, "decimal.Decimal", does not parse.
+  Parser: unknown type 'decimal.Decimal' in 'decimal.Decimal'
+  Help: sx help script

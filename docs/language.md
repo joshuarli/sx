@@ -8,7 +8,8 @@ interpreter in the same commit.
 
 A program is one expression. There are no top-level definitions, imports, macros, quoting, or
 recursion. Evaluation is strict, and arguments evaluate left to right, except inside `par` and
-`par-map`.
+`par-map`. A program may instead be a [script](#scripts): one `script` form that declares typed
+inputs around that expression.
 
 Every program terminates. Iteration runs over lists that already exist, and every form that
 repeats, `retry`, `wait-until`, and `loop`, takes a literal bound the checker reads before the
@@ -54,6 +55,7 @@ program runs. There is no general recursion and no unbounded loop.
 | `Map<String, V>` | Any number of string keys, each with a value of type `V`. Keys are always strings, because JSON object keys are strings, so `Map<Int, V>` and every other key type are rejected. |
 | Core enum | Nominal, declared by a core, for example `git.Checkout` |
 | Core nominal | Nominal wrapper over a base type, declared by a core, for example `git.RepoId` |
+| Core-validated nominal | A nominal over `String` whose values the core validates and canonicalizes, for example `decimal.Decimal`. Only the core's functions build one. |
 
 There is no `Any`, no subtyping, and no user-declared type. `Int` and `Float` never convert into
 each other: `(+ 1 1.5)`, `(< 1 1.5)`, and `(= 2 2.0)` are each a `type-mismatch` whose fix is
@@ -142,7 +144,9 @@ Equality is structural on every type, and on `Float` it is IEEE equality, so `0.
 `(= (+ 0.1 0.2) 0.3)` is `false`. Ordering with `<`, `<=`, `>`, and `>=` is defined on `Int`, on
 `Float`, and on `String`, where strings compare lexicographically by Unicode code point. Both
 operands have the same type. Sort keys, used by `sort-by`, may also be `Float`, `Bool` (`false` first) and tuples or lists of sort keys, compared element
-by element. A map is not a sort key.
+by element. A map is not a sort key. Neither is a core-validated nominal such as `decimal.Decimal`,
+because its text does not order like its value: the diagnostic names the core's comparison function,
+`decimal.compare`.
 
 ## Special forms
 
@@ -590,7 +594,7 @@ compare traces sorted by request ID.
 | `invalid-host-response` | See [Execution](#execution) | No |
 | `loop-limit` | A `loop` reached its `:max` and its body asked to `recur` again | No |
 | `budget-exhausted` | A budget ran out. The error names the budget. | No |
-| `arithmetic` | Overflow, division by zero, a `Float` result that is infinite or not a number, negative `take` count | No |
+| `arithmetic` | Overflow, division by zero, a `Float` result that is infinite or not a number, negative `take` count, or a core function whose arithmetic fails, such as a `decimal` result beyond 38 digits | No |
 | `out-of-range` | `first` of an empty list, `nth` past the end, or `round`, `floor`, or `ceil` beyond the `Int` range | No |
 | `internal` | Interpreter bug | No |
 
@@ -632,11 +636,61 @@ may shadow it. The host supplies a value for every declared input, in the
 rejects the run before any request. An undeclared name is an `unknown-name` error. `sx explain`
 lists the inputs a program uses.
 
-In v0 only the host declares inputs. A script file cannot declare its own.
+A host declares inputs in its declarations (`inputs` maps names to type text). A script declares its own, in its [header](#scripts).
 
 A host maps command-line options to inputs. In the repomod host, `discover --owner acme --owner beta`
 reaches `discover.sx` as `owners`, a `List<String>`, and `status --offline --dirty` reaches
 `status-offline.sx` as `only-dirty`, a `Bool`.
+
+## Scripts
+
+A program may be a script:
+
+```
+(script {:inputs {:owners "List<String>" :limit "Int"}}
+  (take limit owners))
+```
+
+`script` takes a header record and a body, and only the outermost form of a program can be one. The
+header's only key is `:inputs`, a record from input names to types. Each type is a string literal in
+the declaration type language, parsed by the same parser as a declaration's types and resolved against
+the declared types, enums, and core types, so a core's type such as `decimal.Decimal` needs its core
+registered. The body sees each input by name as in [Inputs](#inputs), and a `let` may shadow it.
+
+A header declares no authority. Which capabilities a script may call is still the host's grant, and a
+`call` to an ungranted capability is `unauthorized` as in any program. A header whose type has no JSON
+encoding, such as `Option<Option<Int>>`, is rejected as `no-encoding`.
+
+The checker reports these header errors, each pointing at the offending text and naming `sx help script`:
+
+| Code | Cause |
+| --- | --- |
+| `script-position` | `script` anywhere but the outermost form |
+| `arity` | `script` without exactly a header and a body |
+| `script-header` | A header that is not a record literal, or an `:inputs` value that is not a record literal |
+| `script-key` | A header key other than `:inputs`. A key within edit distance 2 of `:inputs` is suggested. |
+| `input-type` | A type that is not a string literal, or a string the type parser rejects. The parser's message is the detail. |
+| `reserved-name` | An input named like a form: a special form, `none`, or `script` |
+| `no-encoding` | A type with no JSON encoding |
+| `duplicate-field` | The same input, or the same header key, written twice. The reader reports it, as for any record. |
+
+An input whose type is wrong stays in scope with no type of its own, so a use of it adds no further error.
+
+When a host also declares inputs, the two declarations must agree exactly, with the same names and the
+same types. A disagreement is a usage error, not a diagnostic, and it names each difference. A host that
+declares no inputs agrees with any header.
+
+### Running a script
+
+`sx run report.sx --input 'owners=["acme"]' --input limit=2` decodes each `--input NAME=JSON` against
+its declared type with the [type-directed decoder](#values-and-json), so a script needs no declarations
+file when it calls no capability. A value that does not decode, a name that is not an input, and a
+required input with no value are usage errors. The last lists every required input and its type. An
+`Option` input may be left out and is then `none`. `sx explain` lists each declared input with its type,
+used or not, and `--format json` adds `input_types`. The protocol's [`start`](#host-protocol) message
+takes a script unchanged, with `inputs` as JSON, and refuses with `invalid-input` in the same cases. A
+host-declared program keeps its stricter rule that every declared input has a value. `sx help script`
+documents the form with a runnable example.
 
 ## Values and JSON
 
@@ -661,6 +715,7 @@ always knows the expected type, so every encoding below is unambiguous.
 | Core enum, variant without a value | The variant name as a string, for example `"Missing"` |
 | Core enum, variant with a value | `{"tag": "OnBranch", "value": x}` |
 | Core nominal | The encoding of its base type |
+| Core-validated nominal | A string. Decoding hands the string to the core, which accepts it and canonicalizes it, or refuses it with a reason. A number, or any other JSON, is a mismatch. |
 
 `Option<T>` has no JSON encoding when `T` itself can encode as `null`, which is when `T` is `Unit`
 or another `Option`. `none` and `(some x)` would both be `null`. `Map<String, Option<T>>` has none
@@ -720,7 +775,7 @@ Kernel to host:
 | `requests` | `requests` | The run is suspended. Each request is `{"id", "kind": "call", "capability", "input"}` or `{"id", "kind": "delay", "milliseconds"}`. A delay is answered with `"output": null` once the host has waited. |
 | `completed` | `value`, `trace` | The program finished. `value` is the result and `trace` the [trace](#execution). |
 | `failed` | `failure`, `trace` | The program stopped. `failure` is `{"kind", "message", "span", "request"}`, where `span` and `request` may be `null`. |
-| `explained` | `tools`, `inputs`, `result` | For each capability the program can call: `id`, `effect` (`read`, `write, idempotent`, or `write, not idempotent`), `allowed`, and the literal `inputs` of its calls, with `"computed at run time"` for arguments the program computes, and for a capability with a scope, `verdicts`. Also the inputs the program uses and its result type. Same as `sx explain --format json`. |
+| `explained` | `tools`, `inputs`, `result` | For each capability the program can call: `id`, `effect` (`read`, `write, idempotent`, or `write, not idempotent`), `allowed`, and the literal `inputs` of its calls, with `"computed at run time"` for arguments the program computes, and for a capability with a scope, `verdicts`. Also the inputs the program uses and its result type. For a script, `inputs` lists every declared input and `input_types` maps each to its type. Same as `sx explain --format json`. |
 | `scope-verdict` | `id`, `verdict`, and `reason` when denied | The answer to `check-scope`: `allowed`, `denied` with the pack's reason, or `unchecked` when the capability's scope came from a declarations file, so no registered check can judge it and the host must. |
 | `error` | `code`, `message` | The message was not valid, so the kernel did nothing with it. |
 
@@ -821,6 +876,7 @@ The checker's codes are:
 | Forms | `condition-not-bool`, `missing-else`, `branch-mismatch`, `fn-position`, `bad-pattern`, `bad-option`, `recur-position`, `recur-arity`, `loop-no-result` |
 | Match | `non-exhaustive`, `unreachable-clause` |
 | Effects | `unauthorized`, `out-of-scope`, `parallel-write`, `par-map-limit`, `retry-write`, `wait-write` |
+| Script | `script-position`, `script-header`, `script-key`, `input-type`. See [Scripts](#scripts). |
 | Size | `too-large`, naming the `source-bytes`, `nodes`, or `depth` budget |
 | Habits | `habit`, naming the construct. The reader detects `nil`, `capitalized-boolean`, `quote`, `reader-macro`, `anonymous-fn-shorthand`, `set-literal`, `threading`, `js-operator`, `js-object-key`, `method-call`, and `namespace-slash`. The checker detects `defn`, `keyword-call`, `keyword-value`, `argument-order`, `assoc`, `let-body`, `while`, and `loop-without-max`. |
 
@@ -874,6 +930,49 @@ at one level, a claim of `unverified`, and `proved-properties` without `specifie
 every named conformance test to exist. A theorem is about the Lean model only. It says nothing
 about the Python or Rust code, or about real Git and GitHub behavior, without separate
 conformance evidence.
+
+## The decimal core
+
+`decimal` is a Rust core, registered by listing `"decimal"` under `cores` in the declarations. It adds
+the core-validated nominal `decimal.Decimal` and the nullary enum `decimal.Rounding` with the variants
+`HalfEven`, `HalfUp`, `Down`, `Up`, `Floor`, and `Ceiling`.
+
+A `decimal.Decimal` is an exact decimal number with at most 38 significant digits and at most 38
+fractional digits. A literal is an optional `-`, one or more digits, and optionally a `.` with one or
+more digits. There is no `+`, exponent, space, or bare point, and leading zeros are accepted. The core
+keeps every value in canonical form: trailing fractional zeros are dropped and zero has no sign, so
+`1.50` is `1.5`, `-0` is `0`, and `=` on decimals is numeric equality. An integer keeps its zeros,
+so `100.00` is `100`. A value is a string in JSON, such as `"12.50"`, which decoding validates and
+canonicalizes through the core: a JSON number, a string that is not a literal, and a literal beyond the
+digit limits are decode errors with the path, as `invalid-host-response` or an invalid input. A
+decimal is never a sort key, and `<` does not order decimals; `decimal.compare` does.
+
+| Function | Type |
+| --- | --- |
+| `decimal.parse` | `String -> Option<decimal.Decimal>`, `none` for anything that is not a literal within the limits |
+| `decimal.show` | `decimal.Decimal -> String`, the canonical text |
+| `decimal.format` | `decimal.Decimal Int -> String`, exactly that many places, rounded half to even. Zero rounds to `0.00`, never `-0.00`. |
+| `decimal.from-int` | `Int -> decimal.Decimal` |
+| `decimal.add decimal.sub decimal.mul` | `decimal.Decimal decimal.Decimal -> decimal.Decimal`, exact |
+| `decimal.div` | `decimal.Decimal decimal.Decimal Int decimal.Rounding -> decimal.Decimal`, the quotient rounded to that many places |
+| `decimal.round` | `decimal.Decimal Int decimal.Rounding -> decimal.Decimal` |
+| `decimal.compare` | `decimal.Decimal decimal.Decimal -> Int`, `-1`, `0`, or `1` |
+| `decimal.to-float` | `decimal.Decimal -> Float`, the nearest `Float` |
+
+Places are 0 to 38. The modes: `HalfEven` and `HalfUp` round a tie to the even neighbor and away from
+zero; `Down` and `Up` go toward and away from zero; `Floor` and `Ceiling` go toward negative and
+positive infinity. A tie only matters to the two half modes.
+
+A place count outside 0 to 38, division by zero (`0` divided by `0` included), and a result beyond
+either limit fail the program with `arithmetic`. A result is judged in canonical form: `9999999999999999999999999999999999999.5` plus `0.5` is `10000000000000000000000000000000000000` and fits, while
+`99999999999999999999999999999999999999` plus `1` does not. A core reports such a failure
+as `CoreError::Arithmetic`, which the machine turns into `arithmetic` with the function's name; any
+other `CoreError::Failed` is `internal`.
+
+`fixtures/cores/decimal.json` holds the conformance vectors, generated from Python's `decimal` module
+by `rust/sx-cores/scripts/decimal_vectors.py`. A test regenerates them and fails when the committed
+file is stale. The Lean reference runs decimal programs with its own implementation of the core, so
+the agreement check compares two implementations.
 
 ## Budgets
 

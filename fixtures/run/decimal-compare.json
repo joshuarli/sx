@@ -1,0 +1,17 @@
+{
+  "description": "decimal.compare is -1, 0, or 1, numerically.",
+  "python": false,
+  "program": "(let [d (fn [s] (match (decimal.parse s) (some x) x none (decimal.from-int 0)))] [(decimal.compare (d \"1\") (d \"2\")) (decimal.compare (d \"2\") (d \"1.999\")) (decimal.compare (d \"1.0\") (d \"1\")) (decimal.compare (d \"-1\") (d \"-2\")) (decimal.compare (d \"-0.5\") (d \"0.5\")) (decimal.compare (d \"0\") (d \"-0\"))])",
+  "declarations": "declarations/decimal.json",
+  "allow": [],
+  "expect": {
+    "completed": [
+      -1,
+      1,
+      0,
+      1,
+      -1,
+      0
+    ]
+  }
+}

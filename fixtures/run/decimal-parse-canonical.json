@@ -1,0 +1,20 @@
+{
+  "description": "decimal.parse reads plain literals, canonicalizes them, and returns none for anything else.",
+  "python": false,
+  "program": "[(decimal.parse \"12.50\") (decimal.parse \"-0\") (decimal.parse \"007\") (decimal.parse \"1.5e3\") (decimal.parse \"\") (decimal.parse \"0.1.2\") (decimal.parse \"+1\") (decimal.parse \".5\") (decimal.parse \"5.\")]",
+  "declarations": "declarations/decimal.json",
+  "allow": [],
+  "expect": {
+    "completed": [
+      "12.5",
+      "0",
+      "7",
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  }
+}

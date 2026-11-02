@@ -1,0 +1,15 @@
+{
+  "description": "A script that calls a capability the host did not grant is rejected.",
+  "python": false,
+  "program": "(script {:inputs {:id \"String\"}} (call store.get {:id id}))",
+  "declarations": "declarations.json",
+  "allow": [],
+  "inputs": {
+    "id": "a"
+  },
+  "expect": {
+    "rejected": [
+      "unauthorized"
+    ]
+  }
+}

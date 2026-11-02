@@ -1,0 +1,7 @@
+error[script-key] 3:10-3:16
+  (script {:input {:n "Int"}} 1)
+           ^^^^^^
+  A script header has no key :input.
+  Keys: :inputs
+  Fix: :inputs
+  Help: sx help script

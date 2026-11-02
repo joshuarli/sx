@@ -1,0 +1,10 @@
+{
+  "description": "decimal.round also takes places from 0 to 38.",
+  "python": false,
+  "program": "(decimal.round (decimal.from-int 1) 100 HalfEven)",
+  "declarations": "declarations/decimal.json",
+  "allow": [],
+  "expect": {
+    "failed": "arithmetic"
+  }
+}

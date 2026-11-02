@@ -1,0 +1,4 @@
+; declarations: fixtures/check/decimal-declarations.json
+; python: no
+(script {:inputs {:price "decimal.Decimal" :mode "decimal.Rounding"}}
+  (decimal.round price 2 mode))

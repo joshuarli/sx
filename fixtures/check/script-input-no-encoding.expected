@@ -1,0 +1,11 @@
+error[no-encoding] 3:26-3:47
+  (script {:inputs {:maybe "Option<Option<Int>>" :units "Map<String, Option<Int>>"}}
+                           ^^^^^^^^^^^^^^^^^^^^^
+  Input :maybe is Option<Option<Int>>, which has no JSON encoding, because none and (some x) would both be null.
+  Help: sx help script
+
+error[no-encoding] 3:55-3:81
+  (script {:inputs {:maybe "Option<Option<Int>>" :units "Map<String, Option<Int>>"}}
+                                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  Input :units is Map<String, Option<Int>>, which has no JSON encoding, because a null value and a missing key would collide.
+  Help: sx help script

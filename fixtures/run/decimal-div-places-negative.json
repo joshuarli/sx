@@ -1,0 +1,10 @@
+{
+  "description": "Places below zero stop the program with arithmetic.",
+  "python": false,
+  "program": "(decimal.div (decimal.from-int 1) (decimal.from-int 3) -1 HalfEven)",
+  "declarations": "declarations/decimal.json",
+  "allow": [],
+  "expect": {
+    "failed": "arithmetic"
+  }
+}

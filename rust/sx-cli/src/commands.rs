@@ -4,12 +4,13 @@ use std::path::Path;
 use sx_cores::kernel::{Cores, core as builtin_core};
 use sx_kernel::authority::{Authority, GrantError, Grants};
 use sx_kernel::budgets::Budgets;
-use sx_kernel::checker::{closest, compile_source};
+use sx_kernel::checker::{closest, compile_source, input_disagreement};
 use sx_kernel::diagnostics::{Diagnostic, render};
 use sx_kernel::explain::{RUNTIME_INPUT, explain_tools};
 use sx_kernel::export::export_program;
 use sx_kernel::help::{guide, lookup, names, render_cores};
 use sx_kernel::host::{FixtureHost, run};
+use sx_kernel::inputs::{InputProblem, supply};
 use sx_kernel::ir::Program;
 use sx_kernel::json::{Json, Layout, dumps, python_repr, repr_str};
 use sx_kernel::machine::{Machine, Outcome};
@@ -249,6 +250,12 @@ fn command_program(args: &ProgramArgs, base: Registry, output: &mut Output) -> R
         output.emit(args.format, payload, render(&source, &checked.diagnostics).trim_end_matches('\n'))?;
         return Ok(EXIT_REJECTED);
     };
+    let script = checked.header_inputs;
+    if let Some(header) = &script
+        && let Some(difference) = input_disagreement(header, &inputs)
+    {
+        return Err(Stop::usage(difference));
+    }
     match &args.kind {
         ProgramKind::Check { emit_ir: true } => {
             let shown = dumps(&export_program(&program), Layout::Spaced).map_err(|e| Stop::Internal(e.to_string()))?;
@@ -261,9 +268,12 @@ fn command_program(args: &ProgramArgs, base: Registry, output: &mut Output) -> R
             output.emit(args.format, payload, &format!("ok: {result}"))?;
             Ok(EXIT_OK)
         }
-        ProgramKind::Explain => command_explain(args, &program, &registry, &grants, output),
+        ProgramKind::Explain => command_explain(args, &program, &registry, &grants, script.as_ref(), output),
         ProgramKind::Run { responses, inputs: pairs } => {
-            let values = input_values(pairs, &inputs)?;
+            let values = match &script {
+                Some(header) => script_input_values(pairs, header)?,
+                None => input_values(pairs, &inputs)?,
+            };
             match (responses.as_deref(), &args.grants) {
                 (None, Some(_)) => command_run_native(args.format, &program, &grants, &values, output),
                 (responses, _) => {
@@ -298,6 +308,7 @@ fn command_explain(
     program: &Program,
     registry: &Registry,
     grants: &Grants,
+    script: Option<&BTreeMap<String, Type>>,
     output: &mut Output,
 ) -> Result<i32, Stop> {
     let tools = explain_tools(program, registry, grants).map_err(Stop::Internal)?;
@@ -315,18 +326,42 @@ fn command_explain(
             }
         }
     }
-    let names: Vec<&str> = program.inputs.keys().map(String::as_str).collect();
-    let listed = if names.is_empty() { "none".to_string() } else { names.join(", ") };
+    let names: Vec<&str> = script.unwrap_or(&program.inputs).keys().map(String::as_str).collect();
+    let listed = match script {
+        _ if names.is_empty() => "none".to_string(),
+        Some(declared) => declared.iter().map(|(name, t)| format!("{name}: {}", show_type(t))).collect::<Vec<_>>().join(", "),
+        None => names.join(", "),
+    };
     let result = show_type(&program.result);
     lines.push(format!("inputs: {listed}"));
     lines.push(format!("result: {result}"));
-    let payload = Json::object([
+    let mut fields = vec![
         ("tools", Json::Array(tools.iter().map(|tool| tool.json()).collect())),
         ("inputs", Json::Array(names.iter().map(|n| Json::string(*n)).collect())),
-        ("result", Json::string(result.as_str())),
-    ]);
-    output.emit(args.format, payload, &lines.join("\n"))?;
+    ];
+    if let Some(declared) = script {
+        let types = declared.iter().map(|(name, t)| (name.clone(), Json::string(show_type(t)))).collect();
+        fields.push(("input_types", Json::Object(types)));
+    }
+    fields.push(("result", Json::string(result.as_str())));
+    output.emit(args.format, Json::object(fields), &lines.join("\n"))?;
     Ok(EXIT_OK)
+}
+
+fn script_input_values(pairs: &[String], header: &BTreeMap<String, Type>) -> Result<Vec<(String, Value)>, Stop> {
+    let mut supplied: Vec<(String, Json)> = Vec::new();
+    for pair in pairs {
+        let Some((name, text)) = pair.split_once('=') else {
+            return Err(Stop::usage(format!("--input takes NAME=JSON, not {}", repr_str(pair))));
+        };
+        let parsed = pyjson::parse(text).map_err(|e| Stop::usage(format!("--input {name}: {e}")))?;
+        supplied.push((name.to_string(), parsed));
+    }
+    supply(header, &supplied).map_err(|problem| match &problem {
+        InputProblem::Unknown { .. } => Stop::usage(format!("--input {problem}")),
+        InputProblem::Missing { .. } => Stop::usage(format!("{problem}; pass each as --input NAME=JSON")),
+        InputProblem::Mismatch { name, error } => Stop::usage(format!("--input {name}: {error}")),
+    })
 }
 
 fn input_values(pairs: &[String], inputs: &BTreeMap<String, Type>) -> Result<Vec<(String, Value)>, Stop> {

@@ -1,0 +1,12 @@
+{
+  "description": "A decimal is not a sort key, so sort-by on one is rejected.",
+  "python": false,
+  "program": "(let [d (fn [s] (match (decimal.parse s) (some x) x none (decimal.from-int 0)))] (sort-by (fn [x] x) [(d \"2\") (d \"1\")]))",
+  "declarations": "declarations/decimal.json",
+  "allow": [],
+  "expect": {
+    "rejected": [
+      "type-mismatch"
+    ]
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "cores": ["decimal"],
+  "capabilities": [
+    {"id": "price.get", "effect": "read", "input": "Record {sku: String}", "output": "decimal.Decimal", "description": "Reads one price."},
+    {"id": "price.list", "effect": "read", "input": "Record {}", "output": "List<decimal.Decimal>", "description": "Lists every price."},
+    {"id": "price.set", "effect": "write", "idempotent": true, "input": "Record {sku: String, price: decimal.Decimal}", "output": "Unit", "description": "Stores one price."}
+  ]
+}

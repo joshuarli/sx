@@ -1,0 +1,10 @@
+{
+  "description": "A product beyond 38 significant digits stops the program with arithmetic.",
+  "python": false,
+  "program": "(let [d (fn [s] (match (decimal.parse s) (some x) x none (decimal.from-int 0)))] (decimal.mul (d \"100000000000000000000\") (d \"100000000000000000000\")))",
+  "declarations": "declarations/decimal.json",
+  "allow": [],
+  "expect": {
+    "failed": "arithmetic"
+  }
+}

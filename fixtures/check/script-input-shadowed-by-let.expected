@@ -1,0 +1,6 @@
+error[type-mismatch] 4:26-4:31
+    (let [limit "text"] (+ limit 1)))
+                           ^^^^^
+  This is a String, but an Int is needed here.
+  Expected: Int
+  Found: String

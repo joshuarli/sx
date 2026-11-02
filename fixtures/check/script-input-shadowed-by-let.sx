@@ -1,0 +1,4 @@
+; declarations: fixtures/run/declarations.json
+; python: no
+(script {:inputs {:limit "Int"}}
+  (let [limit "text"] (+ limit 1)))

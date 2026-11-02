@@ -1,0 +1,12 @@
+{
+  "description": "A String is not a decimal, though they share a JSON form.",
+  "python": false,
+  "program": "(decimal.show \"1.5\")",
+  "declarations": "declarations/decimal.json",
+  "allow": [],
+  "expect": {
+    "rejected": [
+      "type-mismatch"
+    ]
+  }
+}

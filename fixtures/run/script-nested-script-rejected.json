@@ -1,0 +1,12 @@
+{
+  "description": "A script header is only for the whole program.",
+  "python": false,
+  "program": "(let [x 1] (script {:inputs {}} x))",
+  "declarations": "declarations.json",
+  "allow": [],
+  "expect": {
+    "rejected": [
+      "script-position"
+    ]
+  }
+}

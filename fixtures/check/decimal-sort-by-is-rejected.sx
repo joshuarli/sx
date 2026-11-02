@@ -1,0 +1,3 @@
+; declarations: fixtures/check/decimal-declarations.json
+; python: no
+(sort-by (fn [x] x) [(decimal.from-int 2) (decimal.from-int 1)])

@@ -1,0 +1,6 @@
+error[input-type] 3:27-3:40
+  (script {:inputs {:owners "List<Strng>"}}
+                            ^^^^^^^^^^^^^
+  The type of input :owners, "List<Strng>", does not parse.
+  Parser: unknown type 'Strng' in 'List<Strng>'
+  Help: sx help script

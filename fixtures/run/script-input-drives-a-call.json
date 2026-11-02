@@ -1,0 +1,47 @@
+{
+  "description": "A script's input reaches a capability call like any bound name.",
+  "python": false,
+  "program": "(script {:inputs {:id \"String\"}} (get (call store.get {:id id}) :size))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get"
+  ],
+  "inputs": {
+    "id": "a"
+  },
+  "responses": [
+    {
+      "capability": "store.get",
+      "input": {
+        "id": "a"
+      },
+      "results": [
+        {
+          "output": {
+            "id": "a",
+            "size": 7
+          }
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": 7
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "store.get",
+      "input": {
+        "id": "a"
+      }
+    },
+    {
+      "response": "r:1",
+      "output": {
+        "id": "a",
+        "size": 7
+      }
+    }
+  ]
+}

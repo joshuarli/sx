@@ -1,0 +1,19 @@
+{
+  "description": "Equal decimals group and deduplicate together, whatever their written scale.",
+  "python": false,
+  "program": "(let [d (fn [s] (match (decimal.parse s) (some x) x none (decimal.from-int 0)))] {:distinct (map decimal.show (distinct-by identity [(d \"1.50\") (d \"1.5\") (d \"2\")])) :groups (map (fn [g] (count (nth g 1))) (group-by identity [(d \"1.0\") (d \"1\") (d \"2\") (d \"1.00\")]))})",
+  "declarations": "declarations/decimal.json",
+  "allow": [],
+  "expect": {
+    "completed": {
+      "distinct": [
+        "1.5",
+        "2"
+      ],
+      "groups": [
+        3,
+        1
+      ]
+    }
+  }
+}

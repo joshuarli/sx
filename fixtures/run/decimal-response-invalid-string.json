@@ -1,0 +1,38 @@
+{
+  "description": "A string that is not a decimal literal is an invalid host response.",
+  "python": false,
+  "program": "(call price.get {:sku \"a\"})",
+  "declarations": "declarations/decimal.json",
+  "allow": [
+    "price.get"
+  ],
+  "responses": [
+    {
+      "capability": "price.get",
+      "input": {
+        "sku": "a"
+      },
+      "results": [
+        {
+          "output": "twelve"
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "failed": "invalid-host-response"
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "price.get",
+      "input": {
+        "sku": "a"
+      }
+    },
+    {
+      "response": "r:1",
+      "output": "twelve"
+    }
+  ]
+}

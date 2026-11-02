@@ -1,0 +1,10 @@
+{
+  "description": "A quotient beyond 38 digits stops the program with arithmetic.",
+  "python": false,
+  "program": "(let [d (fn [s] (match (decimal.parse s) (some x) x none (decimal.from-int 0)))] (decimal.div (d \"99999999999999999999999999999999999999\") (d \"0.5\") 0 HalfEven))",
+  "declarations": "declarations/decimal.json",
+  "allow": [],
+  "expect": {
+    "failed": "arithmetic"
+  }
+}

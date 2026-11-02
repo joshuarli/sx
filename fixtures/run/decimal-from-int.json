@@ -1,0 +1,14 @@
+{
+  "description": "decimal.from-int is exact over the whole Int range.",
+  "python": false,
+  "program": "[(decimal.from-int 0) (decimal.from-int -9223372036854775808) (decimal.from-int 9223372036854775807)]",
+  "declarations": "declarations/decimal.json",
+  "allow": [],
+  "expect": {
+    "completed": [
+      "0",
+      "-9223372036854775808",
+      "9223372036854775807"
+    ]
+  }
+}

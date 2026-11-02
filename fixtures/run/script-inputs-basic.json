@@ -1,0 +1,25 @@
+{
+  "description": "A script header declares typed inputs that the body reads by name, and a let may shadow one.",
+  "python": false,
+  "program": "(script {:inputs {:owners \"List<String>\" :limit \"Int\"}} {:n (count owners) :first (take limit owners) :shadowed (let [limit 99] limit)})",
+  "declarations": "declarations.json",
+  "allow": [],
+  "inputs": {
+    "owners": [
+      "acme",
+      "beta",
+      "cyan"
+    ],
+    "limit": 2
+  },
+  "expect": {
+    "completed": {
+      "n": 3,
+      "first": [
+        "acme",
+        "beta"
+      ],
+      "shadowed": 99
+    }
+  }
+}

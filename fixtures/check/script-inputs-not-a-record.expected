@@ -1,0 +1,6 @@
+error[script-header] 3:18-3:25
+  (script {:inputs ["Int"]} 1)
+                   ^^^^^^^
+  The value of :inputs is a record of input names and types.
+  Write: {:owners "List<String>" :limit "Int"}
+  Help: sx help script

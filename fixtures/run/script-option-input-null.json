@@ -1,0 +1,13 @@
+{
+  "description": "An Option input given as null is none.",
+  "python": false,
+  "program": "(script {:inputs {:note \"Option<String>\"}} (match note (some s) s none \"no note\"))",
+  "declarations": "declarations.json",
+  "allow": [],
+  "inputs": {
+    "note": null
+  },
+  "expect": {
+    "completed": "no note"
+  }
+}

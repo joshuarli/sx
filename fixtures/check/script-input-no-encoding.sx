@@ -1,0 +1,4 @@
+; declarations: fixtures/run/declarations.json
+; python: no
+(script {:inputs {:maybe "Option<Option<Int>>" :units "Map<String, Option<Int>>"}}
+  1)

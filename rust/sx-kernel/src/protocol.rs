@@ -5,9 +5,10 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use crate::authority::{Authority, GrantError, Grants, Screen, Verdict};
 use crate::budgets::Budgets;
-use crate::checker::compile_source;
+use crate::checker::{compile_source, input_disagreement};
 use crate::explain::explain_tools;
 use crate::diagnostics::{Diagnostic, render};
+use crate::inputs::supply;
 use crate::ir::Program;
 use crate::json::{Json, Layout, dumps, parse, repr_str};
 use crate::machine::{CoreImplementations, Failure, Machine, Outcome, Request, Response};
@@ -300,19 +301,44 @@ fn request_json(request: &Request) -> Json {
     }
 }
 
-pub fn explain_report(program: &Program, registry: &Registry, grants: &Grants) -> Result<Json, String> {
+pub fn explain_report(
+    program: &Program,
+    registry: &Registry,
+    grants: &Grants,
+    script: Option<&BTreeMap<String, Type>>,
+) -> Result<Json, String> {
     let tools = explain_tools(program, registry, grants)?;
-    Ok(Json::object([
+    let names = script.unwrap_or(&program.inputs);
+    let mut fields = vec![
         ("type", Json::string("explained")),
         ("tools", Json::Array(tools.iter().map(|tool| tool.json()).collect())),
-        ("inputs", Json::Array(program.inputs.keys().map(|name| Json::string(name.as_str())).collect())),
-        ("result", Json::string(show_type(&program.result))),
-    ]))
+        ("inputs", Json::Array(names.keys().map(|name| Json::string(name.as_str())).collect())),
+    ];
+    if let Some(declared) = script {
+        let types = declared.iter().map(|(name, t)| (name.clone(), Json::string(show_type(t)))).collect();
+        fields.push(("input_types", Json::Object(types)));
+    }
+    fields.push(("result", Json::string(show_type(&program.result))));
+    Ok(Json::object(fields))
 }
 
 pub struct Declared {
     pub registry: Registry,
     pub inputs: BTreeMap<String, Type>,
+}
+
+enum DeclaredInputs {
+    Host(BTreeMap<String, Type>),
+    Script(BTreeMap<String, Type>),
+}
+
+impl DeclaredInputs {
+    fn script(&self) -> Option<&BTreeMap<String, Type>> {
+        match self {
+            DeclaredInputs::Script(header) => Some(header),
+            DeclaredInputs::Host(_) => None,
+        }
+    }
 }
 
 fn invalid_declarations(message: impl Into<String>) -> ProtocolError {
@@ -363,7 +389,7 @@ pub fn declare(declarations: &Json, library: &dyn CoreLibrary) -> Result<Declare
 
 enum Compiled {
     Rejected(Json),
-    Ready { program: Box<Program>, declared: BTreeMap<String, Type>, registry: Box<Registry>, grants: Box<Grants> },
+    Ready { program: Box<Program>, declared: DeclaredInputs, registry: Box<Registry>, grants: Box<Grants> },
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -408,12 +434,18 @@ fn compile(
     };
     let checked = compile_source(&source.text, &registry, authority, &inputs, budgets);
     match checked.program {
-        Some(program) => Ok(Compiled::Ready {
-            program: Box::new(program),
-            declared: inputs,
-            registry: Box::new(registry),
-            grants: Box::new(grants),
-        }),
+        Some(program) => {
+            let declared = match checked.header_inputs {
+                Some(header) => {
+                    if let Some(difference) = input_disagreement(&header, &inputs) {
+                        return Err(invalid_declarations(difference));
+                    }
+                    DeclaredInputs::Script(header)
+                }
+                None => DeclaredInputs::Host(inputs),
+            };
+            Ok(Compiled::Ready { program: Box::new(program), declared, registry: Box::new(registry), grants: Box::new(grants) })
+        }
         None => Ok(Compiled::Rejected(Json::object([
             ("type", Json::string("rejected")),
             ("diagnostics", Json::Array(checked.diagnostics.iter().map(diagnostic_json).collect())),
@@ -422,13 +454,17 @@ fn compile(
     }
 }
 
-fn values_of(declared: &BTreeMap<String, Type>, supplied: &[(String, Json)]) -> Result<Vec<(String, Value)>, ProtocolError> {
+fn values_of(declared: &DeclaredInputs, supplied: &[(String, Json)]) -> Result<Vec<(String, Value)>, ProtocolError> {
     let invalid = |message: String| ProtocolError::new(ErrorCode::InvalidInput, message);
-    if let Some((name, _)) = supplied.iter().find(|(name, _)| !declared.contains_key(name)) {
+    let host = match declared {
+        DeclaredInputs::Script(header) => return supply(header, supplied).map_err(|problem| invalid(problem.to_string())),
+        DeclaredInputs::Host(host) => host,
+    };
+    if let Some((name, _)) = supplied.iter().find(|(name, _)| !host.contains_key(name)) {
         return Err(invalid(format!("input {name} is not declared in the declarations' inputs")));
     }
     let mut values = Vec::new();
-    for (name, t) in declared {
+    for (name, t) in host {
         let given = supplied
             .iter()
             .find(|(n, _)| n == name)
@@ -588,7 +624,7 @@ impl<R: BufRead, W: Write> Session<'_, R, W> {
         let library = self.library;
         let reply = guarded(|| match compile(source, Purpose::Explain, Budgets::default(), library)? {
             Compiled::Rejected(rejection) => Ok(rejection),
-            Compiled::Ready { program, registry, grants, .. } => explain_report(&program, &registry, &grants)
+            Compiled::Ready { program, declared, registry, grants } => explain_report(&program, &registry, &grants, declared.script())
                 .map_err(|message| ProtocolError::new(ErrorCode::Internal, message)),
         });
         match reply.and_then(|inner| inner) {

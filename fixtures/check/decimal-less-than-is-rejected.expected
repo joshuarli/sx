@@ -1,0 +1,6 @@
+error[type-mismatch] 3:4-3:24
+  (< (decimal.from-int 1) (decimal.from-int 2))
+     ^^^^^^^^^^^^^^^^^^^^
+  < compares integers, floats, or strings, but this is a decimal.Decimal.
+  Compare two decimal.Decimal with decimal.compare.
+  Help: sx help <

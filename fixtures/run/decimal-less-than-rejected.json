@@ -1,0 +1,12 @@
+{
+  "description": "< does not order decimals.",
+  "python": false,
+  "program": "(< (decimal.from-int 1) (decimal.from-int 2))",
+  "declarations": "declarations/decimal.json",
+  "allow": [],
+  "expect": {
+    "rejected": [
+      "type-mismatch"
+    ]
+  }
+}

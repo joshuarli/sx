@@ -1,0 +1,13 @@
+{
+  "description": "A JSON number is not a decimal input.",
+  "python": false,
+  "program": "(script {:inputs {:price \"decimal.Decimal\"}} price)",
+  "declarations": "declarations/decimal.json",
+  "allow": [],
+  "inputs": {
+    "price": 12.5
+  },
+  "expect": {
+    "invalid-input": "$price: expected decimal.Decimal (a string), found a number with a fraction"
+  }
+}

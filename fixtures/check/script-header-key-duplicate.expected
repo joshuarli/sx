@@ -1,0 +1,5 @@
+error[duplicate-field] 3:29-3:36
+  (script {:inputs {:n "Int"} :inputs {:m "Int"}} n)
+                              ^^^^^^^
+  The field :inputs appears twice in this record.
+  First use: 3:10

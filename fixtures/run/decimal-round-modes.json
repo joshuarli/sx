@@ -1,0 +1,75 @@
+{
+  "description": "Each rounding mode on ties, near-ties, and exact values, in the order HalfEven HalfUp Down Up Floor Ceiling.",
+  "python": false,
+  "program": "(let [d (fn [s] (match (decimal.parse s) (some x) x none (decimal.from-int 0)))\n      modes [HalfEven HalfUp Down Up Floor Ceiling]\n      row (fn [s places] (map (fn [m] (decimal.show (decimal.round (d s) places m))) modes))]\n  [(row \"2.5\" 0) (row \"-2.5\" 0) (row \"3.5\" 0) (row \"0.125\" 2) (row \"-0.125\" 2) (row \"2.51\" 1) (row \"-2.49\" 0) (row \"7\" 2)])",
+  "declarations": "declarations/decimal.json",
+  "allow": [],
+  "expect": {
+    "completed": [
+      [
+        "2",
+        "3",
+        "2",
+        "3",
+        "2",
+        "3"
+      ],
+      [
+        "-2",
+        "-3",
+        "-2",
+        "-3",
+        "-3",
+        "-2"
+      ],
+      [
+        "4",
+        "4",
+        "3",
+        "4",
+        "3",
+        "4"
+      ],
+      [
+        "0.12",
+        "0.13",
+        "0.12",
+        "0.13",
+        "0.12",
+        "0.13"
+      ],
+      [
+        "-0.12",
+        "-0.13",
+        "-0.12",
+        "-0.13",
+        "-0.13",
+        "-0.12"
+      ],
+      [
+        "2.5",
+        "2.5",
+        "2.5",
+        "2.6",
+        "2.5",
+        "2.6"
+      ],
+      [
+        "-2",
+        "-2",
+        "-2",
+        "-3",
+        "-3",
+        "-2"
+      ],
+      [
+        "7",
+        "7",
+        "7",
+        "7",
+        "7",
+        "7"
+      ]
+    ]
+  }
+}

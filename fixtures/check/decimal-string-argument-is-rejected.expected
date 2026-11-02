@@ -1,0 +1,7 @@
+error[type-mismatch] 3:35-3:38
+  (decimal.add (decimal.from-int 1) "2")
+                                    ^^^
+  decimal.add takes a decimal.Decimal here, but this is a String.
+  Expected: decimal.Decimal
+  Found: String
+  Help: sx help decimal.add

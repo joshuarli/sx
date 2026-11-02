@@ -1,0 +1,6 @@
+error[input-type] 3:22-3:25
+  (script {:inputs {:n Int}}
+                       ^^^
+  The type of input :n must be a string literal, such as "List<String>".
+  A header states each type in the declaration type language, as text.
+  Help: sx help script

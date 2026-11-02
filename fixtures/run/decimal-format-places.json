@@ -1,0 +1,19 @@
+{
+  "description": "decimal.format writes exactly the places asked, rounding half to even.",
+  "python": false,
+  "program": "(let [d (fn [s] (match (decimal.parse s) (some x) x none (decimal.from-int 0)))] [(decimal.format (d \"2.675\") 2) (decimal.format (d \"0.125\") 2) (decimal.format (d \"5\") 3) (decimal.format (d \"-0.001\") 2) (decimal.format (d \"1234.5\") 0) (decimal.format (d \"1235.5\") 0) (decimal.format (d \"12.5\") 0) (decimal.format (d \"-7.10\") 1)])",
+  "declarations": "declarations/decimal.json",
+  "allow": [],
+  "expect": {
+    "completed": [
+      "2.68",
+      "0.12",
+      "5.000",
+      "0.00",
+      "1234",
+      "1236",
+      "12",
+      "-7.1"
+    ]
+  }
+}

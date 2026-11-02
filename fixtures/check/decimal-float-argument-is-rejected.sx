@@ -1,0 +1,3 @@
+; declarations: fixtures/check/decimal-declarations.json
+; python: no
+(decimal.from-int 1.5)

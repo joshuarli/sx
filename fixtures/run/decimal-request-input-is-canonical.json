@@ -1,0 +1,40 @@
+{
+  "description": "A decimal sent to a capability is written in canonical form.",
+  "python": false,
+  "program": "(let [p (decimal.mul (decimal.from-int 3) (decimal.div (decimal.from-int 1) (decimal.from-int 4) 4 Down))] (call price.set {:sku \"a\" :price p}))",
+  "declarations": "declarations/decimal.json",
+  "allow": [
+    "price.set"
+  ],
+  "responses": [
+    {
+      "capability": "price.set",
+      "input": {
+        "sku": "a",
+        "price": "0.75"
+      },
+      "results": [
+        {
+          "output": null
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": null
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "price.set",
+      "input": {
+        "sku": "a",
+        "price": "0.75"
+      }
+    },
+    {
+      "response": "r:1",
+      "output": null
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "description": "A literal beyond 38 significant digits is refused.",
+  "python": false,
+  "program": "(script {:inputs {:price \"decimal.Decimal\"}} price)",
+  "declarations": "declarations/decimal.json",
+  "allow": [],
+  "inputs": {
+    "price": "111111111111111111111111111111111111111"
+  },
+  "expect": {
+    "invalid-input": "$price: expected decimal.Decimal, found a string that is not valid"
+  }
+}

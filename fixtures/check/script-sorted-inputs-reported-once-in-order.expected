@@ -1,0 +1,13 @@
+error[input-type] 3:22-3:28
+  (script {:inputs {:b "Nope" :a "Nada"}} 1)
+                       ^^^^^^
+  The type of input :b, "Nope", does not parse.
+  Parser: unknown type 'Nope' in 'Nope'
+  Help: sx help script
+
+error[input-type] 3:32-3:38
+  (script {:inputs {:b "Nope" :a "Nada"}} 1)
+                                 ^^^^^^
+  The type of input :a, "Nada", does not parse.
+  Parser: unknown type 'Nada' in 'Nada'
+  Help: sx help script

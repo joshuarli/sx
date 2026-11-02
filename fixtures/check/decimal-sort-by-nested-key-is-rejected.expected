@@ -1,0 +1,8 @@
+error[type-mismatch] 3:10-3:24
+  (sort-by (fn [x] [1 x]) [(decimal.from-int 2) (decimal.from-int 1)])
+           ^^^^^^^^^^^^^^
+  sort-by needs a key that is an Int, Float, String, Bool, or a tuple of them.
+  Expected: a sort key
+  Found: Tuple<Int, decimal.Decimal>
+  decimal.Decimal is not a sort key, because its text does not order like its value. Compare two with decimal.compare.
+  Help: sx help sort-by

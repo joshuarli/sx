@@ -1,0 +1,15 @@
+{
+  "description": "decimal.to-float gives the nearest Float.",
+  "python": false,
+  "program": "(let [d (fn [s] (match (decimal.parse s) (some x) x none (decimal.from-int 0)))] [(decimal.to-float (d \"0.1\")) (decimal.to-float (d \"-2.5\")) (decimal.to-float (decimal.div (decimal.from-int 1) (decimal.from-int 3) 20 HalfEven)) (decimal.to-float (decimal.from-int 3))])",
+  "declarations": "declarations/decimal.json",
+  "allow": [],
+  "expect": {
+    "completed": [
+      0.1,
+      -2.5,
+      0.3333333333333333,
+      3.0
+    ]
+  }
+}

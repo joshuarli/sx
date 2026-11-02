@@ -1,0 +1,3 @@
+; declarations: fixtures/run/declarations.json
+; python: no
+(script {:inputs {:match "Int" :none "Int" :script "Int"}} 1)

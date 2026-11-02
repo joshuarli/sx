@@ -16,6 +16,10 @@ use crate::types::{type_depth,
 };
 use crate::values::{MapValue, Value, show_value};
 
+mod script;
+
+pub use script::disagreement as input_disagreement;
+
 const SPECIAL_FORMS: [&str; 18] = [
     "let", "if", "cond", "match", "fn", "get", "call", "attempt", "retry", "wait-until", "loop", "recur", "par",
     "par-map", "some", "ok", "err", "sleep",
@@ -405,6 +409,13 @@ fn empty_lambda(span: Span, captured: Option<String>) -> Lambda {
 pub struct CheckResult {
     pub program: Option<ir::Program>,
     pub diagnostics: Vec<Diagnostic>,
+    pub header_inputs: Option<BTreeMap<String, Type>>,
+}
+
+impl CheckResult {
+    fn rejected(diagnostics: Vec<Diagnostic>) -> CheckResult {
+        CheckResult { program: None, diagnostics, header_inputs: None }
+    }
 }
 
 struct FunctionBinding<'a> {
@@ -1444,6 +1455,10 @@ impl<'r> Checker<'r> {
         let name = symbol(head).unwrap_or("?");
         let found = habit_head(name);
         let construct = found.map(|(c, _)| c);
+        if name == script::SCRIPT {
+            self.report(script::position_diagnostic(head.span));
+            return self.placeholder(span);
+        }
         for item in &items[1..] {
             if construct == Some("defn") || (construct == Some("assoc") && keyword(item).is_some()) {
                 continue;
@@ -4006,7 +4021,7 @@ pub fn check(
         Ok(result) => result,
         Err(error) => {
             let message = format!("The checker could not start a thread for this program: {error}.");
-            CheckResult { program: None, diagnostics: vec![Diagnostic::new("too-large", program.span, message)] }
+            CheckResult::rejected(vec![Diagnostic::new("too-large", program.span, message)])
         }
     }
 }
@@ -4040,11 +4055,29 @@ fn elaborate(
         nesting: 0,
         overflowed: std::cell::Cell::new(false),
     };
+    let mut declared: BTreeMap<String, Type> = inputs.clone();
+    let mut header_inputs = None;
+    let mut body_node = program;
+    let mut unusable: Vec<String> = Vec::new();
+    if script::is_script(program) {
+        let read = script::read(program, registry);
+        checker.diagnostics.extend(read.diagnostics);
+        let Some(body) = read.body else {
+            return CheckResult::rejected(checker.diagnostics);
+        };
+        body_node = body;
+        declared = read.inputs.iter().cloned().collect();
+        header_inputs = Some(declared.clone());
+        unusable = read.unusable;
+    }
     let mut scope = Scope::default();
-    for (name, t) in inputs {
+    for (name, t) in &declared {
         scope = scope.value(name, t.clone());
     }
-    let (mut body, result) = checker.check(program, None, &scope);
+    for name in &unusable {
+        scope = scope.value(name, Type::Never);
+    }
+    let (mut body, result) = checker.check(body_node, None, &scope);
     drop(scope);
     checker.check_presence_tests();
     checker.check_late_sort_keys();
@@ -4061,7 +4094,7 @@ fn elaborate(
             );
             diagnostics.push(Diagnostic::new("too-large", program.span, message));
         }
-        return CheckResult { program: None, diagnostics };
+        return CheckResult::rejected(diagnostics);
     }
     if let Some(problem) = encodable_problem(&result) {
         let reason = problem.split_once(" has no JSON encoding").map_or("", |(_, reason)| reason);
@@ -4077,9 +4110,9 @@ fn elaborate(
     }
     diagnostics.sort_by_key(|d| (d.span.start.line, d.span.start.column));
     if !diagnostics.is_empty() {
-        return CheckResult { program: None, diagnostics };
+        return CheckResult::rejected(diagnostics);
     }
-    let used_inputs: BTreeMap<String, Type> = inputs
+    let used_inputs: BTreeMap<String, Type> = declared
         .iter()
         .filter(|(name, _)| checker.inputs_used.contains(*name))
         .map(|(name, t)| (name.clone(), t.clone()))
@@ -4115,7 +4148,7 @@ fn elaborate(
         signatures,
     };
     program.enums = crate::export::referenced_enums(&program);
-    CheckResult { program: Some(program), diagnostics: Vec::new() }
+    CheckResult { program: Some(program), diagnostics: Vec::new(), header_inputs }
 }
 
 pub fn compile_source(
@@ -4130,11 +4163,11 @@ pub fn compile_source(
         let start = crate::syntax::Position { line: 1, column: 1 };
         let message =
             format!("The program is {size} bytes, more than the source-bytes budget of {}.", budgets.source_bytes);
-        return CheckResult { program: None, diagnostics: vec![Diagnostic::new("too-large", Span::new(start, start), message)] };
+        return CheckResult::rejected(vec![Diagnostic::new("too-large", Span::new(start, start), message)]);
     }
     let read = crate::reader::read(source);
     match read.program {
-        None => CheckResult { program: None, diagnostics: read.diagnostics },
+        None => CheckResult::rejected(read.diagnostics),
         Some(program) => check(&program, registry, authority, inputs, budgets),
     }
 }

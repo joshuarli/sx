@@ -1,0 +1,19 @@
+{
+  "description": "A script takes decimals as JSON strings and canonicalizes them.",
+  "python": false,
+  "program": "(script {:inputs {:price \"decimal.Decimal\" :qty \"Int\" :tax \"Option<decimal.Decimal>\"}} (let [net (decimal.mul price (decimal.from-int qty))] {:net net :gross (match tax (some t) (decimal.add net t) none net) :shown (decimal.format net 2)}))",
+  "declarations": "declarations/decimal.json",
+  "allow": [],
+  "inputs": {
+    "price": "12.50",
+    "qty": 3,
+    "tax": "0.375"
+  },
+  "expect": {
+    "completed": {
+      "net": "37.5",
+      "gross": "37.875",
+      "shown": "37.50"
+    }
+  }
+}

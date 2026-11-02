@@ -34,5 +34,8 @@ The line is the last header line: it follows the `; task:` or `; declarations:` 
 Rust check test compares its rendered diagnostics with the `.expected` file, as for every fixture.
 The command-line comparison against Python skips it.
 
+A `; declarations:` line may name a declarations file that lists `cores`. `fixtures/check/decimal-declarations.json`
+registers the `decimal` core for the fixtures that need its types. Only Rust loads cores from declarations.
+
 A reader treats the whole file as the program, so the header lines are comments in it and a
 diagnostic's line numbers count them.

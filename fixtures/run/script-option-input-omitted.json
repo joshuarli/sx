@@ -1,0 +1,16 @@
+{
+  "description": "An Option input that is left out is none.",
+  "python": false,
+  "program": "(script {:inputs {:note \"Option<String>\" :limit \"Int\"}} {:note (match note (some s) s none \"no note\") :limit limit})",
+  "declarations": "declarations.json",
+  "allow": [],
+  "inputs": {
+    "limit": 1
+  },
+  "expect": {
+    "completed": {
+      "note": "no note",
+      "limit": 1
+    }
+  }
+}

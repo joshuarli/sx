@@ -1,0 +1,16 @@
+{
+  "description": "An input that does not match its declared type is refused before the run.",
+  "python": false,
+  "program": "(script {:inputs {:owners \"List<String>\"}} (count owners))",
+  "declarations": "declarations.json",
+  "allow": [],
+  "inputs": {
+    "owners": [
+      "a",
+      2
+    ]
+  },
+  "expect": {
+    "invalid-input": "$owners[1]: expected String, found an integer"
+  }
+}

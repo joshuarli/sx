@@ -1,0 +1,8 @@
+error[type-mismatch] 3:19-3:22
+  (decimal.from-int 1.5)
+                    ^^^
+  decimal.from-int takes an Int here, but this is a Float.
+  Expected: Int
+  Found: Float
+  Sx does not convert between number types. (round x), (floor x), and (ceil x) turn a Float into an Int.
+  Help: sx help decimal.from-int

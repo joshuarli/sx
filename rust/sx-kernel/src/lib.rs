@@ -8,6 +8,7 @@ pub mod explain;
 pub mod export;
 pub mod help;
 pub mod host;
+pub mod inputs;
 pub mod ir;
 pub mod json;
 pub mod machine;

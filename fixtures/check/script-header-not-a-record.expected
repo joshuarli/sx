@@ -1,0 +1,6 @@
+error[script-header] 3:9-3:18
+  (script [:inputs] 1)
+          ^^^^^^^^^
+  The header of a script is a record literal.
+  Write: (script {:inputs {:name "Type"}} body)
+  Help: sx help script

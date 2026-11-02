@@ -1,0 +1,42 @@
+{
+  "description": "One bad element makes the whole list an invalid host response.",
+  "python": false,
+  "program": "(call price.list {})",
+  "declarations": "declarations/decimal.json",
+  "allow": [
+    "price.list"
+  ],
+  "responses": [
+    {
+      "capability": "price.list",
+      "input": {},
+      "results": [
+        {
+          "output": [
+            "1.5",
+            "2.",
+            "3"
+          ]
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "failed": "invalid-host-response"
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "price.list",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": [
+        "1.5",
+        "2.",
+        "3"
+      ]
+    }
+  ]
+}

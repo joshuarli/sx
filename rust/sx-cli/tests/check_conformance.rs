@@ -15,6 +15,8 @@ use sx_kernel::host::{FixtureHost, parse_result, run};
 use sx_kernel::json::{Json, Layout, dumps, parse, python_equal};
 use sx_kernel::machine::{Machine, Outcome, Response};
 use sx_kernel::registry::{Registry, load_declarations};
+use sx_kernel::types::Type;
+use sx_kernel::values::{Value, decode};
 
 mod common;
 use common::{json_case_runs_in_python, source_runs_in_python};
@@ -108,6 +110,10 @@ fn registry_for(spec: &Spec) -> Registry {
         Spec::Declarations(path) => {
             let declarations = read_json(&root().join(path));
             let mut registry = Registry::new();
+            for id in declarations.get("cores").and_then(Json::as_array).into_iter().flatten() {
+                let core = id.as_str().and_then(sx_cores::kernel::core).unwrap_or_else(|| panic!("{path}: unknown core {id:?}"));
+                registry.add_core(core).unwrap_or_else(|e| panic!("{path}: {e}"));
+            }
             for id in declarations.get("packs").and_then(Json::as_array).into_iter().flatten() {
                 let pack = id.as_str().and_then(sx_packs::pack).unwrap_or_else(|| panic!("{path}: unknown pack {id:?}"));
                 registry.add_pack(pack).unwrap_or_else(|e| panic!("{path}: {e}"));
@@ -382,12 +388,30 @@ fn expectation(outcome: &Outcome) -> Json {
     }
 }
 
+fn fixture_inputs(program: &sx_kernel::ir::Program, fixture: &Json) -> Result<Vec<(String, Value)>, String> {
+    let given = fixture.get("inputs").and_then(Json::as_object).unwrap_or_default();
+    if let Some((name, _)) = given.iter().find(|(name, _)| !program.inputs.contains_key(name)) {
+        return Err(format!("{name} is not an input of the script"));
+    }
+    let mut values = Vec::new();
+    for (name, declared) in &program.inputs {
+        let value = match given.iter().find(|(held, _)| held == name) {
+            Some((_, json)) => decode(json, declared, &format!("${name}")).map_err(|e| e.to_string())?,
+            None if matches!(declared, Type::Option(_)) => Value::None,
+            None => return Err(format!("the script needs a value for input {name}")),
+        };
+        values.push((name.clone(), value));
+    }
+    Ok(values)
+}
+
 fn run_rust(program: &sx_kernel::ir::Program, case: &RunCase) -> Result<(), String> {
     let fixture = &case.fixture;
     let budgets = case.case.budgets();
     let cores = Cores;
+    let inputs = fixture_inputs(program, fixture)?;
     let (outcome, trace) = if let Some(steps) = fixture.get("steps").and_then(Json::as_array) {
-        let mut machine = Machine::new(program, &[], budgets, &cores);
+        let mut machine = Machine::new(program, &inputs, budgets, &cores);
         let mut outcome = machine.start();
         for step in steps {
             let Outcome::Suspended(requests) = &outcome else {
@@ -416,7 +440,7 @@ fn run_rust(program: &sx_kernel::ir::Program, case: &RunCase) -> Result<(), Stri
             FixtureHost::from_responses(&program.signatures.capabilities, &responses).map_err(|e| e.to_string())?;
         let registry = registry_for(&case.case.spec);
         let grants = grants_for(&case.case, &registry);
-        let finished = run(program, &grants, &mut host, &[], budgets, &cores).map_err(|e| format!("unexpected call: {e}"))?;
+        let finished = run(program, &grants, &mut host, &inputs, budgets, &cores).map_err(|e| format!("unexpected call: {e}"))?;
         let trace = finished.machine.trace().to_vec();
         (finished.outcome, trace)
     };
@@ -433,10 +457,20 @@ fn run_rust(program: &sx_kernel::ir::Program, case: &RunCase) -> Result<(), Stri
     Ok(())
 }
 
+fn invalid_input(fixture: &Json) -> Option<&str> {
+    fixture.get("expect").and_then(|e| e.get("invalid-input")).and_then(Json::as_str)
+}
+
 fn judge_alone(case: &RunCase) -> Result<(), String> {
     let (rust, program) = rust_check(&case.case);
     let wanted = case.fixture.get("expect").and_then(|e| e.get("rejected"));
     match (&rust, program) {
+        (Checked::Accepted { .. }, Some(program)) if wanted.is_none() && invalid_input(&case.fixture).is_some() => {
+            match (fixture_inputs(&program, &case.fixture), invalid_input(&case.fixture)) {
+                (Err(message), Some(wanted)) if message.contains(wanted) => Ok(()),
+                (other, _) => Err(format!("the inputs gave {other:?}, but the fixture expects an invalid input")),
+            }
+        }
         (Checked::Accepted { .. }, Some(program)) if wanted.is_none() => run_rust(&program, case),
         (Checked::Rejected { codes, .. }, _) => {
             let listed = Json::Array(codes.iter().map(|c| Json::string(c.as_str())).collect());
@@ -729,7 +763,7 @@ fn corpus() -> Vec<Case> {
         let source = fs::read_to_string(&path).expect("cli fixture");
         seeds.push(Case::new(format!("cli-{}", stem(&path)), source, Spec::Declarations("fixtures/cli/declarations.json".to_string())));
     }
-    seeds.extend(run_cases().into_iter().map(|c| c.case));
+    seeds.extend(run_cases().into_iter().filter(|c| json_case_runs_in_python(&c.fixture)).map(|c| c.case));
     seeds.extend(example_cases());
     let declarations = Spec::Declarations("fixtures/run/declarations.json".to_string());
     for depth in [100, 127, 128, 129, 300, 2_000, 20_000] {

@@ -1,0 +1,16 @@
+{
+  "description": "Decimal addition, subtraction, and multiplication are exact, unlike Float.",
+  "python": false,
+  "program": "(let [d (fn [s] (match (decimal.parse s) (some x) x none (decimal.from-int 0)))] {:sum (decimal.add (d \"0.1\") (d \"0.2\")) :float (= (+ 0.1 0.2) 0.3) :diff (decimal.sub (d \"1\") (d \"0.0001\")) :product (decimal.mul (d \"1.5\") (d \"-2.25\")) :zero (decimal.sub (d \"1.5\") (d \"1.50\"))})",
+  "declarations": "declarations/decimal.json",
+  "allow": [],
+  "expect": {
+    "completed": {
+      "sum": "0.3",
+      "float": false,
+      "diff": "0.9999",
+      "product": "-3.375",
+      "zero": "0"
+    }
+  }
+}

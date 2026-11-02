@@ -62,7 +62,7 @@ Each command takes `--format json`.
 
 `rust/` holds the same command line as a Rust binary, `sx`, with the same options, exit codes, and
 output as the Python one. Build it with `cargo build --release --manifest-path rust/Cargo.toml -p sx-cli`.
-Two things differ on purpose. The Rust binary reads `"cores": ["text", "semver", "git", "github"]` in a
+Two things differ on purpose. The Rust binary reads `"cores": ["text", "semver", "git", "github", "decimal"]` in a
 declarations file and registers those built-in cores, where the Python command refuses. And it
 validates declarations more strictly than Python's duck typing does, for example `"types": []`.
 `rust/sx-cli/tests/cli_parity.rs` runs every `tests/test_cli.py` scenario, every `fixtures/cli`
@@ -90,6 +90,35 @@ each call site's verdict, or `checked per request` for a computed path. `run` wi
 `--responses` reads and writes the files for real, and refuses each out-of-scope request with
 `PermissionDenied` before it touches the file system. With `--responses` it answers from the recorded
 responses, after the same refusal. [docs/language.md](docs/language.md#grants-and-scopes) has the rules.
+
+## Scripts and decimals
+
+A program may declare its own typed inputs, so it runs with no declarations file. This works on the Rust
+binary only.
+
+```sh
+cat > report.sx <<'EOF'
+(script {:inputs {:owners "List<String>" :limit "Int"}}
+  (take limit owners))
+EOF
+sx run report.sx --input 'owners=["acme","beta","cyan"]' --input limit=2
+sx explain report.sx
+sx help script
+```
+
+Each `--input NAME=JSON` is decoded against the header's type. A missing required input lists the required
+inputs and their types; an `Option` input may be left out. A header declares no authority, so a script that
+calls a capability still needs the host's grant. The optional `decimal` core adds exact decimals, which
+travel as JSON strings and are never sort keys:
+
+```sh
+echo '{"cores": ["decimal"]}' > decimal.json
+echo '(script {:inputs {:price "decimal.Decimal"}} (decimal.format (decimal.mul price price) 2))' > square.sx
+sx run square.sx --declarations decimal.json --input 'price="12.50"'
+```
+
+[docs/language.md](docs/language.md#scripts) has the rules, and
+[the decimal core](docs/language.md#the-decimal-core) its functions and limits.
 
 ## Verify
 

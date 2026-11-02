@@ -1,0 +1,6 @@
+error[script-position] 4:4-4:10
+    (script {:inputs {}} 1))
+     ^^^^^^
+  script is the header of a whole program, so only the outermost form can be one.
+  Write: (script {:inputs {:name "Type"}} body)
+  Help: sx help script

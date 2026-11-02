@@ -104,6 +104,14 @@ pub static PRELUDE: [Entry; 44] = [
     entry("group-by", "(group-by f xs) -> List<Tuple<K, List<T>>>", "Groups elements by key, as [key items] tuples in first-seen order.", "(group-by (fn [x] (rem x 2)) [1 2 3])", "[[1 [1 3]] [0 [2]]]"),
 ];
 
+pub static EXTENSIONS: [Entry; 1] = [entry(
+    "script",
+    "(script {:inputs {:name \"Type\" ...}} body)",
+    "The outermost form of a program that declares its own typed inputs, so it needs no host to declare them. Each type is a string in the declaration type language, such as \"List<String>\" or \"Option<Int>\", and the body reads each input by name. A header declares no authority. An Option input may be left out when running and is then none. Run this example with: sx run report.sx --input 'owners=[\"acme\",\"beta\",\"cyan\"]' --input limit=2",
+    "(script {:inputs {:owners \"List<String>\" :limit \"Int\"}} (take limit owners))",
+    "[\"acme\" \"beta\"]",
+)];
+
 pub fn types() -> Vec<Entry> {
     let kinds = CallErrorKind::ALL.map(CallErrorKind::name).join(", ");
     vec![
@@ -218,6 +226,10 @@ pub fn lookup_entry(name: &str) -> Option<String> {
     entries().iter().find(|e| e.name == name).map(render_entry)
 }
 
+pub fn lookup_extension(name: &str) -> Option<String> {
+    EXTENSIONS.iter().find(|e| e.name == name).map(render_entry)
+}
+
 pub fn not_found_message(name: &str, candidates: &[String]) -> String {
     let hint = crate::checker::closest(name, candidates).map(|s| format!(" Did you mean {s}?")).unwrap_or_default();
     format!("sx help: nothing is named {name}.{hint}")
@@ -287,6 +299,9 @@ fn named_types(types: &[&Type], registry: &Registry) -> Vec<String> {
         match t {
             Type::Enum(enumeration) => lines.push(format!("{name} = {}", variants_text(&enumeration.variants))),
             Type::Record(_) => lines.push(format!("{name} = {}", show_definition(t))),
+            Type::Nominal(nominal) if nominal.validation.is_some() => {
+                lines.push(format!("{name} = {}", show_definition(t)));
+            }
             _ => {}
         }
     }
@@ -335,7 +350,7 @@ pub fn render_cores(registry: &Registry) -> String {
 }
 
 pub fn lookup(name: &str, registry: &Registry) -> Option<String> {
-    if let Some(found) = lookup_entry(name) {
+    if let Some(found) = lookup_entry(name).or_else(|| lookup_extension(name)) {
         return Some(found);
     }
     if let Some(core) = registry.core(name) {
@@ -357,6 +372,7 @@ pub fn lookup(name: &str, registry: &Registry) -> Option<String> {
 
 pub fn names(registry: &Registry) -> Vec<String> {
     let mut found = entry_names();
+    found.extend(EXTENSIONS.iter().map(|e| e.name.to_string()));
     found.extend(registry.cores().map(|core| core.id.clone()));
     found.extend(registry.functions().map(|function| function.name.clone()));
     found.extend(registry.capabilities().map(|capability| capability.id.clone()));

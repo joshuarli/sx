@@ -1,0 +1,20 @@
+error[reserved-name] 3:19-3:25
+  (script {:inputs {:match "Int" :none "Int" :script "Int"}} 1)
+                    ^^^^^^
+  match is the name of a form, so it cannot name an input.
+  Fix: :matched
+  Help: sx help script
+
+error[reserved-name] 3:32-3:37
+  (script {:inputs {:match "Int" :none "Int" :script "Int"}} 1)
+                                 ^^^^^
+  none is the name of a form, so it cannot name an input.
+  Fix: :missing
+  Help: sx help script
+
+error[reserved-name] 3:44-3:51
+  (script {:inputs {:match "Int" :none "Int" :script "Int"}} 1)
+                                             ^^^^^^^
+  script is the name of a form, so it cannot name an input.
+  Fix: :scripts
+  Help: sx help script

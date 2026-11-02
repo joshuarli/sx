@@ -1,0 +1,5 @@
+error[unknown-name] 4:10-4:15
+    (count owner))
+           ^^^^^
+  owner is not defined here.
+  Fix: owners

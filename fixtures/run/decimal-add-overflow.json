@@ -1,0 +1,10 @@
+{
+  "description": "A sum beyond 38 significant digits stops the program with arithmetic.",
+  "python": false,
+  "program": "(let [d (fn [s] (match (decimal.parse s) (some x) x none (decimal.from-int 0)))] (decimal.add (d \"99999999999999999999999999999999999999\") (decimal.from-int 1)))",
+  "declarations": "declarations/decimal.json",
+  "allow": [],
+  "expect": {
+    "failed": "arithmetic"
+  }
+}

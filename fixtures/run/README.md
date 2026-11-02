@@ -10,14 +10,21 @@ and types the cases share.
 | `python` | Optional. `false` marks a case that the frozen Python prototype does not implement. Any other value, or no field, leaves the case unmarked. |
 | `program` | The source text |
 | `declarations` | The declarations file, relative to this directory |
+| `inputs` | Optional. A JSON object from input name to value, in the [JSON encoding](../../docs/language.md#values-and-json). Only a script (`python: false`) takes inputs here. An `Option` input left out is `none`. |
 | `allow` | The capability IDs the host authorizes |
 | `budgets` | Optional budget overrides, by budget name |
 | `responses` | Fixture responses, in the format of `bench/codemode/README.md` |
 | `steps` | Instead of `responses`: each step lists the request IDs the machine must suspend with, and the responses to resume it with, as `[id, {"output": ...}]` or `[id, {"error": ...}]` pairs |
-| `expect` | `{"completed": JSON}`, `{"failed": KIND}`, or `{"rejected": [CODE, ...]}` |
+| `expect` | `{"completed": JSON}`, `{"failed": KIND}`, `{"rejected": [CODE, ...]}`, or `{"invalid-input": TEXT}` |
 | `trace` | The logical trace: each request, delay, and response, in the order the machine produced them |
 
-A rejected case has no trace, because a rejected program never runs.
+A rejected case has no trace, because a rejected program never runs. A case that expects `invalid-input` has none either: the inputs
+do not decode, a name is not an input of the script, or a required input has no value, and the run never starts. `TEXT` must occur in
+the message that the Rust kernel's `invalid-input` protocol error and the command line's usage error carry. Because the machine
+binds only the inputs a program uses, such a case uses every input it declares.
+
+Declarations that only Rust and Lean read, such as the ones that list `cores`, live in `declarations/`, so the case listing
+finds only cases. `declarations/decimal.json` registers the `decimal` core and three capabilities that carry decimals.
 
 ## Cases that Python does not run
 

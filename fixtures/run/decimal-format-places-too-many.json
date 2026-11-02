@@ -1,0 +1,10 @@
+{
+  "description": "Places beyond 38 stop the program with arithmetic.",
+  "python": false,
+  "program": "(decimal.format (decimal.from-int 1) 39)",
+  "declarations": "declarations/decimal.json",
+  "allow": [],
+  "expect": {
+    "failed": "arithmetic"
+  }
+}

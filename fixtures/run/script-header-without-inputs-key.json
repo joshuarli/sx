@@ -1,0 +1,10 @@
+{
+  "description": "A header with no keys declares no inputs.",
+  "python": false,
+  "program": "(script {} (+ 1 2))",
+  "declarations": "declarations.json",
+  "allow": [],
+  "expect": {
+    "completed": 3
+  }
+}

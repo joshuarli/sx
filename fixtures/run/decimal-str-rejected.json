@@ -1,0 +1,12 @@
+{
+  "description": "str does not take a decimal: decimal.show writes one.",
+  "python": false,
+  "program": "(str (decimal.from-int 1))",
+  "declarations": "declarations/decimal.json",
+  "allow": [],
+  "expect": {
+    "rejected": [
+      "type-mismatch"
+    ]
+  }
+}

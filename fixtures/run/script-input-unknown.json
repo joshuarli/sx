@@ -1,0 +1,14 @@
+{
+  "description": "A value for a name the script does not declare is refused before the run.",
+  "python": false,
+  "program": "(script {:inputs {:limit \"Int\"}} limit)",
+  "declarations": "declarations.json",
+  "allow": [],
+  "inputs": {
+    "limit": 1,
+    "extra": 2
+  },
+  "expect": {
+    "invalid-input": "extra is not an input of the script"
+  }
+}

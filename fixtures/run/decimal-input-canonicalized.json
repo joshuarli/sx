@@ -1,0 +1,22 @@
+{
+  "description": "A decimal input is canonicalized on the way in.",
+  "python": false,
+  "program": "(script {:inputs {:prices \"List<decimal.Decimal>\"}} [prices (= (first prices) (nth prices 1))])",
+  "declarations": "declarations/decimal.json",
+  "allow": [],
+  "inputs": {
+    "prices": [
+      "1.50",
+      "1.5000"
+    ]
+  },
+  "expect": {
+    "completed": [
+      [
+        "1.5",
+        "1.5"
+      ],
+      true
+    ]
+  }
+}

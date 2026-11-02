@@ -10,7 +10,7 @@ use sx_kernel::host::FixtureHost;
 use sx_kernel::ir::CapabilitySignature;
 use sx_kernel::json::{Json, Layout, dumps, parse, python_equal};
 use sx_kernel::machine::Request;
-use sx_kernel::registry::{Registry, load_declarations};
+use sx_cores::kernel::declared_registry;
 
 mod common;
 use common::json_case_runs_in_python;
@@ -117,8 +117,7 @@ fn cases() -> Vec<PathBuf> {
 }
 
 fn signatures(declarations: &Json) -> BTreeMap<String, CapabilitySignature> {
-    let mut registry = Registry::new();
-    load_declarations(&mut registry, declarations).expect("declarations load");
+    let registry = declared_registry(declarations).expect("declarations load");
     registry
         .capabilities()
         .map(|c| {
@@ -143,6 +142,9 @@ fn start_message(case: &Json, declarations: &Json) -> Json {
     ];
     if let Some(budgets) = case.get("budgets") {
         fields.push(("budgets", budgets.clone()));
+    }
+    if let Some(inputs) = case.get("inputs") {
+        fields.push(("inputs", inputs.clone()));
     }
     Json::object(fields)
 }
@@ -304,6 +306,17 @@ fn compare(case: &Json, reply: &Json, python: Option<&Json>) -> Result<(), Strin
             }
             if reply.get("rendered").and_then(Json::as_str).is_none_or(str::is_empty) {
                 return Err("a rejection carries rendered diagnostics".to_string());
+            }
+        }
+        "error" => {
+            let wanted = expected
+                .get("invalid-input")
+                .and_then(Json::as_str)
+                .ok_or_else(|| format!("an error, expected {}", shown(expected)))?;
+            let code = reply.get("code").and_then(Json::as_str);
+            let message = reply.get("message").and_then(Json::as_str).unwrap_or_default();
+            if code != Some("invalid-input") || !message.contains(wanted) {
+                return Err(format!("error {} does not match invalid-input {wanted:?}", shown(reply)));
             }
         }
         other => return Err(format!("unexpected reply {other}: {}", shown(reply))),
@@ -665,5 +678,58 @@ fn mutated_messages_never_crash_the_kernel() {
             assert!(reply.get("code").and_then(Json::as_str).is_some());
             assert!(reply.get("message").and_then(Json::as_str).is_some());
         }
+    }
+}
+
+fn script_start(program: &str, extra: &str) -> String {
+    let program = dumps(&Json::string(program), Layout::Spaced).expect("program text");
+    format!(r#"{{"version":1,"type":"start","program":{program},"allow":[]{extra}}}"#)
+}
+
+const SCRIPT: &str = r#"(script {:inputs {:owners "List<String>" :note "Option<String>"}} [(count owners) note])"#;
+
+#[test]
+fn a_script_starts_with_its_inputs_as_json_and_needs_no_declarations() {
+    let good = script_start(SCRIPT, r#","inputs":{"owners":["a","b"]}"#);
+    let explicit = script_start(SCRIPT, r#","inputs":{"owners":[],"note":"x"}"#);
+    let missing = script_start(SCRIPT, r#","inputs":{"note":"x"}"#);
+    let unknown = script_start(SCRIPT, r#","inputs":{"owners":[],"extra":1}"#);
+    let mistyped = script_start(SCRIPT, r#","inputs":{"owners":["a",1]}"#);
+    let (replies, status) = replies(lines(&[&good, &explicit, &missing, &unknown, &mistyped]));
+    assert!(status.success());
+    let value = |at: usize| replies[at].get("value").cloned().expect("a completed value");
+    assert!(python_equal(&value(0), &parse("[2, null]").expect("json")));
+    assert!(python_equal(&value(1), &parse("[0, \"x\"]").expect("json")));
+    let message = |at: usize| {
+        assert_eq!(summary(&replies[at]), "error:invalid-input");
+        replies[at].get("message").and_then(Json::as_str).expect("message").to_string()
+    };
+    assert_eq!(message(2), "the script needs a value for input owners; its required inputs are owners: List<String>");
+    assert_eq!(message(3), "extra is not an input of the script, whose inputs are note, owners");
+    assert_eq!(message(4), "input owners: $owners[1]: expected String, found an integer");
+}
+
+#[test]
+fn explain_lists_a_scripts_declared_inputs_with_their_types() {
+    let explain = script_start(SCRIPT, "").replace(r#""type":"start""#, r#""type":"explain""#);
+    let (replies, _) = replies(lines(&[&explain]));
+    let reply = &replies[0];
+    assert_eq!(kind(reply), "explained");
+    assert!(python_equal(reply.get("inputs").expect("inputs"), &parse(r#"["note", "owners"]"#).expect("json")));
+    let types = parse(r#"{"note": "Option<String>", "owners": "List<String>"}"#).expect("json");
+    assert!(python_equal(reply.get("input_types").expect("input_types"), &types));
+}
+
+#[test]
+fn a_script_and_a_declarations_object_that_disagree_on_inputs_are_invalid_declarations() {
+    let declarations = r#","declarations":{"inputs":{"owners":"List<Int>"}}"#;
+    let start = script_start(SCRIPT, &format!(r#"{declarations},"inputs":{{"owners":[]}}"#));
+    let explain = script_start(SCRIPT, declarations).replace(r#""type":"start""#, r#""type":"explain""#);
+    let (replies, _) = replies(lines(&[&start, &explain]));
+    for reply in &replies {
+        assert_eq!(summary(reply), "error:invalid-declarations");
+        let message = reply.get("message").and_then(Json::as_str).expect("message");
+        assert!(message.contains("input owners is List<String> in the script's header and List<Int> in the declarations"), "{message}");
+        assert!(message.contains("the script's header declares input note (Option<String>), which the declarations do not"), "{message}");
     }
 }
