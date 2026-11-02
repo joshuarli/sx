@@ -672,7 +672,9 @@ every accepted fixture, and the repomod parity tests pass on the Rust kernel.
   program and responses and receives requests, serves Python, TypeScript, and Bun hosts with one
   implementation, because suspension is already plain data. A PyO3 module is faster for Python
   hosts only. The recommendation is the JSON protocol first, and PyO3 only if the measured
-  dispatch cost calls for it.
+  dispatch cost calls for it. Measured after the port: a Python host costs 24.5 µs of CPU per call
+  over the protocol, about what the in-process Python kernel cost, while real capability calls
+  take milliseconds, so PyO3 is not needed.
 - **Identical diagnostics.** Diagnostics and help are part of the language, so the
   recommendation is byte-identical text across implementations, enforced by the check fixtures.
 - **The Python prototype after the port.** Keep it as an executable specification beside Lean
