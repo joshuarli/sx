@@ -179,6 +179,7 @@ class Gen:
         self.rng = rng
         self.concurrency = concurrency
         self.counter = 0
+        self.finals = 0
         self.enums: dict[str, tuple[tuple[str, Ty | None], ...]] = {}
         self.enums["CallErrorKind"] = tuple((v, None) for v, _ in CALL_ERROR_KIND.variants)
         self.caps = [
@@ -470,22 +471,85 @@ class Gen:
         if not fns:
             options.pop()
         options += self.specific(ty, c, known, loose)
+        if self.joinable(ty):
+            options.append((4.0, lambda: self.join_template(ty, c)))
         if loose or known:
             options += self.loose_options(ty, c, known)
         return self.weighted(options)
 
+    def joinable(self, ty: Ty) -> bool:
+        if ty == STRING or ty.head == "Option":
+            return True
+        if ty.head == "List":
+            return self.joinable(ty.args[0])
+        if ty.head == "Tuple":
+            return any(self.joinable(t) for t in ty.args)
+        if ty.head == "Record":
+            return any(self.joinable(t) for _, t in ty.fields)
+        return False
+
+    def view(self, ty: Ty) -> Ty | None:
+        if ty == STRING:
+            return self.pick([LEVEL, KIND])
+        if ty.head == "Option":
+            inner = self.view(ty.args[0]) if self.chance(0.4) else None
+            return opt(inner) if inner is not None else ty.args[0]
+        if ty.head == "List":
+            element = self.view(ty.args[0])
+            return lst(element) if element is not None else None
+        if ty.head == "Tuple":
+            indexes = [i for i, t in enumerate(ty.args) if self.view(t) is not None]
+            if not indexes:
+                return None
+            at = self.pick(indexes)
+            changed = self.view(ty.args[at])
+            assert changed is not None
+            return tup(*[changed if i == at else t for i, t in enumerate(ty.args)])
+        if ty.head == "Record":
+            options: list[tuple[str, Ty | None]] = []
+            for name, field_ty in ty.fields:
+                if field_ty.head == "Option":
+                    options.append((name, None))
+                altered = self.view(field_ty)
+                if altered is not None:
+                    options.append((name, altered))
+            if not options:
+                return None
+            name, altered = self.pick(options)
+            if altered is None:
+                return Ty("Record", fields=tuple(f for f in ty.fields if f[0] != name))
+            return Ty("Record", fields=tuple((n, altered if n == name else t) for n, t in ty.fields))
+        return None
+
+    def join_template(self, ty: Ty, ctx: Ctx) -> str:
+        altered = self.view(ty)
+        if altered is None:
+            return self.expr(ty, ctx)
+        first, second = self.expr(ty, ctx.down()), self.expr(altered, ctx.down())
+        if self.chance(0.6):
+            name = self.fresh("w")
+            second = f"(let [{name} {second}] {name})"
+        if self.chance(0.15):
+            first, second = second, first
+        if self.chance(0.5):
+            test, _ = self.cond_test(ctx)
+            return f"(if {test} {first} {second})"
+        if self.chance(0.5):
+            return f"(cond {self.expr(BOOL, ctx.down())} {first} :else {second})"
+        return f"(match {self.expr(BOOL, ctx.down())} true {first} false {second})"
+
     def branch_looseness(self, loose: int, index: int) -> int:
         if loose:
             return min(loose, 1) if index == 0 else loose
-        if self.chance(0.35):
+        if self.chance(0.5):
             return 1 if index == 0 else 2
         return 0
 
     def loose_options(self, ty: Ty, ctx: Ctx, known: bool) -> list[tuple[float, Callable[[], str]]]:
         if ty.head == "Option":
-            return [(2.0, lambda: self.expr(ty.args[0], ctx, known, 1))]
+            return [(6.0, lambda: self.expr(ty.args[0], ctx, known, 1))]
         if ty == STRING:
-            return [(1.0, lambda: self.expr(self.pick([LEVEL, KIND]), ctx, False, 0))]
+            return [(6.0, lambda: self.expr(self.pick([LEVEL, KIND]), ctx, False, 0))]
         return []
 
     def fn_apply(self, ty: Ty, ctx: Ctx) -> str:
@@ -983,8 +1047,19 @@ class Gen:
             parts += [b.name, init]
         maximum = self.pick([1, 2, 3, 4, 5, 8, 20])
         inner = Ctx((*ctx.env, *binders), ctx.depth - 1, ctx.writes, tuple(binders))
-        body = self.tail(ty, inner)
+        saved = self.finals
+        for _ in range(4):
+            self.reset_finals()
+            body = self.tail(ty, inner)
+            if self.finals:
+                break
+        else:
+            body = f"(if {self.expr(BOOL, inner.down(2))} {self.expr(ty, inner.down(2))} {body})"
+        self.finals = saved
         return f"(loop {{:max {maximum}}} [{' '.join(parts)}] {body})"
+
+    def reset_finals(self) -> None:
+        self.finals = 0
 
     def recur_form(self, ctx: Ctx) -> str:
         assert ctx.loop is not None
@@ -1002,10 +1077,12 @@ class Gen:
 
     def tail(self, ty: Ty, ctx: Ctx) -> str:
         if ctx.depth <= 0 or self.chance(0.1):
-            return self.expr(ty, ctx)
+            self.finals += 1
+            return self.expr(ty, Ctx(ctx.env, ctx.depth, ctx.writes, None))
         c = ctx.down()
 
         def fin(cc: Ctx) -> str:
+            self.finals += 1
             return self.expr(ty, Ctx(cc.env, cc.depth, cc.writes, None))
 
         def sub(cc: Ctx, _i: int) -> str:

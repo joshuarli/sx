@@ -21,7 +21,10 @@ from sx.types import (
     Type,
 )
 
-WORDS = ("a", "b", "c", "d", "ab", "x", "key", "name", "id", "zed", "", "A", "é", "😀", "￿", "a b", "done", "pending")
+WORDS = (
+    "a", "b", "c", "d", "ab", "x", "key", "name", "id", "zed", "", "A", "é", "😀", "￿", "a b", "done", "pending",
+    "\u0000", "\u2028", "\U0010ffff", "e\u0301", "\x7f", "\\", '"', "\n",
+)
 INTS = (0, 1, -1, 2, 3, 4, 5, 7, 10, 11, 100, 2**31, 2**53, 2**53 + 1, 2**62, 2**63 - 1, -(2**63), 3037000500)
 FLOATS = (0.0, -0.0, 1.0, -1.0, 0.5, 1.5, 2.5, -2.5, 0.1, 21.0, 1e21, 1e-7, 1e300, 5e-324, 123456789012345680000.0, 3.0)
 KINDS = ("Timeout", "Unavailable", "RateLimited", "NotFound", "PermissionDenied", "Invalid", "Conflict", "Failed")
