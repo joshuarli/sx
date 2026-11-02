@@ -775,10 +775,30 @@ mapping, each skipped construct, and every error path.
 
 ### Phase 9: The six-workflow milestone
 
-Run the roadmap's six workflows end to end in Sx and in TypeScript on Bun with the same tools,
-exposed to both through MCP so neither side gets a private advantage. Record successful outcomes,
-model attempts, tokens, wall time, and the host code each needed. Packs or cores a workflow needs,
-such as `sqlite` or YAML formats, come in with that workflow.
+Run the roadmap's six workflows end to end in Sx and in TypeScript on Bun, written by the probe
+model from the same task text and the same typed tool declarations, several samples each.
+
+- **One tool implementation for both sides.** Sx performs pack and endpoint calls natively.
+  `sx mcp serve` exposes the same granted performers as an MCP server, and the Bun harness calls
+  them through a minimal MCP client behind the same generated `api` object the probe uses. The
+  effects are identical, and neither side has a private advantage. Authority differs: Sx's
+  `explain` reports it before anything runs, and the comparison records what each side could
+  show before running.
+- **Sandboxed, local, real effects.** Every workflow runs against temporary directories, local
+  Git repositories, and local mock services (a GitHub-like CI API, a paginated REST API, an
+  object store, an MCP tool server), never the public internet.
+- **Workflows and what they bring in:**
+  1. Inspect 100 local Git checkouts and their CI in parallel: `process` with `git`, typed
+     `http` endpoints.
+  2. Fetch paginated REST data into SQLite: typed endpoints, a `sqlite` pack.
+  3. Read YAML manifests, change values, and write them atomically: a `yaml` core that edits
+     the supported block subset in place and reports anything outside it, never reformatting.
+  4. Run a compiler, collect diagnostics, and attempt a bounded repair: `process`, `fs`, `loop`.
+  5. Build an index and publish it to object storage: `http` with credentials injected by the
+     grant, so the program never sees the secret.
+  6. Call an MCP tool through an imported typed capability.
+- **Measured per workflow and language:** successful outcomes, first-attempt and final
+  correctness, tokens, wall time, and the host code each needed.
 
 **Gate:** All six run in both languages, with the comparison recorded in plan.md's Status.
 
