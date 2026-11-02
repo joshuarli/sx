@@ -147,10 +147,10 @@ suite runs in an environment where repomod is not installed, which proves the bo
 
 ## Status
 
-Phase 0 and Phase 1 have passed their gates. Phase 2 failed its gate on the first held-out run,
-on both models. The owner chose to spend the one allowed revision, described below, and then
-dropped Iceman from the probe, so the rerun gates on Muse Spark alone. That change came after the
-first failure, and Iceman's result in the table below would fail any version of the gate.
+Phase 0 and Phase 1 have passed their gates. Phase 2 failed its gate twice: on the first
+held-out run, and again after the one allowed revision. By this plan's rule that stops the
+project. The owner had already directed work to continue through Phase 4 and to stop for review
+before the Rust port, so work continued, and the owner decides at that review whether Sx goes on.
 
 **Phase 0.** The syntax pilot ran on the development set and drove one language revision.
 
@@ -251,6 +251,25 @@ safe meaning. Each change cites the development failures behind it:
 
 The held-out rerun ran against commit 295af7b, on the Sx arm only. The TypeScript arm did not
 change, so its first held-out trials pair with the new Sx trials.
+
+**Phase 2 second held-out result.** Muse Spark, standard guide, 24 expressible tasks, two
+samples:
+
+| Arm | First attempt | Final | Attempts | First prompt | Reasoning per trial | Tokens per solved task |
+| --- | --- | --- | --- | --- | --- | --- |
+| TypeScript | 97.9% | 100.0% | 1.02 | 526 | 3,157 | 4,292 |
+| Sx after the revision | 70.8% | 93.8% | 1.35 | 2,182 | 4,439 | 8,723 |
+
+Sx minus TypeScript is -27.1 points at first attempt (95% interval -45.8 to -10.4) and -6.2 at
+final (-16.7 to 0.0). The gate fails again. First attempts did not improve on the first run's
+77.1%; the difference is inside the noise of 48 trials. The revision fixed what the development
+set showed, and the development set does not predict the held-out tasks: after the revision the
+same development answers pass at 100%.
+
+**After the gate.** The first held-out set has spent its one revision, so it no longer works as a
+gate. Its answers and failures are now development evidence. A fresh held-out set, written by an
+agent whose tasks are never read by the language designer, replaces it for any later gate, under
+the same freeze rule.
 
 Out of the revision: `Map` and dynamic keys (`assoc`, `keys`), which also make up the
 expressiveness gap, belong to the type-set work in the roadmap.
