@@ -149,9 +149,15 @@ suite runs in an environment where repomod is not installed, which proves the bo
 
 ## Status
 
-Phase 0 and Phase 1 have passed their gates. Phase 2 failed twice on the first held-out set, the
-second time after its one allowed revision, and then passed on a fresh blind held-out set. The
-owner decides at the review before the Rust port whether that pass is enough to continue.
+Phases 0, 1, 3, and 4 have passed their gates. Phase 2 failed twice on the first held-out set,
+the second time after its one allowed revision, and then passed on a fresh blind held-out set.
+Phase 5, the Rust port, is planned and waits for the owner's review. That review decides:
+
+- whether the fresh-set pass is enough to continue, given that the plan's rule said to stop
+  after the second failure;
+- the three Phase 5 decisions: the host boundary, identical diagnostics, and the Python
+  prototype after the port;
+- the repomod changes Phase 3 proposes, which this project may not make itself.
 
 **Phase 0.** The syntax pilot ran on the development set and drove one language revision.
 
