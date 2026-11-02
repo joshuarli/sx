@@ -27,9 +27,13 @@ function validate(task, dir) {
     if (!TASK_KINDS.has(kind)) problems.push(`unknown kind ${kind}`);
   }
   const typeText = JSON.stringify([task.types ?? {}, task.enums ?? {}, task.capabilities ?? []]);
-  const needsMissingType = /\b(Map|Float|Bytes)\b/.test(typeText);
-  if (needsMissingType === task["sx-expressible"]) {
-    problems.push(`sx-expressible must be ${!needsMissingType}: Map, Float, or Bytes ${needsMissingType ? "appears" : "does not appear"}`);
+  const needsMissingType = /\b(Float|Bytes)\b/.test(typeText);
+  const usesMap = /\bMap\b/.test(typeText);
+  if (needsMissingType && task["sx-expressible"]) {
+    problems.push(`sx-expressible must be false: Float or Bytes appears`);
+  }
+  if (!needsMissingType && !usesMap && !task["sx-expressible"]) {
+    problems.push(`sx-expressible must be true: Map, Float, and Bytes do not appear`);
   }
   if (!("expected" in task)) problems.push(`expected is missing`);
   const declared = new Map();

@@ -1,0 +1,27 @@
+{
+  "id": "dev-assignee-index",
+  "split": "development",
+  "kinds": ["filter-group"],
+  "domain": "other",
+  "sx-expressible": true,
+  "description": "List the open tickets and return an object that maps each assignee to the ids of their open tickets whose `severity` is `high` or `critical`, with each list of ids sorted alphabetically. Leave out an assignee who has no such ticket.",
+  "types": {"Ticket": "Record {id: String, assignee: String, severity: String}"},
+  "cores": [],
+  "capabilities": [
+    {"id": "tickets.list", "effect": "read", "input": "Record {status: String}", "output": "List<Ticket>", "description": "Lists the tickets with the given status: open or closed. Severity is low, medium, high, or critical."}
+  ],
+  "responses": [
+    {"capability": "tickets.list", "input": {"status": "open"}, "results": [{"output": [
+      {"id": "t-9", "assignee": "ada", "severity": "high"},
+      {"id": "t-2", "assignee": "lin", "severity": "low"},
+      {"id": "t-5", "assignee": "ada", "severity": "critical"},
+      {"id": "t-1", "assignee": "bo", "severity": "medium"},
+      {"id": "t-7", "assignee": "lin", "severity": "critical"},
+      {"id": "t-3", "assignee": "ada", "severity": "high"}
+    ]}]}
+  ],
+  "expected": {
+    "ada": ["t-3", "t-5", "t-9"],
+    "lin": ["t-7"]
+  }
+}

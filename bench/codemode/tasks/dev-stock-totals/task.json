@@ -1,0 +1,24 @@
+{
+  "id": "dev-stock-totals",
+  "split": "development",
+  "kinds": ["filter-group", "arithmetic"],
+  "domain": "other",
+  "sx-expressible": true,
+  "description": "Combine the stock levels of the `north` and `south` warehouses. Return a list of records with `sku` and `total` (the on-hand count across both warehouses; a sku that only one warehouse holds counts just that count) for every sku whose total is below 10, sorted by `total` from lowest to highest, and alphabetically by `sku` among equal totals.",
+  "types": {},
+  "cores": [],
+  "capabilities": [
+    {"id": "warehouse.levels", "effect": "read", "input": "Record {warehouse: String}", "output": "Map<String, Int>", "description": "Reads the on-hand count of every sku a warehouse holds, keyed by sku."}
+  ],
+  "responses": [
+    {"capability": "warehouse.levels", "input": {"warehouse": "north"}, "results": [{"output": {"pen-b": 4, "ink-a": 12, "pad-c": 3, "clip-d": 0}}]},
+    {"capability": "warehouse.levels", "input": {"warehouse": "south"}, "results": [{"output": {"ink-a": 2, "pen-b": 5, "cap-e": 8, "pad-c": 1, "tag-f": 4}}]}
+  ],
+  "expected": [
+    {"sku": "clip-d", "total": 0},
+    {"sku": "pad-c", "total": 4},
+    {"sku": "tag-f", "total": 4},
+    {"sku": "cap-e", "total": 8},
+    {"sku": "pen-b", "total": 9}
+  ]
+}

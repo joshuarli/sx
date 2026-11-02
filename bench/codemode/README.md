@@ -18,7 +18,7 @@ responses, and compares its result with `expected`.
 | `split` | `"development"` or `"held-out"` | Which set the task belongs to |
 | `kinds` | list of strings | What the task exercises, from [Kinds](#kinds) |
 | `domain` | `"repomod"` or `"other"` | Whether the task uses repository and CI tools |
-| `sx-expressible` | boolean | `false` when any declared type uses `Map`, `Float`, or `Bytes`, otherwise `true` |
+| `sx-expressible` | boolean | `false` when any declared type uses `Float` or `Bytes`, otherwise `true`. Sx has `Map<String, T>`, so a task whose types use only `Map` is `true`. |
 | `description` | string | The task as a user would state it. See [Descriptions](#descriptions). |
 | `types` | object | Optional. Named record types, `"Name": "Record {...}"` |
 | `enums` | object | Optional. `"ns.Name": {"Variant": null, "Other": "Type"}`. `null` means the variant carries no value. |
@@ -40,11 +40,11 @@ Types are written in Sx type notation:
 | `Record {name: String, open-prs: Int}` | object with exactly these keys |
 | a name from `types` | its record |
 | `ns.Name` from `enums` | a variant without a value is its name as a string, `"Passing"`. A variant with a value is `{"tag": "Failed", "value": ...}`. |
-| `Map<String, T>` | object with arbitrary keys. Sx v0 lacks it. |
+| `Map<String, T>` | object with arbitrary string keys and values of type `T`. The key type is always `String`. |
 | `Float` | a number with a fraction. Sx v0 lacks it. |
 | `Bytes` | base64 string. Sx v0 lacks it. |
 
-Use the type that fits the data. Do not avoid `Map`, `Float`, or `Bytes` because Sx lacks them.
+Use the type that fits the data. Do not avoid `Float` or `Bytes` because Sx lacks them.
 Set `sx-expressible` to `false` instead.
 
 Field names are lowercase words joined by `-`. Prefer one word.
