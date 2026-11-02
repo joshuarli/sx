@@ -1,0 +1,112 @@
+{
+  "id": "fresh-schema-drift",
+  "split": "fresh",
+  "kinds": [
+    "filter-group",
+    "parallel"
+  ],
+  "domain": "other",
+  "sx-expressible": true,
+  "description": "Compare the columns of table `events` in the `staging` and `prod` environments. Return a record with `added` (column names present in staging but not in prod), `removed` (present in prod but not in staging), and `changed` (records with `column`, `from` (the type in prod), and `to` (the type in staging), for columns in both whose types differ). Each list is sorted by column name.",
+  "types": {
+    "Column": "Record {name: String, type: String}"
+  },
+  "cores": [],
+  "capabilities": [
+    {
+      "id": "tables.columns",
+      "effect": "read",
+      "input": "Record {env: String, table: String}",
+      "output": "List<Column>",
+      "description": "Lists a table's columns with their declared types in an environment."
+    }
+  ],
+  "responses": [
+    {
+      "capability": "tables.columns",
+      "input": {
+        "env": "staging",
+        "table": "events"
+      },
+      "results": [
+        {
+          "output": [
+            {
+              "name": "ts",
+              "type": "text"
+            },
+            {
+              "name": "id",
+              "type": "int"
+            },
+            {
+              "name": "user_id",
+              "type": "int"
+            },
+            {
+              "name": "region",
+              "type": "text"
+            },
+            {
+              "name": "payload",
+              "type": "json"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "capability": "tables.columns",
+      "input": {
+        "env": "prod",
+        "table": "events"
+      },
+      "results": [
+        {
+          "output": [
+            {
+              "name": "id",
+              "type": "int"
+            },
+            {
+              "name": "ts",
+              "type": "timestamp"
+            },
+            {
+              "name": "payload",
+              "type": "json"
+            },
+            {
+              "name": "legacy",
+              "type": "text"
+            },
+            {
+              "name": "user_id",
+              "type": "bigint"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "expected": {
+    "added": [
+      "region"
+    ],
+    "removed": [
+      "legacy"
+    ],
+    "changed": [
+      {
+        "column": "ts",
+        "from": "timestamp",
+        "to": "text"
+      },
+      {
+        "column": "user_id",
+        "from": "bigint",
+        "to": "int"
+      }
+    ]
+  }
+}

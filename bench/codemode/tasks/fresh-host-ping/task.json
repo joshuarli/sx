@@ -1,0 +1,120 @@
+{
+  "id": "fresh-host-ping",
+  "split": "fresh",
+  "kinds": [
+    "retry",
+    "partial-failure",
+    "parallel"
+  ],
+  "domain": "other",
+  "sx-expressible": true,
+  "description": "Ping hosts `h1` through `h5`. When a ping fails with Timeout, retry it once after waiting 3 seconds; a second failure counts as down. Any other failure counts as down immediately. Return a record with `up` (the hosts that answered, sorted by `ms` lowest first and then by host name) and `down` (the hosts that did not answer, in the order h1 to h5).",
+  "types": {
+    "Pong": "Record {host: String, ms: Int}"
+  },
+  "cores": [],
+  "capabilities": [
+    {
+      "id": "hosts.ping",
+      "effect": "read",
+      "input": "Record {host: String}",
+      "output": "Pong",
+      "description": "Pings a host and returns the round-trip time in milliseconds."
+    }
+  ],
+  "responses": [
+    {
+      "capability": "hosts.ping",
+      "input": {
+        "host": "h1"
+      },
+      "results": [
+        {
+          "output": {
+            "host": "h1",
+            "ms": 40
+          }
+        }
+      ]
+    },
+    {
+      "capability": "hosts.ping",
+      "input": {
+        "host": "h2"
+      },
+      "results": [
+        {
+          "error": {
+            "kind": "Timeout",
+            "message": "no reply"
+          }
+        },
+        {
+          "output": {
+            "host": "h2",
+            "ms": 15
+          }
+        }
+      ]
+    },
+    {
+      "capability": "hosts.ping",
+      "input": {
+        "host": "h3"
+      },
+      "results": [
+        {
+          "error": {
+            "kind": "Unavailable",
+            "message": "refused"
+          }
+        }
+      ]
+    },
+    {
+      "capability": "hosts.ping",
+      "input": {
+        "host": "h4"
+      },
+      "results": [
+        {
+          "error": {
+            "kind": "Timeout",
+            "message": "no reply"
+          }
+        },
+        {
+          "error": {
+            "kind": "Timeout",
+            "message": "no reply"
+          }
+        }
+      ]
+    },
+    {
+      "capability": "hosts.ping",
+      "input": {
+        "host": "h5"
+      },
+      "results": [
+        {
+          "output": {
+            "host": "h5",
+            "ms": 40
+          }
+        }
+      ]
+    }
+  ],
+  "expected": {
+    "up": [
+      "h2",
+      "h1",
+      "h5"
+    ],
+    "down": [
+      "h3",
+      "h4"
+    ]
+  }
+}

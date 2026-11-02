@@ -1,0 +1,139 @@
+{
+  "id": "fresh-load-staging",
+  "split": "fresh",
+  "kinds": [
+    "pagination",
+    "write",
+    "arithmetic"
+  ],
+  "domain": "other",
+  "sx-expressible": true,
+  "description": "Copy every row of the staging table `visits` into the warehouse. Read the staging pages in order (the first page with no cursor, then following each page's `next` cursor; at most 10 pages), and for each page with at least one row, upsert that page's rows in a single call, in the order read, once that page has been read. Upserting is safe to repeat. Skip the upsert for an empty page. Return the total of the `count` values the upsert calls reported.",
+  "types": {
+    "Row": "Record {id: Int, url: String}",
+    "StagingPage": "Record {rows: List<Row>, next: Option<String>}",
+    "Upserted": "Record {count: Int}"
+  },
+  "cores": [],
+  "capabilities": [
+    {
+      "id": "staging.page",
+      "effect": "read",
+      "input": "Record {table: String, cursor: Option<String>}",
+      "output": "StagingPage",
+      "description": "Reads one page of a staging table's rows; `next` is absent on the last page."
+    },
+    {
+      "id": "warehouse.upsert",
+      "effect": "write",
+      "idempotent": true,
+      "input": "Record {table: String, rows: List<Row>}",
+      "output": "Upserted",
+      "description": "Inserts or replaces rows by id and reports how many rows were new."
+    }
+  ],
+  "responses": [
+    {
+      "capability": "staging.page",
+      "input": {
+        "table": "visits",
+        "cursor": null
+      },
+      "results": [
+        {
+          "output": {
+            "rows": [
+              {
+                "id": 1,
+                "url": "/a"
+              },
+              {
+                "id": 2,
+                "url": "/b"
+              }
+            ],
+            "next": "c2"
+          }
+        }
+      ]
+    },
+    {
+      "capability": "staging.page",
+      "input": {
+        "table": "visits",
+        "cursor": "c2"
+      },
+      "results": [
+        {
+          "output": {
+            "rows": [],
+            "next": "c3"
+          }
+        }
+      ]
+    },
+    {
+      "capability": "staging.page",
+      "input": {
+        "table": "visits",
+        "cursor": "c3"
+      },
+      "results": [
+        {
+          "output": {
+            "rows": [
+              {
+                "id": 3,
+                "url": "/c"
+              }
+            ],
+            "next": null
+          }
+        }
+      ]
+    },
+    {
+      "capability": "warehouse.upsert",
+      "input": {
+        "table": "visits",
+        "rows": [
+          {
+            "id": 1,
+            "url": "/a"
+          },
+          {
+            "id": 2,
+            "url": "/b"
+          }
+        ]
+      },
+      "results": [
+        {
+          "output": {
+            "count": 1
+          }
+        }
+      ]
+    },
+    {
+      "capability": "warehouse.upsert",
+      "input": {
+        "table": "visits",
+        "rows": [
+          {
+            "id": 3,
+            "url": "/c"
+          }
+        ]
+      },
+      "results": [
+        {
+          "output": {
+            "count": 1
+          }
+        }
+      ]
+    }
+  ],
+  "expected": 2
+}

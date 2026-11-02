@@ -1,0 +1,99 @@
+{
+  "id": "fresh-shift-hours",
+  "split": "fresh",
+  "kinds": [
+    "pagination",
+    "arithmetic",
+    "schema-detail"
+  ],
+  "domain": "other",
+  "sx-expressible": true,
+  "description": "Summarize the on-call schedule across all of its pages (at most 10), reading the first page with no cursor and then following each page's `next` cursor. A shift lasts `end` minus `start` hours. Return a record with `hours` (records with `person` and `hours`, the total hours per person, sorted by hours highest first and then by person) and `uncovered` (the number of shifts that have no `backup`).",
+  "types": {
+    "Shift": "Record {person: String, start: Int, end: Int, backup: Option<String>}",
+    "ShiftPage": "Record {shifts: List<Shift>, next: Option<String>}"
+  },
+  "cores": [],
+  "capabilities": [
+    {
+      "id": "oncall.shifts",
+      "effect": "read",
+      "input": "Record {cursor: Option<String>}",
+      "output": "ShiftPage",
+      "description": "Reads one page of the on-call schedule; `next` is absent on the last page."
+    }
+  ],
+  "responses": [
+    {
+      "capability": "oncall.shifts",
+      "input": {
+        "cursor": null
+      },
+      "results": [
+        {
+          "output": {
+            "shifts": [
+              {
+                "person": "ben",
+                "start": 8,
+                "end": 16,
+                "backup": null
+              },
+              {
+                "person": "ana",
+                "start": 0,
+                "end": 8,
+                "backup": "ben"
+              }
+            ],
+            "next": "c2"
+          }
+        }
+      ]
+    },
+    {
+      "capability": "oncall.shifts",
+      "input": {
+        "cursor": "c2"
+      },
+      "results": [
+        {
+          "output": {
+            "shifts": [
+              {
+                "person": "ana",
+                "start": 16,
+                "end": 20,
+                "backup": null
+              },
+              {
+                "person": "cho",
+                "start": 20,
+                "end": 24,
+                "backup": "ana"
+              }
+            ],
+            "next": null
+          }
+        }
+      ]
+    }
+  ],
+  "expected": {
+    "hours": [
+      {
+        "person": "ana",
+        "hours": 12
+      },
+      {
+        "person": "ben",
+        "hours": 8
+      },
+      {
+        "person": "cho",
+        "hours": 4
+      }
+    ],
+    "uncovered": 2
+  }
+}

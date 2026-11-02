@@ -1,0 +1,110 @@
+{
+  "id": "fresh-overdue-by-customer",
+  "split": "fresh",
+  "kinds": [
+    "pagination",
+    "filter-group",
+    "arithmetic"
+  ],
+  "domain": "other",
+  "sx-expressible": true,
+  "description": "Total the overdue invoices per customer. Read the invoice list 2 invoices at a time (`limit` 2), starting at offset 0 and advancing the offset by 2 after each page, and stop after the first page that has fewer than 2 invoices. An invoice is overdue when its `status` is `overdue`. Return a list of records with `customer` and `total` (the sum of `amount`, in cents), one per customer with at least one overdue invoice, sorted by `total` highest first and then by `customer`.",
+  "types": {
+    "Invoice": "Record {id: String, customer: String, status: String, amount: Int}"
+  },
+  "cores": [],
+  "capabilities": [
+    {
+      "id": "invoices.page",
+      "effect": "read",
+      "input": "Record {offset: Int, limit: Int}",
+      "output": "List<Invoice>",
+      "description": "Reads up to `limit` invoices starting at `offset`; a short page is the last."
+    }
+  ],
+  "responses": [
+    {
+      "capability": "invoices.page",
+      "input": {
+        "offset": 0,
+        "limit": 2
+      },
+      "results": [
+        {
+          "output": [
+            {
+              "id": "i1",
+              "customer": "ann",
+              "status": "overdue",
+              "amount": 500
+            },
+            {
+              "id": "i2",
+              "customer": "bo",
+              "status": "paid",
+              "amount": 900
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "capability": "invoices.page",
+      "input": {
+        "offset": 2,
+        "limit": 2
+      },
+      "results": [
+        {
+          "output": [
+            {
+              "id": "i3",
+              "customer": "bo",
+              "status": "overdue",
+              "amount": 300
+            },
+            {
+              "id": "i4",
+              "customer": "ann",
+              "status": "overdue",
+              "amount": 100
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "capability": "invoices.page",
+      "input": {
+        "offset": 4,
+        "limit": 2
+      },
+      "results": [
+        {
+          "output": [
+            {
+              "id": "i5",
+              "customer": "cy",
+              "status": "overdue",
+              "amount": 600
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "expected": [
+    {
+      "customer": "ann",
+      "total": 600
+    },
+    {
+      "customer": "cy",
+      "total": 600
+    },
+    {
+      "customer": "bo",
+      "total": 300
+    }
+  ]
+}

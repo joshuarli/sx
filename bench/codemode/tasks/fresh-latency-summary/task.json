@@ -1,0 +1,76 @@
+{
+  "id": "fresh-latency-summary",
+  "split": "fresh",
+  "kinds": [
+    "parallel",
+    "arithmetic",
+    "filter-group"
+  ],
+  "domain": "other",
+  "sx-expressible": false,
+  "description": "For services `auth`, `search`, and `cart`, read the latency samples (in milliseconds) and report each service's mean and maximum. Return a list of records with `service`, `mean`, and `max`, sorted by `mean` highest first and then by `service`. Leave out services with no samples.",
+  "cores": [],
+  "capabilities": [
+    {
+      "id": "metrics.latency",
+      "effect": "read",
+      "input": "Record {service: String}",
+      "output": "List<Float>",
+      "description": "Lists a service's recent request latencies in milliseconds."
+    }
+  ],
+  "responses": [
+    {
+      "capability": "metrics.latency",
+      "input": {
+        "service": "auth"
+      },
+      "results": [
+        {
+          "output": [
+            10,
+            30,
+            20
+          ]
+        }
+      ]
+    },
+    {
+      "capability": "metrics.latency",
+      "input": {
+        "service": "search"
+      },
+      "results": [
+        {
+          "output": [
+            100.5,
+            99.5
+          ]
+        }
+      ]
+    },
+    {
+      "capability": "metrics.latency",
+      "input": {
+        "service": "cart"
+      },
+      "results": [
+        {
+          "output": []
+        }
+      ]
+    }
+  ],
+  "expected": [
+    {
+      "service": "search",
+      "mean": 100,
+      "max": 100.5
+    },
+    {
+      "service": "auth",
+      "mean": 20,
+      "max": 30
+    }
+  ]
+}

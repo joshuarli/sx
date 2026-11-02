@@ -1,0 +1,149 @@
+{
+  "id": "fresh-fill-west-warehouse",
+  "split": "fresh",
+  "kinds": [
+    "write",
+    "conditional-call",
+    "arithmetic"
+  ],
+  "domain": "other",
+  "sx-expressible": true,
+  "description": "The `west` warehouse should hold at least 10 units of each SKU it stocks. For each SKU listed in the west warehouse with fewer than 10 units, in order of `sku`, move the shortfall (10 minus its quantity) from the `east` warehouse, but only if east holds at least the shortfall; a SKU east does not list holds 0. Make one transfer call per SKU moved, with `request` set to `fill-` followed by the SKU; repeating a transfer with the same request is safe. Return a record with `moved` (records with `sku` and `quantity`) and `short` (the SKUs east could not cover), both in `sku` order.",
+  "types": {
+    "Row": "Record {sku: String, quantity: Int}"
+  },
+  "cores": [],
+  "capabilities": [
+    {
+      "id": "stock.list",
+      "effect": "read",
+      "input": "Record {warehouse: String}",
+      "output": "List<Row>",
+      "description": "Lists the SKUs a warehouse stocks with their quantities."
+    },
+    {
+      "id": "transfers.create",
+      "effect": "write",
+      "idempotent": true,
+      "input": "Record {request: String, sku: String, from: String, to: String, quantity: Int}",
+      "output": "Unit",
+      "description": "Moves units between warehouses; a repeated request id moves nothing more."
+    }
+  ],
+  "responses": [
+    {
+      "capability": "stock.list",
+      "input": {
+        "warehouse": "west"
+      },
+      "results": [
+        {
+          "output": [
+            {
+              "sku": "nut",
+              "quantity": 4
+            },
+            {
+              "sku": "bolt",
+              "quantity": 10
+            },
+            {
+              "sku": "cog",
+              "quantity": 9
+            },
+            {
+              "sku": "axle",
+              "quantity": 0
+            },
+            {
+              "sku": "pin",
+              "quantity": 12
+            },
+            {
+              "sku": "dowel",
+              "quantity": 7
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "capability": "stock.list",
+      "input": {
+        "warehouse": "east"
+      },
+      "results": [
+        {
+          "output": [
+            {
+              "sku": "nut",
+              "quantity": 50
+            },
+            {
+              "sku": "bolt",
+              "quantity": 3
+            },
+            {
+              "sku": "cog",
+              "quantity": 1
+            },
+            {
+              "sku": "axle",
+              "quantity": 9
+            },
+            {
+              "sku": "pin",
+              "quantity": 2
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "capability": "transfers.create",
+      "input": {
+        "request": "fill-cog",
+        "sku": "cog",
+        "from": "east",
+        "to": "west",
+        "quantity": 1
+      },
+      "results": [
+        {
+          "output": null
+        }
+      ]
+    },
+    {
+      "capability": "transfers.create",
+      "input": {
+        "request": "fill-nut",
+        "sku": "nut",
+        "from": "east",
+        "to": "west",
+        "quantity": 6
+      },
+      "results": [
+        {
+          "output": null
+        }
+      ]
+    }
+  ],
+  "expected": {
+    "moved": [
+      {
+        "sku": "cog",
+        "quantity": 1
+      },
+      {
+        "sku": "nut",
+        "quantity": 6
+      }
+    ],
+    "short": [
+      "axle",
+      "dowel"
+    ]
+  }
+}
