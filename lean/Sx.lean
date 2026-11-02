@@ -10,3 +10,4 @@ import Sx.Check
 import Sx.Eval
 import Sx.Proofs.Safety
 import Sx.Proofs.Effect
+import Sx.Proofs.Order
