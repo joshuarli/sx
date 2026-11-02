@@ -1,8 +1,10 @@
 # Core conformance vectors
 
 Each `CORE.json` file holds input and output pairs for every function of one core: `text`,
-`semver`, `git`, and `github`. The Python cores produced them and are now frozen, and the Rust crate
-[`rust/sx-cores`](../../rust/sx-cores) must reproduce every one. The vectors are the shared
+`semver`, `git`, `github`, and `decimal`. The Python cores produced the first four and are now frozen,
+and the Rust crate [`rust/sx-cores`](../../rust/sx-cores) must reproduce every one. `decimal` has no
+Python core: `decimal.json` comes from Python's `decimal` module, as described under
+[The decimal vectors](#the-decimal-vectors). The vectors are the shared
 definition of what each core function does until the Lean model covers the cores.
 
 | Field | Meaning |
@@ -45,3 +47,21 @@ crate is defined only there.
 - `text.casefold` and `text.trim` depend on the Unicode data of the running Python. The Rust
   tables are generated from it by `scripts/casefold_table.py`, and the same test file fails when
   the checked-in tables differ from the running Python.
+
+## The decimal vectors
+
+`decimal.json` has the same fields, with one difference: a vector that fails has `"fails": "arithmetic"`
+instead of `"fails": "ValueError"`, and the Rust kernel must turn it into `CoreError::Arithmetic`.
+
+`scripts/decimal_vectors.py` in the crate decides each result with Python's `decimal` module at 400 digits
+of precision, so no operation is inexact. It rejects a literal that is not `-?[0-9]+(\.[0-9]+)?`, then
+canonicalizes the value and rejects one with more than 38 significant digits or 38 fractional digits, the
+limits of the core. A division is rounded once, to the places asked, by `Decimal.quantize` with the mode's
+Python rounding. The corpus is fixed edge cases, every pair from a table of small values, and seeded
+random literals from a generator that does not depend on the Python version. Regenerate with:
+
+```
+uv run python rust/sx-cores/scripts/decimal_vectors.py
+```
+
+`tests/test_decimal_vectors.py` regenerates the vectors in memory and fails if the committed file differs.

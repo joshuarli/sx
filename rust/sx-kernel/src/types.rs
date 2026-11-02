@@ -79,6 +79,47 @@ impl EnumType {
     }
 }
 
+pub type Canonicalize = fn(&str) -> Result<String, String>;
+
+#[derive(Clone, Copy, Debug)]
+pub struct Validation {
+    pub canonicalize: Canonicalize,
+    pub compare: &'static str,
+    pub summary: &'static str,
+}
+
+#[derive(Clone, Debug)]
+pub struct NominalType {
+    pub name: String,
+    pub base: Type,
+    pub validation: Option<Validation>,
+}
+
+impl NominalType {
+    pub fn plain(name: &str, base: Type) -> NominalType {
+        NominalType { name: name.to_string(), base, validation: None }
+    }
+
+    pub fn validated(
+        name: &str,
+        canonicalize: Canonicalize,
+        compare: &'static str,
+        summary: &'static str,
+    ) -> NominalType {
+        NominalType {
+            name: name.to_string(),
+            base: STRING,
+            validation: Some(Validation { canonicalize, compare, summary }),
+        }
+    }
+}
+
+impl PartialEq for NominalType {
+    fn eq(&self, other: &NominalType) -> bool {
+        self.name == other.name && self.base == other.base
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Type {
     Primitive(Primitive),
@@ -89,7 +130,7 @@ pub enum Type {
     Result(Box<Type>, Box<Type>),
     Record(RecordType),
     Enum(Arc<EnumType>),
-    Nominal { name: String, base: Box<Type> },
+    Nominal(Arc<NominalType>),
     Variable(u64),
     Never,
 }
@@ -205,7 +246,7 @@ pub fn show_type(t: &Type) -> String {
             }
         }
         Type::Enum(e) => e.name.clone(),
-        Type::Nominal { name, .. } => name.clone(),
+        Type::Nominal(nominal) => nominal.name.clone(),
         Type::Variable(_) => "?".to_string(),
         Type::Never => "Never".to_string(),
     }
@@ -218,6 +259,10 @@ pub fn show_definition(t: &Type) -> String {
             let fields: Vec<String> = record.fields.iter().map(|(n, ft)| format!("{n}: {}", show_type(ft))).collect();
             format!("Record {marker}{{{}}}", fields.join(", "))
         }
+        Type::Nominal(nominal) => match &nominal.validation {
+            Some(validation) => validation.summary.to_string(),
+            None => show_type(t),
+        },
         _ => show_type(t),
     }
 }
@@ -272,7 +317,8 @@ pub const TYPE_NESTING_LIMIT: usize = 1000;
 
 pub fn type_depth(t: &Type) -> usize {
     1 + match t {
-        Type::List(inner) | Type::Map(inner) | Type::Option(inner) | Type::Nominal { base: inner, .. } => type_depth(inner),
+        Type::List(inner) | Type::Map(inner) | Type::Option(inner) => type_depth(inner),
+        Type::Nominal(nominal) => type_depth(&nominal.base),
         Type::Tuple(items) => items.iter().map(type_depth).max().unwrap_or(0),
         Type::Result(ok, err) => type_depth(ok).max(type_depth(err)),
         Type::Record(record) => record.fields.iter().map(|(_, ft)| type_depth(ft)).max().unwrap_or(0),
@@ -451,7 +497,7 @@ pub fn encodable_problem(t: &Type) -> Option<String> {
         Type::Result(ok, err) => encodable_problem(ok).or_else(|| encodable_problem(err)),
         Type::Record(record) => record.fields.iter().find_map(|(_, ft)| encodable_problem(ft)),
         Type::Enum(e) => e.variants.iter().find_map(|(_, payload)| payload.as_ref().and_then(encodable_problem)),
-        Type::Nominal { base, .. } => encodable_problem(base),
+        Type::Nominal(nominal) => encodable_problem(&nominal.base),
         _ => None,
     }
 }

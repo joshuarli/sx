@@ -369,7 +369,18 @@ pub fn decode(value: &Json, t: &Type, path: &str) -> Result<Value, DecodeError> 
                 .collect();
             Err(fail(format!("{} ({})", e.name, choices.join(" | "))))
         }
-        Type::Nominal { base, .. } => decode(value, base, path),
+        Type::Nominal(nominal) => match &nominal.validation {
+            None => decode(value, &nominal.base, path),
+            Some(validation) => {
+                let Json::String(text) = value else {
+                    return Err(fail(format!("{} (a string)", nominal.name)));
+                };
+                match (validation.canonicalize)(text) {
+                    Ok(canonical) => Ok(Value::string(&canonical)),
+                    Err(problem) => Err(error(path, nominal.name.as_str(), format!("a string that is not valid: {problem}"))),
+                }
+            }
+        },
         Type::Variable(_) => Err(error(path, "a known type", "a type the checker could not resolve")),
         Type::Never => Err(fail(show_type(t))),
     }

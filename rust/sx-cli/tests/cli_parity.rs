@@ -247,10 +247,14 @@ fn python_results(label: &str, cases: &[Case]) -> Vec<Option<Seen>> {
 
 fn all_cores() -> Registry {
     let mut registry = Registry::new();
-    for core in cores() {
+    for core in python_cores() {
         registry.add_core(core).expect("core registers");
     }
     registry
+}
+
+fn python_cores() -> Vec<sx_kernel::registry::Core> {
+    cores().into_iter().filter(|core| CORE_IDS.contains(&core.id.as_str())).collect()
 }
 
 fn rust_result(case: &Case) -> Seen {
@@ -410,7 +414,7 @@ fn core_cases() -> Vec<Case> {
     let rust_declarations = write("with-cores.json", &dumps(&Json::Object(with_cores), Layout::Spaced).expect("json"));
     let python_declarations = write("without-cores.json", &dumps(&base, Layout::Spaced).expect("json"));
     let mut names: Vec<String> = CORE_IDS.iter().map(|c| (*c).to_string()).collect();
-    for core in cores() {
+    for core in python_cores() {
         names.extend(core.functions.iter().map(|f| f.name.clone()));
         names.extend(core.types.iter().map(|(name, _)| name.clone()));
     }

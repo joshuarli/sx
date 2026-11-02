@@ -6,6 +6,7 @@
     clippy::indexing_slicing
 )]
 
+pub mod decimal;
 pub mod git;
 pub mod github;
 pub mod kernel;

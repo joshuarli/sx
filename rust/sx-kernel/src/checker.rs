@@ -11,7 +11,7 @@ use crate::ir::{
 use crate::registry::{Capability, Effect, Function, Registry};
 use crate::syntax::{Items, Node, NodeKind, Span, show};
 use crate::types::{type_depth, 
-    BOOL, BYTES, CallErrorKind, EnumType, FLOAT, INT, Primitive, RecordType, STRING, Type, UNIT, call_error,
+    BOOL, BYTES, CallErrorKind, EnumType, FLOAT, INT, NominalType, Primitive, RecordType, STRING, Type, UNIT, call_error,
     call_error_kind, encodable_problem, show_type,
 };
 use crate::values::{MapValue, Value, show_value};
@@ -1006,11 +1006,33 @@ impl<'r> Checker<'r> {
             Type::Primitive(p) => matches!(p, Primitive::Int | Primitive::Float | Primitive::String | Primitive::Bool),
             Type::Tuple(items) => items.iter().all(|item| self.is_sort_key(item)),
             Type::List(element) => self.is_sort_key(&element),
-            Type::Nominal { base, .. } => self.is_sort_key(&base),
+            Type::Nominal(nominal) => nominal.validation.is_none() && self.is_sort_key(&nominal.base),
             Type::Variable(id) => !matches!(self.shape(id), Some(Shape::Brace)),
             Type::Never => true,
             _ => false,
         }
+    }
+
+    fn validated_nominal_in(&self, t: &Type) -> Option<Arc<NominalType>> {
+        match self.resolve(t) {
+            Type::Nominal(nominal) if nominal.validation.is_some() => Some(nominal),
+            Type::Tuple(items) => items.iter().find_map(|item| self.validated_nominal_in(item)),
+            Type::List(element) => self.validated_nominal_in(&element),
+            _ => None,
+        }
+    }
+
+    fn sort_key_detail(&self, key: &Type) -> String {
+        let mut detail = format!("Expected: a sort key\nFound: {}", show_type(&self.zonk(key)));
+        if let Some(nominal) = self.validated_nominal_in(key)
+            && let Some(validation) = &nominal.validation
+        {
+            detail.push_str(&format!(
+                "\n{} is not a sort key, because its text does not order like its value. Compare two with {}.",
+                nominal.name, validation.compare
+            ));
+        }
+        detail
     }
 
     fn collecting<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> (R, Effects<'r>) {
@@ -1801,7 +1823,7 @@ impl<'r> Checker<'r> {
                         *span,
                         "sort-by needs a key that is an Int, Float, String, Bool, or a tuple of them.",
                     )
-                    .detail(format!("Expected: a sort key\nFound: {}", show_type(&self.zonk(key))))
+                    .detail(self.sort_key_detail(key))
                     .help("sort-by"),
                 );
             }
@@ -3414,7 +3436,14 @@ impl<'r> Checker<'r> {
                 let (second, _) = self.check(&args[1], Some(&first_type), scope);
                 let resolved = self.resolve(&first_type);
                 if !matches!(resolved, Type::Never) && !self.is_open(&resolved) && resolved != STRING {
-                    let hint = matches!(resolved, Type::Option(_)).then(|| OPTIONAL_HINT.to_string());
+                    let hint = match &resolved {
+                        Type::Option(_) => Some(OPTIONAL_HINT.to_string()),
+                        Type::Nominal(nominal) => nominal
+                            .validation
+                            .as_ref()
+                            .map(|validation| format!("Compare two {} with {}.", nominal.name, validation.compare)),
+                        _ => None,
+                    };
                     let message =
                         format!("{op} compares integers, floats, or strings, but this is {}.", describe(&self.zonk(&resolved)));
                     self.report(Diagnostic::new("type-mismatch", args[0].span, message).maybe_detail(hint).help(op));
@@ -3683,7 +3712,7 @@ impl<'r> Checker<'r> {
                             show(&filter[2])
                         ));
                     }
-                    let mut detail = format!("Expected: a sort key\nFound: {}", show_type(&self.zonk(&key)));
+                    let mut detail = self.sort_key_detail(&key);
                     if let Some(hint) = &hint {
                         detail.push('\n');
                         detail.push_str(hint);

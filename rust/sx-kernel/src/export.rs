@@ -9,7 +9,7 @@ use crate::ir::{
 use crate::json::{Json, parse};
 use crate::registry::Effect;
 use crate::syntax::{Position, Span};
-use crate::types::{CallErrorKind, EnumType, Primitive, RecordType, Type};
+use crate::types::{CallErrorKind, EnumType, NominalType, Primitive, RecordType, Type};
 use crate::values::{MapValue, RecordValue, Value, base64_decode, base64_encode};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -116,7 +116,7 @@ impl<'a> Reader<'a> {
         {
             let name = string(field(json, "nominal", "nominal type")?, "nominal name")?;
             let base = self.type_of(field(json, "base", "nominal type")?)?;
-            return Ok(Type::Nominal { name, base: Box::new(base) });
+            return Ok(Type::Nominal(Arc::new(NominalType::plain(&name, base))));
         }
         let Some((key, inner)) = only_entry(json) else {
             return Err(bad("type", json));
@@ -554,7 +554,7 @@ impl Writer<'_> {
             Type::Result(ok, err) => self.result_type(ok, err),
             Type::Record(record) => self.record_type(record),
             Type::Enum(e) => self.enum_type(e),
-            Type::Nominal { name, base } => self.nominal_type(name, base),
+            Type::Nominal(nominal) => self.nominal_type(nominal),
             Type::Variable(id) => Json::object([("var", int(*id))]),
             Type::Never => Json::string("Never"),
         }
@@ -589,9 +589,13 @@ impl Writer<'_> {
         ])
     }
 
-    fn nominal_type(&mut self, name: &str, base: &Type) -> Json {
-        let base = self.type_of(base);
-        Json::Object(vec![("nominal".to_string(), Json::string(name)), ("base".to_string(), base)])
+    fn nominal_type(&mut self, nominal: &NominalType) -> Json {
+        let base = self.type_of(&nominal.base);
+        let mut fields = vec![("nominal".to_string(), Json::string(nominal.name.as_str())), ("base".to_string(), base)];
+        if nominal.validation.is_some() {
+            fields.push(("validated".to_string(), Json::Bool(true)));
+        }
+        Json::Object(fields)
     }
 
     fn enum_type(&mut self, e: &Arc<EnumType>) -> Json {

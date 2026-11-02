@@ -4,9 +4,10 @@ use std::sync::Arc;
 use sx_kernel::json::Json;
 use sx_kernel::machine::{CoreError, CoreImplementations};
 use sx_kernel::registry::{Assurance, Core, Evidence, Example, Function, LoadError, Registry, RegistryError, load_declarations};
-use sx_kernel::types::{BOOL, EnumType, INT, RecordType, STRING, Type};
+use sx_kernel::types::{BOOL, EnumType, FLOAT, INT, NominalType, RecordType, STRING, Type};
 use sx_kernel::values::{RecordValue, Value};
 
+use crate::decimal::{Decimal, DecimalError, Rounding};
 use crate::git::{self, Checkout, Head};
 use crate::github::{self, Check, CiState, UpstreamState};
 use crate::semver::{self, Version};
@@ -382,8 +383,123 @@ pub fn github_core() -> Core {
     }
 }
 
+fn canonical_decimal(text: &str) -> Result<String, String> {
+    Decimal::parse(text).map(Decimal::show).map_err(|error| error.to_string())
+}
+
+fn decimal_type() -> Type {
+    Type::Nominal(Arc::new(NominalType::validated(
+        "decimal.Decimal",
+        canonical_decimal,
+        "decimal.compare",
+        "a string holding a decimal literal such as \"-12.5\", with at most 38 significant and 38 fractional digits",
+    )))
+}
+
+pub fn decimal_core() -> Core {
+    let decimal = decimal_type();
+    let modes: Vec<&str> = Rounding::ALL.iter().map(|mode| mode.variant()).collect();
+    let rounding = nullary_enum("decimal.Rounding", &modes);
+    let quarter = "(decimal.div (decimal.from-int 1) (decimal.from-int 4) 2 HalfEven)";
+    let functions = vec![
+        function(
+            "decimal.parse",
+            vec![STRING],
+            option(decimal.clone()),
+            "Reads an optional minus sign, digits, and optionally a point and digits, or none for anything else, \
+             including a value of more than 38 significant or fractional digits.",
+            ("(decimal.parse \"12.50\")", "(some \"12.5\")"),
+        ),
+        function(
+            "decimal.show",
+            vec![decimal.clone()],
+            STRING,
+            "Writes a decimal without trailing fractional zeros, so 1.50 is 1.5 and -0 is 0.",
+            ("(decimal.show (decimal.from-int -7))", "\"-7\""),
+        ),
+        function(
+            "decimal.format",
+            vec![decimal.clone(), INT],
+            STRING,
+            "Writes a decimal with exactly the given number of places from 0 to 38, rounding half to even.",
+            (&format!("(decimal.format {quarter} 1)"), "\"0.2\""),
+        ),
+        function(
+            "decimal.from-int",
+            vec![INT],
+            decimal.clone(),
+            "The decimal equal to an Int.",
+            ("(decimal.from-int 42)", "\"42\""),
+        ),
+        function(
+            "decimal.add",
+            vec![decimal.clone(), decimal.clone()],
+            decimal.clone(),
+            "Adds exactly. A result beyond 38 significant or fractional digits stops the program.",
+            (&format!("(decimal.add {quarter} {quarter})"), "\"0.5\""),
+        ),
+        function(
+            "decimal.sub",
+            vec![decimal.clone(), decimal.clone()],
+            decimal.clone(),
+            "Subtracts exactly. A result beyond 38 significant or fractional digits stops the program.",
+            (&format!("(decimal.sub (decimal.from-int 1) {quarter})"), "\"0.75\""),
+        ),
+        function(
+            "decimal.mul",
+            vec![decimal.clone(), decimal.clone()],
+            decimal.clone(),
+            "Multiplies exactly. A result beyond 38 significant or fractional digits stops the program.",
+            (&format!("(decimal.mul {quarter} {quarter})"), "\"0.0625\""),
+        ),
+        function(
+            "decimal.div",
+            vec![decimal.clone(), decimal.clone(), INT, rounding.clone()],
+            decimal.clone(),
+            "Divides and rounds to the given number of places from 0 to 38 with a rounding mode. Dividing by zero \
+             stops the program.",
+            ("(decimal.div (decimal.from-int 2) (decimal.from-int 3) 4 HalfEven)", "\"0.6667\""),
+        ),
+        function(
+            "decimal.round",
+            vec![decimal.clone(), INT, rounding.clone()],
+            decimal.clone(),
+            "Rounds to the given number of places from 0 to 38 with a rounding mode. HalfEven and HalfUp send ties \
+             to the even and the farther neighbor; Down and Up go toward and away from zero; Floor and Ceiling go \
+             toward negative and positive infinity.",
+            ("(decimal.round (decimal.div (decimal.from-int 5) (decimal.from-int 2) 1 Down) 0 HalfEven)", "\"2\""),
+        ),
+        function(
+            "decimal.compare",
+            vec![decimal.clone(), decimal.clone()],
+            INT,
+            "-1, 0, or 1 as the first decimal is less than, equal to, or greater than the second. Decimals are not \
+             sort keys: compare them with this.",
+            ("(decimal.compare (decimal.from-int 1) (decimal.from-int 2))", "-1"),
+        ),
+        function(
+            "decimal.to-float",
+            vec![decimal.clone()],
+            FLOAT,
+            "The Float nearest a decimal.",
+            (&format!("(decimal.to-float {quarter})"), "0.25"),
+        ),
+    ];
+    Core {
+        id: "decimal".to_string(),
+        version: "0.1.0".to_string(),
+        functions,
+        types: vec![("decimal.Decimal".to_string(), decimal), ("decimal.Rounding".to_string(), rounding)],
+        evidence: conformance(&[
+            "rust/sx-cores/tests/decimal_vectors.rs::every_decimal_vector_holds_through_the_kernel",
+            "rust/sx-cores/tests/decimal_vectors.rs::every_decimal_example_produces_its_documented_result",
+            "tests/test_decimal_vectors.py::test_committed_vectors_match_python_decimal",
+        ]),
+    }
+}
+
 pub fn cores() -> Vec<Core> {
-    vec![text_core(), semver_core(), git_core(), github_core()]
+    vec![text_core(), semver_core(), git_core(), github_core(), decimal_core()]
 }
 
 pub fn core(id: &str) -> Option<Core> {
@@ -411,13 +527,13 @@ impl std::error::Error for DeclaredError {}
 
 pub fn declared_registry(declarations: &Json) -> Result<Registry, DeclaredError> {
     let mut registry = Registry::new();
-    load_declarations(&mut registry, declarations).map_err(DeclaredError::Load)?;
     let ids = declarations.get("cores").and_then(Json::as_array).unwrap_or(&[]);
     for id in ids {
         let id = id.as_str().ok_or_else(|| DeclaredError::UnknownCore(format!("{id:?}")))?;
         let found = core(id).ok_or_else(|| DeclaredError::UnknownCore(id.to_string()))?;
         registry.add_core(found).map_err(DeclaredError::Registry)?;
     }
+    load_declarations(&mut registry, declarations).map_err(DeclaredError::Load)?;
     Ok(registry)
 }
 
@@ -591,6 +707,47 @@ fn ci_state_value(state: CiState) -> Value {
     Value::variant("github.CiState", state.variant(), None)
 }
 
+fn arithmetic<T>(result: Result<T, DecimalError>) -> Result<T, CoreError> {
+    result.map_err(|error| CoreError::Arithmetic(error.to_string()))
+}
+
+fn decimal_of(value: &Value) -> Option<Decimal> {
+    Decimal::parse(string_of(value)?).ok()
+}
+
+fn decimal_value(decimal: Decimal) -> Value {
+    Value::string(&decimal.show())
+}
+
+fn rounding_of(value: &Value) -> Option<Rounding> {
+    Rounding::from_variant(variant_name(value)?)
+}
+
+fn decimal_call(function: &str, args: &[Value]) -> Option<Result<Value, CoreError>> {
+    let value = match (function, args) {
+        ("decimal.parse", [s]) => Ok(some_or_none(Decimal::parse(string_of(s)?).ok().map(decimal_value))),
+        ("decimal.show", [d]) => Ok(Value::string(&decimal_of(d)?.show())),
+        ("decimal.format", [d, places]) => arithmetic(decimal_of(d)?.format(int_of(places)?)).map(|text| Value::string(&text)),
+        ("decimal.from-int", [n]) => Ok(decimal_value(Decimal::from_int(int_of(n)?))),
+        ("decimal.add", [a, b]) => arithmetic(decimal_of(a)?.sum(decimal_of(b)?)).map(decimal_value),
+        ("decimal.sub", [a, b]) => arithmetic(decimal_of(a)?.subtract(decimal_of(b)?)).map(decimal_value),
+        ("decimal.mul", [a, b]) => arithmetic(decimal_of(a)?.multiply(decimal_of(b)?)).map(decimal_value),
+        ("decimal.div", [a, b, places, mode]) => {
+            arithmetic(decimal_of(a)?.divide(decimal_of(b)?, int_of(places)?, rounding_of(mode)?)).map(decimal_value)
+        }
+        ("decimal.round", [d, places, mode]) => {
+            arithmetic(decimal_of(d)?.round(int_of(places)?, rounding_of(mode)?)).map(decimal_value)
+        }
+        ("decimal.compare", [a, b]) => Ok(Value::Int(decimal_of(a)?.compare(decimal_of(b)?) as i64)),
+        ("decimal.to-float", [d]) => match decimal_of(d)?.to_float() {
+            Some(float) => Ok(Value::float(float)),
+            None => Err(CoreError::Failed("the decimal has no finite Float".to_string())),
+        },
+        _ => return None,
+    };
+    Some(value)
+}
+
 pub struct Cores;
 
 impl Cores {
@@ -641,6 +798,7 @@ impl Cores {
             ("github.upstream-state-name", [state]) => {
                 Value::string(github::upstream_state_name(upstream_state_of(state)?))
             }
+            (function, args) if function.starts_with("decimal.") => return decimal_call(function, args),
             _ => return Some(Err(CoreError::Unimplemented)),
         };
         Some(Ok(value))
