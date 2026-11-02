@@ -301,6 +301,13 @@ a real lead. Sx still costs 1.7 times the tokens per solved task; its first prom
 than TypeScript's, mostly the guide. The expressiveness gap is 2 of 30. The fresh set's answers stay
 unread, so it can serve once more as a gate after a future revision.
 
+Of that cost, output tokens per solved task are 2,897 for Sx and 2,703 for TypeScript, 1.07
+times. The difference is almost all input, and the guide is a fixed prefix a host can cache.
+A shorter guide does not help: after the gate, the `minimal` level on the development and
+retired sets scored 37 of 41 at first attempt against 38 of 41 for `standard`, but cost more
+tokens per solved task (4,773 against 4,602 on development, 7,996 against 6,429 on the retired
+set), because Muse Spark reasons more when the guide says less. `standard` stays.
+
 Out of the revision: `Map` and dynamic keys (`assoc`, `keys`), which also make up the
 expressiveness gap, belong to the type-set work in the roadmap.
 

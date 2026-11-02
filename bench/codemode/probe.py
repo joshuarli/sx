@@ -297,6 +297,7 @@ def summarize(arm_trials: list[Trial], tasks: list[str]) -> dict[str, Any]:
     final = {task: mean(t.final_correct for t in arm_trials if t.task == task) for task in tasks}
     solved = sum(t.final_correct for t in arm_trials)
     total = sum(tokens(t) for t in arm_trials)
+    output = sum(sum(a.tokens.get("output", 0) for a in t.attempts) for t in arm_trials)
     return {
         "first": first,
         "final": final,
@@ -308,6 +309,7 @@ def summarize(arm_trials: list[Trial], tasks: list[str]) -> dict[str, Any]:
         "reasoning": mean(sum(a.tokens.get("reasoning", 0) for a in t.attempts) for t in arm_trials),
         "attempts": mean(len(t.attempts) for t in arm_trials),
         "per_solved": total / solved if solved else float("inf"),
+        "output_per_solved": output / solved if solved else float("inf"),
     }
 
 
@@ -322,15 +324,16 @@ def report(trials: list[Trial], expressiveness: tuple[str, int, int]) -> str:
         lines += [f"## {model}", "", f"Tasks with every condition: {len(tasks)}", ""]
         lines += [
             "| Condition | First attempt | Final | Attempts | First prompt | Input per trial | Output per trial "
-            "| Of which reasoning | Tokens per solved task |",
-            "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+            "| Of which reasoning | Tokens per solved task | Output per solved task |",
+            "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
         ]
         for name, st in stats.items():
             per_solved = f"{st['per_solved']:,.0f}" if st["solved"] else "none solved"
+            output_per_solved = f"{st['output_per_solved']:,.0f}" if st["solved"] else "none solved"
             lines.append(
                 f"| {name} | {mean(st['first'].values()):.1%} | {mean(st['final'].values()):.1%} "
                 f"| {st['attempts']:.2f} | {st['prompt']:,.0f} | {st['input']:,.0f} | {st['output']:,.0f} "
-                f"| {st['reasoning']:,.0f} | {per_solved} |"
+                f"| {st['reasoning']:,.0f} | {per_solved} | {output_per_solved} |"
             )
         lines.append("")
         if "js" in stats:
