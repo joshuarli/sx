@@ -613,9 +613,55 @@ example is: CI aggregation never reports `passing` when a required check failed.
 
 Port the kernel to Rust once Phases 2 to 4 hold. Check it against the same fixtures, compared
 with both Python and Lean. Only then measure parsing, evaluation, suspension, and host dispatch
-cost.
+cost. This plan was written when Phase 4 ended and waits for the owner's review before any work
+starts.
 
-Plan this phase in detail when Phase 4 ends.
+**Scope.** The reader, checker, semantic IR, machine, values and JSON, registry, budgets,
+diagnostics, help, and the `sx` command line, plus the `text`, `semver`, `git`, and `github`
+cores, which the fixtures and the benchmark use. Optimization, WASM, and host SDKs belong to
+campaign 4.
+
+**Layout.** A Cargo workspace in `rust/` with three crates: `sx-kernel` (a library whose modules
+mirror `src/sx`), `sx-cores` (the four cores), and `sx-cli` (the binary). A stable toolchain is
+pinned in `rust/rust-toolchain.toml`. Dependencies stay minimal: `serde_json` for JSON and `ryu`
+for shortest float digits. The case-folding table for `text.casefold` is generated from
+Python's `unicodedata` and checked in, so it matches the prototype code point for code point.
+
+**Order of work.** Each step lands with its conformance check green.
+
+1. Values, types, and type-directed JSON, checked by decoding and encoding every value in
+   `fixtures/run`.
+2. The reader, checked byte for byte against `fixtures/read`.
+3. The machine, driven by IR that Python exports with `sx check --emit ir`, so machine
+   conformance does not wait for the checker. Gate: every accepted `fixtures/run` case gives the
+   same outcome and exact trace.
+4. The checker. Gate: the IR it emits is identical to Python's for every accepted fixture, and
+   every `fixtures/check` output is byte-identical, diagnostics included.
+5. The cores, `sx help`, and the command line, checked against Python's output for every help
+   entry and every CLI fixture.
+6. Differential testing. The probe has saved several hundred real model programs. The Rust
+   kernel must give the same check result and verdict on each as Python. A grammar-based
+   generator then compares random programs across Python, Rust, and Lean's `sx-ref`.
+7. The host boundary, then the repomod host on the Rust kernel, gated by the Phase 3 parity
+   tests.
+8. Measurements of parsing, checking, evaluation, suspension and resume, and host dispatch,
+   against Python, under the perf-gate rules.
+
+**Gate.** Rust agrees with Python on every fixture and every saved model program, with Lean on
+every accepted fixture, and the repomod parity tests pass on the Rust kernel.
+
+**Decisions for the review.**
+
+- **Host boundary.** A JSON protocol over standard input and output, where the host sends a
+  program and responses and receives requests, serves Python, TypeScript, and Bun hosts with one
+  implementation, because suspension is already plain data. A PyO3 module is faster for Python
+  hosts only. The recommendation is the JSON protocol first, and PyO3 only if the measured
+  dispatch cost calls for it.
+- **Identical diagnostics.** Diagnostics and help are part of the language, so the
+  recommendation is byte-identical text across implementations, enforced by the check fixtures.
+- **The Python prototype after the port.** The recommendation is to keep it as an executable
+  specification beside Lean until Rust passes every gate, then freeze it: new features land in
+  Rust and Lean.
 
 ## repomod safety rules
 
