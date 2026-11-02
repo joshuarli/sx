@@ -1,0 +1,6 @@
+{
+  "fs.read-text": {"roots": ["{{root}}/deploy"]},
+  "fs.list": {"roots": ["{{root}}/deploy"]},
+  "fs.stat": {"roots": ["{{root}}/deploy"]},
+  "fs.move": {"roots": ["{{root}}/deploy"]}
+}

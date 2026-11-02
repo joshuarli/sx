@@ -1,0 +1,19 @@
+(let [deploy "{{root}}/deploy"
+      retire (call fs.read-text {:path (str deploy "/retire.json")})
+      releases (call fs.read-text {:path (str deploy "/releases.json")})
+      pins (call fs.read-text {:path (str deploy "/pins.txt")})
+      listed (map (fn [i] (match (json.get retire ["retire" i]) (some v) v none ""))
+                  (json.keys retire ["retire"]))
+      pinned (map (fn [line] (first (text.split (text.trim line) " ")))
+                  (filter (fn [line] (not= (text.trim line) "")) (text.split pins "\n")))
+      live (match (json.get releases ["live"]) (some v) v none "")
+      staging (match (json.get releases ["staging"]) (some v) v none "")
+      protected (concat pinned [live staging])
+      present (map (fn [e] (get e :name)) (call fs.list {:path (str deploy "/builds")}))
+      archived (map (fn [e] (get e :name)) (call fs.list {:path (str deploy "/archive")}))
+      movable? (fn [name]
+                 (and (and (not (contains? protected name)) (contains? present name))
+                      (not (contains? archived name))))
+      moved (filter movable? listed)
+      _ (map (fn [name] (call fs.move {:from (str deploy "/builds/" name) :to (str deploy "/archive/" name)})) moved)]
+  {:moved moved :skipped (filter (fn [name] (not (movable? name))) listed)})
