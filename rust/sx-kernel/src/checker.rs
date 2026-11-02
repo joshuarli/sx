@@ -230,6 +230,18 @@ fn record_names(record: &RecordType) -> BTreeSet<&str> {
     record.fields.iter().map(|(name, _)| name.as_str()).collect()
 }
 
+fn always_recurs(at: &ir::Node) -> bool {
+    match &at.kind {
+        Ir::Recur { .. } => true,
+        Ir::Let(ir::Let { body, .. }) | Ir::LocalFunction { body, .. } | Ir::Coerce { value: body, .. } => {
+            always_recurs(body)
+        }
+        Ir::If(ir::If { then, otherwise, .. }) => always_recurs(then) && always_recurs(otherwise),
+        Ir::Match(ir::Match { clauses, .. }) => clauses.iter().all(|(_, body)| always_recurs(body)),
+        _ => false,
+    }
+}
+
 fn float_fix(source: Option<&Node>) -> Option<String> {
     let source = source?;
     if let NodeKind::Symbol(name) = &source.kind
@@ -254,7 +266,7 @@ pub fn describe(t: &Type) -> String {
     article(&show_type(t))
 }
 
-pub fn edit_distance(a: &str, b: &str) -> usize {
+fn edit_distance(a: &str, b: &str) -> usize {
     let b: Vec<char> = b.chars().collect();
     let mut previous: Vec<usize> = (0..=b.len()).collect();
     for (i, ca) in a.chars().enumerate() {
@@ -524,6 +536,7 @@ struct Checker<'r> {
     trail: Vec<usize>,
     shapes: HashMap<usize, Shape>,
     presence_tests: Vec<PresenceTest>,
+    late_sort_keys: Vec<(Type, Span)>,
     diagnostics: Vec<Diagnostic>,
     effects: Vec<Effects<'r>>,
     capabilities_used: BTreeSet<String>,
@@ -687,6 +700,9 @@ impl<'r> Checker<'r> {
                 return true;
             };
             let Some(other_shape) = other_shape else {
+                if self.occurs(other_id, &Type::Variable(variable)) {
+                    return false;
+                }
                 self.assign(other_id, Type::Variable(variable));
                 return true;
             };
@@ -1774,6 +1790,23 @@ impl<'r> Checker<'r> {
         }
     }
 
+    fn check_late_sort_keys(&mut self) {
+        let keys = std::mem::take(&mut self.late_sort_keys);
+        for (key, span) in &keys {
+            if !self.is_sort_key(key) {
+                self.report(
+                    Diagnostic::new(
+                        "type-mismatch",
+                        *span,
+                        "sort-by needs a key that is an Int, Float, String, Bool, or a tuple of them.",
+                    )
+                    .detail(format!("Expected: a sort key\nFound: {}", show_type(&self.zonk(key))))
+                    .help("sort-by"),
+                );
+            }
+        }
+    }
+
     fn narrowed<'a>(test: &Test, scope: &Scope<'a>) -> Scope<'a> {
         match (&test.name, &test.inner) {
             (Some(name), Some(inner)) => scope.value(name, inner.clone()),
@@ -2519,8 +2552,15 @@ impl<'r> Checker<'r> {
     }
 
     fn durations(&mut self, syntax: &Node, form: &str, option_name: &str, count: Option<usize>) -> Option<Vec<i64>> {
-        if let (NodeKind::Duration(ms), None) = (&syntax.kind, count) {
-            return Some(vec![*ms]);
+        if let (NodeKind::Duration(_), None) = (&syntax.kind, count) {
+            let shown = show(syntax);
+            self.report(
+                Diagnostic::new("bad-option", syntax.span, format!(":{option_name} takes a list of durations, one per retry."))
+                    .detail(format!("A list states how many times to retry; [{shown}] retries once."))
+                    .fix(format!("[{shown}]"))
+                    .help(form),
+            );
+            return None;
         }
         if let Some(items) = list_items(syntax) {
             let found: Vec<i64> = items
@@ -2851,6 +2891,17 @@ impl<'r> Checker<'r> {
         let saved = self.tail.replace(LoopContext { types });
         let (body, t) = self.repeated(|c| c.check(&items[3], expected, &inner));
         self.tail = saved;
+        if always_recurs(&body) {
+            self.report(
+                Diagnostic::new(
+                    "loop-no-result",
+                    items[3].span,
+                    "This loop body always ends in recur, so the loop has no result and can only fail with loop-limit.",
+                )
+                .detail("Give the body a branch that does not recur, such as (if done? result (recur ...)).")
+                .help("loop"),
+            );
+        }
         (node(Ir::Loop(ir::Loop { maximum, binders, initial, body: Box::new(body) }), span), t)
     }
 
@@ -3588,6 +3639,9 @@ impl<'r> Checker<'r> {
                 };
                 let (function, key) = self.function_argument(function_node, vec![element.clone()], None, op, scope);
                 self.sort_key_owner = None;
+                if self.is_open(&key) {
+                    self.late_sort_keys.push((key.clone(), function_node.span));
+                }
                 if !self.is_sort_key(&key) {
                     let mut hint = None;
                     if head_name(items_node) == Some("filter")
@@ -3932,6 +3986,7 @@ fn elaborate(
         trail: Vec::new(),
         shapes: HashMap::new(),
         presence_tests: Vec::new(),
+        late_sort_keys: Vec::new(),
         diagnostics: Vec::new(),
         effects: Vec::new(),
         capabilities_used: BTreeSet::new(),
@@ -3952,6 +4007,7 @@ fn elaborate(
     let (mut body, result) = checker.check(program, None, &scope);
     drop(scope);
     checker.check_presence_tests();
+    checker.check_late_sort_keys();
     checker.check_size(program);
     checker.settle(&mut body);
     let result = checker.zonk(&result);
