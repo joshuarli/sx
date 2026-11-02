@@ -2,6 +2,8 @@ import ast
 from pathlib import Path
 
 import pytest
+from sx_git import CORE as GIT
+from sx_github import CORE as GITHUB
 from sx_semver import CORE as SEMVER
 from sx_text import CORE as TEXT
 
@@ -9,7 +11,7 @@ from sx.cli import EXIT_OK, main
 from sx.registry import Assurance, Core, Evidence, Registry, RegistryError
 
 ROOT = Path(__file__).parent.parent
-WORKSPACE_CORES = (TEXT, SEMVER)
+WORKSPACE_CORES = (TEXT, SEMVER, GIT, GITHUB)
 
 
 def bare(*evidence: Evidence) -> Core:
@@ -88,4 +90,6 @@ def test_cores_lists_each_core_with_its_levels(capsys: pytest.CaptureFixture[str
     assert capsys.readouterr().out.splitlines() == [
         "text 0.1.0  unverified, conformance-tested",
         "semver 0.1.0  unverified, conformance-tested",
+        "git 0.1.0  unverified, conformance-tested",
+        "github 0.1.0  unverified, conformance-tested",
     ]

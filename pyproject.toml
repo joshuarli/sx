@@ -17,6 +17,8 @@ members = ["cores/*"]
 [tool.uv.sources]
 sx-text = { workspace = true }
 sx-semver = { workspace = true }
+sx-git = { workspace = true }
+sx-github = { workspace = true }
 
 [dependency-groups]
 dev = [
@@ -25,6 +27,8 @@ dev = [
     "ruff>=0.15",
     "sx-text",
     "sx-semver",
+    "sx-git",
+    "sx-github",
 ]
 
 [tool.pytest.ini_options]
@@ -32,7 +36,7 @@ testpaths = ["tests", "cores"]
 pythonpath = ["bench/codemode"]
 
 [tool.ty.environment]
-root = ["src", "tests", "bench", "bench/codemode", "cores/text/src", "cores/semver/src"]
+root = ["src", "tests", "bench", "bench/codemode", "cores/text/src", "cores/semver/src", "cores/git/src", "cores/github/src"]
 python-version = "3.15"
 python-platform = "darwin"
 

@@ -5,6 +5,8 @@ requires-python = ">=3.15"
 [manifest]
 members = [
     "sx",
+    "sx-git",
+    "sx-github",
     "sx-semver",
     "sx-text",
 ]
@@ -104,6 +106,8 @@ source = { editable = "." }
 dev = [
     { name = "pytest" },
     { name = "ruff" },
+    { name = "sx-git" },
+    { name = "sx-github" },
     { name = "sx-semver" },
     { name = "sx-text" },
     { name = "ty" },
@@ -115,10 +119,34 @@ dev = [
 dev = [
     { name = "pytest", specifier = ">=9.1.1" },
     { name = "ruff", specifier = ">=0.15" },
+    { name = "sx-git", editable = "cores/git" },
+    { name = "sx-github", editable = "cores/github" },
     { name = "sx-semver", editable = "cores/semver" },
     { name = "sx-text", editable = "cores/text" },
     { name = "ty", specifier = ">=0.0.84" },
 ]
+
+[[package]]
+name = "sx-git"
+version = "0.1.0"
+source = { editable = "cores/git" }
+dependencies = [
+    { name = "sx" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "sx", editable = "." }]
+
+[[package]]
+name = "sx-github"
+version = "0.1.0"
+source = { editable = "cores/github" }
+dependencies = [
+    { name = "sx" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "sx", editable = "." }]
 
 [[package]]
 name = "sx-semver"
