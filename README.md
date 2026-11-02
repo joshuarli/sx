@@ -61,11 +61,14 @@ uv run python -c "import importlib.util, sys; sys.exit(importlib.util.find_spec(
 
 ## Run repomod programs
 
-`sx-repomod` runs `discover` and `status --offline` as Sx programs and prints what the Python
-commands print. It imports repomod from `../repomod/src` when you put it on `PYTHONPATH`. Set
+`sx-repomod` runs `discover` and `status --offline` as Sx programs on the Rust kernel and prints
+what the Python commands print. It speaks the [host protocol](docs/language.md#host-protocol) to
+`sx serve`, which it finds at `rust/target/release/sx` or `rust/target/debug/sx`, or at `SX_KERNEL`.
+It imports repomod from `../repomod/src` when you put it on `PYTHONPATH`. Set
 `PYTHONDONTWRITEBYTECODE=1` so nothing is written into `../repomod`. Both programs only read.
 
 ```sh
+cargo build --release --manifest-path rust/Cargo.toml -p sx-cli
 export PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=../repomod/src
 uv run sx-repomod status --offline --json --repo acme/tool
 uv run sx-repomod discover --owner acme
@@ -83,6 +86,8 @@ inputs, and compare the parsed JSON, the text, and the exit status:
 ```sh
 PYTHONDONTWRITEBYTECODE=1 uv run pytest hosts/repomod/tests -p no:cacheprovider
 ```
+
+The tests build the Rust kernel with `cargo` first.
 
 The tests find repomod next to this repository, or at `SX_REPOMOD`. To check types against
 repomod's own, run

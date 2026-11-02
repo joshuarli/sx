@@ -16,13 +16,15 @@ def main(target: Path) -> int:
         case = json.loads(path.read_text())
         program = target / f"{path.stem}.sx"
         program.write_text(case["program"])
-        arguments = ["explain", str(program), "--declarations", str(FIXTURES / case["declarations"]), "--format", "json"]
+        declarations = str(FIXTURES / case["declarations"])
+        arguments = ["explain", str(program), "--declarations", declarations, "--format", "json"]
         for capability in case["allow"]:
             arguments += ["--allow", capability]
         captured = io.StringIO()
         with contextlib.redirect_stdout(captured):
             code = sx_main(arguments)
-        (target / f"{path.stem}.explain.json").write_text(json.dumps({"code": code, "output": json.loads(captured.getvalue())}))
+        report = {"code": code, "output": json.loads(captured.getvalue())}
+        (target / f"{path.stem}.explain.json").write_text(json.dumps(report))
     return 0
 
 

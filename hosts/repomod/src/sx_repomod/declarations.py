@@ -9,7 +9,6 @@ from sx_github import CORE as GITHUB
 from sx_text import CORE as TEXT
 
 from sx.registry import Capability, Effect, Registry
-from sx.types import Type
 
 FINDING = (
     "Record {repository: String, rule: String, file: Option<String>, message: String, severity: String, "
@@ -42,6 +41,9 @@ CAPABILITIES: tuple[tuple[str, str, str, str], ...] = (
 )
 
 
+CORE_IDS = tuple(core.id for core in (TEXT, GIT, GITHUB))
+
+
 def new_registry() -> Registry:
     registry = Registry()
     for core in (TEXT, GIT, GITHUB):
@@ -69,8 +71,16 @@ class Program:
     def source(self) -> str:
         return files("sx_repomod").joinpath("programs", f"{self.name}.sx").read_text()
 
-    def input_types(self, registry: Registry) -> dict[str, Type]:
-        return {name: registry.parse(text) for name, text in self.inputs.items()}
+    @property
+    def declarations(self) -> dict[str, object]:
+        return {
+            "cores": list(CORE_IDS),
+            "inputs": dict(self.inputs),
+            "capabilities": [
+                {"id": capability_id, "effect": "read", "input": input_type, "output": output_type, "description": text}
+                for capability_id, input_type, output_type, text in CAPABILITIES
+            ],
+        }
 
 
 DISCOVER = Program(
