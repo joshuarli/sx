@@ -1,0 +1,26 @@
+(let [pages (loop {:max 20} [n 1 acc []]
+              (let [page (call issues.page {:page n :per_page 20})
+                    items (get page :items)]
+                (if (= (count items) 0)
+                  {:count n :items acc}
+                  (recur (+ n 1) (concat acc items)))))
+      latest (reduce (fn [m i] (assoc m (text.from-int (get i :id)) i)) {} (get pages :items))
+      candidates (sort-by (fn [i] (get i :id))
+                          (filter (fn [i] (and (= (get i :severity) "critical") (= (get i :state) "open")))
+                                  (vals latest)))
+      known (map (fn [r] (get r :issue_id)) (call notified.ids {}))
+      outcomes (map (fn [i]
+                      (if (contains? known (get i :id))
+                        {:id (get i :id) :outcome "already"}
+                        (match (attempt (call chat.post {:channel "#oncall"
+                                                         :text (str "Critical issue #" (get i :id) ": " (get i :title))}))
+                          (ok _) (let [_ (call notified.add {:issue_id (get i :id) :title (get i :title)})]
+                                   {:id (get i :id) :outcome "notified"})
+                          (err _) {:id (get i :id) :outcome "failed"})))
+                    candidates)
+      ids (fn [outcome] (map (fn [o] (get o :id)) (filter (fn [o] (= (get o :outcome) outcome)) outcomes)))]
+  {:pages (get pages :count)
+   :candidates (count candidates)
+   :already (ids "already")
+   :notified (ids "notified")
+   :failed (ids "failed")})

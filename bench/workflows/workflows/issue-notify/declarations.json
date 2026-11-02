@@ -1,0 +1,46 @@
+{
+  "cores": ["text"],
+  "packs": ["sqlite"],
+  "capabilities": [
+    {
+      "id": "issues.page",
+      "http": {"method": "GET", "url": "{{tracker_origin}}/issues", "query": ["page", "per_page"]},
+      "input": "Record {page: Int, per_page: Int}",
+      "output": "Record open {items: List<Record open {id: Int, title: String, severity: String, state: String, assignee: Option<String>}>}",
+      "effect": "read",
+      "description": "Returns one numbered page of issues. A page past the end has no items."
+    },
+    {
+      "id": "chat.post",
+      "http": {"method": "POST", "url": "{{chat_origin}}/messages", "query": []},
+      "input": "Record {channel: String, text: String}",
+      "output": "Record open {id: Int}",
+      "effect": "write",
+      "idempotent": false,
+      "description": "Posts a message to a channel."
+    },
+    {
+      "id": "notified.ids",
+      "sqlite": {
+        "database": "{{root}}/notified.db",
+        "statement": "SELECT issue_id FROM notified ORDER BY issue_id"
+      },
+      "input": "Record {}",
+      "output": "List<Record {issue_id: Int}>",
+      "effect": "read",
+      "description": "Lists the ids of the issues announced so far."
+    },
+    {
+      "id": "notified.add",
+      "sqlite": {
+        "database": "{{root}}/notified.db",
+        "statement": "INSERT INTO notified(issue_id, title) VALUES (:issue_id, :title)"
+      },
+      "input": "Record {issue_id: Int, title: String}",
+      "output": "Int",
+      "effect": "write",
+      "idempotent": false,
+      "description": "Records an issue as announced."
+    }
+  ]
+}

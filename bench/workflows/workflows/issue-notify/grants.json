@@ -1,0 +1,6 @@
+{
+  "issues.page": {"origins": ["{{tracker_origin}}"], "methods": ["GET"]},
+  "chat.post": {"origins": ["{{chat_origin}}"], "methods": ["POST"]},
+  "notified.ids": {"roots": ["{{root}}"]},
+  "notified.add": {"roots": ["{{root}}"]}
+}
