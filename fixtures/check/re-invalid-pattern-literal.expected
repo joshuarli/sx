@@ -1,0 +1,5 @@
+error[bad-literal] 3:10-3:17
+  (re.find #"(\d+" "main.c:9")
+           ^^^^^^^
+  re.find cannot use this literal: found open group without closing ')'
+  Help: sx help re.find

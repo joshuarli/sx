@@ -11,6 +11,7 @@ pub mod git;
 pub mod github;
 pub mod guide;
 pub mod kernel;
+pub mod re;
 pub mod semver;
 mod tables;
 pub mod text;

@@ -35,6 +35,18 @@ pub struct Example {
     pub result: String,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct LiteralCheck {
+    pub argument: usize,
+    pub check: fn(&str) -> Result<(), String>,
+}
+
+impl PartialEq for LiteralCheck {
+    fn eq(&self, other: &LiteralCheck) -> bool {
+        self.argument == other.argument
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Function {
     pub name: String,
@@ -42,6 +54,7 @@ pub struct Function {
     pub output: Type,
     pub description: String,
     pub example: Option<Example>,
+    pub literal_checks: Vec<LiteralCheck>,
 }
 
 #[derive(Clone, Debug, PartialEq)]

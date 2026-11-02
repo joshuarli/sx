@@ -1461,7 +1461,7 @@ The checker's codes are:
 | --- | --- |
 | Reading | `unclosed`, `unexpected-close`, `bad-literal`, `bad-symbol`, `int-range`, `float-range`, `bad-escape`, `record-key`, `record-missing-value`, `duplicate-field`, `empty-program`, `multiple-expressions` |
 | Names | `unknown-name`, `unknown-function`, `unknown-capability`, `unknown-field`, `missing-field`, `unknown-variant`, `reserved-name` |
-| Calls | `arity`, `type-mismatch`, `unresolved-type`, `not-a-record`, `no-encoding` |
+| Calls | `arity`, `type-mismatch`, `unresolved-type`, `not-a-record`, `no-encoding`. `bad-literal` also reports a literal argument that a core rejects at check time, as `re.find` does for a pattern that does not compile. |
 | Forms | `condition-not-bool`, `missing-else`, `branch-mismatch`, `fn-position`, `bad-pattern`, `bad-option`, `recur-position`, `recur-arity`, `loop-no-result` |
 | Match | `non-exhaustive`, `unreachable-clause` |
 | Effects | `unauthorized`, `out-of-scope`, `parallel-write`, `par-map-limit`, `retry-write`, `wait-write` |
@@ -1650,6 +1650,76 @@ value after the colon or dash and keeps a trailing comment: `key: # c` becomes `
 
 An edit replaces the bytes of one scalar, so the text before and after it, comments, blank lines,
 indentation, key order, line ends, and the scalar's own trailing spaces and comment are unchanged.
+
+## The re core
+
+`re` is a Rust core, registered by listing `"re"` under `cores`. It matches regular expressions with the
+[`regex-lite`](https://crates.io/crates/regex-lite) engine, so a workflow can read compiler diagnostics,
+Git output, and logs without splitting on punctuation. Every function is pure, and the pattern is always
+the first argument, as in Clojure's `re-find`.
+
+| Function | Type |
+| --- | --- |
+| `re.find` | `String String -> Option<List<String>>`, the first match anywhere: the whole match, then each capture group |
+| `re.find-all` | `String String -> List<List<String>>`, every non-overlapping match, each as `re.find` lists it |
+| `re.matches` | `String String -> Option<List<String>>`, as `re.find`, only when the pattern matches the whole string |
+| `re.test` | `String String -> Bool`, whether the pattern matches anywhere |
+| `re.replace` | `String String String -> String`, pattern, input, replacement: every match replaced |
+| `re.split` | `String String -> List<String>`, the input cut at every match |
+
+```
+(match (re.find #"main\.c:(\d+):(\d+): error: (.*)" "main.c:9:18: error: expected ';'")
+  (some g) {:line (nth g 1) :message (nth g 3)}
+  none {:line "" :message ""})
+```
+
+**Argument order.** The pattern comes first in all six functions, including `re.replace` and `re.split`,
+although `text.replace` and `text.split` take the string first. Two strings and a pattern are all `String`,
+so a swapped call type-checks; one rule for the whole core is the order a model can keep, and it is the
+order of `re-find`, `re-matches`, and `re-seq`, which models know from Clojure.
+
+**Groups.** `(nth m 0)` is the whole match and `(nth m 1)` is group 1, numbered by opening parenthesis, as in
+JavaScript's `match`. A group that did not take part in the match, such as `(b)?` that matched nothing or the
+unused side of `(a)|(b)`, is the empty string, so it cannot be told from a group that matched empty text.
+`re.find` and `re.matches` always return the whole-match element even when the match is empty.
+
+**Matches.** `re.find-all` scans left to right and never overlaps matches. A match that can be empty is
+found at each position that fits and not right after a match that ended there: `x*` on `axb` gives `""`,
+`x`, `""`. `re.matches` anchors the pattern at both ends, and the pattern is compiled on its own first,
+so an invalid pattern is refused as itself. `re.split` returns the text between matches, with an empty
+string where a match touches either end; capture groups add no pieces, `(re.split #"," "")` is `[""]`,
+and a pattern that matches the empty string cuts between every character, with an empty piece at each end.
+
+**Replacement.** In the replacement, `$1` and `${1}` write a numbered group, `${name}` a named group
+(`(?P<name>...)`), and `$$` a dollar sign. `$1x` names a group called `1x`, so write `${1}x`. A group that
+does not exist or did not take part writes nothing. A backslash in the replacement is a backslash.
+
+**Pattern literals.** A pattern is an ordinary `String`. Write it with the `#"..."` form, which keeps
+backslashes, as in `#"\d+"`; in a plain `"\d+"` the reader refuses the unknown escape and points to
+`#"..."`. A literal pattern, a `#"..."` or a `"..."` string written directly as the pattern argument, is
+compiled when the program is checked, and a pattern that does not compile is a `bad-literal` diagnostic at
+the literal with the engine's message. A computed pattern, such as `(str "^" prefix)`, is compiled when the call
+runs, and one that does not compile stops the program with the `invalid-input` failure kind, which `attempt`
+does not catch. Only the first argument is a pattern: the input and the replacement may contain any
+characters.
+
+**Limits.** A pattern may nest groups at most 50 deep and may compile to at most 1 MiB of program
+(`regex-lite`'s size limit, set explicitly); a pattern beyond either is refused like an invalid one. Matching
+is linear in the input times the pattern and never backtracks exponentially.
+
+**What the syntax lacks.** `regex-lite` is a subset of what JavaScript and Rust's `regex` accept. It has
+literals, `.` (any character except a newline, unless `(?s)`), classes such as `[a-z]` and `[^,]`,
+`\d \w \s \b` and their negations, anchors `^ $ \A \z` (`$` matches only at the end unless `(?m)`),
+alternation, groups, non-capturing groups `(?:...)`, named groups `(?P<name>...)` and `(?<name>...)`, the greedy and lazy repeats
+`* + ? {n,m}`, and the flags `i m s x U`. It has no lookahead or lookbehind (`(?=` `(?!` `(?<=` `(?<!`), no backreferences (`\1`),
+no `\p{...}` Unicode property classes, no class intersection or difference, and no atomic groups. `\d`,
+`\w`, `\s`, `\b`, and `(?i)` are ASCII-only: `\w` does not match `é`, and `(?i)é` does not match `É`;
+write the characters in a class, such as `[a-zA-Zé]`. `.` and classes work on whole characters, so `.`
+matches one emoji.
+
+`rust/sx-cores/tests/re_core.rs` holds the table of expected results, including non-ASCII input, empty
+matches, and unmatched groups. The Python interpreter and the Lean reference have no `re` core, and Python
+does not read the `#"..."` form.
 
 ## Budgets
 

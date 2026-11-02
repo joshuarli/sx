@@ -1,0 +1,5 @@
+error[unknown-function] 3:2-3:9
+  (re-find #"(\d+)" "main.c:9")
+   ^^^^^^^
+  Sx has no re-find.
+  Use re.find, as in (re.find #"(\d+)" s). The re core must be in the declarations' "cores".

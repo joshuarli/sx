@@ -1,0 +1,5 @@
+error[bad-escape] 3:11-3:13
+  (re.find "\d+" "main.c:9")
+            ^^
+  \d is not a string escape.
+  Escapes: \" \\ \n \r \t \u{HEX}. For a regular expression, write #"..." so backslashes stay, as in #"\d+".

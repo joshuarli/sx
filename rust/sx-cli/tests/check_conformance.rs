@@ -757,6 +757,9 @@ fn corpus() -> Vec<Case> {
         check_fixture_cases().into_iter().map(|(case, _)| case).filter(|case| source_runs_in_python(&case.source)).collect();
     for path in sx_files("fixtures/read") {
         let source = fs::read_to_string(&path).expect("read fixture");
+        if !source_runs_in_python(&source) {
+            continue;
+        }
         seeds.push(Case::new(format!("read-{}", stem(&path)), source, Spec::Declarations("fixtures/run/declarations.json".to_string())));
     }
     for path in sx_files("fixtures/cli") {

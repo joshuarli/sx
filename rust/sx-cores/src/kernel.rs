@@ -3,13 +3,16 @@ use std::sync::Arc;
 
 use sx_kernel::json::Json;
 use sx_kernel::machine::{CoreError, CoreImplementations};
-use sx_kernel::registry::{Assurance, Core, Evidence, Example, Function, LoadError, Registry, RegistryError, load_declarations};
+use sx_kernel::registry::{
+    Assurance, Core, Evidence, Example, Function, LiteralCheck, LoadError, Registry, RegistryError, load_declarations,
+};
 use sx_kernel::types::{BOOL, EnumType, FLOAT, INT, NominalType, RecordType, STRING, Type};
 use sx_kernel::values::{RecordValue, Value};
 
 use crate::decimal::{Decimal, DecimalError, Rounding};
 use crate::git::{self, Checkout, Head};
 use crate::github::{self, Check, CiState, UpstreamState};
+use crate::re;
 use crate::semver::{self, Version};
 use crate::text::{self, TextError};
 use crate::yaml;
@@ -48,6 +51,7 @@ fn function(name: &str, params: Vec<Type>, output: Type, description: &str, exam
         output,
         description: description.to_string(),
         example: Some(Example { program: example.0.to_string(), result: example.1.to_string() }),
+        literal_checks: Vec::new(),
     }
 }
 
@@ -555,8 +559,84 @@ pub fn yaml_core() -> Core {
     }
 }
 
+fn pattern_function(name: &str, mut params: Vec<Type>, output: Type, description: &str, example: (&str, &str)) -> Function {
+    params.insert(0, STRING);
+    let mut found = function(name, params, output, description, example);
+    found.literal_checks = vec![LiteralCheck { argument: 0, check: re::validate }];
+    found
+}
+
+pub fn re_core() -> Core {
+    let functions = vec![
+        pattern_function(
+            "re.find",
+            vec![STRING],
+            option(list(STRING)),
+            "Finds the first match anywhere in the string. The list holds the whole match, then each capture group \
+             in order of its opening parenthesis, so (nth m 1) is group 1. A group that did not take part in the \
+             match is an empty string. A pattern that is invalid, nests deeper than 50 groups, or compiles to more than \
+             1 MiB stops the program with invalid-input; a literal pattern is rejected when the program is checked. \
+             Every re function takes the pattern first.",
+            ("(re.find #\"(\\d+)-(\\d+)\" \"ab 12-345 x\")", "(some [\"12-345\" \"12\" \"345\"])"),
+        ),
+        pattern_function(
+            "re.find-all",
+            vec![STRING],
+            list(list(STRING)),
+            "Finds every non-overlapping match, left to right, each as re.find lists it. An empty match is found \
+             at every position it fits, so a pattern that can match nothing, such as x*, also matches between \
+             characters.",
+            ("(re.find-all #\"(\\w)=(\\d)\" \"a=1 b=2\")", "[[\"a=1\" \"a\" \"1\"] [\"b=2\" \"b\" \"2\"]]"),
+        ),
+        pattern_function(
+            "re.matches",
+            vec![STRING],
+            option(list(STRING)),
+            "Like re.find, but only when the pattern matches the whole string, so the pattern is anchored at both \
+             ends.",
+            ("(re.matches #\"(\\d+)\\.(\\d+)\" \"3.14\")", "(some [\"3.14\" \"3\" \"14\"])"),
+        ),
+        pattern_function(
+            "re.test",
+            vec![STRING],
+            BOOL,
+            "True when the pattern matches anywhere in the string.",
+            ("(re.test #\"^v\\d+$\" \"v12\")", "true"),
+        ),
+        pattern_function(
+            "re.replace",
+            vec![STRING, STRING],
+            STRING,
+            "Replaces every match in the second string with the third. In the replacement, $1 or ${1} writes a \
+             capture group, ${name} a named group, and $$ a dollar sign; write ${1} when a letter or digit \
+             follows, because $1x names a group called 1x. A group that does not exist writes nothing.",
+            ("(re.replace #\"(\\d+)-(\\d+)\" \"10-20\" \"${2}-${1}\")", "\"20-10\""),
+        ),
+        pattern_function(
+            "re.split",
+            vec![STRING],
+            list(STRING),
+            "Splits the string at every match. Capture groups do not add pieces. A match at either end leaves an \
+             empty string there.",
+            ("(re.split #\"\\s*,\\s*\" \"a , b,c\")", "[\"a\" \"b\" \"c\"]"),
+        ),
+    ];
+    Core {
+        id: "re".to_string(),
+        version: "0.1.0".to_string(),
+        functions,
+        types: Vec::new(),
+        evidence: conformance(&[
+            "rust/sx-cores/tests/re_core.rs::every_re_function_yields_its_documented_result_on_a_table_of_inputs",
+            "rust/sx-cores/tests/re_core.rs::a_literal_pattern_that_does_not_compile_is_rejected_at_check_time_at_its_position",
+            "rust/sx-cores/tests/re_core.rs::a_computed_pattern_that_does_not_compile_fails_with_invalid_input",
+            "rust/sx-cores/tests/re_core.rs::every_re_example_produces_its_documented_result",
+        ]),
+    }
+}
+
 pub fn cores() -> Vec<Core> {
-    vec![text_core(), semver_core(), git_core(), github_core(), decimal_core(), yaml_core()]
+    vec![text_core(), semver_core(), git_core(), github_core(), decimal_core(), yaml_core(), re_core()]
 }
 
 pub fn core(id: &str) -> Option<Core> {
@@ -821,6 +901,26 @@ fn yaml_call(function: &str, args: &[Value]) -> Option<Result<Value, CoreError>>
     Some(outcome.map_err(|error| CoreError::InvalidInput(error.to_string())))
 }
 
+fn re_call(function: &str, args: &[Value]) -> Option<Result<Value, CoreError>> {
+    let outcome = match (function, args) {
+        ("re.find", [pattern, s]) => re::find(string_of(pattern)?, string_of(s)?).map(optional_groups),
+        ("re.find-all", [pattern, s]) => re::find_all(string_of(pattern)?, string_of(s)?)
+            .map(|found| Value::list(found.into_iter().map(string_list).collect())),
+        ("re.matches", [pattern, s]) => re::matches(string_of(pattern)?, string_of(s)?).map(optional_groups),
+        ("re.test", [pattern, s]) => re::test(string_of(pattern)?, string_of(s)?).map(Value::Bool),
+        ("re.replace", [pattern, s, replacement]) => {
+            re::replace(string_of(pattern)?, string_of(s)?, string_of(replacement)?).map(|text| Value::string(&text))
+        }
+        ("re.split", [pattern, s]) => re::split(string_of(pattern)?, string_of(s)?).map(string_list),
+        _ => return Some(Err(CoreError::Unimplemented)),
+    };
+    Some(outcome.map_err(CoreError::InvalidInput))
+}
+
+fn optional_groups(found: Option<Vec<String>>) -> Value {
+    some_or_none(found.map(string_list))
+}
+
 pub struct Cores;
 
 impl Cores {
@@ -873,6 +973,7 @@ impl Cores {
             }
             (function, args) if function.starts_with("decimal.") => return decimal_call(function, args),
             (function, args) if function.starts_with("yaml.") => return yaml_call(function, args),
+            (function, args) if function.starts_with("re.") => return re_call(function, args),
             _ => return Some(Err(CoreError::Unimplemented)),
         };
         Some(Ok(value))

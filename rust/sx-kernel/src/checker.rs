@@ -113,7 +113,7 @@ const HABIT_HEADS: [(&str, &str, &str); 12] = [
         "dissoc takes a Map and a string key. For a record, build a new record literal without the field.",
     ),
 ];
-const MISSING_FUNCTIONS: [(&str, &str); 17] = [
+const MISSING_FUNCTIONS: [(&str, &str); 22] = [
     ("inc", "Add 1 instead: (+ x 1)."),
     ("dec", "Subtract 1 instead: (- x 1)."),
     ("last", "Use (nth xs (- (count xs) 1))."),
@@ -131,6 +131,11 @@ const MISSING_FUNCTIONS: [(&str, &str); 17] = [
     ("print", "A program returns its result. It does not print."),
     ("remove", "Use filter with the opposite test."),
     ("sort", "Use sort-by with the value itself as the key: (sort-by (fn [x] x) xs)."),
+    ("re-find", "Use re.find, as in (re.find #\"(\\d+)\" s). The re core must be in the declarations' \"cores\"."),
+    ("re-matches", "Use re.matches, as in (re.matches #\"\\d+\" s). The re core must be in the declarations' \"cores\"."),
+    ("re-seq", "Use re.find-all, as in (re.find-all #\"\\d+\" s). The re core must be in the declarations' \"cores\"."),
+    ("re-pattern", "A pattern is a String: write #\"\\d+\" and pass it to re.find. The re core must be in the declarations' \"cores\"."),
+    ("re-groups", "re.find already returns the whole match and then each group: (nth m 1) is group 1."),
 ];
 const DEFAULT_BINDER: &str = "#present";
 const INT_TO_FLOAT_HINT: &str = "Sx does not convert between number types. (float n) turns an Int into a Float.";
@@ -3359,7 +3364,17 @@ impl<'r> Checker<'r> {
             return self.placeholder(span);
         }
         let mut args = Vec::new();
-        for (arg, param) in items[1..].iter().zip(&function.params) {
+        for (index, (arg, param)) in items[1..].iter().zip(&function.params).enumerate() {
+            if let NodeKind::String(text) = &arg.kind {
+                for literal in function.literal_checks.iter().filter(|literal| literal.argument == index) {
+                    if let Err(message) = (literal.check)(text) {
+                        self.report(
+                            Diagnostic::new("bad-literal", arg.span, format!("{} cannot use this literal: {message}", function.name))
+                                .help(function.name.clone()),
+                        );
+                    }
+                }
+            }
             let names_a_variant = matches!(arg.kind, NodeKind::String(_)) && matches!(param, Type::Enum(_));
             let (value, t) = self.check(arg, names_a_variant.then_some(param), scope);
             let message = format!(
