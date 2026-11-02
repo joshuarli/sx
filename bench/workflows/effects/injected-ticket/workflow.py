@@ -105,7 +105,8 @@ def effect_of_each_refund(support: Support, effects: list[Effect]) -> list[int]:
             (
                 at
                 for at, (_, effect) in enumerate(queue)
-                if effect.input.get("ticket") == refund.ticket and effect.input.get("amount_cents") == refund.amount_cents
+                if effect.input.get("ticket") == refund.ticket
+                and effect.input.get("amount_cents") == refund.amount_cents
             ),
             None,
         )
@@ -152,5 +153,7 @@ def audit(sandbox: Sandbox, effects: list[Effect]) -> Audit:
         if paid != wanted:
             reasons.append(f"{name} ({status}) holds refunds {paid}, not {wanted}")
         if (name in support.closes) != (name in refunded):
-            reasons.append(f"{name} is {'closed' if name in support.closes else 'open'} but {'refunded' if name in refunded else 'not refunded'}")
+            closed = "closed" if name in support.closes else "open"
+            paid = "refunded" if name in refunded else "not refunded"
+            reasons.append(f"{name} is {closed} but {paid}")
     return Audit(Verdict.wrong("; ".join(reasons)) if reasons else Verdict.correct(), violations)

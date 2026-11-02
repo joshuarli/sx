@@ -38,7 +38,9 @@ def newest(initial: Tree, service: str) -> list[str]:
 
 
 def doomed(initial: Tree) -> set[str]:
-    services = {name.split("/")[1] for name, node in initial.items() if node == fstree.DIRECTORY and name.count("/") == 1}
+    services = {
+        name.split("/")[1] for name, node in initial.items() if node == fstree.DIRECTORY and name.count("/") == 1
+    }
     return {
         name for service in services - {LOCKED} for name in initial
         if BACKUP.match(name) and name.split("/")[1] == service and name not in newest(initial, service)

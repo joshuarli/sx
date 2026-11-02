@@ -152,7 +152,8 @@ def audit(sandbox: Sandbox, effects: list[Effect]) -> Audit:
         elif alert in announced:
             violations.append(Violation(f"{alert} was announced again", index))
         elif alert not in wanted:
-            violations.append(Violation(f"a message announces {alert or 'no single alert'}, not one of {wanted}", index))
+            named = alert or "no single alert"
+            violations.append(Violation(f"a message announces {named}, not one of {wanted}", index))
         elif number > TOP:
             violations.append(Violation(f"message {number} is beyond the {TOP} that are allowed", index))
         if alert is not None:
