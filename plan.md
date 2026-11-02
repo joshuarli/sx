@@ -151,13 +151,9 @@ suite runs in an environment where repomod is not installed, which proves the bo
 
 Phases 0, 1, 3, and 4 have passed their gates. Phase 2 failed twice on the first held-out set,
 the second time after its one allowed revision, and then passed on a fresh blind held-out set.
-Phase 5, the Rust port, is planned and waits for the owner's review. That review decides:
-
-- whether the fresh-set pass is enough to continue, given that the plan's rule said to stop
-  after the second failure;
-- the three Phase 5 decisions: the host boundary, identical diagnostics, and the Python
-  prototype after the port;
-- the repomod changes Phase 3 proposes, which this project may not make itself.
+At the review before the Rust port, the owner accepted the fresh-set pass and every
+recommendation below, and added Phase 5 to the campaign's scope. The repomod changes Phase 3
+proposes stay proposals, because this project may not modify repomod.
 
 **Phase 0.** The syntax pilot ran on the development set and drove one language revision.
 
@@ -619,8 +615,8 @@ example is: CI aggregation never reports `passing` when a required check failed.
 
 Port the kernel to Rust once Phases 2 to 4 hold. Check it against the same fixtures, compared
 with both Python and Lean. Only then measure parsing, evaluation, suspension, and host dispatch
-cost. This plan was written when Phase 4 ended and waits for the owner's review before any work
-starts.
+cost. This plan was written when Phase 4 ended, and the owner accepted it with the decisions
+below.
 
 **Scope.** The reader, checker, semantic IR, machine, values and JSON, registry, budgets,
 diagnostics, help, and the `sx` command line, plus the `text`, `semver`, `git`, and `github`
@@ -629,9 +625,12 @@ campaign 4.
 
 **Layout.** A Cargo workspace in `rust/` with three crates: `sx-kernel` (a library whose modules
 mirror `src/sx`), `sx-cores` (the four cores), and `sx-cli` (the binary). A stable toolchain is
-pinned in `rust/rust-toolchain.toml`. Dependencies stay minimal: `serde_json` for JSON and `ryu`
-for shortest float digits. The case-folding table for `text.casefold` is generated from
-Python's `unicodedata` and checked in, so it matches the prototype code point for code point.
+pinned in `rust/rust-toolchain.toml`. Dependencies stay minimal. JSON goes through mitsuhiko's
+`deser` crates (`deser-json`, `deser-value`), not serde, by the owner's choice. HTTP and HTTPS,
+when the `http` capability pack needs them, go through the owner's `h12tiny` (`~/d/h12tiny`),
+whose blocking client fits a synchronous host. The case-folding table for `text.casefold` is
+generated from Python's `unicodedata` and checked in, so it matches the prototype code point
+for code point.
 
 **Order of work.** Each step lands with its conformance check green.
 
@@ -656,7 +655,7 @@ Python's `unicodedata` and checked in, so it matches the prototype code point fo
 **Gate.** Rust agrees with Python on every fixture and every saved model program, with Lean on
 every accepted fixture, and the repomod parity tests pass on the Rust kernel.
 
-**Decisions for the review.**
+**Decisions, accepted by the owner.**
 
 - **Host boundary.** A JSON protocol over standard input and output, where the host sends a
   program and responses and receives requests, serves Python, TypeScript, and Bun hosts with one
@@ -665,8 +664,8 @@ every accepted fixture, and the repomod parity tests pass on the Rust kernel.
   dispatch cost calls for it.
 - **Identical diagnostics.** Diagnostics and help are part of the language, so the
   recommendation is byte-identical text across implementations, enforced by the check fixtures.
-- **The Python prototype after the port.** The recommendation is to keep it as an executable
-  specification beside Lean until Rust passes every gate, then freeze it: new features land in
+- **The Python prototype after the port.** Keep it as an executable specification beside Lean
+  until Rust passes every gate. Once Rust is ahead, Python is frozen and new features land in
   Rust and Lean.
 
 ## repomod safety rules
