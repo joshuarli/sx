@@ -172,7 +172,8 @@ def command_program(args: argparse.Namespace, base: Registry) -> int:
     try:
         finished = run(program, host, values)
     except UnexpectedCallError as error:
-        emit(args.format, {"outcome": "unexpected-call", "message": str(error)}, f"sx run: {error}")
+        payload = {"outcome": "unexpected-call", "message": str(error), "calls": host.calls}
+        emit(args.format, payload, f"sx run: {error}")
         return EXIT_FAILED
     outcome = finished.outcome
     if isinstance(outcome, Completed):

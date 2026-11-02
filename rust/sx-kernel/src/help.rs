@@ -1,7 +1,8 @@
 use std::borrow::Cow;
 
 use crate::json::{self, Json};
-use crate::types::CallErrorKind;
+use crate::registry::{Capability, Core, Effect, Function, Registry, RegistryError};
+use crate::types::{CallErrorKind, Type, show_definition, show_type};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Entry {
@@ -220,4 +221,202 @@ pub fn lookup_entry(name: &str) -> Option<String> {
 pub fn not_found_message(name: &str, candidates: &[String]) -> String {
     let hint = crate::checker::closest(name, candidates).map(|s| format!(" Did you mean {s}?")).unwrap_or_default();
     format!("sx help: nothing is named {name}.{hint}")
+}
+
+pub fn effect_label(effect: Effect, idempotent: bool) -> &'static str {
+    match (effect, idempotent) {
+        (Effect::Read, _) => "read",
+        (Effect::Write, true) => "write, idempotent",
+        (Effect::Write, false) => "write, not idempotent",
+    }
+}
+
+fn parameters(function: &Function) -> String {
+    function.params.iter().map(show_type).collect::<Vec<_>>().join(" ")
+}
+
+fn variants_text(variants: &[(String, Option<Type>)]) -> String {
+    variants
+        .iter()
+        .map(|(variant, payload)| match payload {
+            None => variant.clone(),
+            Some(payload) => format!("({variant} {})", show_type(payload)),
+        })
+        .collect::<Vec<_>>()
+        .join(" | ")
+}
+
+pub fn render_function(function: &Function) -> String {
+    let mut lines = vec![
+        format!("({} {}) -> {}", function.name, parameters(function), show_type(&function.output)),
+        function.description.clone(),
+    ];
+    if let Some(example) = &function.example {
+        lines.push(format!("Example: {}", example.program));
+        lines.push(format!("Result: {}", example.result));
+    }
+    lines.join("\n") + "\n"
+}
+
+pub fn capability_signature(capability: &Capability) -> String {
+    format!(
+        "(call {} {}) -> {}   [{}]",
+        capability.id,
+        show_type(&capability.input),
+        show_type(&capability.output),
+        effect_label(capability.effect, capability.idempotent)
+    )
+}
+
+pub fn render_capability(capability: &Capability, registry: &Registry) -> String {
+    let mut lines = vec![capability_signature(capability), capability.description.clone()];
+    lines.extend(named_types(&[&capability.input, &capability.output], registry).into_iter().map(|line| format!("  {line}")));
+    lines.join("\n") + "\n"
+}
+
+fn named_types(types: &[&Type], registry: &Registry) -> Vec<String> {
+    let wanted: Vec<String> = types.iter().map(|t| show_type(t)).collect();
+    let mut lines = Vec::new();
+    for (name, t) in registry.types() {
+        if !wanted.iter().any(|text| text.contains(name)) {
+            continue;
+        }
+        match t {
+            Type::Enum(enumeration) => lines.push(format!("{name} = {}", variants_text(&enumeration.variants))),
+            Type::Record(_) => lines.push(format!("{name} = {}", show_definition(t))),
+            _ => {}
+        }
+    }
+    lines
+}
+
+const UNVERIFIED_MEANING: &str = "the interface was validated when the core registered";
+
+fn render_assurance(core: &Core) -> Vec<String> {
+    let mut lines = vec!["Assurance:".to_string()];
+    let levels = core.assurance();
+    for (level, references) in &levels {
+        if *level == crate::registry::Assurance::Unverified {
+            lines.push(format!("  {}: {UNVERIFIED_MEANING}", level.name()));
+            continue;
+        }
+        lines.push(format!("  {}:", level.name()));
+        lines.extend(references.iter().map(|reference| format!("    {reference}")));
+    }
+    for level in crate::registry::Assurance::ALL {
+        if !levels.iter().any(|(held, _)| *held == level) {
+            lines.push(format!("  {}: none", level.name()));
+        }
+    }
+    lines
+}
+
+pub fn render_core(core: &Core) -> String {
+    let mut lines = vec![format!("{} {}  [core]", core.id, core.version)];
+    lines.extend(render_assurance(core));
+    lines.push("Functions:".to_string());
+    for function in &core.functions {
+        lines.push(format!("  ({} {}) -> {}", function.name, parameters(function), show_type(&function.output)));
+    }
+    lines.join("\n") + "\n"
+}
+
+pub fn render_cores(registry: &Registry) -> String {
+    registry
+        .cores()
+        .map(|core| {
+            let levels: Vec<&str> = core.assurance().iter().map(|(level, _)| level.name()).collect();
+            format!("{} {}  {}\n", core.id, core.version, levels.join(", "))
+        })
+        .collect()
+}
+
+pub fn lookup(name: &str, registry: &Registry) -> Option<String> {
+    if let Some(found) = lookup_entry(name) {
+        return Some(found);
+    }
+    if let Some(core) = registry.core(name) {
+        return Some(render_core(core));
+    }
+    if let Some(function) = registry.function(name) {
+        return Some(render_function(function));
+    }
+    if let Some(capability) = registry.capability(name) {
+        return Some(render_capability(capability, registry));
+    }
+    let t = registry.named_types().get(name)?;
+    let mut lines = named_types(&[t], registry);
+    if lines.is_empty() {
+        lines.push(format!("{name} = {}", show_type(t)));
+    }
+    Some(lines.join("\n") + "\n")
+}
+
+pub fn names(registry: &Registry) -> Vec<String> {
+    let mut found = entry_names();
+    found.extend(registry.cores().map(|core| core.id.clone()));
+    found.extend(registry.functions().map(|function| function.name.clone()));
+    found.extend(registry.capabilities().map(|capability| capability.id.clone()));
+    found.extend(registry.types().map(|(name, _)| name.to_string()));
+    found
+}
+
+fn namespace(name: &str) -> &str {
+    name.split('.').next().unwrap_or(name)
+}
+
+pub fn tool_listing(
+    registry: &Registry,
+    capability_ids: &[&str],
+    core_ids: &[&str],
+) -> Result<String, RegistryError> {
+    let mut lines: Vec<String> = Vec::new();
+    let outside: Vec<&Type> =
+        registry.types().filter(|(name, _)| !core_ids.contains(&namespace(name))).map(|(_, t)| t).collect();
+    let records: Vec<(&str, &Type)> =
+        registry.types().filter(|(_, t)| matches!(t, Type::Record(_)) && outside.contains(t)).collect();
+    let enums: Vec<(&str, &Type)> = registry.types().filter(|(_, t)| matches!(t, Type::Enum(_))).collect();
+    if !records.is_empty() {
+        lines.push("Types:".to_string());
+        lines.extend(records.iter().map(|(name, t)| format!("  {name} = {}", show_definition(t))));
+        lines.push(String::new());
+    }
+    if !enums.is_empty() {
+        lines.push("Enums (match on their variants):".to_string());
+        for (name, t) in &enums {
+            if let Type::Enum(enumeration) = t {
+                lines.push(format!("  {name} = {}", variants_text(&enumeration.variants)));
+            }
+        }
+        lines.push(String::new());
+    }
+    lines.push("Tools:".to_string());
+    for id in capability_ids {
+        let capability = registry
+            .capability(id)
+            .ok_or_else(|| RegistryError(format!("the listing names a tool the registry does not define: {id}")))?;
+        lines.push(format!("  {}", capability_signature(capability)));
+        lines.push(format!("      {}", capability.description));
+    }
+    lines.push(String::new());
+    let functions: Vec<&Function> = registry.functions().filter(|f| core_ids.contains(&namespace(&f.name))).collect();
+    if !functions.is_empty() {
+        lines.push("Functions:".to_string());
+        for (name, t) in registry.types() {
+            if core_ids.contains(&namespace(name)) {
+                lines.push(format!("  {name} = {}", show_definition(t)));
+            }
+        }
+        for function in functions {
+            lines.push(format!(
+                "  ({} {}) -> {}   {}",
+                function.name,
+                parameters(function),
+                show_type(&function.output),
+                function.description
+            ));
+        }
+        lines.push(String::new());
+    }
+    Ok(lines.join("\n"))
 }
