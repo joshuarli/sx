@@ -1,6 +1,7 @@
 use std::io;
 
 use sx_kernel::authority::{GrantError, Grants};
+use sx_kernel::json::{Layout, dumps};
 use sx_kernel::registry::Registry;
 use sx_packs::mcp::{Server, serve as serve_connection};
 
@@ -34,38 +35,45 @@ fn grants_of(options: &Options, registry: &Registry) -> Result<Grants, Stop> {
     Ok(grants)
 }
 
-pub(crate) fn serve(args: &[String], new_registry: &dyn Fn() -> Registry) -> Exit {
-    let options = match scan(args, &["--declarations", "--grants", "--allow"]) {
-        Ok(options) => options,
-        Err(message) => return usage(&message),
-    };
+fn build(args: &[String], new_registry: &dyn Fn() -> Registry, what: &str) -> Result<Server, Exit> {
+    let options = scan(args, &["--declarations", "--grants", "--allow"]).map_err(|message| usage(&message))?;
     if let Some(extra) = options.positional.first() {
-        return usage(&format!("unrecognized argument {extra}"));
+        return Err(usage(&format!("unrecognized argument {extra}")));
     }
     if options.command.is_some() {
-        return usage("sx mcp serve starts no server command");
+        return Err(usage(&format!("sx mcp {what} starts no server command")));
     }
     let Some(declarations) = options.last("--declarations") else {
-        return usage("sx mcp serve needs --declarations FILE");
+        return Err(usage(&format!("sx mcp {what} needs --declarations FILE")));
     };
-    let (registry, _, endpoints) = match load_registry(Some(declarations), new_registry()) {
-        Ok(loaded) => loaded,
-        Err(stop) => return stopped(stop),
-    };
-    let grants = match grants_of(&options, &registry) {
-        Ok(grants) => grants,
-        Err(stop) => return stopped(stop),
-    };
-    let server = match Server::new(&registry, grants, endpoints) {
-        Ok(server) => server,
-        Err(message) => return usage(&message),
-    };
+    let (registry, _, endpoints) = load_registry(Some(declarations), new_registry()).map_err(stopped)?;
+    let grants = grants_of(&options, &registry).map_err(stopped)?;
+    let server = Server::new(&registry, grants, endpoints).map_err(|message| usage(&message))?;
     for skipped in server.not_served() {
-        eprintln!("sx mcp serve: not serving {}: {}", skipped.id, skipped.reason);
+        eprintln!("sx mcp {what}: not serving {}: {}", skipped.id, skipped.reason);
     }
     if server.names().next().is_none() {
-        return usage("no granted capability can be served; grant one with --grants or --allow");
+        return Err(usage("no granted capability can be served; grant one with --grants or --allow"));
     }
+    Ok(server)
+}
+
+pub(crate) fn describe(args: &[String], new_registry: &dyn Fn() -> Registry) -> Exit {
+    let server = match build(args, new_registry, "describe") {
+        Ok(server) => server,
+        Err(exit) => return exit,
+    };
+    match dumps(&server.describe(), Layout::Indented) {
+        Ok(text) => Exit { code: EXIT_OK, stdout: format!("{text}\n"), stderr: String::new() },
+        Err(error) => Exit { code: EXIT_FAILED, stdout: String::new(), stderr: format!("sx mcp: {}\n", error.0) },
+    }
+}
+
+pub(crate) fn serve(args: &[String], new_registry: &dyn Fn() -> Registry) -> Exit {
+    let server = match build(args, new_registry, "serve") {
+        Ok(server) => server,
+        Err(exit) => return exit,
+    };
     match serve_connection(&server, io::stdin().lock(), io::stdout()) {
         Ok(()) => Exit { code: EXIT_OK, stdout: String::new(), stderr: String::new() },
         Err(message) => Exit { code: EXIT_FAILED, stdout: String::new(), stderr: format!("sx mcp: {message}\n") },

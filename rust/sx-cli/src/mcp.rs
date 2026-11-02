@@ -15,10 +15,12 @@ const MCP_HELP: &str = r#"usage: sx mcp import --name NAME (--tools FILE | -- CO
                   [--input NAME=JSON ...] [--format {text,json}] [--name NAME]
                   [--timeout-ms MS] -- COMMAND [ARG ...]
        sx mcp serve --declarations FILE [--grants FILE] [--allow ID ...]
+       sx mcp describe --declarations FILE [--grants FILE] [--allow ID ...]
 
 Import the tools of an MCP server as Sx declarations, run a program
 against that server over stdio, and serve granted capabilities as an MCP
-server on standard input and output.
+server on standard input and output, or describe what serve would list in
+Sx terms.
 
 import options:
   --name NAME       Server name; its tools become capabilities mcp-NAME.TOOL
@@ -35,7 +37,7 @@ run options:
                        hold several
   --timeout-ms MS      Per-call and startup timeout, 60000 by default
 
-serve options:
+serve and describe options:
   --declarations FILE  Declarations of the capabilities and packs
   --grants FILE        JSON object granting capabilities, with their scopes
   --allow ID           Grant one capability that declares no scope
@@ -129,8 +131,9 @@ pub fn run(args: &[String], new_registry: &dyn Fn() -> Registry) -> Exit {
         Some((word, rest)) if word == "import" => import(rest),
         Some((word, rest)) if word == "run" => run_program(rest, new_registry),
         Some((word, rest)) if word == "serve" => crate::mcp_serve::serve(rest, new_registry),
-        Some((word, _)) => usage(&format!("{word:?} is not a subcommand; choose import, run, or serve")),
-        None => usage("choose a subcommand: import, run, or serve"),
+        Some((word, rest)) if word == "describe" => crate::mcp_serve::describe(rest, new_registry),
+        Some((word, _)) => usage(&format!("{word:?} is not a subcommand; choose import, run, serve, or describe")),
+        None => usage("choose a subcommand: import, run, serve, or describe"),
     }
 }
 

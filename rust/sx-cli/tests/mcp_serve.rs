@@ -345,3 +345,33 @@ fn a_program_runs_against_what_sx_serves_with_the_same_result_as_natively() {
     let report = json(&String::from_utf8(ran.stdout).expect("UTF-8"));
     assert_eq!(report.get("result").and_then(Json::as_str), Some("inside"), "{}", String::from_utf8_lossy(&ran.stderr));
 }
+
+#[test]
+fn describe_lists_the_served_capabilities_with_the_named_types_they_use() {
+    let w = Workspace::new(
+        "describe",
+        r#"{"packs": ["fs", "http"]}"#,
+        r#"{"fs.list": {"roots": ["ROOT"]}, "fs.stat": {"roots": ["ROOT"]}}"#,
+    );
+    let mut args = w.arguments();
+    args[1] = "describe".to_string();
+    let output = Command::new(SX).args(&args).stdin(Stdio::null()).output().expect("sx runs");
+    assert_eq!(output.status.code(), Some(0), "{}", String::from_utf8_lossy(&output.stderr));
+    let described = json(&String::from_utf8(output.stdout).expect("UTF-8"));
+    assert_eq!(
+        shown(described.get("enums").expect("enums")),
+        r#"{"fs.Kind": {"File": null, "Directory": null, "Symlink": null, "Other": null}}"#
+    );
+    assert_eq!(
+        shown(described.get("types").expect("types")),
+        r#"{"fs.Entry": "Record {name: String, kind: fs.Kind}", "fs.Stat": "Record {kind: fs.Kind, size: Int}"}"#
+    );
+    let ids: Vec<&str> = described
+        .get("capabilities")
+        .and_then(Json::as_array)
+        .expect("capabilities")
+        .iter()
+        .filter_map(|c| c.get("id").and_then(Json::as_str))
+        .collect();
+    assert_eq!(ids, ["fs.list", "fs.stat"]);
+}

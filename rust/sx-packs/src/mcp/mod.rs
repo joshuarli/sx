@@ -1,4 +1,5 @@
 mod client;
+mod describe;
 mod export;
 mod import;
 mod schema;

@@ -7,11 +7,12 @@ use std::thread;
 
 use sx_kernel::authority::{Grant, Grants, Screen, Verdict};
 use sx_kernel::json::{Json, Layout, dumps, parse};
-use sx_kernel::registry::Registry;
+use sx_kernel::registry::{Capability, Registry};
 use sx_kernel::types::{CallErrorKind, Type};
 use sx_kernel::values::{Value, decode, encode};
 
 use super::client::{ACCEPTED_VERSIONS, LINE_LIMIT, PROTOCOL_VERSION, read_line};
+use super::describe::describe;
 use super::export::{Shape, WRAPPED_KEY, export};
 use super::tools::filled;
 use crate::http::Endpoints;
@@ -30,6 +31,7 @@ fn locked<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 
 #[derive(Clone, Debug)]
 struct Served {
+    capability: Capability,
     input: Type,
     output: Type,
     shape: Shape,
@@ -127,6 +129,7 @@ impl Server {
             served.insert(
                 id,
                 Served {
+                    capability: capability.clone(),
                     input: capability.input.clone(),
                     output: capability.output.clone(),
                     shape: exported.shape,
@@ -143,6 +146,10 @@ impl Server {
 
     pub fn tools(&self) -> Vec<Json> {
         self.served.values().map(|served| served.tool.clone()).collect()
+    }
+
+    pub fn describe(&self) -> Json {
+        describe(self.served.values().map(|served| &served.capability))
     }
 
     pub fn names(&self) -> impl Iterator<Item = &str> {
