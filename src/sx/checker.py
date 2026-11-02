@@ -100,6 +100,7 @@ MISSING_FUNCTIONS = {
     "remove": "Use filter with the opposite test.",
     "sort": "Use sort-by with the value itself as the key: (sort-by (fn [x] x) xs).",
 }
+DEFAULT_BINDER = "#present"
 TEST_SUBJECT = {"if": "An if condition", "cond": "A cond test"}
 OPTIONAL_HINT = "This value is optional. Take it apart first: (match x (some v) ... none ...)."
 BINARY_SIGNATURE = {"+": "Int Int", "*": "Int Int", "quot": "Int Int", "rem": "Int Int"}
@@ -1133,9 +1134,10 @@ class _Checker:
         return self.placeholder(node.span)
 
     def form_get(self, node: Form, expected: Type | None, scope: Mapping[str, Binding]) -> tuple[ir.Node, Type]:
-        if not self.arity(node, 2, 2, "record :field"):
+        if not self.arity(node, 2, 3, "record :field [default]"):
             return self.placeholder(node.span)
-        _, record_node, key = node.items
+        record_node, key = node.items[1], node.items[2]
+        default_node = node.items[3] if len(node.items) == 4 else None
         record_ir, record_type = self.check(record_node, None, scope)
         if not isinstance(key, Keyword):
             fix = f'(get {show(record_node)} :{key.value})' if isinstance(key, StringLiteral) else None
@@ -1174,7 +1176,25 @@ class _Checker:
                 fix=None if suggestion is None else f"(get {show(record_node)} :{suggestion})", help="get",
             )
             return self.placeholder(node.span)
-        return self.coerce(ir.Get(record_ir, key.name, node.span), field_type, expected, node.span)
+        getter = ir.Get(record_ir, key.name, node.span)
+        if default_node is None:
+            return self.coerce(getter, field_type, expected, node.span)
+        resolved_field = self.resolve(field_type)
+        if not isinstance(resolved_field, OptionType):
+            self.error(
+                "arity", default_node.span,
+                f"The field :{key.name} is always present, so get takes no default for it.",
+                detail=f"The field has type {show_type(self.zonk(field_type))}, not an Option.",
+                fix=f"(get {show(record_node)} :{key.name})", help="get",
+            )
+            return self.coerce(getter, field_type, expected, node.span)
+        default, _ = self.check(default_node, resolved_field.inner, scope)
+        present = ir.Variable(DEFAULT_BINDER, node.span)
+        choice = ir.Match(
+            getter, ((ir.MatchSome(ir.MatchAny(ir.BindName(DEFAULT_BINDER))), present), (ir.MatchNone(), default)),
+            node.span,
+        )
+        return self.coerce(choice, resolved_field.inner, expected, node.span)
 
     def form_call(self, node: Form, expected: Type | None, scope: Mapping[str, Binding]) -> tuple[ir.Node, Type]:
         span = node.span

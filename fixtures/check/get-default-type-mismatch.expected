@@ -1,0 +1,6 @@
+error[type-mismatch] 3:19-3:20
+    (get page :next 0))
+                    ^
+  This is an Int, but a String is needed here.
+  Expected: String
+  Found: Int

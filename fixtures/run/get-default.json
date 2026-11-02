@@ -1,0 +1,73 @@
+{
+  "description": "A three-argument get reads an optional field and falls back to the default when it is none.",
+  "program": "(map (fn [r] {:name (get r :name) :hits (get r :hits 0) :note (get r :note \"-\")}) (call rows.list {}))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list",
+    "rows.add",
+    "checks.list"
+  ],
+  "responses": [
+    {
+      "capability": "rows.list",
+      "input": {},
+      "results": [
+        {
+          "output": [
+            {
+              "name": "a",
+              "note": "fast",
+              "hits": 3
+            },
+            {
+              "name": "b",
+              "note": null,
+              "hits": null
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": [
+      {
+        "name": "a",
+        "hits": 3,
+        "note": "fast"
+      },
+      {
+        "name": "b",
+        "hits": 0,
+        "note": "-"
+      }
+    ]
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "rows.list",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": [
+        {
+          "name": "a",
+          "note": "fast",
+          "hits": 3
+        },
+        {
+          "name": "b",
+          "note": null,
+          "hits": null
+        }
+      ]
+    }
+  ]
+}

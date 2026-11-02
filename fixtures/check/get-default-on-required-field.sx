@@ -1,0 +1,3 @@
+; task: dev-events-pages
+(let [page (call audit.page {:cursor none})]
+  (get page :events []))

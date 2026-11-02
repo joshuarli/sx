@@ -35,7 +35,9 @@ FORMS = (
           "(match (some 3) (some n) (+ n 1) none 0)", "4"),
     entry("fn", "(fn [param ...] body)", "A function, as an argument to map, filter, and the like, "
           "or as the value of a let binding.", "(map (fn [x] (+ x 1)) [1 2])", "[2 3]"),
-    entry("get", "(get record :field)", "Reads a record field.", '(get {:name "ada" :age 36} :age)', "36"),
+    entry("get", "(get record :field) or (get record :field default)", "Reads a record field. With a default, "
+          "the field must be optional, and the default replaces none.",
+          '(get {:nick none} :nick "anon")', '"anon"'),
     entry("call", "(call tool.name {:field value})", "Calls a tool with an input record.",
           '(count (call people.list {:team "infra"}))', "3"),
     entry("attempt", "(attempt expression)", "(ok value), or (err {:kind K :message m}) if a tool call failed.",
