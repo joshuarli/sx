@@ -1,0 +1,34 @@
+(let [ids (loop {:max 10} [offset 0 acc []]
+            (let [page (call people.list {:offset offset :limit 20})
+                  all (concat acc (map (fn [p] (get p :id)) (get page :people)))]
+              (if (< (+ offset 20) (get page :total))
+                (recur (+ offset 20) all)
+                all)))
+      fetched (par-map {:limit 4}
+                       (fn [id]
+                         (match (attempt (retry {:delays [50ms 150ms] :on [RateLimited]} (call people.get {:id id})))
+                           (ok p) {:id id :state "found" :name (get p :name) :email (text.casefold (text.trim (get p :email))) :team (get p :team)}
+                           (err e) {:id id :state (if (= (get e :kind) "NotFound") "gone" "failed") :name "" :email "" :team none}))
+                       ids)
+      rows (call people.all {})
+      known (into-map (map (fn [r] [(get r :id) r]) rows))
+      found (filter (fn [f] (= (get f :state) "found")) fetched)
+      outcomes (map (fn [f]
+                      (let [row {:id (get f :id) :name (get f :name) :email (get f :email) :team (get f :team)}]
+                        (match (get known (get f :id))
+                          none (let [_ (call people.insert row)] {:id (get f :id) :op "inserted"})
+                          (some old) (if (= old row)
+                                       {:id (get f :id) :op "unchanged"}
+                                       (let [_ (call people.update row)] {:id (get f :id) :op "updated"})))))
+                    found)
+      stale (filter (fn [r] (not (contains? ids (get r :id)))) rows)
+      _ (map (fn [r] (call people.delete {:id (get r :id)})) stale)
+      pick (fn [op] (sort-by identity (map (fn [o] (get o :id)) (filter (fn [o] (= (get o :op) op)) outcomes))))
+      with-state (fn [state] (sort-by identity (map (fn [f] (get f :id)) (filter (fn [f] (= (get f :state) state)) fetched))))]
+  {:listed (count ids)
+   :inserted (pick "inserted")
+   :updated (pick "updated")
+   :deleted (sort-by identity (map (fn [r] (get r :id)) stale))
+   :unchanged (count (pick "unchanged"))
+   :gone (with-state "gone")
+   :failed (with-state "failed")})

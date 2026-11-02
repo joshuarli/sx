@@ -1,0 +1,56 @@
+{
+  "packs": ["sqlite"],
+  "capabilities": [
+    {
+      "id": "people.list",
+      "http": {"method": "GET", "url": "{{dir_origin}}/v2/people", "query": ["offset", "limit"]},
+      "input": "Record {offset: Int, limit: Int}",
+      "output": "Record {total: Int, people: List<Record open {id: String}>}",
+      "effect": "read",
+      "description": "Returns one page of the employee listing and the total number of employees."
+    },
+    {
+      "id": "people.get",
+      "http": {"method": "GET", "url": "{{dir_origin}}/v2/people/{id}", "query": []},
+      "input": "Record {id: String}",
+      "output": "Record open {id: String, name: String, email: String, team: Option<String>}",
+      "effect": "read",
+      "description": "Returns one employee's details."
+    },
+    {
+      "id": "people.all",
+      "sqlite": {"database": "{{root}}/people.db", "statement": "SELECT id, name, email, team FROM people ORDER BY id"},
+      "input": "Record {}",
+      "output": "List<Record {id: String, name: String, email: String, team: Option<String>}>",
+      "effect": "read",
+      "description": "Returns every row of the people table."
+    },
+    {
+      "id": "people.insert",
+      "sqlite": {"database": "{{root}}/people.db", "statement": "INSERT INTO people(id, name, email, team) VALUES (:id, :name, :email, :team)"},
+      "input": "Record {id: String, name: String, email: String, team: Option<String>}",
+      "output": "Int",
+      "effect": "write",
+      "idempotent": false,
+      "description": "Inserts a row."
+    },
+    {
+      "id": "people.update",
+      "sqlite": {"database": "{{root}}/people.db", "statement": "UPDATE people SET name = :name, email = :email, team = :team WHERE id = :id"},
+      "input": "Record {id: String, name: String, email: String, team: Option<String>}",
+      "output": "Int",
+      "effect": "write",
+      "idempotent": true,
+      "description": "Replaces the name, email, and team of the row with the id."
+    },
+    {
+      "id": "people.delete",
+      "sqlite": {"database": "{{root}}/people.db", "statement": "DELETE FROM people WHERE id = :id"},
+      "input": "Record {id: String}",
+      "output": "Int",
+      "effect": "write",
+      "idempotent": true,
+      "description": "Deletes the row with the id."
+    }
+  ]
+}

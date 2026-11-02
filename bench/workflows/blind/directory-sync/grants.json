@@ -1,0 +1,8 @@
+{
+  "people.list": {"origins": ["{{dir_origin}}"], "methods": ["GET"]},
+  "people.get": {"origins": ["{{dir_origin}}"], "methods": ["GET"]},
+  "people.all": {"roots": ["{{root}}"]},
+  "people.insert": {"roots": ["{{root}}"]},
+  "people.update": {"roots": ["{{root}}"]},
+  "people.delete": {"roots": ["{{root}}"]}
+}
