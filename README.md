@@ -15,6 +15,14 @@ uv run sx help
 uv run sx help retry
 ```
 
+To give a model the guide for one host's tools, build the binary and print the tailored guide, which
+the workflow benchmark uses:
+
+```sh
+cargo build --manifest-path rust/Cargo.toml -p sx-cli
+rust/target/debug/sx guide --declarations declarations.json --grants grants.json
+```
+
 ## Layout
 
 This is a uv workspace.
