@@ -510,6 +510,25 @@ post that fails with 503), `calendar-mcp` (a stdio MCP server with nested struct
 optional field, error results for hidden holds), and `dependency-audit` (`semver`, at most 4 registry
 requests in flight). Both references of each pass, and wrong variants of each were rejected by its check.
 
+**Phase 11, iteration 1: the tailored guide.** On master at `ea06e69` (no language change yet), the
+twelve development workflows, 3 samples each, Muse Spark at medium thinking. Prompt and output are
+tokens per trial. TypeScript got the tool notes (`--ts-notes`).
+
+| Condition | First attempt | Final | Prompt | Output | Output per solved task |
+| --- | --- | --- | --- | --- | --- |
+| Sx, standard guide and listing | 20 of 35 (57%) | 33 of 35 | 5,276 | 13,319 | 14,126 |
+| Sx, tailored guide | 28 of 36 (78%) | 36 of 36 | 7,211 | 10,790 | 10,790 |
+| Sx, tailored guide and the leave-one-out corpus | 22 of 36 (61%) | 34 of 36 | 20,994 | 10,659 | 11,286 |
+| TypeScript, tool notes | 36 of 36 | 36 of 36 | 1,078 | 5,952 | 5,952 |
+
+(One standard trial of `dependency-audit` did not finish.) The tailored guide gained 21 points and cut
+output by a fifth. The corpus of eleven other workflows' tasks and programs gained nothing over the
+tailored guide, at three times the prompt, and its answers broke brackets more often, so it is
+dropped. The eight tailored misses were five `unresolved-type` (a helper called with `[]`, and a loop
+accumulator starting as `[]`) and three bracket errors. On the development probe tasks (2 samples of
+17), the tailored guide scored 33 of 34 first attempts against 34 of 34 for the standard guide, one
+bracket error, with output 3,093 tokens per trial against 2,309.
+
 **The repomod track passed.** repomod gained `default_catalog`, `select_repositories`, `print_json`,
 `discover_owner`, `checkout_status`, `todo_item_count`, `status_text`, and `render_discover`, and
 `sx-repomod` calls them. repomod's suite gives 595 passed and 1 skipped, ruff and ty pass, and the 36
