@@ -81,8 +81,10 @@ Each entry is `{"capability": ID, "input": {...}, "results": [...]}`. Each resul
 
 The default export is an async function that receives one object, `api`, and returns the result.
 
-- `api.NAMESPACE.name(input)` calls a capability. Names are camelCase, so `github.list-prs` is
-  `api.github.listPrs`. Input and output keys are camelCase too, so `open-prs` is `openPrs`.
+- `api.NAMESPACE.name(input)` calls a capability. Function names are camelCase, so
+  `github.list-prs` is `api.github.listPrs`. Input and output keys stay exactly as declared, so a
+  field `open-prs` is read as `pr["open-prs"]`. A tool whose input is `Record {}` may be called
+  with no argument.
 - A failed call throws an error with `.kind` and `.message`.
 - `api.text` and `api.semver` hold the core functions listed in `cores.json`, when the task lists
   those cores.
@@ -107,11 +109,22 @@ Describe the goal, not the steps. Name no programming language.
 `schema-detail` marks a task whose correct answer depends on reading the declared types closely,
 for example an `Option` field or a field whose name differs from the obvious one.
 
-## Checker limits
+## The probe
 
-The Phase 2 harness must close these before the probe scores anything:
+`probe.py` compares Sx with TypeScript on these tasks. Each trial sends a model one arm's prompt
+through the `pi` CLI, with every tool, skill, and context file disabled, and allows two repairs.
 
-- The checker does not compare `api.sleep` durations, so a solution that retries or polls without
-  waiting, or with the wrong waits, still passes.
-- Key conversion between kebab-case and camelCase applies to every object key, including the keys
-  of a `Map`. It must apply only to record fields, using the declared types.
+- The Sx arm gets a guide level from `sx help --level` and the task's tool listing. Its answer is
+  checked and run on the Sx machine against the task's fixtures.
+- The TypeScript arm gets TypeScript declarations generated from the task by `typescript.py`. Its
+  answer is checked by `tsc` and run by `run_js.mjs` against the same fixtures, through `host.mjs`.
+- A repair feeds back only what a real host would show: diagnostics, a type error, a runtime
+  failure, or a tool rejecting its input. A wrong result shows nothing, so it ends the trial.
+- A trial is correct when its result equals `expected`, its writes ran exactly as the fixtures
+  require, and its waits match the reference solution's waits.
+
+```sh
+uv run python bench/codemode/probe.py --measure-guides --out .work/probe/measure
+uv run python bench/codemode/probe.py --split development --guide minimal --guide standard --samples 2 --out .work/probe/dev
+uv run python bench/codemode/probe.py --report --out .work/probe/dev
+```
