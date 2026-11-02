@@ -1,0 +1,14 @@
+(def root "{{root}}/backups")
+(defn dated? [name] (re.test #"^[a-z]+-\d{4}-\d{2}-\d{2}\.tar\.gz$" name))
+(defn doomed [service]
+  (let [entries (call fs.list {:path (str root "/" service)})
+        locked (any? (fn [e] (= (get e :name) ".lock")) entries)
+        files (filter (fn [e] (= (get e :kind) File)) entries)
+        backups (sort-by identity (filter dated? (map (fn [e] (get e :name)) files)))]
+    (if (or locked (<= (count backups) 3)) [] (take (- (count backups) 3) backups))))
+(defn rotate [service]
+  (let [names (doomed service)
+        _ (map (fn [name] (call fs.delete {:path (str root "/" service "/" name)})) names)]
+    [service names]))
+(def services (map (fn [e] (get e :name)) (filter (fn [e] (= (get e :kind) Directory)) (call fs.list {:path root}))))
+(into-map (map rotate services))

@@ -1,0 +1,6 @@
+{
+  "fs.list": {"roots": ["{{root}}/backups"]},
+  "fs.stat": {"roots": ["{{root}}/backups"]},
+  "fs.read-text": {"roots": ["{{root}}/backups"]},
+  "fs.delete": {"roots": ["{{root}}/backups"]}
+}
