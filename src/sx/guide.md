@@ -71,7 +71,7 @@ only the forms and functions below exist.
 - Comparison: `(= a b)`, `(not= a b)`, `(< a b)`, `(<= a b)`, `(> a b)`, `(>= a b)`
 - Logic: `(not x)`, `(and a b)`, `(or a b)`
 - Arithmetic: `(- x)` negates.
-- `(str a b c ...)` joins strings.
+- `(str a b c ...)` joins strings, integers, booleans, and enum values: `(str "n=" 3)` is `"n=3"`.
 - `(count xs)`, `(first xs)`, `(rest xs)`, `(nth xs i)`, `(take n xs)`, `(concat xs ys)`,
   `(flatten xss)`, `(contains? xs x)`. `first` and `nth` stop the program on a list that is too
   short, so check `(count xs)` first when it may be.

@@ -2255,14 +2255,19 @@ class _Checker:
         checked = []
         for arg in node.items[1:]:
             value, t = self.check(arg, None, scope)
+            resolved = self.resolve(t)
+            if hint is None and (
+                resolved in {INT, BOOL} or (isinstance(resolved, EnumType) and self.nullary(resolved))
+            ):
+                checked.append(value)
+                continue
+            message = (
+                f"A sort key built with str joins strings only, but this argument is {describe(self.zonk(t))}."
+                if hint is not None
+                else f"str joins strings, integers, booleans, and enum values, but this is {describe(self.zonk(t))}."
+            )
             value, _ = self.coerce(
-                value, t, STRING, arg.span,
-                message=f"str joins strings, but this argument is {describe(self.zonk(t))}.",
-                detail_hint=(
-                    hint
-                    if hint is not None
-                    else ("Convert an Int with text.from-int." if self.resolve(t) == INT else None)
-                ),
+                value, t, STRING, arg.span, message=message, detail_hint=hint,
                 help_name="sort-by" if hint is not None else "str",
             )
             checked.append(value)

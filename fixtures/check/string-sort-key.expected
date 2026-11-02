@@ -1,7 +1,7 @@
 error[type-mismatch] 6:25-6:43
     (sort-by (fn [r] (str (- (get r :count)) "|" (get r :tag))) tag-counts))
                           ^^^^^^^^^^^^^^^^^^
-  str joins strings, but this argument is an Int.
+  A sort key built with str joins strings only, but this argument is an Int.
   Expected: String
   Found: Int
   To sort by several keys, return a tuple: (fn [r] [(- (get r :count)) (get r :tag)])

@@ -311,7 +311,7 @@ as in Clojure.
 | `< <= > >=` | `T T -> Bool` for `Int` or `String` |
 | `not` | `Bool -> Bool` |
 | `and or` | `Bool Bool -> Bool`. Both arguments always evaluate. Use `if` to make a call conditional. |
-| `str` | `String ... -> String`, one or more strings joined in order |
+| `str` | `T ... -> String`, one or more arguments joined in order. Each is a `String`, an `Int` written in decimal, a `Bool` written `true` or `false`, or a value of an enum with no payloads written as its variant name. In a `sort-by` key every argument must be a `String`, because joining numbers into a string key sorts them as text. |
 | `count` | `List<T> -> Int`, or `Map<String, V> -> Int` for the number of entries |
 | `first` | `List<T> -> T`. An empty list is an `out-of-range` error. |
 | `rest` | `List<T> -> List<T>`, every element after the first. Empty for an empty list. |

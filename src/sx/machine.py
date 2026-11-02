@@ -29,6 +29,7 @@ from sx.values import (
     decode,
     encode,
     make_map,
+    show_value,
     size,
 )
 
@@ -947,6 +948,17 @@ def same(a: Value, b: Value) -> bool:
     return type(a) is type(b) and a == b
 
 
+def text_of(value: Value, span: Span) -> str:
+    match value:
+        case bool():
+            return "true" if value else "false"
+        case int() | str():
+            return str(value)
+        case VariantValue(variant=variant, payload=None):
+            return variant
+    raise _TerminalError(Failure(FailureKind.INTERNAL, f"str cannot write {show_value(value)}.", span))
+
+
 def pure_prelude(op: str, args: list[Value], span: Span, machine: Machine) -> Value:
     match op:
         case "+":
@@ -982,7 +994,7 @@ def pure_prelude(op: str, args: list[Value], span: Span, machine: Machine) -> Va
         case "or":
             return args[0] is True or args[1] is True
         case "str":
-            joined = "".join(a for a in args if isinstance(a, str))
+            joined = "".join(text_of(a, span) for a in args)
             machine.check_size(joined, span)
             return joined
         case "count":
