@@ -54,8 +54,9 @@ function texts(result: ToolResult): string {
     .join("");
 }
 
-function unwrap(tool: Tool, result: ToolResult): unknown {
+function unwrap(tool: Tool, result: ToolResult, foreign: boolean): unknown {
   if (result.isError === true) {
+    if (foreign) throw new CallError("Failed", texts(result));
     const kind = result.structuredContent?.kind;
     const message = result.structuredContent?.message;
     if (isKind(kind) && typeof message === "string") throw new CallError(kind, message);
@@ -67,12 +68,23 @@ function unwrap(tool: Tool, result: ToolResult): unknown {
   return tool._meta?.[RESULT_META] === WRAPPED ? structured[WRAPPED_KEY] : structured;
 }
 
+function withoutNulls(payload: unknown): unknown {
+  if (typeof payload !== "object" || payload === null || Array.isArray(payload)) return payload;
+  return Object.fromEntries(Object.entries(payload).filter(([, value]) => value !== null));
+}
+
 export interface Built {
   api: { [namespace: string]: unknown };
   calls: CallRecord[];
 }
 
-export function buildApi(client: McpClient, tools: Tool[], timeoutMs: number): Built {
+export interface Source {
+  client: McpClient;
+  tools: Tool[];
+  names: { [tool: string]: string } | null;
+}
+
+export function buildApi(sources: Source[], timeoutMs: number): Built {
   const calls: CallRecord[] = [];
   const api: { [namespace: string]: unknown } = {
     sleep: async (milliseconds: number): Promise<void> => {
@@ -82,23 +94,26 @@ export function buildApi(client: McpClient, tools: Tool[], timeoutMs: number): B
       await new Promise((resolve) => setTimeout(resolve, milliseconds));
     },
   };
-  for (const tool of tools) {
-    const [namespace, name] = tool.name.split(".", 2);
-    if (namespace === undefined || name === undefined) throw new HostError(`${tool.name} is not NAMESPACE.NAME`);
+  const entries = sources.flatMap(({ client, tools, names }) => tools.map((tool) => ({ client, tool, names })));
+  for (const { client, tool, names } of entries) {
+    const capability = names === null ? tool.name : names[tool.name];
+    if (capability === undefined) throw new HostError(`${tool.name} has no capability name`);
+    const [namespace, name] = capability.split(".", 2);
+    if (namespace === undefined || name === undefined) throw new HostError(`${capability} is not NAMESPACE.NAME`);
     const space = (api[camel(namespace)] ??= {}) as { [member: string]: unknown };
     space[camel(name)] = async (input?: unknown): Promise<unknown> => {
       if (calls.length >= CALL_LIMIT) throw new HostError(`more than ${CALL_LIMIT} tool calls`);
       const payload = input === undefined ? {} : structuredClone(input);
-      const record: CallRecord = { capability: tool.name, input: payload, milliseconds: 0, outcome: "ok" };
+      const record: CallRecord = { capability, input: payload, milliseconds: 0, outcome: "ok" };
       calls.push(record);
       const started = performance.now();
       try {
-        return unwrap(tool, await client.callTool(tool.name, payload, timeoutMs));
+        return unwrap(tool, await client.callTool(tool.name, names === null ? payload : withoutNulls(payload), timeoutMs), names !== null);
       } catch (error) {
         if (error instanceof CallError) record.outcome = error.kind;
-        if (error instanceof RpcError) throw new HostError(`${tool.name} was rejected: ${error.message}`);
+        if (error instanceof RpcError) throw new HostError(`${capability} was rejected: ${error.message}`);
         if (error instanceof RpcTimeout) throw new CallError("Timeout", error.message);
-        if (error instanceof RpcClosed) throw new HostError(`${tool.name}: ${error.message}`);
+        if (error instanceof RpcClosed) throw new HostError(`${capability}: ${error.message}`);
         throw error;
       } finally {
         record.milliseconds = performance.now() - started;

@@ -1,10 +1,11 @@
-import { CallError, HostError, buildApi, type CallRecord } from "./api.ts";
+import { CallError, HostError, buildApi, type CallRecord, type Source } from "./api.ts";
 import { McpClient, STANDARD_TIMEOUT_MS } from "./mcp.ts";
 
 interface Options {
   solution: string;
   timeoutMs: number;
   command: string[];
+  imported: { command: string[]; names: { [tool: string]: string } } | null;
 }
 
 function parseArguments(argv: string[]): Options {
@@ -14,16 +15,24 @@ function parseArguments(argv: string[]): Options {
   const command = separator < 0 ? [] : rest.slice(separator + 1);
   let solution: string | undefined;
   let timeoutMs = STANDARD_TIMEOUT_MS;
+  let importedCommand: string[] | undefined;
+  let importedNames: { [tool: string]: string } | undefined;
   for (let at = 0; at < own.length; at += 2) {
     const value = own[at + 1];
     if (own[at] === "--solution" && value !== undefined) solution = value;
     else if (own[at] === "--timeout-ms" && value !== undefined) timeoutMs = Number(value);
+    else if (own[at] === "--imported-command" && value !== undefined) importedCommand = JSON.parse(value) as string[];
+    else if (own[at] === "--imported-names" && value !== undefined) importedNames = JSON.parse(value) as { [tool: string]: string };
     else throw new Error(`unrecognized argument ${own[at] ?? ""}`);
   }
   if (solution === undefined) throw new Error("--solution FILE is required");
-  if (command.length === 0) throw new Error("a server command is needed after --");
+  if (command.length === 0 && importedCommand === undefined) throw new Error("a server command is needed after --");
+  if ((importedCommand === undefined) !== (importedNames === undefined)) {
+    throw new Error("--imported-command and --imported-names go together");
+  }
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new Error("--timeout-ms must be a positive number");
-  return { solution, timeoutMs, command };
+  const imported = importedCommand === undefined || importedNames === undefined ? null : { command: importedCommand, names: importedNames };
+  return { solution, timeoutMs, command, imported };
 }
 
 interface Report {
@@ -39,10 +48,20 @@ interface Report {
 async function main(): Promise<Report> {
   const options = parseArguments(process.argv);
   const began = performance.now();
-  const client = await McpClient.connect(options.command, options.timeoutMs);
+  const clients: McpClient[] = [];
   try {
-    const tools = await client.listTools(options.timeoutMs);
-    const { api, calls } = buildApi(client, tools, options.timeoutMs);
+    const sources: Source[] = [];
+    if (options.command.length > 0) {
+      const client = await McpClient.connect(options.command, options.timeoutMs);
+      clients.push(client);
+      sources.push({ client, tools: await client.listTools(options.timeoutMs), names: null });
+    }
+    if (options.imported !== null) {
+      const client = await McpClient.connect(options.imported.command, options.timeoutMs);
+      clients.push(client);
+      sources.push({ client, tools: await client.listTools(options.timeoutMs), names: options.imported.names });
+    }
+    const { api, calls } = buildApi(sources, options.timeoutMs);
     const startupMs = performance.now() - began;
     let report: Report;
     try {
@@ -67,7 +86,7 @@ async function main(): Promise<Report> {
     }
     return report;
   } finally {
-    await client.close();
+    await Promise.all(clients.map((client) => client.close()));
   }
 }
 

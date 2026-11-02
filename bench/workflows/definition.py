@@ -35,6 +35,12 @@ type Check = Callable[[Sandbox, object], Verdict]
 
 
 @dataclass(frozen=True, slots=True)
+class ToolServer:
+    name: str
+    command: list[str]
+
+
+@dataclass(frozen=True, slots=True)
 class Workflow:
     id: str
     directory: Path
@@ -43,6 +49,7 @@ class Workflow:
     grants: str
     setup: Setup
     check: Check
+    server: str | None = None
 
     def render(self, template: str, sandbox: Sandbox) -> str:
         def substitute(found: re.Match[str]) -> str:
@@ -62,6 +69,12 @@ class Workflow:
             self.setup(sandbox)
             yield sandbox
 
+    def tool_server(self, sandbox: Sandbox) -> ToolServer | None:
+        if self.server is None:
+            return None
+        loaded: Json = json.loads(self.render(self.server, sandbox))
+        return ToolServer(loaded["name"], list(loaded["command"]))
+
     def declarations_json(self, sandbox: Sandbox) -> Json:
         loaded: Json = json.loads(self.render(self.declarations, sandbox))
         return loaded
@@ -77,6 +90,7 @@ def load(workflow_id: str, root: Path = WORKFLOWS) -> Workflow:
         raise ImportError(f"cannot load {directory / 'workflow.py'}")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    server = directory / "server.json"
     return Workflow(
         id=workflow_id,
         directory=directory,
@@ -85,6 +99,7 @@ def load(workflow_id: str, root: Path = WORKFLOWS) -> Workflow:
         grants=(directory / "grants.json").read_text(),
         setup=module.setup,
         check=module.check,
+        server=server.read_text() if server.is_file() else None,
     )
 
 

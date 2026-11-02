@@ -30,7 +30,8 @@ def sx_prompt(workflow: Workflow, sandbox: Sandbox, level: str) -> str:
 
 def js_arm_prompt(workflow: Workflow, sandbox: Sandbox) -> str:
     task = {"description": workflow.render(workflow.task, sandbox).strip()}
-    return js_prompt({**arms.described_for(workflow, sandbox), **task}, NO_CORES)
+    prompt = js_prompt({**arms.described_for(workflow, sandbox), **task}, NO_CORES)
+    return prompt.replace(arms.VIRTUAL_WAIT, arms.REAL_WAIT)
 
 
 def verdict_of(workflow: Workflow, sandbox: Sandbox, run: ArmRun) -> tuple[str, str]:

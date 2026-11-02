@@ -21,6 +21,13 @@ BROKEN = {
 }
 
 
+@pytest.mark.parametrize("workflow_id", definition.available())
+@pytest.mark.parametrize("arm", BOTH)
+def test_every_workflow_reference_passes_in_both_arms(workflow_id: str, arm: Arm) -> None:
+    _, status, detail = trial.reference(definition.load(workflow_id), arm)
+    assert (status, detail) == ("correct", "")
+
+
 @pytest.mark.parametrize("arm", BOTH)
 def test_the_example_workflow_passes_in_both_arms(arm: Arm) -> None:
     run, status, detail = trial.reference(definition.load(EXAMPLE), arm)

@@ -1,0 +1,22 @@
+(let [order [["E-500" 2] ["A-100" 3] ["D-404" 2] ["C-300" 5] ["B-200" 1]]
+      looked (par-map {:limit 5}
+                      (fn [[sku quantity]]
+                        (match (attempt (call mcp-inventory.lookup-item {:sku sku}))
+                          (ok item) {:sku sku :quantity quantity :known true :stock (get item :stock) :cents (get item :cents) :perishable (contains? (get item :tags) "perishable")}
+                          (err _) {:sku sku :quantity quantity :known false :stock 0 :cents 0 :perishable false}))
+                      order)
+      lines (sort-by (fn [l] (get l :sku)) looked)
+      outcomes (map (fn [l]
+                      (cond
+                        (not (get l :known)) {:sku (get l :sku) :reason "unknown" :reservation "" :cents 0}
+                        (< (get l :stock) (get l :quantity)) {:sku (get l :sku) :reason "insufficient" :reservation "" :cents 0}
+                        :else
+                        (let [r (if (get l :perishable)
+                                  (call mcp-inventory.reserve-stock {:sku (get l :sku) :quantity (get l :quantity) :priority "rush"})
+                                  (call mcp-inventory.reserve-stock {:sku (get l :sku) :quantity (get l :quantity)}))]
+                          {:sku (get l :sku) :reason "" :reservation (get r :reservation) :cents (* (get l :cents) (get l :quantity))})))
+                    lines)
+      reserved (filter (fn [o] (not= (get o :reservation) "")) outcomes)]
+  {:reserved (map (fn [o] {:sku (get o :sku) :reservation (get o :reservation) :cents (get o :cents)}) reserved)
+   :rejected (map (fn [o] {:sku (get o :sku) :reason (get o :reason)}) (filter (fn [o] (= (get o :reservation) "")) outcomes))
+   :total (reduce + 0 (map (fn [o] (get o :cents)) reserved))})
