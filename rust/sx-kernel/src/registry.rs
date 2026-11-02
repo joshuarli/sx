@@ -288,11 +288,24 @@ impl Registry {
                 )));
             }
             self.add_capability(entry.capability.clone())?;
-            if let Some(check) = entry.check {
-                self.scope_checks.insert(entry.capability.id.clone(), check);
+            if let Some(check) = &entry.check {
+                self.scope_checks.insert(entry.capability.id.clone(), check.clone());
             }
         }
         self.packs.push(pack.id);
+        Ok(())
+    }
+
+    pub fn add_checked_capability(&mut self, capability: Capability, check: ScopeCheck) -> Result<(), RegistryError> {
+        if capability.scope.is_none() {
+            return Err(RegistryError(format!(
+                "capability {} registers a scope check but declares no scope type",
+                repr_str(&capability.id)
+            )));
+        }
+        let id = capability.id.clone();
+        self.add_capability(capability)?;
+        self.scope_checks.insert(id, check);
         Ok(())
     }
 
@@ -301,7 +314,7 @@ impl Registry {
     }
 
     pub fn scope_check(&self, id: &str) -> Option<ScopeCheck> {
-        self.scope_checks.get(id).copied()
+        self.scope_checks.get(id).cloned()
     }
 
     pub fn add_type(&mut self, name: &str, t: Type) -> Result<(), RegistryError> {
@@ -482,7 +495,28 @@ fn unique(pairs: &[(String, Json)]) -> Vec<(&str, &Json)> {
     found
 }
 
+pub trait EndpointBinder {
+    fn bind(&mut self, registry: &mut Registry, entry: &Json) -> Result<(), String>;
+}
+
+struct NoEndpoints;
+
+impl EndpointBinder for NoEndpoints {
+    fn bind(&mut self, _registry: &mut Registry, entry: &Json) -> Result<(), String> {
+        let id = entry.get("id").and_then(Json::as_str).unwrap_or("?");
+        Err(format!("capability {} declares an http endpoint, which this loader does not bind", repr_str(id)))
+    }
+}
+
 pub fn load_declarations(registry: &mut Registry, declarations: &Json) -> Result<(), LoadError> {
+    load_declarations_with(registry, declarations, &mut NoEndpoints)
+}
+
+pub fn load_declarations_with(
+    registry: &mut Registry,
+    declarations: &Json,
+    endpoints: &mut dyn EndpointBinder,
+) -> Result<(), LoadError> {
     if !matches!(declarations, Json::Object(_)) {
         return Err(LoadError::Shape(format!("declarations must be a JSON object, not {}", python_repr(declarations))));
     }
@@ -530,6 +564,10 @@ pub fn load_declarations(registry: &mut Registry, declarations: &Json) -> Result
         }
     };
     for entry in capabilities {
+        if entry.get("http").is_some() {
+            endpoints.bind(registry, entry).map_err(LoadError::Value)?;
+            continue;
+        }
         let id = text(required(entry, "id")?, "a capability id")?.to_string();
         let effect_json = required(entry, "effect")?;
         let effect = effect_json

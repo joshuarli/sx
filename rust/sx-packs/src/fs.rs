@@ -88,8 +88,13 @@ fn path_input() -> Type {
     record(None, vec![("path", STRING)])
 }
 
-const READ_CHECK: ScopeCheck = ScopeCheck { prepare, check: check_read };
-const WRITE_CHECK: ScopeCheck = ScopeCheck { prepare, check: check_write };
+fn read_check() -> ScopeCheck {
+    ScopeCheck::new(prepare, check_read)
+}
+
+fn write_check() -> ScopeCheck {
+    ScopeCheck::new(prepare, check_write)
+}
 
 fn capability(id: &str, effect: Effect, input: Type, output: Type, description: &str, check: ScopeCheck) -> PackCapability {
     PackCapability {
@@ -108,15 +113,15 @@ fn capability(id: &str, effect: Effect, input: Type, output: Type, description: 
 
 pub fn pack() -> Pack {
     let capabilities = vec![
-        capability(READ_TEXT, Effect::Read, path_input(), STRING, "Reads a whole file as UTF-8 text.", READ_CHECK),
-        capability(READ_BYTES, Effect::Read, path_input(), BYTES, "Reads a whole file as bytes.", READ_CHECK),
+        capability(READ_TEXT, Effect::Read, path_input(), STRING, "Reads a whole file as UTF-8 text.", read_check()),
+        capability(READ_BYTES, Effect::Read, path_input(), BYTES, "Reads a whole file as bytes.", read_check()),
         capability(
             LIST,
             Effect::Read,
             path_input(),
             Type::List(Box::new(entry_type())),
             "Lists a directory's entries, sorted by name.",
-            READ_CHECK,
+            read_check(),
         ),
         capability(
             STAT,
@@ -124,7 +129,7 @@ pub fn pack() -> Pack {
             path_input(),
             Type::Option(Box::new(stat_type())),
             "Reports a path's kind and size, or none when nothing is there.",
-            READ_CHECK,
+            read_check(),
         ),
         capability(
             WRITE_TEXT,
@@ -132,7 +137,7 @@ pub fn pack() -> Pack {
             record(None, vec![("path", STRING), ("text", STRING)]),
             UNIT,
             "Replaces a file's contents with UTF-8 text, atomically.",
-            WRITE_CHECK,
+            write_check(),
         ),
     ];
     Pack {
@@ -157,11 +162,11 @@ pub fn performer(capability: &str) -> Option<Performer> {
     }
 }
 
-fn shown(path: &str) -> String {
+pub(crate) fn shown(path: &str) -> String {
     show_value(&Value::string(path))
 }
 
-fn strings(value: &Value) -> Option<Vec<&str>> {
+pub(crate) fn strings(value: &Value) -> Option<Vec<&str>> {
     match value {
         Value::List(items) => items
             .iter()
@@ -174,14 +179,14 @@ fn strings(value: &Value) -> Option<Vec<&str>> {
     }
 }
 
-fn field<'v>(value: &'v Value, name: &str) -> Option<&'v Value> {
+pub(crate) fn field<'v>(value: &'v Value, name: &str) -> Option<&'v Value> {
     match value {
         Value::Record(record) => record.get(name),
         _ => None,
     }
 }
 
-fn text_field<'v>(value: &'v Value, name: &str) -> Option<&'v str> {
+pub(crate) fn text_field<'v>(value: &'v Value, name: &str) -> Option<&'v str> {
     match field(value, name) {
         Some(Value::String(s)) => Some(s),
         _ => None,
@@ -193,6 +198,10 @@ fn prepare(scope: &Value) -> Result<Value, String> {
     if roots.is_empty() {
         return Err("a fs scope needs at least one root".to_string());
     }
+    Ok(Value::Record(RecordValue::new(vec![(Arc::from("roots"), Value::list(canonical_roots(&roots)?))])))
+}
+
+pub(crate) fn canonical_roots(roots: &[&str]) -> Result<Vec<Value>, String> {
     let mut canonical = Vec::new();
     for root in roots {
         if !root.starts_with('/') {
@@ -211,7 +220,7 @@ fn prepare(scope: &Value) -> Result<Value, String> {
             .ok_or_else(|| format!("root {} resolves to a path that is not valid UTF-8", shown(root)))?;
         canonical.push(Value::string(text));
     }
-    Ok(Value::Record(RecordValue::new(vec![(Arc::from("roots"), Value::list(canonical))])))
+    Ok(canonical)
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

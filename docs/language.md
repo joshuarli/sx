@@ -469,14 +469,15 @@ a request's input to allowed, or denied with a reason. The check runs in two pla
 
 - **Before the run.** When a call's input is known before the run, the checker applies the check and
   rejects a denied call with `out-of-scope`. An input is known when it is built only from literals:
-  a `Bool`, `Int`, `Float`, or `String` literal, or a record or list literal of known values. Any
+  a `Bool`, `Int`, `Float`, or `String` literal, `none`, `(some x)` of a known `x`, or a record or
+  list literal of known values, including a record that omits optional fields, which are `none`. Any
   other input, including a name bound to a literal, is computed, and only the run-time check sees it.
 - **During the run.** The host applies the check to every request before performing it, and refuses
   a denied one with a `CallError` of kind `PermissionDenied` whose message is the reason. That is a
   refusal kind, so the operation never took effect and the retry rules treat it as not performed.
 
-A capability declared in a declarations file may name its scope type with `"scope"`, but no check
-comes with it: the kernel passes the scope to the host, which must check each request itself. The
+A capability declared in a declarations file may name its scope type with `"scope"`, except an HTTP endpoint, whose scope and check come with it (see [the http pack](#the-http-pack)). For any other, no check
+comes with the scope: the kernel passes it to the host, which must check each request itself. The
 checker cannot judge such a call, and `explain` reports it as checked per request.
 
 `sx explain` lists every call site under its capability. For a capability that declares a scope it
@@ -555,6 +556,255 @@ native host, which drives the machine, performs each suspension's requests concu
 more than the `concurrency` budget, and waits for real on delays. A program that calls a capability
 no pack implements is a usage error before the run starts. With `--responses`, `sx run` answers from
 the recorded responses as before, after refusing out-of-scope requests the same way.
+
+### The process pack
+
+A declarations file registers it with `"packs": ["process"]`. It declares one capability:
+
+| Capability | Input | Output | Effect |
+| --- | --- | --- | --- |
+| `process.run` | `{program: String, args: List<String>, cwd: String, stdin: Option<String>}` | `process.Output` | write, not idempotent |
+
+`process.Output` is `Record {status: Int, stdout: String, stderr: String}`. `status` is the exit code,
+and a nonzero code is a value, not an error, so a program branches on it. Sx never offers a capability
+that runs an arbitrary command: a host grants specific programs with specific argument patterns, and
+a grant of nothing runs nothing. `process.run` executes the program directly with exactly the given
+arguments. No shell reads them, so `$HOME`, `*`, `;`, and backquotes reach the program as they are.
+
+**Scope.** The scope type is `Record {commands: List<process.Command>, roots: List<String>}`.
+`process.Command` is `Record {program: String, args: List<process.Arg>}`, and `process.Arg` is an
+enum with payloads, which the grants JSON writes as the kernel [encodes](#values-and-json) every
+enum: a variant with a value is `{"tag": NAME, "value": x}`, and one without is its name as a string.
+
+| Pattern | JSON | Matches |
+| --- | --- | --- |
+| `(Exact s)` | `{"tag": "Exact", "value": "s"}` | one argument equal to `s` |
+| `(OneOf [s ...])` | `{"tag": "OneOf", "value": ["s", ...]}` | one argument equal to any of the strings |
+| `(AnyOne)` | `"AnyOne"` | any single argument, including an empty one |
+| `(Rest)` | `"Rest"` | all remaining arguments, including none |
+
+```json
+{"process.run": {
+  "commands": [
+    {"program": "/usr/bin/git", "args": [{"tag": "Exact", "value": "status"}, {"tag": "OneOf", "value": ["--short", "--porcelain"]}]},
+    {"program": "/bin/echo", "args": ["Rest"]}
+  ],
+  "roots": ["/srv/work"]
+}}
+```
+
+A request is allowed when some command lists the request's program and its patterns match the
+request's arguments by position: each pattern consumes one argument, `(Rest)` consumes the remainder,
+and without `(Rest)` the counts must be equal. A program may appear in any number of commands, and
+any one of them may allow the request. A command with no patterns allows no arguments. Loading a grant
+refuses a `(Rest)` that is not last, a `(OneOf [])`, which matches nothing, a NUL character in a
+pattern, an empty `commands` or `roots` list, and any `roots` problem the `fs` pack refuses.
+
+A program must be an absolute path to an executable regular file. Granting canonicalizes it,
+following symlinks. A request's `program` must also be absolute, with no NUL character, and it is
+canonicalized the same way and compared with the granted programs as a whole path, so `echo` and
+`./echo` are denied, `PATH` is never searched, and a symlink to a program that is not granted is
+denied, while one to a granted program is allowed. The program is then started through its canonical
+path with the request's path as `argv[0]`, so a multi-call binary such as busybox still sees the name
+it was called by. A grant is on the file, not the name: granting `/bin/echo` on a system where it is a
+link to busybox grants every name that links to busybox. A request argument with a NUL character is
+denied. `cwd` must resolve inside one of the scope's `roots` by the [fs pack's rules](#the-fs-pack):
+absolute, symlinks followed, whole-component containment. A `cwd` that does not exist fails with
+`NotFound`, and one that is not a directory with `Invalid`, before anything starts.
+
+**Execution.** The child gets an empty environment: no `PATH`, `HOME`, `LANG`, or anything inherited
+from the host. A shell started this way chooses its own default `PATH`. Standard input is the
+`stdin` text when it is `some`, or an empty input (the null device) when it is `none`. A program that
+exits without reading all of its input is not an error. Standard output and standard error are
+captured separately, at most 1 MiB (1,048,576 bytes) each, and the whole request has 60 seconds.
+The child runs in a new process group, and the host kills the group with `SIGKILL` on every way out:
+a normal exit, which also ends any background process the program left behind, an exceeded limit, and
+a failure. A request therefore returns only after it has killed the group and reaped the process it
+started. A process that
+escapes the group, for example with `setsid`, is not killed. If it holds the output open past the
+timeout, the request fails with `Timeout`.
+
+**Errors.** The mapping is closed. A nonzero exit status is not an error.
+
+| Situation | Kind | Took effect |
+| --- | --- | --- |
+| The scope check denies the request, including a program that does not exist | `PermissionDenied` | no |
+| `cwd` does not exist | `NotFound` | no |
+| `cwd` is not a directory | `Invalid` | no |
+| The program or its interpreter cannot be found when it starts | `NotFound` | no |
+| The program cannot be executed | `PermissionDenied` | no |
+| Any other failure to start | `Failed` | no |
+| The 60 seconds pass; the group is killed | `Timeout` | yes |
+| Output past 1 MiB on either stream; the group is killed | `Failed` | yes |
+| The program was killed by a signal, named in the message | `Failed` | yes |
+| The program wrote invalid UTF-8 to either stream | `Failed` | yes |
+
+The last four rows are not refusal kinds, because the program ran. Invalid UTF-8 in particular is
+`Failed`, not `Invalid`: the checker allows a retry of this write on refusal kinds only, and an
+`Invalid` would let a retry run the program again.
+
+**What the scope does not do.** It decides which program starts, with which arguments, and from
+where. It does not confine the program. A granted program runs as the host's user and can read or
+write any file that user can, whatever `roots` says. An argument pattern that lets a program run
+other programs, such as `(Rest)` after `sh -c` or an interpreter's script argument, grants everything
+that program can reach. Grant the narrowest patterns that do the job. As in the `fs` pack, the check
+resolves paths and the start then uses the resolved path, so a process that rewrites the tree between
+the two can redirect it.
+
+### The http pack
+
+A declarations file registers it with `"packs": ["http"]`. It declares two capabilities, each with the scope
+type `Record {origins: List<String>, methods: List<String>}`:
+
+| Capability | Input | Output | Effect |
+| --- | --- | --- | --- |
+| `http.request` | `{method: String, url: String, headers: Map<String, String>, body: Option<String>}` | `http.Response` | write, not idempotent, because the method is data |
+| `http.get` | `{url: String, headers: Map<String, String>}` | `http.Response` | read |
+
+`http.Response` is `Record {status: Int, headers: Map<String, String>, body: String}`. Header names are
+lowercase, and a header the server sent more than once is joined with `, ` in arrival order (a joined
+`set-cookie` is therefore ambiguous, and the pack does not keep cookies). The body must be UTF-8. Any
+status is a value: raw requests fail only when no response could be read, and a 404 or 500 comes back
+as a `Response` for the program to match on.
+
+**Scope.** `origins` lists `scheme://host[:port]` strings, and `methods` lists HTTP method tokens. Granting
+normalizes each origin, and a malformed one, an empty list, or a method that is not an uppercase token
+is a usage error:
+
+- The scheme is `http` or `https`, lowercased. Anything else is refused.
+- The host is lowercased. A label that is not ASCII is lowercased and encoded as punycode (RFC 3492)
+  behind `xn--`, so `https://bücher.example` grants `https://xn--bcher-kva.example`. This is not full
+  UTS 46: there is no Unicode normalization and no mapping of look-alike characters, so a spelling that
+  needs either names a different host and is denied, which fails safe. A host that ends in a dot, has an empty
+  label, holds a `%`, or has a character a host name never has is refused.
+- A host whose last label is all digits, or begins `0x`, must be a strict dotted-quad IPv4 address, so
+  `127.1`, `0x7f.1`, and `2130706433` are refused rather than guessed at. An IPv6 literal is written in
+  brackets and printed in its canonical form.
+- The port defaults to 80 for `http` and 443 for `https`, and the normalized origin always writes it, so
+  `https://a.example` and `https://a.example:443` are one origin. An empty port, `0`, and a port above
+  65535 are refused.
+- An origin has no userinfo, path, query, or fragment, not even a trailing `/`.
+
+A request is allowed only when its URL's normalized origin is in `origins` and its method, compared
+exactly and case-sensitively (`get` is not `GET`), is in `methods`. The URL is parsed by the same rules
+and then refused if it carries userinfo (`user@`, and so `a.example@evil.example`), a backslash, a space
+or control character, a path or query that is not ASCII or holds a `%` not followed by two hexadecimal
+digits, or a scheme other than `http` and `https`. The fragment is dropped. The pack connects to the
+normalized origin it checked, never to the text it was given. A denied request opens no socket.
+
+**Request.** The client is h12tiny's blocking HTTP/1.1 client, with HTTPS through Rustls. HTTP/2 is not
+used. It sends `user-agent: sx-packs/VERSION` unless the program sets one. The headers `host`,
+`content-length`, `transfer-encoding`, `connection`, `upgrade`, `te`, and `trailer` belong to the client,
+and a request that sets one, repeats a name that differs only in case, or names an invalid header is
+`Invalid` before any socket opens. The client uses no proxy, cookie jar, or connection reuse. HTTPS
+verifies against the operating-system trust store, as h12tiny documents, and on macOS `SSL_CERT_FILE` or
+`SSL_CERT_DIR` selects the roots instead.
+
+**Redirects.** A redirect is a new request. The pack follows `301`, `302`, `303`, `307`, and `308` with
+one `Location` only when the target, resolved against the current URL, passes the same grant with the
+method the next request will use, and at most 5 times. Otherwise it returns the redirect response as is,
+status, `location`, and body, which is the safer default: a program sees where it was sent and decides.
+`303` becomes a `GET` (or stays `HEAD`) without a body; `301` and `302` are followed only for `GET` and
+`HEAD`, so a write is never silently turned into a read; `307` and `308` repeat the method and body. A
+redirect to another origin carries none of the program's headers, so an `authorization` header never
+leaves the origin it was sent to; a redirect inside the origin keeps them. A target that is relative,
+malformed, carries userinfo, or is not `http` or `https`, or whose origin or method the grant does not
+cover, is not followed.
+
+**Typed endpoints.** A declarations file may declare an HTTP endpoint as an ordinary capability by giving
+a `capabilities` entry an `http` object in place of a scope:
+
+```json
+{"id": "github.repo",
+ "http": {"method": "GET", "url": "https://api.github.com/repos/{owner}/{name}", "query": [],
+          "headers": {"accept": "application/vnd.github+json"}},
+ "input": "Record {owner: String, name: String}",
+ "output": "Record open {full_name: String, stargazers_count: Int}",
+ "effect": "read"}
+```
+
+`id`, `http`, `input`, `output`, and `effect` are required, and `description` and `idempotent` behave as for
+any capability (the default description is the method and URL template). An endpoint's scope type is the
+one above, implied, and it is granted by the endpoint's own ID, so a grant file lists `github.repo`
+with `origins` and `methods` like any other scoped capability. The `http` object has `method`, `url`, and
+optional `query` and `headers`; an unknown key is an error. Every mistake below is a declaration error
+that names the endpoint, found when the declarations load:
+
+- The input is a record. `{field}` in the URL path names an input field of type `String`, `Int`, or `Bool`
+  and must exist. Nothing but the path may hold a variable: the scheme, host, and port are literal, so the
+  checker knows the endpoint's origin. The template has no query or fragment.
+- `query` lists input fields sent as query parameters of the same name. A field may be `String`, `Int`,
+  or `Bool`, an `Option` of one, which is omitted when `none`, or a `List` of one, which repeats the parameter.
+- The remaining input fields are the JSON body, encoded as a record, for `POST`, `PUT`, and `PATCH`, with
+  `content-type: application/json` unless the endpoint sets one; when there are none, there is no body.
+  For any other method a field left over is an error, because the request would drop it.
+- A field is not used twice, and `headers` are static strings that obey the client's header rules above.
+
+A path or query value is percent-encoded except for letters, digits, `-`, `.`, `_`, and `~`, so a
+variable never adds a segment or a parameter. An empty path value, `.`, and `..` are `Invalid`. A
+response with a `2xx` status is read as JSON and decoded against the declared output with the type-directed
+decoder of [Values and JSON](#values-and-json), so an open record drops fields it does not declare, and a
+closed record, a missing field, or a wrong type is a failure that names the path, such as
+`$.list[1].n: expected Int, found a string`. An output of `Unit` ignores the body. A decode failure is
+`Invalid` for a `read` endpoint. For a `write` endpoint it is `Failed`, because `Invalid` is a refusal kind
+and the server already acted. The same rule makes a non-UTF-8 raw response `Invalid` for `GET`, `HEAD`,
+`OPTIONS`, and `TRACE` and `Failed` for every other method.
+
+The scope check for an endpoint compares its fixed origin and method with the grant, so a literal call to
+an endpoint the grant does not cover is rejected by `check` with `out-of-scope`. It is the same function
+the host applies to each request, and the pack applies it again before it opens a socket. Redirects of an
+endpoint's request follow the rules above under the endpoint's own grant. A raw call whose input
+passes a `headers` map is not a literal to the checker, because the checker reads records and lists
+but not maps, so `explain` reports it as checked per request. An endpoint with no `Map` in its input is
+checked before the run.
+
+`sx serve` binds endpoint declarations too, so its checker and `check-scope` judge them; the host that
+answers the requests must perform them under the rules here. A loader that binds no endpoints, which is
+every other embedding of the declaration loader, refuses an entry with an `http` key.
+
+**Errors.** One closed table maps every failure to a call error kind:
+
+| Failure | Kind |
+| --- | --- |
+| The request is denied by the grant | `PermissionDenied` |
+| A header is invalid or reserved | `Invalid` |
+| Connection refused, unreachable, or reset while connecting; DNS failure | `Unavailable` |
+| A connect, write, header, or body read, or the whole request, exceeds the timeout | `Timeout` |
+| A TLS handshake or certificate failure | `Failed` |
+| A failed send, a malformed or truncated response, or a body larger than the cap | `Failed` |
+| A raw response body that is not UTF-8 | `Invalid` for a safe method, else `Failed` |
+
+For a typed endpoint the response status then decides, checked before the body is read, so a large error
+page does not turn a `404` into `Failed`:
+
+| Status | Kind |
+| --- | --- |
+| `2xx` | the decoded output |
+| `400`, `422` | `Invalid` |
+| `401`, `403` | `PermissionDenied` |
+| `404` | `NotFound` |
+| `409`, `412` | `Conflict` |
+| `429` | `RateLimited` |
+| `501` | `Failed` |
+| every other `5xx` | `Unavailable` |
+| anything else, including a redirect the pack did not follow | `Failed` |
+
+`RateLimited` is a refusal kind, so the pack may report it only when the server did not perform the
+request, and `429` means that by HTTP semantics. `503` does not, since a server may fail after acting,
+which is why it is `Unavailable` and a write that is not idempotent is never retried on it. The same holds
+for `500`, `502`, and `504`. The message names the URL without its query, so a token in a query
+never reaches a trace, plus the status and up to 200 characters of the response body.
+
+**Limits.** One 30 second deadline covers a request from its first connection through every redirect to
+the last byte of the body. Each connection attempt also gets 10 seconds, but resolving a host name cannot be
+interrupted, so a stalled resolver can run past the deadline. The response head is capped at 64 KiB by the
+client, and the body at 8 MiB; a response over the cap fails without being returned. The `delay_ms`
+budget does not bound a request.
+
+**What the scope does not do.** It names origins, not addresses: a granted name can resolve to any
+address, a private one included, so grant an origin only for a name you trust, and the pack does not
+defend against DNS rebinding. It does not look at headers, paths, or bodies, and it cannot stop a granted
+method from doing harm on a granted origin.
 
 ## Execution
 
@@ -765,7 +1015,7 @@ Host to kernel:
 `capabilities`, and `inputs` (names mapped to type text). It also takes `cores`, a list of core
 IDs that the kernel registers before the rest, so a capability can name a core type such as
 `git.Checkout`, and `packs`, a list of capability packs registered after the cores. The kernel
-binary links the `text`, `semver`, `git`, and `github` cores and the `fs` pack.
+binary links the `text`, `semver`, `git`, and `github` cores and the `fs`, `http`, and `process` packs.
 
 Kernel to host:
 

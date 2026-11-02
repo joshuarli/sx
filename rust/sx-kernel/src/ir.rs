@@ -335,6 +335,8 @@ pub enum Literal {
     Text(Arc<str>),
     Record(Vec<(String, Literal)>),
     List(Vec<Literal>),
+    Absent,
+    Present(Box<Literal>),
 }
 
 impl Literal {
@@ -345,8 +347,10 @@ impl Literal {
                 Value::Int(n) => Some(Literal::Int(*n)),
                 Value::Float(f) => Some(Literal::Float(f.0)),
                 Value::String(s) => Some(Literal::Text(s.clone())),
+                Value::None => Some(Literal::Absent),
                 _ => None,
             },
+            NodeKind::Wrap { kind: WrapKind::Some, value, .. } => Literal::of(value).map(|inner| Literal::Present(Box::new(inner))),
             NodeKind::MakeRecord { fields } => fields
                 .iter()
                 .map(|(name, part)| Literal::of(part).map(|l| (name.clone(), l)))
@@ -365,6 +369,8 @@ impl Literal {
             Literal::Text(s) => Json::string(&**s),
             Literal::Record(fields) => Json::Object(fields.iter().map(|(n, v)| (n.clone(), v.json())).collect()),
             Literal::List(items) => Json::Array(items.iter().map(Literal::json).collect()),
+            Literal::Absent => Json::Null,
+            Literal::Present(inner) => inner.json(),
         }
     }
 
@@ -378,6 +384,8 @@ impl Literal {
                 Value::Record(RecordValue::new(fields.iter().map(|(n, v)| (Arc::from(n.as_str()), v.value())).collect()))
             }
             Literal::List(items) => Value::list(items.iter().map(Literal::value).collect()),
+            Literal::Absent => Value::None,
+            Literal::Present(inner) => Value::some(inner.value()),
         }
     }
 }

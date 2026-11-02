@@ -4,7 +4,8 @@ use std::process::ExitCode;
 use sx_cores::kernel::{Cores, core};
 use sx_kernel::machine::CoreImplementations;
 use sx_kernel::protocol::{CoreLibrary, Ending, serve};
-use sx_kernel::registry::{Core, Pack};
+use sx_kernel::registry::{Core, EndpointBinder, Pack};
+use sx_packs::http::EndpointLoader;
 
 struct Library;
 
@@ -19,6 +20,10 @@ impl CoreLibrary for Library {
 
     fn implementations(&self) -> &dyn CoreImplementations {
         &Cores
+    }
+
+    fn endpoints(&self) -> Option<Box<dyn EndpointBinder>> {
+        Some(Box::new(EndpointLoader::new()))
     }
 }
 
