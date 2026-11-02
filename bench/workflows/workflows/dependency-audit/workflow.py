@@ -16,9 +16,17 @@ REGISTRY = {
     "arg-parse": ["3.2.4", "3.2.1", "3.2.3", "3.2.10"],
 }
 MANIFESTS = {
-    "web": "# web frontend\nleft-pad==1.3.0\nhttp-kit == 2.5.0\n\ntiny-log==0.10.0\ncss-tools==4.0.0\nghost-pkg==1.0.0\n",
-    "api": "http-kit==3.1.9\ndb-driver==5.2.0\n# pinned\nleft-pad==1.10.0\njson-schema-lite == 2.0.0\nqueue-core==0.3.7\n",
-    "worker": "db-driver==4.9.9\nqueue-core==0.3.7\n\ntiny-log==0.10.1\nretry-it==1.0.0\nghost-pkg==2.0.0\n",
+    "web": (
+        "# web frontend\nleft-pad==1.3.0\nhttp-kit == 2.5.0\n\ntiny-log==0.10.0\ncss-tools==4.0.0\n"
+        "ghost-pkg==1.0.0\n"
+    ),
+    "api": (
+        "http-kit==3.1.9\ndb-driver==5.2.0\n# pinned\nleft-pad==1.10.0\njson-schema-lite == 2.0.0\n"
+        "queue-core==0.3.7\n"
+    ),
+    "worker": (
+        "db-driver==4.9.9\nqueue-core==0.3.7\n\ntiny-log==0.10.1\nretry-it==1.0.0\nghost-pkg==2.0.0\n"
+    ),
     "cli": "arg-parse==3.2.1\ntiny-log==0.9.0\ncss-tools==3.9.9\n",
 }
 LATENCY = 0.05
@@ -62,7 +70,8 @@ def expected() -> object:
             missing.append({"project": project, "package": name})
             continue
         best, current = latest(name), triple(version)
-        assert best is not None and current is not None
+        assert best is not None
+        assert current is not None
         if best > current:
             kind = next(KINDS[index] for index in range(3) if best[index] != current[index])
             outdated.append(

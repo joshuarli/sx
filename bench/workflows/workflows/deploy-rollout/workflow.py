@@ -114,13 +114,14 @@ def check(sandbox: Sandbox, result: object, evidence: Evidence) -> Verdict:
             return Verdict.wrong(f"{service} was started {len(starts[service])} times, not {wanted_starts}")
         for before, after in pairwise(starts[service]):
             if after - before < INTERVAL - SLACK:
-                return Verdict.wrong(f"the refused start of {service} was repeated after {(after - before) * 1000:.0f} ms")
+                gap = (after - before) * 1000
+                return Verdict.wrong(f"the refused start of {service} was repeated after {gap:.0f} ms")
         if not polls[identifier(service)] or polls[identifier(service)][0] < starts[service][-1]:
             return Verdict.wrong(f"{service} was not polled after its start")
     for service, (_, needed) in POLLS_TO_FINISH.items():
         count = len(polls[identifier(service)])
         if count != needed:
-            return Verdict.wrong(f"{service} was polled {count} times; it finishes at poll {needed} and polling stops there")
+            return Verdict.wrong(f"{service} was polled {count} times, not {needed}, the poll that shows its end")
     stuck = polls[identifier("search")]
     if not MIN_STUCK_POLLS <= len(stuck) <= MAX_STUCK_POLLS:
         return Verdict.wrong(f"search was polled {len(stuck)} times, outside {MIN_STUCK_POLLS} to {MAX_STUCK_POLLS}")

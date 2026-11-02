@@ -8,7 +8,9 @@ from sandbox import Request, Response, Sandbox
 PER_PAGE = 20
 TOTAL = 87
 SEVERITIES = ("low", "high", "low", "high", "high", "low", "low")
-TITLES = ("Payment gateway timeout", "Login loop on mobile", "Search index stale", "Export job stuck", "Webhook retries")
+TITLES = (
+    "Payment gateway timeout", "Login loop on mobile", "Search index stale", "Export job stuck", "Webhook retries"
+)
 SEEDED = (1007, 1013, 1031, 1067, 1500)
 FAILING_POST = 1049
 SCHEMA = "CREATE TABLE notified (issue_id INTEGER PRIMARY KEY, title TEXT NOT NULL)"

@@ -118,7 +118,7 @@ class Calendar:
         if day != DAY or not isinstance(start, int) or not isinstance(end, int) or not isinstance(attendees, list):
             return failure("invalid booking")
         for person in attendees:
-            if person not in BUSY:
+            if not isinstance(person, str) or person not in BUSY:
                 return failure(f"unknown person: {person}")
             low, high = WORKING_HOURS.get(person, DEFAULT_HOURS)
             if start < low or end > high or end <= start:
@@ -137,7 +137,7 @@ class Calendar:
         }
         if len(attendees) >= 3:
             meeting["room"] = f"Room {'AB'[(self.meetings - 1) % 2]}"
-        for person in attendees:
+        for person in map(str, attendees):
             self.booked[person].append((start, end, title))
         return success({"meeting": meeting})
 

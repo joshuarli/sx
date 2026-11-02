@@ -7,7 +7,9 @@ from definition import Evidence, Verdict
 from sandbox import Sandbox
 
 CUSTOMERS = ("Acme Corp", "Birch & Sons", "Cobalt Ltd", "Delta Foods", "Evergreen Co")
-PRICES = ("19.99", "5.5", "0.125", "249", "3.333", "0.05", "12.75", "7.045", "100.1", "1.005", "2.675", "0.285", "8.345")
+PRICES = (
+    "19.99", "5.5", "0.125", "249", "3.333", "0.05", "12.75", "7.045", "100.1", "1.005", "2.675", "0.285", "8.345"
+)
 DISCOUNTS = ("0", "0", "10", "12.5", "5", "33.3", "0")
 INVOICES = 22
 WRONG_TOTAL = {3: "0.01", 7: "-1.00", 12: "0.10", 17: "100.00"}

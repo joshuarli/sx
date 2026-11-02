@@ -31,7 +31,7 @@ seconds, and for an Sx answer the `sx explain --format json` report taken before
 turns a trials directory into the correctness, token, and time table, the host code each workflow
 needed, and a summary of what `explain` said.
 
-## The six workflows
+## The workflows
 
 | Workflow | Task | What it needs |
 | --- | --- | --- |
@@ -41,6 +41,17 @@ needed, and a summary of what `explain` said.
 | `compiler-repair` | Run `/usr/bin/cc -fsyntax-only`, parse diagnostics, add missing semicolons, rerun, at most 6 runs | `process`, `fs`, `loop`, the `text` core |
 | `object-store-index` | Build an index of Markdown files and PUT it to an object store that demands a credential | a typed `PUT` endpoint whose `authorization` header the grant injects from an environment variable |
 | `mcp-inventory` | Look up items and reserve stock through a stdio MCP server | `sx mcp import`, `sx mcp run`, an imported read tool and an imported write tool with an optional enum input |
+
+Six more workflows cover other shapes of development work:
+
+| Workflow | Task | What it needs |
+| --- | --- | --- |
+| `log-triage` | Count error codes and services over many log files and write a summary file the check compares byte for byte | `fs.list`, `fs.read-text`, `fs.write-text`, the `text` core, `group-by` |
+| `invoice-totals` | Total CSV-like invoices per customer under a stated rounding rule and flag invoices whose stated total is wrong | the `decimal` core; TypeScript has no equivalent and uses scaled integers |
+| `deploy-rollout` | Start deployments with a non-idempotent POST, poll each until it is done or failed within a deadline, and roll back the failed ones | typed `POST` and `GET` endpoints, `retry` with `:on [RateLimited]` around a write, `wait-until` |
+| `issue-notify` | Page through an issue tracker by page number, announce new critical issues in chat, and record them in SQLite | typed endpoints, declared `sqlite` statements over a database the sandbox seeds, `attempt` around a non-idempotent write |
+| `calendar-mcp` | Find free slots for several people and book meetings through a stdio MCP server whose tools return structured results | `sx mcp import`, `sx mcp run`, nested output records with an optional field, an error result |
+| `dependency-audit` | Ask a package registry about each distinct package in text manifests and compare versions | `fs`, a typed endpoint, `par-map` with a limit, the `semver` core |
 
 Each `task.md` states every policy its check verifies. The checks look at the sandbox, not only the
 result: the Git workflow checks which commits CI was asked about and the peak number of requests in

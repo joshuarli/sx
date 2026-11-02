@@ -42,9 +42,8 @@ def check(sandbox: Sandbox, result: object, evidence: Evidence) -> Verdict:
         return Verdict.wrong("an availability read named another day")
     bookings = [entry for entry in entries if entry["tool"] == "book_meeting"]
     asked = [{**entry["arguments"], "attendees": sorted(entry["arguments"]["attendees"])} for entry in bookings]
-    wanted = [{**booking, "attendees": sorted(booking["attendees"])} for booking in BOOKINGS]
-    if asked != wanted:
-        return Verdict.wrong(f"the book-meeting calls were {json.dumps(asked)}, not {json.dumps(wanted)}")
+    if asked != BOOKINGS:
+        return Verdict.wrong(f"the book-meeting calls were {json.dumps(asked)}, not {json.dumps(BOOKINGS)}")
     if [bool(entry["error"]) for entry in bookings] != REFUSED:
         return Verdict.wrong("the service refused different bookings than expected")
     return Verdict.correct()
