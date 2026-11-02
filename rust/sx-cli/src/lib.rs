@@ -3,6 +3,7 @@
 mod argparse;
 mod commands;
 mod helptext;
+mod mcp;
 mod native;
 mod pyfile;
 mod pyjson;
@@ -22,6 +23,11 @@ pub struct Exit {
 }
 
 pub fn run(args: &[String], new_registry: &dyn Fn() -> Registry) -> Exit {
+    if let Some((word, rest)) = args.split_first()
+        && word == "mcp"
+    {
+        return mcp::run(rest, new_registry);
+    }
     match argparse::parse(args) {
         argparse::Parsed::Done(exit) => exit,
         argparse::Parsed::Invoke(invocation) => commands::execute(invocation, new_registry()),
