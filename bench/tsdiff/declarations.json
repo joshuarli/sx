@@ -1,0 +1,20 @@
+{
+  "types": {
+    "Item": "Record {id: String, name: String, qty: Int, price: Float, note: Option<String>}",
+    "Page": "Record {items: List<String>, next: Option<String>}",
+    "Job": "Record {state: String, progress: Int}"
+  },
+  "capabilities": [
+    {"id": "items.list", "effect": "read", "input": "Record {}", "output": "List<Item>", "description": "Lists every item."},
+    {"id": "items.get", "effect": "read", "input": "Record {id: String}", "output": "Item", "description": "Reads one item."},
+    {"id": "items.find", "effect": "read", "input": "Record {query: String, limit: Option<Int>}", "output": "List<String>", "description": "Finds item ids by name."},
+    {"id": "items.count", "effect": "read", "input": "Record {}", "output": "Int", "description": "Counts items."},
+    {"id": "items.update", "effect": "write", "idempotent": true, "input": "Record {id: String, qty: Int}", "output": "Item", "description": "Sets the quantity of an item."},
+    {"id": "items.create", "effect": "write", "idempotent": false, "input": "Record {name: String, qty: Int}", "output": "Record {id: String}", "description": "Creates an item."},
+    {"id": "stats.mean", "effect": "read", "input": "Record {ids: List<String>}", "output": "Float", "description": "Mean price of items."},
+    {"id": "notes.read", "effect": "read", "input": "Record {path: String}", "output": "String", "description": "Reads a note."},
+    {"id": "notes.write", "effect": "write", "idempotent": true, "input": "Record {path: String, text: String}", "output": "Unit", "description": "Writes a note."},
+    {"id": "pages.fetch", "effect": "read", "input": "Record {cursor: Option<String>}", "output": "Page", "description": "Reads one page of ids."},
+    {"id": "jobs.status", "effect": "read", "input": "Record {id: String}", "output": "Job", "description": "Reads a job."}
+  ]
+}

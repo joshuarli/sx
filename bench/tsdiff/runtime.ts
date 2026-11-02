@@ -85,7 +85,7 @@ export class FixtureHost {
     entries: Entry[],
     private readonly effects: Map<string, "read" | "write">,
   ) {
-    this.entries = entries.map((entry) => ({ ...entry, served: 0 }));
+    this.entries = entries.map((entry) => ({ ...entry, input: withoutNulls(entry.input), served: 0 }));
   }
 
   record(capability: string, input: Json): void {

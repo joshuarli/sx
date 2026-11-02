@@ -78,7 +78,7 @@ export async function runProgram(source: string, specs: ToolSpec[], entries: Ent
       environment.parseInt,
       guards(),
     ];
-    const run = new AsyncFunction(...names, `"use strict";\n${body}`);
+    const run = new AsyncFunction(...names, `"use strict";\nreturn (async () => {\n${body}\n})();`);
     const value = await run(...values);
     return output({ result: checkedJson(value === undefined ? null : value) });
   } catch (error) {
