@@ -34,6 +34,7 @@ enum Spec {
     Declarations(String),
     Help,
     Cores,
+    Fuzz,
 }
 
 impl Spec {
@@ -45,6 +46,7 @@ impl Spec {
             }
             Spec::Help => Json::object([("kind", Json::string("help"))]),
             Spec::Cores => Json::object([("kind", Json::string("cores"))]),
+            Spec::Fuzz => Json::object([("kind", Json::string("fuzz"))]),
         }
     }
 }
@@ -113,6 +115,13 @@ fn registry_for(spec: &Spec) -> Registry {
             let mut registry = Registry::new();
             for core in sx_cores::kernel::cores() {
                 registry.add_core(core).expect("core registers");
+            }
+            registry
+        }
+        Spec::Fuzz => {
+            let mut registry = Registry::new();
+            for path in [RUN_DECLARATIONS, "tests/fuzz/declarations.json"] {
+                load_declarations(&mut registry, &read_json(&root().join(path))).expect("fuzz declarations load");
             }
             registry
         }
@@ -438,7 +447,7 @@ fn every_run_fixture_checks_exports_and_runs_as_python_does() {
     assert!(failures.is_empty(), "{} of {} differ:\n{}", failures.len(), cases.len(), failures.join("\n"));
 }
 
-const PYTHON_CRASHES: [&str; 3] = ["AssertionError: ", "IndexError: tuple index out of range", "RecursionError"];
+const PYTHON_CRASHES: [&str; 1] = ["RecursionError"];
 
 #[derive(Default)]
 struct Tally {
@@ -695,9 +704,43 @@ fn corpus() -> Vec<Case> {
     cases
 }
 
+fn generated_cases() -> Vec<Case> {
+    let target = Path::new(env!("CARGO_TARGET_TMPDIR")).join("generated.json");
+    let status = Command::new("uv")
+        .args(["run", "--quiet", "python", "rust/scripts/check_corpus.py", "generated"])
+        .arg(&target)
+        .current_dir(root())
+        .status()
+        .expect("uv runs the Python corpus generator");
+    assert!(status.success(), "rust/scripts/check_corpus.py generated failed");
+    let generated = read_json(&target);
+    generated
+        .as_array()
+        .expect("generated programs")
+        .iter()
+        .enumerate()
+        .map(|(index, entry)| {
+            let source = entry.get("source").and_then(Json::as_str).expect("source");
+            let mut case = Case::new(format!("generated-{index}"), source, Spec::Fuzz);
+            case.allowed = Some(
+                entry.get("allowed").and_then(Json::as_array).expect("allowed").iter().filter_map(Json::as_str).map(str::to_string).collect(),
+            );
+            case.budgets = entry
+                .get("budgets")
+                .and_then(Json::as_object)
+                .expect("budgets")
+                .iter()
+                .map(|(k, v)| (k.clone(), v.as_i64().and_then(|v| u64::try_from(v).ok()).expect("budget count")))
+                .collect();
+            case
+        })
+        .collect()
+}
+
 #[test]
 fn differential_corpus_checks_identically_in_rust_and_python() {
-    let cases = corpus();
+    let mut cases = corpus();
+    cases.extend(generated_cases());
     let (tally, failures) = compare("differential", &cases);
     eprintln!(
         "{} differential programs compared: {} accepted, {} rejected with {} distinct codes, {} where Python crashes",

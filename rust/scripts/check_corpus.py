@@ -1,3 +1,4 @@
+import importlib
 import json
 import re
 import sys
@@ -18,6 +19,8 @@ from sx.registry import Core, Registry, load_declarations
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 CORES: dict[str, Core] = {core.id: core for core in (TEXT, SEMVER, GIT, GITHUB)}
+FUZZ_DECLARATIONS = ("fixtures/run/declarations.json", "tests/fuzz/declarations.json")
+GENERATED = 2_000
 GUIDE_EXAMPLE = re.compile(r"```sx\n(.*?)```\n\nResult: `(.*?)`\n", re.DOTALL)
 
 
@@ -36,6 +39,9 @@ def build_registry(spec: dict[str, Any]) -> Registry:
         case "cores":
             for core in CORES.values():
                 registry.add_core(core)
+        case "fuzz":
+            for path in FUZZ_DECLARATIONS:
+                load_declarations(registry, json.loads((ROOT / path).read_text()))
         case other:
             raise ValueError(f"unknown registry kind {other!r}")
     return registry
@@ -73,9 +79,20 @@ def examples() -> dict[str, Any]:
     return {"help": entries, "guide": guide, "functions": functions}
 
 
+def generated() -> list[dict[str, Any]]:
+    sys.path.insert(0, str(ROOT))
+    differential = importlib.import_module("tests.fuzz.differential")
+    known = differential.registry()
+    cases = [differential.make_case("rust", index, known, 0.1) for index in range(GENERATED)]
+    return [{"source": c.source, "allowed": list(c.allow), "budgets": dict(c.budgets)} for c in cases]
+
+
 def main(manifest: Path, target: Path) -> int:
     if manifest.name == "examples":
         target.write_text(json.dumps(examples()))
+        return 0
+    if manifest.name == "generated":
+        target.write_text(json.dumps(generated()))
         return 0
     cases = json.loads(manifest.read_text())
     registries: dict[str, Registry] = {}
