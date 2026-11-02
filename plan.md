@@ -243,6 +243,14 @@ safe meaning. Each change cites the development failures behind it:
    `(match (get s :ahead) (some a) a none 0 _ (get s :ahead))`, and the unreachable `_` made the
    result `Option<Int>`, which then failed `(> ahead 0)`. Item 1 cited this failure but does not
    fix it. Re-scoring the development answers under items 1-8 showed the cause.
+10. **`none` is a valid `get` default, and an optional whose inner type is not yet known is a
+    presence test.** `(get r :f none)` keeps the field optional. A presence test on a value whose
+    type later resolves to `Option<Bool>` is still rejected. Evidence: all four failed first
+    attempts in the development rerun after items 1-9 used `(get r :f none)`, and one also tested
+    a loop variable bound to `none`.
+
+The held-out rerun ran against commit 295af7b, on the Sx arm only. The TypeScript arm did not
+change, so its first held-out trials pair with the new Sx trials.
 
 Out of the revision: `Map` and dynamic keys (`assoc`, `keys`), which also make up the
 expressiveness gap, belong to the type-set work in the roadmap.
