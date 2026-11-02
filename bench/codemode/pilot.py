@@ -93,7 +93,7 @@ def ask(prompt: Path, model: str, thinking: str, workdir: Path) -> tuple[str, di
         tokens.update(
             input=int(usage["input"]) + int(usage["cacheRead"]),
             output=int(usage["output"]),
-            reasoning=int(usage["reasoning"]),
+            reasoning=int(usage.get("reasoning", 0)),
         )
         if message.get("stopReason") != "stop":
             error = f"the model stopped with {message.get('stopReason')}: {message.get('errorMessage', '')}"
