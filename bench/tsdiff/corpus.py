@@ -268,6 +268,7 @@ def build_corpus(effects: Path, real: Path, out: Path) -> list[str]:
             meta={
                 "source": "corpus", "phase": script.phase, "run": script.run, "task": script.task,
                 "session": script.session, "classifier_accepted": row["accepted"], "classifier_codes": row["codes"],
+                "classifier_calls": sorted(set(row["calls"])),
             },
         ).write(out / script.id)
         built[f"phase {script.phase}"] += 1

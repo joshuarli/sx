@@ -8,6 +8,7 @@ from pathlib import Path
 
 from .case import META, CaseFiles
 from .compare import Outcome, SxProtocolError, Verdict, compare, run_js, run_sx
+from .shape import camel
 
 PARALLEL_CONSTRUCTS = ("Promise.all", "parMap")
 
@@ -22,6 +23,7 @@ class Result:
     expected_code: str | None = None
     caught: bool | None = None
     note: str = ""
+    outside_call_set: tuple[str, ...] = ()
 
 
 @dataclass(slots=True)
@@ -54,6 +56,18 @@ def judge_mutant(files: CaseFiles, sx: Outcome) -> Result:
     return Result(files.name, None, None, sx, str(files.meta["mutant"]), expected, caught, note)
 
 
+def source_name(capability: str) -> str:
+    namespace, _, name = capability.partition(".")
+    return f"{camel(namespace)}.{camel(name)}"
+
+
+def outside_call_set(files: CaseFiles, js: Outcome) -> tuple[str, ...]:
+    if "classifier_calls" not in files.meta:
+        return ()
+    allowed = set(files.meta["classifier_calls"])
+    return tuple(sorted({source_name(capability) for capability, _ in js.calls} - allowed))
+
+
 def run_case(directory: Path, *, shim_only: bool, binary: Path | None) -> Result:
     files = CaseFiles.read(directory)
     if "mutant" in files.meta:
@@ -62,10 +76,11 @@ def run_case(directory: Path, *, shim_only: bool, binary: Path | None) -> Result
         return judge_mutant(files, run_sx(files, binary))
     js = run_js(files)
     if shim_only:
-        return Result(files.name, None, js, None)
+        return Result(files.name, None, js, None, outside_call_set=outside_call_set(files, js))
     sx = run_sx(files, binary)
     parallel = any(construct in files.program.read_text() for construct in PARALLEL_CONSTRUCTS)
-    return Result(files.name, compare(js, sx, parallel=parallel, expect_trap=files.expect_trap), js, sx)
+    verdict = compare(js, sx, parallel=parallel, expect_trap=files.expect_trap)
+    return Result(files.name, verdict, js, sx, outside_call_set=outside_call_set(files, js))
 
 
 def run_all(directories: list[Path], *, shim_only: bool, binary: Path | None, jobs: int) -> Report:
@@ -100,6 +115,10 @@ def summarize(report: Report) -> list[str]:
         accepted = len(report.accepted_mutants())
         lines.append(f"mutants {len(mutants)}  rejected {caught}  accepted {accepted}  other code {len(wrong)}")
     lines.extend(disagreement_line(r) for r in report.disagreements())
+    outside = [r for r in report.results if r.outside_call_set]
+    if outside:
+        lines.append(f"scripts whose calls exceed the classifier's call set: {len(outside)}")
+        lines.extend(f"  {r.name}: {list(r.outside_call_set)}" for r in outside[:10])
     lines.extend(f"MUTANT ACCEPTED {r.name}: {r.mutant} should be {r.expected_code}" for r in report.accepted_mutants())
     lines.extend(f"mutant {r.name} ({r.mutant}): {r.note}" for r in report.results if r.caught is True and r.note)
     return lines

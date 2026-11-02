@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -13,9 +14,13 @@ from tsdiff.run import case_directories, run_all, summarize
 
 def command_generate(args: argparse.Namespace) -> int:
     out = Path(args.out)
-    for seed in range(args.seed, args.seed + args.count):
+
+    def write(seed: int) -> None:
         made = mutant_case(seed) if args.mutants else generated_case(seed)
         made.write(out / made.name)
+
+    with ThreadPoolExecutor(max_workers=args.jobs) as pool:
+        list(pool.map(write, range(args.seed, args.seed + args.count)))
     print(f"wrote {args.count} cases to {out}")
     return 0
 
@@ -42,6 +47,7 @@ def main() -> int:
     generate.add_argument("--count", type=int, default=50)
     generate.add_argument("--seed", type=int, default=0)
     generate.add_argument("--mutants", action="store_true")
+    generate.add_argument("--jobs", type=int, default=8)
     generate.add_argument("--out", default=str(SCRATCH / "generated"))
     generate.set_defaults(handler=command_generate)
     corpus = commands.add_parser("corpus", help="Build runnable cases from the codemode corpus.")

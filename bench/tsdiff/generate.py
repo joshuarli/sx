@@ -492,7 +492,7 @@ def accumulate_loop(w: Writer, depth: int) -> None:
     mutable = w.vars_of("int", "str", "float", mutable=True)
     pushed = None
     if r.random() < 0.5:
-        pushed = w.declare("out", "strs")
+        pushed = w.declare("out", "ownedstrs")
         w.emit(f"const {pushed.name}: string[] = [];")
     record = None
     if r.random() < 0.3:
