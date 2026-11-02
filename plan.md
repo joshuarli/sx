@@ -157,8 +157,8 @@ extended the campaign through Phase 9. The Rust port is the implementation now, 
 prototype is frozen as an executable specification, and the Lean reference checks every accepted
 fixture. The six-workflow comparison in Phase 9c is the campaign's main finding: on real workflows,
 TypeScript on Bun beat Sx on first-attempt correctness and on tokens, and Sx led only where a core
-did the work. The repomod changes Phase 3 proposes stay proposals, because this project may not
-modify repomod.
+did the work. The owner then started the second campaign, Phases 10 to 12, to close that gap with
+the guide, and opened repomod to the changes Phase 3 proposed.
 
 **The Python prototype is frozen.** `src/sx` and the Python cores are frozen as of commit
 `15b6ed6`, the parent of the commit that records this, because Rust passed its gates. The prototype
@@ -488,7 +488,7 @@ Decided at the Phase 0 checkpoint:
   They stay errors with a habit diagnostic. Phase 2 records whether that diagnostic repairs them
   in one attempt, and a poor repair rate reopens the question.
 
-Open, for the next campaign:
+Open after the first campaign, taken up by Phases 10 to 12:
 
 - **Close the workflow gap.** Sx trailed TypeScript 10 of 18 against 18 of 18 at first attempt on
   the six workflows, at 2.5 times the tokens. The guide teaches the kernel but not the packs, so a
@@ -500,12 +500,68 @@ Open, for the next campaign:
 - **Catching a core refusal.** `attempt` catches call errors only, so a program cannot recover
   from a `yaml` refusal; the workflow had to exclude the refusable file by name. Either `attempt`
   catches `invalid-input` or refusing cores gain a checking function.
-- **Proposed repomod changes**, which this project may not make: make five private helpers
-  public and extract `render_discover` (Phase 3).
+- **Proposed repomod changes:** make the private helpers `sx-repomod` imports public and extract
+  `render_discover` (Phase 3). The repomod track does this.
 
 ## Phases
 
 Each phase ends at a gate. Do not start a phase until the previous gate passes.
+
+### The second campaign: closing the workflow gap
+
+The owner set the goal after Phase 9c: find out whether the guide, measured on workflows written
+blind, can bring Sx level with TypeScript, which models have seen billions of lines of. Prompt
+tokens may grow to get there; output tokens, attempts, and correctness are what must close. The
+owner also opened `../repomod` to changes.
+
+#### Phase 10: Evidence
+
+- **10a.** Rerun the Sx arm of the six workflows on current master, 3 samples, keeping every
+  prompt and answer, and classify every rejection, failure, and wrong answer by cause. Add the
+  diagnostic codes of the development and retired held-out probe runs. The fresh set stays unread.
+- **10b.** Six more development workflows in shapes the first six lack, written by a subagent the
+  campaign lead may read, with both references passing, and a TypeScript baseline on them. The
+  twelve are the development set.
+
+**Gate:** a failure taxonomy with counts per cause, recorded in Status.
+
+#### Phase 11: The tailored guide and the fixes the taxonomy names
+
+- **A guide composed from the declarations.** `sx help --level tailored --declarations D` prints
+  the kernel guide, a section that maps TypeScript habits to Sx, a section for each pack and core
+  the declarations use, a call template written in Sx for each capability, worked examples at
+  workflow scale for the packs in use, and a checklist of the mistakes the taxonomy counts. Pack
+  sections live beside their packs. Every example in the guide type-checks against the
+  declarations it is shown with, and every kernel example runs.
+- **Language and tool changes the taxonomy justifies**, each with fixtures, the Lean reference
+  where semantics change, and the contract change surfaced: candidates are declared commands that
+  a host may classify as reads, an `attempt` that catches a core's refusal, and habit acceptance.
+- **Repair feedback that teaches:** a diagnostic carries the guide entry for what it names.
+- Iterate on the development set, and record each iteration's numbers in Status.
+
+**Gate:** on the development set, Sx first-attempt correctness within 10 points of TypeScript, and
+no regression on the development probe tasks against the standard guide. After four iterations
+without the gate, Phase 12 runs anyway and the result says so.
+
+#### Phase 12: Blind workflows and the measurement
+
+- A subagent that sees neither the guide, the taxonomy, nor any development result writes eight
+  workflows in the format of `bench/workflows`, with both references passing. The campaign lead
+  reads only the runner's reference verdicts. The set freezes before any model runs on it.
+- Both arms run once, 3 samples each, with the guide frozen.
+- Report first-attempt and final correctness, prompt tokens and output tokens separately, output
+  tokens per solved task, and the wrong runs that performed effects before a correct one.
+
+**Gate:** the result is recorded in Status. Sx has caught up if its first-attempt correctness is
+within 10 points of TypeScript's and its final correctness within 5.
+
+#### The repomod track
+
+Runs beside the phases. repomod gains a public API for what `sx-repomod` imports today through
+private names (`common._catalog`, `common._select`, `common._print_json`,
+`github._discover_owner`, `status._checkout_status`, `status._todo_item_count`,
+`status._status_text`) and a `render_discover` function, with tests in repomod, and `sx-repomod`
+moves to it. **Gate:** repomod's suite, ruff, and ty pass, and the parity tests pass.
 
 ### Phase 0: Skeleton, task corpus, and syntax pilot
 
@@ -856,8 +912,8 @@ model from the same task text and the same typed tool declarations, several samp
 These rules apply to every phase.
 
 - Never run `fix`, `push`, `merge`, `gc`, `topics apply`, or `sync` from this project.
-- Never modify `../repomod`. If repomod needs a change to support the host, propose it
-  separately.
+- Change `../repomod` only in its source, tests, and docs, in a worktree under its own `.work/`,
+  and never push it. The owner opened it to changes after Phase 9.
 - Run parity and mutation-style tests only on copied catalogs and temporary repositories.
 - Running `repomod discover` and `repomod status --offline` against the live catalog for a
   shadow comparison is allowed, because both only read.
