@@ -39,10 +39,6 @@ inductive Slot where
 
 abbrev Env := List (String × Slot)
 
-def Env.lookup : Env → String → Option Slot
-  | [], _ => none
-  | (m, s) :: rest, n => if m = n then some s else Env.lookup rest n
-
 mutual
 def Val.size : Val → Nat
   | .str s => 1 + s.length / 32
@@ -72,6 +68,8 @@ def checkSize (limit : Nat) (v : Val) : Except Failure Unit :=
 def fieldLookup {κ α : Type} [BEq κ] : List (κ × α) → κ → Option α
   | [], _ => none
   | (m, v) :: rest, n => if m == n then some v else fieldLookup rest n
+
+def Env.lookup (env : Env) (n : String) : Option Slot := fieldLookup env n
 
 mutual
 def Val.eqv : Val → Val → Bool

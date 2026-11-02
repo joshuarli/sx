@@ -15,7 +15,6 @@ inductive Ty where
   | nominal (name : String) (base : Ty)
   | var (n : Nat)
   | never
-  | fn (params : List Ty) (result : Ty)
   deriving Repr, BEq, Inhabited
 
 inductive Val where

@@ -9,6 +9,14 @@ def readJson (path : String) : IO Json := do
 
 def main (args : List String) : IO UInt32 := do
   match args with
+  | ["check", irPath] =>
+    match Sx.parseProgram (← readJson irPath) >>= Sx.checkProgram with
+    | .ok () =>
+      IO.println "{\"checked\":true}"
+      pure 0
+    | .error e =>
+      IO.eprintln s!"sx-ref: {e}"
+      pure 1
   | [irPath, fixturePath] =>
     let ir ← readJson irPath
     let fixture ← readJson fixturePath
@@ -20,5 +28,5 @@ def main (args : List String) : IO UInt32 := do
       IO.eprintln s!"sx-ref: {e}"
       pure 1
   | _ =>
-    IO.eprintln "usage: sx-ref IR.json FIXTURE.json"
+    IO.eprintln "usage: sx-ref IR.json FIXTURE.json | sx-ref check IR.json"
     pure 64

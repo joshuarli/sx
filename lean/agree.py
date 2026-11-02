@@ -24,7 +24,7 @@ def main() -> int:
     subprocess.run([lake(), "build", "sx-ref"], cwd=LEAN, check=True, capture_output=True)
     binary = LEAN / ".lake" / "build" / "bin" / "sx-ref"
     SCRATCH.mkdir(parents=True, exist_ok=True)
-    compared, rejected, disagreements = 0, [], []
+    compared, rejected, disagreements, unchecked = 0, [], [], []
     for path in sorted(p for p in FIXTURES.glob("*.json") if p.name != "declarations.json"):
         case = json.loads(path.read_text())
         registry = Registry()
@@ -36,6 +36,9 @@ def main() -> int:
             continue
         ir = SCRATCH / f"{path.stem}.ir.json"
         ir.write_text(json.dumps(export_program(checked.program, {})))
+        checked_by_lean = subprocess.run([binary, "check", ir], capture_output=True, text=True, check=False)
+        if checked_by_lean.returncode != 0:
+            unchecked.append((path.stem, checked_by_lean.stderr.strip()))
         ran = subprocess.run([binary, ir, path], capture_output=True, text=True, check=False)
         compared += 1
         if ran.returncode != 0:
@@ -48,9 +51,12 @@ def main() -> int:
             disagreements.append((path.stem, f"trace {result['trace']} != {case['trace']}"))
     for name, reason in disagreements:
         print(f"disagree {name}: {reason}")
+    for name, reason in unchecked:
+        print(f"lean checker rejects {name}: {reason}")
     print(f"compared {compared} accepted fixtures, {len(disagreements)} disagree; "
           f"{len(rejected)} rejected fixtures are elaborator behavior and are not compared: {', '.join(rejected)}")
-    return 1 if disagreements else 0
+    print(f"the Lean checker accepts {compared - len(unchecked)} of {compared} exported programs")
+    return 1 if disagreements or unchecked else 0
 
 
 if __name__ == "__main__":
