@@ -4,11 +4,12 @@ from pathlib import Path
 from typing import cast
 
 import pytest
+from cores import task_registry as declared_registry
 
 from sx.checker import check
 from sx.diagnostics import render
 from sx.reader import read
-from sx.registry import Registry, declared_registry
+from sx.registry import Registry
 
 ROOT = Path(__file__).parent.parent
 FIXTURES = ROOT / "fixtures" / "check"
@@ -21,9 +22,8 @@ LANGUAGE = ROOT / "docs" / "language.md"
 
 def task_registry(task_id: str) -> tuple[Registry, frozenset[str]]:
     task = json.loads((BENCH / "tasks" / task_id / "task.json").read_text())
-    cores = json.loads((BENCH / "cores.json").read_text())
     capability_ids = frozenset(cast(str, capability["id"]) for capability in task["capabilities"])
-    return declared_registry(task, cores), capability_ids
+    return declared_registry(task), capability_ids
 
 
 @pytest.mark.parametrize("program", PROGRAMS, ids=[path.stem for path in PROGRAMS])

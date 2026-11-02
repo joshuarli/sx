@@ -9,7 +9,7 @@ from pathlib import Path
 from statistics import mean
 from typing import Any
 
-from cores import task_registry
+from cores import SIGNATURES, task_registry
 from pilot import ask, extract, task_section
 from typescript import declarations
 
@@ -411,13 +411,13 @@ def main() -> None:
         print(report(load_trials(args.out), gap))
         return
     if args.rejudge:
-        print(f"{rejudge(args.out, json.loads((BENCH / 'cores.json').read_text()))} attempts changed")
+        print(f"{rejudge(args.out, SIGNATURES)} attempts changed")
         print(report(load_trials(args.out), gap))
         return
     if args.measure_guides:
         print(measure_guides(args.model, args.thinking, args.out))
         return
-    cores = json.loads((BENCH / "cores.json").read_text())
+    cores = SIGNATURES
     if args.quick:
         args.split, args.samples, args.task = "development", 1, args.task or list(QUICK_TASKS)
     tasks = load_tasks(args.split, args.task)

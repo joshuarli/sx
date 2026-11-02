@@ -568,6 +568,33 @@ core function or type, or a capability. An entry has:
 The registry generates core and capability entries from their declarations. Every example is a
 test, so a help entry cannot drift from the interpreter.
 
+### Cores and assurance
+
+A core registers through the Python API with `Registry.add_core`. `sx help CORE` prints a core's
+version, its assurance, and the signature of each function, and `sx cores` lists every registered
+core with the levels it has reached. `--format json` gives the same for a host. The plain `sx`
+command registers no cores, because cores are Python packages that a host registers. A host
+embeds the command with `sx.cli.main(argv, new_registry)`, where `new_registry` builds its
+registry, so `sx-repomod help text` and `sx-repomod cores` answer for the cores that host
+registers.
+
+A core reports the evidence that exists for it, level by level, and never a single "verified"
+flag. A level that has no evidence says `none`.
+
+| Level | Evidence |
+| --- | --- |
+| `unverified` | The interface was validated. Every registered core has this. |
+| `conformance-tested` | Named fixture and parity tests pass. |
+| `specified` | A Lean model of the core exists. |
+| `proved-properties` | Named theorems about that model check. |
+
+A core declares its evidence as `Evidence(level, references)`, where the references name the tests,
+the model file, or the theorems. The registry rejects a claim that names nothing, a second claim
+at one level, a claim of `unverified`, and `proved-properties` without `specified`. A test requires
+every named conformance test to exist. A theorem is about the Lean model only. It says nothing
+about the Python or Rust code, or about real Git and GitHub behavior, without separate
+conformance evidence.
+
 ## Budgets
 
 The host sets every budget. A program cannot read or raise one.

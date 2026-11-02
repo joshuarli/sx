@@ -15,6 +15,12 @@ uv run sx help
 uv run sx help retry
 ```
 
+## Layout
+
+This is a uv workspace. `src/sx` is the kernel, `cores/*` are pure core packages that register
+through the Python API (`sx-text`, `sx-semver`), and `bench/codemode` is the model probe. The
+kernel and the cores never import repomod.
+
 ## Check and run a program
 
 Tools, types, and inputs come from a JSON declarations file. `fixtures/cli` holds an example.

@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import fields, is_dataclass
 from pathlib import Path
 from typing import Any
@@ -31,13 +31,15 @@ class UsageError(Exception):
     pass
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def main(argv: Sequence[str] | None = None, new_registry: Callable[[], Registry] = Registry) -> int:
     parser = argparse.ArgumentParser(prog="sx", description="Check, explain, and run Sx programs.")
     commands = parser.add_subparsers(dest="command", required=True)
     help_command = commands.add_parser("help", help="Print the guide, or the entry for one name.")
     help_command.add_argument("name", nargs="?")
     help_command.add_argument("--declarations", type=Path, help="JSON declarations that add tools and types")
     help_command.add_argument("--level", choices=sx_help.GUIDE_LEVELS, default="standard", help="Guide detail")
+    cores_command = commands.add_parser("cores", help="List the registered cores and the evidence for each.")
+    cores_command.add_argument("--format", choices=["text", "json"], default="text")
     for name, summary in (
         ("check", "Check a program and print its diagnostics."),
         ("explain", "Print the tools, effects, inputs, and result type of a program."),
@@ -54,15 +56,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         if args.command == "help":
-            return command_help(args)
-        return command_program(args)
+            return command_help(args, new_registry())
+        if args.command == "cores":
+            return command_cores(args, new_registry())
+        return command_program(args, new_registry())
     except UsageError as error:
         print(f"sx: {error}", file=sys.stderr)
         return EXIT_USAGE
 
 
-def load_registry(path: Path | None) -> tuple[Registry, dict[str, Any]]:
-    registry = Registry()
+def load_registry(path: Path | None, registry: Registry) -> tuple[Registry, dict[str, Any]]:
     if path is None:
         return registry, {}
     try:
@@ -80,8 +83,20 @@ def load_registry(path: Path | None) -> tuple[Registry, dict[str, Any]]:
     return registry, declarations
 
 
-def command_help(args: argparse.Namespace) -> int:
-    registry, _ = load_registry(args.declarations)
+def command_cores(args: argparse.Namespace, registry: Registry) -> int:
+    payload = {
+        core.id: {
+            "version": core.version,
+            "assurance": {level.value: list(references) for level, references in core.assurance.items()},
+        }
+        for core in registry.cores.values()
+    }
+    emit(args.format, payload, sx_help.render_cores(registry).rstrip("\n"))
+    return EXIT_OK
+
+
+def command_help(args: argparse.Namespace, base: Registry) -> int:
+    registry, _ = load_registry(args.declarations, base)
     if args.name is None:
         print(sx_help.guide(args.level), end="")
         return EXIT_OK
@@ -105,8 +120,8 @@ def declared_inputs(registry: Registry, declarations: dict[str, Any]) -> dict[st
         raise UsageError(f"declarations: {error}") from error
 
 
-def command_program(args: argparse.Namespace) -> int:
-    registry, declarations = load_registry(args.declarations)
+def command_program(args: argparse.Namespace, base: Registry) -> int:
+    registry, declarations = load_registry(args.declarations, base)
     try:
         source = args.file.read_text()
     except OSError as error:
