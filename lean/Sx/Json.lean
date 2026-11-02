@@ -426,7 +426,7 @@ partial def jsonEq (a b : Json) : Bool :=
   match a, b with
   | .null, .null => true
   | .bool x, .bool y => x == y
-  | .num x, .num y => x == y
+  | .num x, .num y => x.mantissa * 10 ^ y.exponent == y.mantissa * 10 ^ x.exponent
   | .str x, .str y => x == y
   | .arr xs, .arr ys => xs.size == ys.size && (xs.toList.zip ys.toList).all fun (x, y) => jsonEq x y
   | .obj _, .obj _ =>
@@ -434,5 +434,85 @@ partial def jsonEq (a b : Json) : Bool :=
     let ys := objFields b
     xs.length == ys.length && (xs.zip ys).all fun ((k, x), (k', y)) => k == k' && jsonEq x y
   | _, _ => false
+
+def zeros (n : Nat) : String := String.ofList (List.replicate n '0')
+
+def numberChar (c : Char) : Bool := c.isDigit || c == '-' || c == '+' || c == '.' || c == 'e' || c == 'E'
+
+def expandExponent (token : String) : String :=
+  match token.toList.span (fun c => c != 'e' && c != 'E') with
+  | (_, []) => token
+  | (mant, _ :: exp) =>
+    let neg := mant.head? == some '-'
+    let digits := (if neg then mant.drop 1 else mant)
+    let (whole, frac) := digits.span (· != '.')
+    let frac := frac.drop 1
+    match (String.ofList exp).toInt? with
+    | none => token
+    | some e =>
+      if e > 400 || e < -400 then token else
+      let all := String.ofList (whole ++ frac)
+      let sign := if neg then "-" else ""
+      if all.all (· == '0') then sign ++ "0.0"
+      else
+        let point : Int := whole.length + e
+        let text :=
+          if point ≤ 0 then
+            "0." ++ zeros point.natAbs ++ all
+          else
+            let p := point.toNat
+            if p ≥ all.length then all ++ zeros (p - all.length) ++ ".0"
+            else String.ofList (all.toList.take p) ++ "." ++ String.ofList (all.toList.drop p)
+        let (w, f) := text.toList.span (· != '.')
+        let w := String.ofList (w.dropWhile (· == '0'))
+        sign ++ (if w.isEmpty then "0" else w) ++ String.ofList f
+
+partial def expandExponents (cs : List Char) (inString escaped : Bool) (out : String) : String :=
+  match cs with
+  | [] => out
+  | c :: rest =>
+    if inString then
+      if escaped then expandExponents rest true false (out.push c)
+      else if c == '\\' then expandExponents rest true true (out.push c)
+      else expandExponents rest (c != '"') false (out.push c)
+    else if c == '"' then expandExponents rest true false (out.push c)
+    else if c.isDigit || c == '-' then
+      let (token, after) := cs.span numberChar
+      expandExponents after false false (out ++ expandExponent (String.ofList token))
+    else expandExponents rest false false (out.push c)
+
+def hexValue? (c : Char) : Option Nat :=
+  if c.isDigit then some (c.toNat - '0'.toNat)
+  else if 'a' ≤ c ∧ c ≤ 'f' then some (c.toNat - 'a'.toNat + 10)
+  else if 'A' ≤ c ∧ c ≤ 'F' then some (c.toNat - 'A'.toNat + 10)
+  else none
+
+def hex4? : List Char → Option Nat
+  | a :: b :: c :: d :: _ => do
+    pure ((← hexValue? a) * 4096 + (← hexValue? b) * 256 + (← hexValue? c) * 16 + (← hexValue? d))
+  | _ => none
+
+partial def loneSurrogate : List Char → Bool → Bool
+  | [], _ => false
+  | '\\' :: 'u' :: rest, true =>
+    match hex4? rest with
+    | some v =>
+      if 0xD800 ≤ v ∧ v ≤ 0xDBFF then
+        match rest.drop 4 with
+        | '\\' :: 'u' :: next =>
+          match hex4? next with
+          | some w => if 0xDC00 ≤ w ∧ w ≤ 0xDFFF then loneSurrogate (next.drop 4) true else true
+          | none => true
+        | _ => true
+      else if 0xDC00 ≤ v ∧ v ≤ 0xDFFF then true
+      else loneSurrogate (rest.drop 4) true
+    | none => loneSurrogate rest true
+  | '\\' :: _ :: rest, true => loneSurrogate rest true
+  | '"' :: rest, inString => loneSurrogate rest (!inString)
+  | _ :: rest, inString => loneSurrogate rest inString
+
+def parseJsonText (text : String) : Except String Json :=
+  if loneSurrogate text.toList false then .error "a JSON string has a lone surrogate escape"
+  else Json.parse (expandExponents text.toList false false "")
 
 end Sx

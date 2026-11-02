@@ -324,8 +324,11 @@ def effectsOk (S : Sig) : Expr → Bool
   | .coerce e _ => effectsOk S e
   | .attempt e => effectsOk S e
   | .retry _ ks e =>
-    ((callsOf e).all (isRepeatable S) ||
-      (ks.all refusalKinds.contains && (callsOf e).dropLast.all (isRepeatable S))) && effectsOk S e
+    let calls := callsIn false e
+    (calls.all (fun c => isRepeatable S c.1) ||
+      (ks.all refusalKinds.contains &&
+        calls.dropLast.all (fun c => isRepeatable S c.1) &&
+        calls.getLast?.all (fun c => isRepeatable S c.1 || !c.2))) && effectsOk S e
   | .waitUntil _ p e => (callsOf e).all (isRead S) && effectsOk S p && effectsOk S e
   | .sleep _ => true
   | .loop _ _ init body => effectsOkList S init && effectsOk S body

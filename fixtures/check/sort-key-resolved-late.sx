@@ -1,0 +1,2 @@
+; declarations: fixtures/run/declarations.json
+(if true [[{}]] (sort-by first []))

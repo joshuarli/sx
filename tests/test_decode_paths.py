@@ -70,3 +70,16 @@ def test_open_record_still_checks_what_it_names(capability: str, output: object,
 def test_open_is_declared_between_record_and_its_fields(text: str) -> None:
     with pytest.raises(RegistryError):
         Registry().parse(text)
+
+
+@pytest.mark.parametrize(
+    ("capability", "output", "problem"),
+    [
+        ("store.list", ["a", "\ud800"], "$[1]: expected String, found a string with a lone surrogate"),
+        ("totals.get", {"\udc00": 1}, '$["\\udc00"]: expected a key that is Unicode text, found a lone surrogate'),
+    ],
+    ids=["string", "map-key"],
+)
+def test_a_lone_surrogate_is_a_mismatch(capability: str, output: object, problem: str) -> None:
+    program = f"(call {capability} {{}})"
+    assert failure_message(program, capability, output).endswith(problem)

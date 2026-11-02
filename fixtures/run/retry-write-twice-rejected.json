@@ -1,0 +1,15 @@
+{
+  "description": "A retry on refusal kinds rejects two non-idempotent writes, because the first is not the last call.",
+  "program": "(retry {:delays [1s] :on [RateLimited]} (let [_ (call mail.send {:to \"x\"})] (call mail.send {:to \"y\"})))",
+  "declarations": "declarations.json",
+  "allow": [
+    "mail.send"
+  ],
+  "responses": [],
+  "expect": {
+    "rejected": [
+      "retry-write"
+    ]
+  },
+  "trace": []
+}

@@ -1,0 +1,6 @@
+error[loop-no-result] 3:3-3:18
+    (recur (+ n 1)))
+    ^^^^^^^^^^^^^^^
+  This loop body always ends in recur, so the loop has no result and can only fail with loop-limit.
+  Give the body a branch that does not recur, such as (if done? result (recur ...)).
+  Help: sx help loop

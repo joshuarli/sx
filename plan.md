@@ -392,6 +392,14 @@ request IDs, and a `wait-until` predicate named by a local function saw the bind
 site instead of its definition. Reproduce with `uv run python lean/agree.py` and
 `lean/axioms.sh`.
 
+**Differential fuzzing after Phase 4.** `tests/fuzz` generates typed random programs and runs
+each through Python and Lean. About 105,000 programs, 75,000 of them accepted, found nine
+disagreements, each now a fixture with the wrong side fixed: four in Lean (number matching in
+the fixture host, `1e2` as an Int, the retry-write rule, a step count) and five in Python (a
+self-containing bracket type that recursed, a late-resolved record sort key, a local `fn`
+without parameters that asserted, lone surrogates in host strings, and a loop with no exit,
+now the `loop-no-result` diagnostic). The final 30,000-program run found none.
+
 Decided at the Phase 0 checkpoint:
 
 - Keywords used as values, such as `{:kind :unknown}`, appeared in both rounds despite the guide.

@@ -22,6 +22,48 @@ def lake() -> str:
     return found
 
 
+def retry_write_twins(binary: Path) -> tuple[int, list[str]]:
+    declarations = json.loads((FIXTURES / "declarations.json").read_text())
+    unsafe = {c["id"] for c in declarations["capabilities"] if c["effect"] == "write" and not c["idempotent"]}
+    for capability in declarations["capabilities"]:
+        if capability["id"] in unsafe:
+            capability["idempotent"] = True
+    registry = Registry()
+    load_declarations(registry, declarations)
+    accepted_by_lean: list[str] = []
+    twins = 0
+    for path in sorted(p for p in FIXTURES.glob("*.json") if p.name != "declarations.json"):
+        case = json.loads(path.read_text())
+        if "retry-write" not in case["expect"].get("rejected", []):
+            continue
+        checked = compile_source(case["program"], registry, allowed=frozenset(case["allow"]))
+        assert checked.program is not None, f"{path.stem}: the twin must check once its writes are idempotent"
+        exported = export_program(checked.program, {})
+        for signature_id, signature in exported["signatures"]["capabilities"].items():
+            if signature_id in unsafe:
+                signature["idempotent"] = False
+        ir = SCRATCH / f"{path.stem}.twin.ir.json"
+        ir.write_text(json.dumps(exported))
+        twins += 1
+        if subprocess.run([binary, "check", ir], capture_output=True, text=True, check=False).returncode == 0:
+            accepted_by_lean.append(path.stem)
+    return twins, accepted_by_lean
+
+
+def lone_surrogate_refused(binary: Path) -> bool:
+    registry = Registry()
+    load_declarations(registry, json.loads((FIXTURES / "declarations.json").read_text()))
+    checked = compile_source("(call store.list {})", registry, allowed=frozenset({"store.list"}))
+    assert checked.program is not None
+    ir = SCRATCH / "lone-surrogate.ir.json"
+    ir.write_text(json.dumps(export_program(checked.program, {})))
+    fixture = SCRATCH / "lone-surrogate.json"
+    entry = '{"capability": "store.list", "input": {}, "results": [{"output": ["\\ud800"]}]}'
+    fixture.write_text('{"responses": [' + entry + "]}")
+    ran = subprocess.run([binary, ir, fixture], capture_output=True, text=True, check=False)
+    return ran.returncode != 0 and "lone surrogate" in ran.stderr
+
+
 def main() -> int:
     subprocess.run([lake(), "build", "sx-ref"], cwd=LEAN, check=True, capture_output=True)
     binary = LEAN / ".lake" / "build" / "bin" / "sx-ref"
@@ -66,7 +108,13 @@ def main() -> int:
           f"{len(rejected)} rejected fixtures are elaborator behavior and are not compared: {', '.join(rejected)}")
     print(f"the pure evaluator agrees on {pure_compared} call-free fixtures")
     print(f"the Lean checker accepts {compared - len(unchecked)} of {compared} exported programs")
-    return 1 if disagreements or unchecked else 0
+    twins, wrongly_accepted = retry_write_twins(binary)
+    for name in wrongly_accepted:
+        print(f"lean checker accepts the retry-write twin of {name}")
+    print(f"the Lean checker rejects {twins - len(wrongly_accepted)} of {twins} retry-write twins")
+    surrogate_refused = lone_surrogate_refused(binary)
+    print(f"the Lean reader {'refuses' if surrogate_refused else 'accepts'} a lone surrogate escape in a string")
+    return 1 if disagreements or unchecked or wrongly_accepted or not surrogate_refused else 0
 
 
 if __name__ == "__main__":

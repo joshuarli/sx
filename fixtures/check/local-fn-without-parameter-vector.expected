@@ -1,0 +1,5 @@
+error[bad-pattern] 2:9-2:26
+  (let [f (fn (ok 1) [x] x)] (map f [1]))
+          ^^^^^^^^^^^^^^^^^
+  fn needs a parameter vector and a body: (fn [x] body).
+  Help: sx help fn

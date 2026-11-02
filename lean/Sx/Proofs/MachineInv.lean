@@ -144,7 +144,7 @@ theorem seqChildren_ok (e : Expr) : OkP (fun cs => ∀ c ∈ cs, callsOf c ⊆ c
     intro c hc; exact List.Subset.trans (mem_callsOfList hc) (by simp [callsOf])
   | .call _ arg => intro c hc; simp at hc; subst hc; simp [callsOf]
   | .get r _ => intro c hc; simp at hc; subst hc; simp [callsOf]
-  | .tupleItem r _ => intro c hc; simp at hc; subst hc; simp [callsOf]
+  | .tupleItem r _ => intro c hc; simp at hc; rcases hc with rfl | rfl <;> simp [callsOf]
   | .wrap _ x _ => intro c hc; simp at hc; subst hc; simp [callsOf]
   | .coerce x _ => intro c hc; simp at hc; subst hc; simp [callsOf]
   | .mkRecord fs => intro c hc; exact mem_callsOfFields hc

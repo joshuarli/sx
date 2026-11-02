@@ -1,0 +1,16 @@
+{
+  "description": "A retry on refusal kinds still rejects a non-idempotent write that a later call follows.",
+  "program": "(retry {:delays [1s] :on [RateLimited]} (let [_ (call mail.send {:to \"x\"}) job (call job.state {:id \"a\"})] job))",
+  "declarations": "declarations.json",
+  "allow": [
+    "mail.send",
+    "job.state"
+  ],
+  "responses": [],
+  "expect": {
+    "rejected": [
+      "retry-write"
+    ]
+  },
+  "trace": []
+}
