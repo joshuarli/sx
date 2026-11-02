@@ -1,0 +1,51 @@
+(let [base "{{root}}/packages"
+      dirs (map (fn [e] (get e :name))
+                (filter (fn [e] (= (get e :kind) Directory)) (call fs.list {:path base})))
+      loaded (par-map {:limit 8}
+                      (fn [d]
+                        (let [path (str base "/" d "/package.json")]
+                          (match (call fs.stat {:path path})
+                            none {:dir d :state "no_manifest" :text ""}
+                            (some _) (let [text (call fs.read-text {:path path})]
+                                       (match (attempt (json.kind text []))
+                                         (ok _) {:dir d :state (match (json.get text ["private"]) (some "true") "private" _ "ok") :text text}
+                                         (err _) {:dir d :state "invalid" :text ""})))))
+                      dirs)
+      first-or (fn [found fallback] (match found (some v) v none fallback))
+      row (fn [d text]
+            {:dir d
+             :name (first-or (json.get text ["name"]) d)
+             :version (first-or (json.get text ["version"]) "")
+             :license (match (json.kind text ["license"])
+                        String (first-or (json.get text ["license"]) "UNLICENSED")
+                        Object (first-or (json.get text ["license" "type"]) "UNLICENSED")
+                        _ (first-or (json.get text ["licenses" "0" "type"]) "UNLICENSED"))
+             :author (match (json.kind text ["author"])
+                       String (let [a (first-or (json.get text ["author"]) "")]
+                                (match (re.find #"^(.*?) <" a)
+                                  (some g) (text.trim (nth g 1))
+                                  none (text.trim a)))
+                       Object (first-or (json.get text ["author" "name"]) "unknown")
+                       _ "unknown")
+             :deps (count (json.keys text ["dependencies"]))
+             :dev (count (json.keys text ["devDependencies"]))})
+      rows (sort-by (fn [r] [(get r :name) (get r :dir)])
+                    (map (fn [l] (row (get l :dir) (get l :text)))
+                         (filter (fn [l] (= (get l :state) "ok")) loaded)))
+      quote (fn [s]
+              (if (or (text.contains? s ",") (text.contains? s "\""))
+                (str "\"" (text.replace s "\"" "\"\"") "\"")
+                s))
+      line (fn [r]
+             (str (quote (get r :name)) "," (quote (get r :version)) "," (quote (get r :license)) ","
+                  (quote (get r :author)) "," (get r :deps) "," (get r :dev) "\n"))
+      _ (call fs.write-text {:path "{{root}}/report.csv"
+                             :text (str "name,version,license,author,deps,dev_deps\n" (text.join "" (map line rows)))})
+      in-state (fn [state] (sort-by identity (map (fn [l] (get l :dir)) (filter (fn [l] (= (get l :state) state)) loaded))))]
+  {:rows (count rows)
+   :private (in-state "private")
+   :invalid (in-state "invalid")
+   :no_manifest (in-state "no_manifest")
+   :licenses (sort-by (fn [c] [(- (get c :count)) (get c :license)])
+                      (map (fn [g] {:license (first g) :count (count (nth g 1))})
+                           (group-by identity (map (fn [r] (get r :license)) rows))))})

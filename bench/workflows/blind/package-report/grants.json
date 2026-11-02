@@ -1,0 +1,6 @@
+{
+  "fs.list": {"roots": ["{{root}}/packages"]},
+  "fs.stat": {"roots": ["{{root}}/packages"]},
+  "fs.read-text": {"roots": ["{{root}}/packages"]},
+  "fs.write-text": {"roots": ["{{root}}"]}
+}
