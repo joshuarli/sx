@@ -1,0 +1,34 @@
+(let [root "{{root}}/project"
+      ignore-entries (map text.trim (text.split (call fs.read-text {:path (str root "/.tidyignore")}) "\n"))
+      entries (filter (fn [l] (and (not= l "") (not (text.starts-with? l "#")))) ignore-entries)
+      wanted? (fn [name] (or (text.ends-with? name ".md") (or (text.ends-with? name ".txt") (text.ends-with? name ".py"))))
+      considered (sort-by identity
+                          (flatten (map (fn [dir]
+                                          (map (fn [e] (str dir "/" (get e :name)))
+                                               (filter (fn [e] (and (= (get e :kind) File) (wanted? (get e :name))))
+                                                       (call fs.list {:path (str root "/" dir)}))))
+                                        ["src" "docs"])))
+      ignored (filter (fn [p] (contains? entries p)) considered)
+      targets (filter (fn [p] (not (contains? entries p))) considered)
+      indent (fn [line]
+               (match (re.find #"^\t*" line)
+                 (some g) (str (text.join "" (map (fn [_] "    ") (text.chars (nth g 0)))) (re.replace #"^\t+" line ""))
+                 none line))
+      tidy (fn [t]
+             (let [lines (text.split (re.replace #"(?m)[ \t]+$" (text.replace t "\r\n" "\n") "") "\n")
+                   body (re.replace #"\n+$" (text.join "\n" (map indent lines)) "")]
+               (if (= body "") "" (str body "\n"))))
+      read (par-map {:limit 6}
+                    (fn [p]
+                      (match (attempt (call fs.read-text {:path (str root "/" p)}))
+                        (ok t) {:path p :readable true :text t}
+                        (err _) {:path p :readable false :text ""}))
+                    targets)
+      readable (filter (fn [r] (get r :readable)) read)
+      dirty (filter (fn [r] (not= (tidy (get r :text)) (get r :text))) readable)
+      _ (map (fn [r] (call fs.write-text {:path (str root "/" (get r :path)) :text (tidy (get r :text))})) dirty)]
+  {:changed (map (fn [r] (get r :path)) dirty)
+   :unchanged (- (count readable) (count dirty))
+   :ignored ignored
+   :skipped (map (fn [r] (get r :path)) (filter (fn [r] (not (get r :readable))) read))
+   :delta (reduce + 0 (map (fn [r] (- (text.length (tidy (get r :text))) (text.length (get r :text)))) dirty))})

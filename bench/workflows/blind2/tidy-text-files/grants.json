@@ -1,0 +1,5 @@
+{
+  "fs.list": {"roots": ["{{root}}/project"]},
+  "fs.read-text": {"roots": ["{{root}}/project"]},
+  "fs.write-text": {"roots": ["{{root}}/project"]}
+}
