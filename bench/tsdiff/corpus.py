@@ -261,7 +261,8 @@ def build_corpus(effects: Path, real: Path, out: Path) -> list[str]:
         if responses is None:
             skipped[why.split(",")[0].split(" calls ")[0] + " (undeclared tool)"] += 1
             continue
-        allow = tuple(c["id"] for c in catalogue.declarations.get("capabilities", []))
+        granted = catalogue.grants or {}
+        allow = tuple(c["id"] for c in catalogue.declarations.get("capabilities", []) if c["id"] not in granted)
         Case(
             name=script.id, program=row["rewritten"], declarations=catalogue.declarations, responses=responses,
             tools=catalogue.tools, allow=allow, grants=catalogue.grants or None,
