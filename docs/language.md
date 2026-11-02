@@ -128,8 +128,8 @@ by element. A map is not a sort key.
 | `(fn [p ...] body)` | A function argument, or the value of a `let` binding. See [Functions](#functions). |
 | `(get r :field)` | `r` is a record with `field`. A missing field is rejected by the checker. |
 | `(get m key)` | `m` is a `Map<String, V>` and `key` is a `String`. The result is `Option<V>`, `none` when the key is absent. A keyword key, as in `(get m :name)`, is rejected with the habit `keyword-value` and the fix `"name"`, because keywords only name record fields. |
-| `(get m key default)` | `default` has type `V`. The result is `V`: the value when the key is present, otherwise `default`, which evaluates only then. |
-| `(get r :field default)` | `field` has type `Option<T>`, and `default` has type `T`. The result is `T`: the value when present, otherwise `default`, which evaluates only then. A field whose type is not an `Option` is rejected with `arity`, because it is always present. |
+| `(get m key default)` | The result is the value when the key is present, otherwise `default`, which evaluates only then. A `default` of type `V` makes the result `V`; an optional `default`, such as `none`, makes it `Option<V>`. |
+| `(get r :field default)` | `field` has type `Option<T>`. The result is the value when present, otherwise `default`, which evaluates only then. A `default` of type `T` makes the result `T`; an optional `default`, such as `none`, makes it `Option<T>`. A field whose type is not an `Option` is rejected with `arity`, because it is always present. |
 | `(call cap.id arg)` | `arg` has the capability's input type. The result has its output type. |
 | `(attempt e)` | `Result<T, CallError>`, where `e` has type `T`. See [Recovery and repetition](#recovery-and-repetition). |
 | `(retry {options} e)` | `T`. Re-evaluates `e` after a failure. |

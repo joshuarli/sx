@@ -1,0 +1,27 @@
+{
+  "description": "get on a map with a none default keeps the lookup optional.",
+  "program": "(let [m (into-map [[\"a\" 1]])] [(get m \"a\" none) (get m \"b\" none)])",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list",
+    "rows.add",
+    "checks.list",
+    "checks.add",
+    "orders.list",
+    "totals.get",
+    "totals.put"
+  ],
+  "expect": {
+    "completed": [
+      1,
+      null
+    ]
+  },
+  "trace": [],
+  "responses": []
+}
