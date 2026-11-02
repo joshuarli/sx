@@ -4,12 +4,12 @@ and a sequence index is a string: `["spec" "containers" "0" "image"]`. Every sca
 so `(text.to-int (yaml.get doc ["replicas"]))` needs the value to be present: match the `Option` first.
 
 ```sx
-(let [path "/srv/deploy/web.yaml"
-      doc (call fs.read-text {:path path})
-      replicas (match (yaml.get doc ["spec" "replicas"]) (some r) (match (text.to-int r) (some n) n none 1) none 1)
-      edited (yaml.set doc ["spec" "replicas"] (str (* replicas 2)))
-      _ (call fs.write-text {:path path :text edited})]
-  replicas)
+(def path "/srv/deploy/web.yaml")
+(def doc (call fs.read-text {:path path}))
+(defn as-int [text] (match (text.to-int text) (some n) n none 1))
+(def replicas (match (yaml.get doc ["spec" "replicas"]) (some r) (as-int r) none 1))
+(def _ (call fs.write-text {:path path :text (yaml.set doc ["spec" "replicas"] (str (* replicas 2)))}))
+replicas
 ```
 
 A file outside the supported subset (flow collections, anchors, block scalars, several documents) stops

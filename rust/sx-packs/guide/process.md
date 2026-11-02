@@ -5,10 +5,10 @@ and there are no pipes, globs, or variables. Its result is a record; a nonzero e
 to check, not a failure:
 
 ```sx
-(let [out (call process.run {:program "/usr/bin/git" :args ["rev-parse" "HEAD"] :cwd "/srv/repo"})]
-  (if (= (get out :status) 0)
-    (some (text.trim (get out :stdout)))
-    none))
+(def out (call process.run {:program "/usr/bin/git" :args ["rev-parse" "HEAD"] :cwd "/srv/repo"}))
+(if (= (get out :status) 0)
+  (some (text.trim (get out :stdout)))
+  none)
 ```
 
 Output usually ends with a newline: `text.trim` it before comparing, and `(text.split out "\n")` for

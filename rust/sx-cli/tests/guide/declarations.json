@@ -64,6 +64,31 @@
       "output": "Record open {sku: String}",
       "effect": "read",
       "description": "Looks up one item."
+    },
+    {
+      "id": "people.list",
+      "effect": "read",
+      "input": "Record {team: String}",
+      "output": "List<User>",
+      "description": "Lists the people on a team."
+    },
+    {
+      "id": "metrics.uptime",
+      "effect": "read",
+      "input": "Record {host: String}",
+      "output": "Record {seconds: Int}",
+      "description": "Reads a host's uptime."
+    },
+    {
+      "id": "storage.files",
+      "effect": "read",
+      "input": "Record {page: Int}",
+      "output": "Record {files: List<File>, last: Bool}",
+      "description": "Reads one page of files."
     }
-  ]
+  ],
+  "types": {
+    "User": "Record {name: String, active: Bool}",
+    "File": "Record {bytes: Int}"
+  }
 }

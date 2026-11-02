@@ -1,14 +1,18 @@
 ## Coming from TypeScript
 
-You know TypeScript well. Each habit below has an Sx form. There are no statements, assignments, or
-mutation: every form is an expression with a value, and the program's last value is its result.
+You know TypeScript well. Each habit below has an Sx form. There are no assignments or mutation:
+every form is an expression with a value. A `def` is like a `const`, and a `defn` like a function
+declaration.
 
 | TypeScript | Sx |
 | --- | --- |
-| `const a = f(x); const b = g(a); return b;` | `(let [a (f x) b (g a)] b)` |
+| `const a = f(x);` | `(def a (f x))` |
+| `function label(r) { return r.name + ": " + r.state; }` | `(defn label [r] (str (get r :name) ": " (get r :state)))` |
 | `await api.ns.tool({ a: 1, b: "x" })` | `(call ns.tool {:a 1 :b "x"})` |
+| `await api.ns.write(x);` as a statement | `(def _ (call ns.write {:x x}))` |
+| `return result;` at the end | the last form of the program |
 | `r.field` | `(get r :field)` |
-| `r.maybe ?? fallback` | `(get r :maybe fallback)`, when `:maybe` is an `Option` |
+| `r.maybe ?? fallback` | `(get r :maybe fallback)` |
 | `{ repo, ahead: n }` | `{:repo repo :ahead n}` |
 | `{ ...r, state: "done" }` | `{:repo (get r :repo) :state "done"}`, a new record with every field |
 | `c ? a : b`, `if (c) {...} else {...}` | `(if c a b)`, and the else is required |
@@ -34,7 +38,7 @@ mutation: every form is an expression with a value, and the program's last value
 | `await Promise.all(xs.map(async x => ...))` | `(par-map {:limit 8} (fn [x] ...) xs)`, for reads |
 | `for (const x of xs) { await write(x); }` | `(map (fn [x] (call ...)) xs)`, one at a time, in order |
 | `while (...) { ...; i++ }` | `(loop {:max 100} [i 0 acc []] (if done acc (recur (+ i 1) (concat acc [x]))))` |
-| `await sleep(1000)` | `[_ (sleep 1s)]` as a `let` step |
+| `await sleep(1000)` | `(def _ (sleep 1s))` |
 | `x === null`, `x !== undefined` | `(match x (some v) ... none ...)` |
 
 ### Where Sx differs on purpose
@@ -42,19 +46,16 @@ mutation: every form is an expression with a value, and the program's last value
 - **A list holds one type.** TypeScript lets you build `{ok: true, value}` in one branch and `{ok: false}`
   in another, and narrows on `if (r.ok)`. In Sx, records joined from branches with different fields
   make each field that some lack an `Option` in all of them, and `(if (get r :ok) ...)` does not narrow
-  it. Build every record with the same fields, keep the `attempt` result itself in the record and
-  `match` it later, or split into separate lists before building records:
+  it. Keep the `attempt` result itself in the record and `match` it later, or split into separate lists
+  first, as TypeScript code that pushes onto `found` and `missing` arrays would:
 
   ```sx
-  (let [skus ["A-1" "B-2"]
-        looked (par-map {:limit 8}
-                 (fn [sku] {:sku sku :found (attempt (call shop.item {:sku sku}))})
-                 skus)
-        known (keep (fn [r] (match (get r :found) (ok item) (some {:sku (get r :sku) :item item}) (err e) none))
-                    looked)
-        unknown (keep (fn [r] (match (get r :found) (ok item) none (err e) (some (get r :sku))))
-                      looked)]
-    {:known (map (fn [k] (get (get k :item) :name)) known) :unknown unknown})
+  (def skus ["A-1" "B-2"])
+  (def looked
+    (par-map {:limit 8} (fn [sku] {:sku sku :found (attempt (call shop.item {:sku sku}))}) skus))
+  (defn known [r] (match (get r :found) (ok item) (some (get item :name)) (err e) none))
+  (defn unknown [r] (match (get r :found) (ok item) none (err e) (some (get r :sku))))
+  {:known (keep known looked) :unknown (keep unknown looked)}
   ```
 
 - **Nothing is mutated.** Where TypeScript pushes onto an array in a loop, Sx maps, filters, or reduces,
@@ -63,5 +64,5 @@ mutation: every form is an expression with a value, and the program's last value
   `Option` type, and you take it apart with `match`, a default, or `(if x ...)` on a name.
 - **A tool failure stops the program** unless an `attempt` encloses the call, like an exception nobody
   catches. Wrap every call whose failure the task tells you to handle.
-- **Regular expressions come from the `re` core** when the declarations list it: `line.match(/(\d+)/)` is
-  `(re.find #"(\d+)" line)`, with the pattern first, written as `#"..."` so backslashes stay.
+- **Regular expressions come from the `re` core**: `line.match(/(\d+)/)` is `(re.find #"(\d+)" line)`,
+  with the pattern first, written as `#"..."` so backslashes stay.

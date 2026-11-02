@@ -1534,7 +1534,8 @@ test, so a help entry cannot drift from the interpreter.
 `sx guide --declarations FILE [--grants FILE] [--allow ID ...]` prints what a model needs to write
 one program against those declarations. It has these sections, in order:
 
-1. The kernel guide that `sx help` prints.
+1. The kernel: the forms and prelude of `sx help`, written as a program of top-level definitions and
+   with the features the frozen prototype lacks, such as defaults on any field.
 2. How TypeScript habits map to Sx.
 3. A section for each pack family whose tools are granted: files, programs, web services (raw or
    typed endpoints), declared SQL statements, and MCP tools. Each section gives the Sx idioms with

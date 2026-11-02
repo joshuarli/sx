@@ -4,8 +4,7 @@ fixed number of places. Rounding modes are `HalfEven`, `HalfUp`, `Down`, `Up`, `
 Compare with `decimal.compare`, never `<`:
 
 ```sx
-(let [amounts ["12.50" "0.75" "3"]
-      parsed (keep decimal.parse amounts)
-      total (reduce decimal.add (decimal.from-int 0) parsed)]
-  {:total (decimal.format total 2) :over-ten (= (decimal.compare total (decimal.from-int 10)) 1)})
+(def amounts (keep decimal.parse ["12.50" "0.75" "3"]))
+(def total (reduce decimal.add (decimal.from-int 0) amounts))
+{:total (decimal.format total 2) :over-ten (= (decimal.compare total (decimal.from-int 10)) 1)}
 ```

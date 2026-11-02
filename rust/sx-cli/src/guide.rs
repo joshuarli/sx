@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 
 use sx_kernel::authority::Grants;
-use sx_kernel::help::{GuideLevel, effect_label, guide};
+use sx_kernel::help::effect_label;
 use sx_kernel::json::Json;
 use sx_kernel::registry::{Capability, Registry};
 use sx_kernel::types::{EnumType, Primitive, RecordType, Type};
@@ -131,7 +131,7 @@ fn notes(families: &BTreeSet<Family>) -> String {
 }
 
 fn tailored(registry: &Registry, declarations: &Json, tools: &[Tool<'_>], families: &BTreeSet<Family>) -> String {
-    let mut parts = vec![guide(GuideLevel::Standard).trim_end().to_string(), sx_kernel::help::TYPESCRIPT.trim_end().to_string()];
+    let mut parts = vec![sx_kernel::help::KERNEL.trim_end().to_string(), sx_kernel::help::TYPESCRIPT.trim_end().to_string()];
     for family in families {
         let (section, behavior) = family.sections();
         parts.push(format!("{}\n\n{}", section.trim_end(), behavior.trim_end()));
