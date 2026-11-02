@@ -1,0 +1,14 @@
+{
+  "cores": ["semver", "text"],
+  "packs": ["fs"],
+  "capabilities": [
+    {
+      "id": "registry.versions",
+      "http": {"method": "GET", "url": "{{registry_origin}}/packages/{name}", "query": []},
+      "input": "Record {name: String}",
+      "output": "Record open {versions: List<String>}",
+      "effect": "read",
+      "description": "Returns every published version of a package, in no particular order."
+    }
+  ]
+}

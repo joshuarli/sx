@@ -1,0 +1,52 @@
+(let [dir "{{root}}/manifests"
+      names (sort-by identity
+                     (map (fn [e] (get e :name))
+                          (filter (fn [e] (and (= (get e :kind) File) (text.ends-with? (get e :name) ".deps")))
+                                  (call fs.list {:path dir}))))
+      deps (flatten
+             (map (fn [n]
+                    (map (fn [line]
+                           (let [parts (text.split line "==")]
+                             {:project (text.replace n ".deps" "")
+                              :package (text.trim (first parts))
+                              :current (text.trim (nth parts 1))}))
+                         (filter (fn [l] (and (not= (text.trim l) "") (not (text.starts-with? l "#"))))
+                                 (text.split (call fs.read-text {:path (str dir "/" n)}) "\n"))))
+                  names))
+      packages (sort-by identity (map (fn [g] (first g)) (group-by (fn [d] (get d :package)) deps)))
+      answers (par-map {:limit 4}
+                       (fn [p]
+                         (match (attempt (call registry.versions {:name p}))
+                           (ok r) {:package p :known true :versions (get r :versions)}
+                           (err _) {:package p :known false :versions []}))
+                       packages)
+      newest (fn [versions]
+               (reduce (fn [best v] (match best (some b) (if (> (semver.compare v b) 0) (some v) (some b)) none (some v)))
+                       none
+                       (keep semver.parse versions)))
+      info (map (fn [a] {:package (get a :package) :known (get a :known) :latest (newest (get a :versions))}) answers)
+      judged (map (fn [d]
+                    (let [i (first (filter (fn [x] (= (get x :package) (get d :package))) info))
+                          current (semver.parse (get d :current))]
+                      (match (get i :latest)
+                        (some l)
+                        (match current
+                          (some c)
+                          (if (> (semver.compare l c) 0)
+                            {:d d :known true :latest (semver.show l)
+                             :kind (cond (not= (get l :major) (get c :major)) "major"
+                                         (not= (get l :minor) (get c :minor)) "minor"
+                                         :else "patch")}
+                            {:d d :known true :latest "" :kind ""})
+                          none {:d d :known true :latest "" :kind ""})
+                        none {:d d :known (get i :known) :latest "" :kind ""})))
+                  deps)
+      by-key (fn [x] [(get (get x :d) :project) (get (get x :d) :package)])
+      outdated (sort-by by-key (filter (fn [j] (not= (get j :kind) "")) judged))
+      missing (sort-by by-key (filter (fn [j] (not (get j :known))) judged))
+      kinds (fn [k] (count (filter (fn [j] (= (get j :kind) k)) outdated)))]
+  {:outdated (map (fn [j] {:project (get (get j :d) :project) :package (get (get j :d) :package)
+                           :current (get (get j :d) :current) :latest (get j :latest) :kind (get j :kind)})
+                  outdated)
+   :missing (map (fn [j] {:project (get (get j :d) :project) :package (get (get j :d) :package)}) missing)
+   :counts {:major (kinds "major") :minor (kinds "minor") :patch (kinds "patch")}})
