@@ -1,0 +1,10 @@
+{
+  "types": {"Item": "Record {id: String, size: Int}"},
+  "capabilities": [
+    {"id": "store.get", "effect": "read", "input": "Record {id: String}", "output": "Item", "description": "Reads one item."},
+    {"id": "store.list", "effect": "read", "input": "Record {}", "output": "List<String>", "description": "Lists item ids."},
+    {"id": "store.put", "effect": "write", "idempotent": true, "input": "Record {id: String, size: Int}", "output": "Unit", "description": "Stores an item."},
+    {"id": "mail.send", "effect": "write", "idempotent": false, "input": "Record {to: String}", "output": "Unit", "description": "Sends one email."},
+    {"id": "job.state", "effect": "read", "input": "Record {id: String}", "output": "String", "description": "Reads a job's state."}
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "description": "Integer overflow ends the program.",
+  "program": "(+ 9223372036854775807 1)",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state"
+  ],
+  "responses": [],
+  "expect": {
+    "failed": "arithmetic"
+  },
+  "trace": []
+}

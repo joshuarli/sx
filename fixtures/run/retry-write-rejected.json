@@ -1,0 +1,18 @@
+{
+  "description": "retry around a write that is not idempotent is rejected.",
+  "program": "(retry {:delays [1s]} (call mail.send {:to \"x\"}))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state"
+  ],
+  "expect": {
+    "rejected": [
+      "retry-write"
+    ]
+  },
+  "responses": []
+}

@@ -1,0 +1,63 @@
+{
+  "description": "Writes inside map run once each, in order.",
+  "program": "(let [_ (map (fn [t] (call mail.send {:to t})) [\"a\" \"b\"])] \"sent\")",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state"
+  ],
+  "responses": [
+    {
+      "capability": "mail.send",
+      "input": {
+        "to": "a"
+      },
+      "results": [
+        {
+          "output": null
+        }
+      ]
+    },
+    {
+      "capability": "mail.send",
+      "input": {
+        "to": "b"
+      },
+      "results": [
+        {
+          "output": null
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": "sent"
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "mail.send",
+      "input": {
+        "to": "a"
+      }
+    },
+    {
+      "response": "r:1",
+      "output": null
+    },
+    {
+      "request": "r:2",
+      "capability": "mail.send",
+      "input": {
+        "to": "b"
+      }
+    },
+    {
+      "response": "r:2",
+      "output": null
+    }
+  ]
+}

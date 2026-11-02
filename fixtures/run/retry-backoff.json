@@ -1,0 +1,140 @@
+{
+  "description": "Backoff doubles from the first delay up to the cap, within the total.",
+  "program": "(attempt (retry {:backoff [100ms 300ms] :within 1s} (call store.get {:id \"a\"})))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state"
+  ],
+  "responses": [
+    {
+      "capability": "store.get",
+      "input": {
+        "id": "a"
+      },
+      "results": [
+        {
+          "error": {
+            "kind": "Timeout",
+            "message": "slow"
+          }
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": {
+      "err": {
+        "kind": "Timeout",
+        "message": "slow"
+      }
+    }
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "store.get",
+      "input": {
+        "id": "a"
+      }
+    },
+    {
+      "response": "r:1",
+      "error": {
+        "kind": "Timeout",
+        "message": "slow"
+      }
+    },
+    {
+      "delay": "r:2",
+      "milliseconds": 100
+    },
+    {
+      "response": "r:2",
+      "output": null
+    },
+    {
+      "request": "r:3",
+      "capability": "store.get",
+      "input": {
+        "id": "a"
+      }
+    },
+    {
+      "response": "r:3",
+      "error": {
+        "kind": "Timeout",
+        "message": "slow"
+      }
+    },
+    {
+      "delay": "r:4",
+      "milliseconds": 200
+    },
+    {
+      "response": "r:4",
+      "output": null
+    },
+    {
+      "request": "r:5",
+      "capability": "store.get",
+      "input": {
+        "id": "a"
+      }
+    },
+    {
+      "response": "r:5",
+      "error": {
+        "kind": "Timeout",
+        "message": "slow"
+      }
+    },
+    {
+      "delay": "r:6",
+      "milliseconds": 300
+    },
+    {
+      "response": "r:6",
+      "output": null
+    },
+    {
+      "request": "r:7",
+      "capability": "store.get",
+      "input": {
+        "id": "a"
+      }
+    },
+    {
+      "response": "r:7",
+      "error": {
+        "kind": "Timeout",
+        "message": "slow"
+      }
+    },
+    {
+      "delay": "r:8",
+      "milliseconds": 300
+    },
+    {
+      "response": "r:8",
+      "output": null
+    },
+    {
+      "request": "r:9",
+      "capability": "store.get",
+      "input": {
+        "id": "a"
+      }
+    },
+    {
+      "response": "r:9",
+      "error": {
+        "kind": "Timeout",
+        "message": "slow"
+      }
+    }
+  ]
+}

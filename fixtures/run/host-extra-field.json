@@ -1,0 +1,49 @@
+{
+  "description": "An extra field in a response is rejected, not dropped.",
+  "program": "(call store.get {:id \"a\"})",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state"
+  ],
+  "responses": [
+    {
+      "capability": "store.get",
+      "input": {
+        "id": "a"
+      },
+      "results": [
+        {
+          "output": {
+            "id": "a",
+            "size": 1,
+            "owner": "x"
+          }
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "failed": "invalid-host-response"
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "store.get",
+      "input": {
+        "id": "a"
+      }
+    },
+    {
+      "response": "r:1",
+      "output": {
+        "id": "a",
+        "size": 1,
+        "owner": "x"
+      }
+    }
+  ]
+}

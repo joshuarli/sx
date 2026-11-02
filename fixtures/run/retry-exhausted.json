@@ -1,0 +1,69 @@
+{
+  "description": "When the delays run out, the last failure propagates.",
+  "program": "(retry {:delays [1s]} (call store.get {:id \"a\"}))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state"
+  ],
+  "responses": [
+    {
+      "capability": "store.get",
+      "input": {
+        "id": "a"
+      },
+      "results": [
+        {
+          "error": {
+            "kind": "Unavailable",
+            "message": "502"
+          }
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "failed": "call-failed"
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "store.get",
+      "input": {
+        "id": "a"
+      }
+    },
+    {
+      "response": "r:1",
+      "error": {
+        "kind": "Unavailable",
+        "message": "502"
+      }
+    },
+    {
+      "delay": "r:2",
+      "milliseconds": 1000
+    },
+    {
+      "response": "r:2",
+      "output": null
+    },
+    {
+      "request": "r:3",
+      "capability": "store.get",
+      "input": {
+        "id": "a"
+      }
+    },
+    {
+      "response": "r:3",
+      "error": {
+        "kind": "Unavailable",
+        "message": "502"
+      }
+    }
+  ]
+}

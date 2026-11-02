@@ -1,0 +1,72 @@
+{
+  "description": "The delay budget ends a program that waits too long.",
+  "program": "(retry {:delays [1s 1s]} (call store.get {:id \"a\"}))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state"
+  ],
+  "budgets": {
+    "delay_ms": 1500
+  },
+  "responses": [
+    {
+      "capability": "store.get",
+      "input": {
+        "id": "a"
+      },
+      "results": [
+        {
+          "error": {
+            "kind": "Timeout",
+            "message": "slow"
+          }
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "failed": "budget-exhausted"
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "store.get",
+      "input": {
+        "id": "a"
+      }
+    },
+    {
+      "response": "r:1",
+      "error": {
+        "kind": "Timeout",
+        "message": "slow"
+      }
+    },
+    {
+      "delay": "r:2",
+      "milliseconds": 1000
+    },
+    {
+      "response": "r:2",
+      "output": null
+    },
+    {
+      "request": "r:3",
+      "capability": "store.get",
+      "input": {
+        "id": "a"
+      }
+    },
+    {
+      "response": "r:3",
+      "error": {
+        "kind": "Timeout",
+        "message": "slow"
+      }
+    }
+  ]
+}

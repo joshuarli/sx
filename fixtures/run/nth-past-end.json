@@ -1,0 +1,17 @@
+{
+  "description": "nth past the end is out of range.",
+  "program": "(nth [1 2] 2)",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state"
+  ],
+  "responses": [],
+  "expect": {
+    "failed": "out-of-range"
+  },
+  "trace": []
+}

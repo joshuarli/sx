@@ -1,0 +1,107 @@
+{
+  "description": "par-map sends at most :limit requests at once.",
+  "program": "(par-map {:limit 2} (fn [i] (get (call store.get {:id i}) :size)) [\"a\" \"b\" \"c\"])",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state"
+  ],
+  "responses": [
+    {
+      "capability": "store.get",
+      "input": {
+        "id": "a"
+      },
+      "results": [
+        {
+          "output": {
+            "id": "a",
+            "size": 1
+          }
+        }
+      ]
+    },
+    {
+      "capability": "store.get",
+      "input": {
+        "id": "b"
+      },
+      "results": [
+        {
+          "output": {
+            "id": "b",
+            "size": 2
+          }
+        }
+      ]
+    },
+    {
+      "capability": "store.get",
+      "input": {
+        "id": "c"
+      },
+      "results": [
+        {
+          "output": {
+            "id": "c",
+            "size": 3
+          }
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": [
+      1,
+      2,
+      3
+    ]
+  },
+  "trace": [
+    {
+      "request": "r.0:1",
+      "capability": "store.get",
+      "input": {
+        "id": "a"
+      }
+    },
+    {
+      "request": "r.1:1",
+      "capability": "store.get",
+      "input": {
+        "id": "b"
+      }
+    },
+    {
+      "response": "r.0:1",
+      "output": {
+        "id": "a",
+        "size": 1
+      }
+    },
+    {
+      "response": "r.1:1",
+      "output": {
+        "id": "b",
+        "size": 2
+      }
+    },
+    {
+      "request": "r.2:1",
+      "capability": "store.get",
+      "input": {
+        "id": "c"
+      }
+    },
+    {
+      "response": "r.2:1",
+      "output": {
+        "id": "c",
+        "size": 3
+      }
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "description": "retry does not repeat a failure outside its kinds, and uses no delay.",
+  "program": "(attempt (retry {:delays [1s 2s]} (call store.get {:id \"a\"})))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state"
+  ],
+  "responses": [
+    {
+      "capability": "store.get",
+      "input": {
+        "id": "a"
+      },
+      "results": [
+        {
+          "error": {
+            "kind": "NotFound",
+            "message": "gone"
+          }
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": {
+      "err": {
+        "kind": "NotFound",
+        "message": "gone"
+      }
+    }
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "store.get",
+      "input": {
+        "id": "a"
+      }
+    },
+    {
+      "response": "r:1",
+      "error": {
+        "kind": "NotFound",
+        "message": "gone"
+      }
+    }
+  ]
+}

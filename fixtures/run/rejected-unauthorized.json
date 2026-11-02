@@ -1,0 +1,14 @@
+{
+  "description": "Naming a tool outside the allow-list rejects the whole program, including calls that are allowed.",
+  "program": "(let [a (call store.get {:id \"a\"})] (call mail.send {:to \"x\"}))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get"
+  ],
+  "expect": {
+    "rejected": [
+      "unauthorized"
+    ]
+  },
+  "responses": []
+}

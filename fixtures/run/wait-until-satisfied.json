@@ -1,0 +1,85 @@
+{
+  "description": "wait-until returns the first value the predicate accepts.",
+  "program": "(wait-until {:within 1m :every 5s} (fn [s] (= s \"done\")) (call job.state {:id \"j\"}))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state"
+  ],
+  "responses": [
+    {
+      "capability": "job.state",
+      "input": {
+        "id": "j"
+      },
+      "results": [
+        {
+          "output": "queued"
+        },
+        {
+          "output": "running"
+        },
+        {
+          "output": "done"
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": "done"
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "job.state",
+      "input": {
+        "id": "j"
+      }
+    },
+    {
+      "response": "r:1",
+      "output": "queued"
+    },
+    {
+      "delay": "r:2",
+      "milliseconds": 5000
+    },
+    {
+      "response": "r:2",
+      "output": null
+    },
+    {
+      "request": "r:3",
+      "capability": "job.state",
+      "input": {
+        "id": "j"
+      }
+    },
+    {
+      "response": "r:3",
+      "output": "running"
+    },
+    {
+      "delay": "r:4",
+      "milliseconds": 5000
+    },
+    {
+      "response": "r:4",
+      "output": null
+    },
+    {
+      "request": "r:5",
+      "capability": "job.state",
+      "input": {
+        "id": "j"
+      }
+    },
+    {
+      "response": "r:5",
+      "output": "done"
+    }
+  ]
+}

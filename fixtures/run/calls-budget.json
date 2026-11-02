@@ -1,0 +1,92 @@
+{
+  "description": "The calls budget ends a program that calls too often.",
+  "program": "(map (fn [i] (call store.get {:id i})) [\"a\" \"b\" \"c\"])",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state"
+  ],
+  "budgets": {
+    "calls": 2
+  },
+  "responses": [
+    {
+      "capability": "store.get",
+      "input": {
+        "id": "a"
+      },
+      "results": [
+        {
+          "output": {
+            "id": "a",
+            "size": 1
+          }
+        }
+      ]
+    },
+    {
+      "capability": "store.get",
+      "input": {
+        "id": "b"
+      },
+      "results": [
+        {
+          "output": {
+            "id": "b",
+            "size": 2
+          }
+        }
+      ]
+    },
+    {
+      "capability": "store.get",
+      "input": {
+        "id": "c"
+      },
+      "results": [
+        {
+          "output": {
+            "id": "c",
+            "size": 3
+          }
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "failed": "budget-exhausted"
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "store.get",
+      "input": {
+        "id": "a"
+      }
+    },
+    {
+      "response": "r:1",
+      "output": {
+        "id": "a",
+        "size": 1
+      }
+    },
+    {
+      "request": "r:2",
+      "capability": "store.get",
+      "input": {
+        "id": "b"
+      }
+    },
+    {
+      "response": "r:2",
+      "output": {
+        "id": "b",
+        "size": 2
+      }
+    }
+  ]
+}

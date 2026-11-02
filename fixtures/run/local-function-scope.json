@@ -1,0 +1,20 @@
+{
+  "description": "A local function sees its definition scope, not the caller's.",
+  "program": "(let [x 1 add (fn [y] (+ x y)) x 100] [(add 1) (add x)])",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state"
+  ],
+  "responses": [],
+  "expect": {
+    "completed": [
+      2,
+      101
+    ]
+  },
+  "trace": []
+}

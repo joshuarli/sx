@@ -1,0 +1,17 @@
+{
+  "description": "A loop that asks to recur past :max fails with loop-limit.",
+  "program": "(loop {:max 3} [n 0] (recur (+ n 1)))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state"
+  ],
+  "responses": [],
+  "expect": {
+    "failed": "loop-limit"
+  },
+  "trace": []
+}

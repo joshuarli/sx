@@ -1,0 +1,18 @@
+{
+  "description": "A program that fails the checker produces no request.",
+  "program": "(call store.get {:id 1})",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state"
+  ],
+  "expect": {
+    "rejected": [
+      "type-mismatch"
+    ]
+  },
+  "responses": []
+}

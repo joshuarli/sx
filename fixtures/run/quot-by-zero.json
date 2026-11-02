@@ -1,0 +1,17 @@
+{
+  "description": "Division by zero ends the program.",
+  "program": "(quot 1 0)",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state"
+  ],
+  "responses": [],
+  "expect": {
+    "failed": "arithmetic"
+  },
+  "trace": []
+}

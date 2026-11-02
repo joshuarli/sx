@@ -1,0 +1,99 @@
+{
+  "description": "A loop follows a cursor until it ends.",
+  "program": "(loop {:max 5} [ids (call store.list {}) total 0] (if (= (count ids) 0) total (recur (rest ids) (+ total (get (call store.get {:id (first ids)}) :size)))))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state"
+  ],
+  "responses": [
+    {
+      "capability": "store.list",
+      "input": {},
+      "results": [
+        {
+          "output": [
+            "a",
+            "b"
+          ]
+        }
+      ]
+    },
+    {
+      "capability": "store.get",
+      "input": {
+        "id": "a"
+      },
+      "results": [
+        {
+          "output": {
+            "id": "a",
+            "size": 1
+          }
+        }
+      ]
+    },
+    {
+      "capability": "store.get",
+      "input": {
+        "id": "b"
+      },
+      "results": [
+        {
+          "output": {
+            "id": "b",
+            "size": 2
+          }
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": 3
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "store.list",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "request": "r:2",
+      "capability": "store.get",
+      "input": {
+        "id": "a"
+      }
+    },
+    {
+      "response": "r:2",
+      "output": {
+        "id": "a",
+        "size": 1
+      }
+    },
+    {
+      "request": "r:3",
+      "capability": "store.get",
+      "input": {
+        "id": "b"
+      }
+    },
+    {
+      "response": "r:3",
+      "output": {
+        "id": "b",
+        "size": 2
+      }
+    }
+  ]
+}

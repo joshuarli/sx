@@ -1,0 +1,18 @@
+{
+  "description": "par cannot call a write.",
+  "program": "(par (call store.list {}) (call store.put {:id \"a\" :size 1}))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state"
+  ],
+  "expect": {
+    "rejected": [
+      "parallel-write"
+    ]
+  },
+  "responses": []
+}

@@ -1,0 +1,22 @@
+{
+  "description": "quot and rem truncate toward zero.",
+  "program": "[(quot -7 2) (rem -7 2) (quot 7 -2) (rem 7 -2)]",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state"
+  ],
+  "responses": [],
+  "expect": {
+    "completed": [
+      -3,
+      -1,
+      -3,
+      1
+    ]
+  },
+  "trace": []
+}

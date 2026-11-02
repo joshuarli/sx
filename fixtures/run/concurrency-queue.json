@@ -1,0 +1,183 @@
+{
+  "description": "Requests beyond the concurrency budget wait for the next suspension, lowest IDs first.",
+  "program": "(par (call store.get {:id \"0\"}) (call store.get {:id \"1\"}) (call store.get {:id \"2\"}) (call store.get {:id \"3\"}) (call store.get {:id \"4\"}))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state"
+  ],
+  "budgets": {
+    "concurrency": 3
+  },
+  "responses": [
+    {
+      "capability": "store.get",
+      "input": {
+        "id": "0"
+      },
+      "results": [
+        {
+          "output": {
+            "id": "0",
+            "size": 0
+          }
+        }
+      ]
+    },
+    {
+      "capability": "store.get",
+      "input": {
+        "id": "1"
+      },
+      "results": [
+        {
+          "output": {
+            "id": "1",
+            "size": 1
+          }
+        }
+      ]
+    },
+    {
+      "capability": "store.get",
+      "input": {
+        "id": "2"
+      },
+      "results": [
+        {
+          "output": {
+            "id": "2",
+            "size": 2
+          }
+        }
+      ]
+    },
+    {
+      "capability": "store.get",
+      "input": {
+        "id": "3"
+      },
+      "results": [
+        {
+          "output": {
+            "id": "3",
+            "size": 3
+          }
+        }
+      ]
+    },
+    {
+      "capability": "store.get",
+      "input": {
+        "id": "4"
+      },
+      "results": [
+        {
+          "output": {
+            "id": "4",
+            "size": 4
+          }
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": [
+      {
+        "id": "0",
+        "size": 0
+      },
+      {
+        "id": "1",
+        "size": 1
+      },
+      {
+        "id": "2",
+        "size": 2
+      },
+      {
+        "id": "3",
+        "size": 3
+      },
+      {
+        "id": "4",
+        "size": 4
+      }
+    ]
+  },
+  "trace": [
+    {
+      "request": "r.0:1",
+      "capability": "store.get",
+      "input": {
+        "id": "0"
+      }
+    },
+    {
+      "request": "r.1:1",
+      "capability": "store.get",
+      "input": {
+        "id": "1"
+      }
+    },
+    {
+      "request": "r.2:1",
+      "capability": "store.get",
+      "input": {
+        "id": "2"
+      }
+    },
+    {
+      "response": "r.0:1",
+      "output": {
+        "id": "0",
+        "size": 0
+      }
+    },
+    {
+      "response": "r.1:1",
+      "output": {
+        "id": "1",
+        "size": 1
+      }
+    },
+    {
+      "response": "r.2:1",
+      "output": {
+        "id": "2",
+        "size": 2
+      }
+    },
+    {
+      "request": "r.3:1",
+      "capability": "store.get",
+      "input": {
+        "id": "3"
+      }
+    },
+    {
+      "request": "r.4:1",
+      "capability": "store.get",
+      "input": {
+        "id": "4"
+      }
+    },
+    {
+      "response": "r.3:1",
+      "output": {
+        "id": "3",
+        "size": 3
+      }
+    },
+    {
+      "response": "r.4:1",
+      "output": {
+        "id": "4",
+        "size": 4
+      }
+    }
+  ]
+}

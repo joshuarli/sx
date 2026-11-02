@@ -1,0 +1,21 @@
+{
+  "description": "Option promotion wraps values at run time.",
+  "program": "(map (fn [n] (if (> n 1) n none)) [1 2 3])",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state"
+  ],
+  "responses": [],
+  "expect": {
+    "completed": [
+      null,
+      2,
+      3
+    ]
+  },
+  "trace": []
+}

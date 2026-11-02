@@ -1,0 +1,17 @@
+{
+  "description": "first of an empty list is out of range.",
+  "program": "(first [])",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state"
+  ],
+  "responses": [],
+  "expect": {
+    "failed": "out-of-range"
+  },
+  "trace": []
+}

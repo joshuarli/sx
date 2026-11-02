@@ -1,0 +1,17 @@
+{
+  "description": "loop rebinds its names on each recur.",
+  "program": "(loop {:max 5} [n 0 total 0] (if (= n 3) total (recur (+ n 1) (+ total n))))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state"
+  ],
+  "responses": [],
+  "expect": {
+    "completed": 3
+  },
+  "trace": []
+}

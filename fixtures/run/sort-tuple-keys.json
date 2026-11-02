@@ -1,0 +1,21 @@
+{
+  "description": "Tuple sort keys sort descending by count, then alphabetically.",
+  "program": "(map (fn [r] (get r :t)) (sort-by (fn [r] [(- (get r :n)) (get r :t)]) [{:t \"b\" :n 1} {:t \"a\" :n 3} {:t \"c\" :n 3}]))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state"
+  ],
+  "responses": [],
+  "expect": {
+    "completed": [
+      "a",
+      "c",
+      "b"
+    ]
+  },
+  "trace": []
+}
