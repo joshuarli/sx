@@ -1105,6 +1105,60 @@ class Gen:
             return self.tail(ty, ctx.down())
         return fin(ctx)
 
+    def poly_body(self, x: str, depth: int) -> str:
+        if depth <= 0 or self.chance(0.15):
+            return x
+
+        def inner() -> str:
+            return self.poly_body(x, depth - 1)
+
+        shapes: list[Callable[[], str]] = [
+            lambda: f"[{inner()}]",
+            lambda: f"[{x} {inner()}]",
+            lambda: f"[{inner()} {inner()}]",
+            lambda: f"{{:a {inner()}}}",
+            lambda: f"{{:a {inner()} :b {inner()}}}",
+            lambda: f"(some {inner()})",
+            lambda: f"(ok {inner()})",
+            lambda: f"(err {inner()})",
+            lambda: f"(if true {inner()} {inner()})",
+            lambda: f"(let [y {inner()}] {inner()})",
+            lambda: f"(first [{inner()}])",
+            lambda: f"(nth [{inner()} {inner()}] 0)",
+            lambda: f"(concat [{inner()}] [{inner()}])",
+            lambda: f'(assoc {{}} "k" {inner()})',
+            lambda: f'(into-map [["a" {inner()}]])',
+            lambda: f'(vals (assoc {{}} "k" {inner()}))',
+            lambda: f"(flatten [[{inner()}]])",
+            lambda: f'(entries (into-map [["a" {inner()}]]))',
+            lambda: f"(get {{:a {inner()}}} :a)",
+            lambda: f"(map identity [{inner()}])",
+            lambda: f"(rest [{inner()}])",
+            lambda: f"(take 1 [{inner()}])",
+            lambda: f"(reduce (fn [acc y] [acc y]) {inner()} [{inner()}])",
+            lambda: f"(match {inner()} (some y) {inner()} none {inner()})",
+            lambda: f"(attempt {inner()})",
+            lambda: f"(retry {{:delays [1s]}} {inner()})",
+            lambda: f"(loop {{:max 2}} [z {inner()}] (if true z (recur {inner()})))",
+        ]
+        return self.pick(shapes)()
+
+    def poly_program(self) -> str:
+        body = self.poly_body("x", self.rng.randint(1, 4))
+        source = self.pick(["[]", "[]", "[]", "(call store.list {})", "[1]", "[[]]", '[(some "a")]'])
+        head = self.pick(["map", "map", "keep", "filter", "any?", "all?"])
+        if head == "keep":
+            body = f"(some {body})"
+        elif head in {"filter", "any?", "all?"}:
+            body = f"(let [y {body}] true)"
+        program = f"({head} (fn [x] {body}) {source})"
+        if self.chance(0.4):
+            program = f"(let [f (fn [x] {self.poly_body('x', 2)})] (map f {source}))"
+        wrap = self.pick(["{}", "(entries (into-map {}))", "(into-map {})", "(flatten {})", "(first {})", "(count {})"])
+        return wrap.format(program)
+
     def program(self) -> str:
+        if self.chance(0.1):
+            return self.poly_program()
         ty = self.rand_ty(2)
         return self.expr(ty, Ctx(depth=self.rng.choice([3, 4, 4, 5, 5, 6, 6, 7])))

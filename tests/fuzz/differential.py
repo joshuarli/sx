@@ -45,6 +45,7 @@ BUDGET_RANGES: dict[str, tuple[int, int]] = {
     "concurrency": (1, 4),
 }
 LEAN_TIMEOUT = 60
+FUZZ_STEPS = 100_000
 
 
 def registry() -> Registry:
@@ -72,6 +73,7 @@ def make_case(seed: str, index: int, known: Registry, mutate_rate: float) -> Cas
         for name in rng.sample(sorted(BUDGET_RANGES), rng.choice([1, 1, 2])):
             low, high = BUDGET_RANGES[name]
             budgets[name] = rng.randint(low, high)
+    budgets.setdefault("steps", FUZZ_STEPS)
     source = Gen(rng, known, budgets.get("concurrency", DEFAULT_BUDGETS.concurrency)).program()
     capabilities = sorted(known.capabilities)
     allow = tuple(capabilities)
@@ -90,7 +92,11 @@ class Finding:
 
     @property
     def signature(self) -> str:
-        return f"{self.kind}: {self.detail.splitlines()[0][:120] if self.detail else ''}"
+        lines = self.detail.strip().splitlines()
+        if not lines:
+            return self.kind
+        line = lines[-1] if self.kind.startswith("python-crash") else lines[0]
+        return f"{self.kind}: {line[:120]}"
 
 
 @dataclass(slots=True)

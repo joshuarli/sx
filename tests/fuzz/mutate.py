@@ -14,7 +14,14 @@ VOCABULARY = (
 )
 
 
+def soup(rng: random.Random) -> str:
+    pieces = [*VOCABULARY, "foo", "x", "1", "\"abc\"", "\n", "  ", ",", "; c\n", "é", "😀", "\u0000", "\ud7ff"]
+    return " ".join(rng.choice(pieces) for _ in range(rng.randint(1, 30)))
+
+
 def mutate(source: str, rng: random.Random) -> str:
+    if rng.random() < 0.15:
+        return soup(rng)
     for _ in range(rng.choice([1, 1, 2, 3])):
         source = one_mutation(source, rng)
     return source
