@@ -1,0 +1,68 @@
+{
+  "description": "Records join field by field, so an enum field beside a string field becomes a string field.",
+  "program": "(map (fn [c] (match (get c :level) Unknown {:name (get c :name) :level \"missing\"} _ {:name (get c :name) :level (get c :level)})) (call checks.list {}))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list",
+    "rows.add",
+    "checks.list",
+    "checks.add"
+  ],
+  "responses": [
+    {
+      "capability": "checks.list",
+      "input": {},
+      "results": [
+        {
+          "output": [
+            {
+              "name": "build",
+              "level": "Passing"
+            },
+            {
+              "name": "lint",
+              "level": "Unknown"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": [
+      {
+        "name": "build",
+        "level": "Passing"
+      },
+      {
+        "name": "lint",
+        "level": "missing"
+      }
+    ]
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "checks.list",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": [
+        {
+          "name": "build",
+          "level": "Passing"
+        },
+        {
+          "name": "lint",
+          "level": "Unknown"
+        }
+      ]
+    }
+  ]
+}

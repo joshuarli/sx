@@ -364,31 +364,33 @@ class _Checker:
         self.substitution = snapshot
         return False
 
-    def convert(self, actual: Type, expected: Type) -> tuple[bool, ir.Conversion | None]:
+    def convert(self, actual: Type, expected: Type, joining: bool = False) -> tuple[bool, ir.Conversion | None]:
         snapshot = dict(self.substitution)
         if self.unify(actual, expected):
             return True, None
         self.substitution = snapshot
         a, e = self.resolve(actual), self.resolve(expected)
+        if joining and e == STRING and isinstance(a, EnumType) and all(payload is None for _, payload in a.variants):
+            return True, ir.VariantName()
         if isinstance(e, OptionType) and not isinstance(a, OptionType | Variable | Never):
-            ok, inner = self.convert(a, e.inner)
+            ok, inner = self.convert(a, e.inner, joining)
             if ok:
                 return True, ir.ToSome(inner)
         elif isinstance(a, RecordType) and isinstance(e, RecordType) and a.names == e.names:
             conversions: list[tuple[str, ir.Conversion | None]] = []
             for name, ft in e.fields:
-                ok, conversion = self.convert(a.field(name) or NEVER, ft)
+                ok, conversion = self.convert(a.field(name) or NEVER, ft, joining)
                 if not ok:
                     break
                 conversions.append((name, conversion))
             else:
                 return True, ir.EachField(tuple(conversions))
         elif isinstance(a, ListType) and isinstance(e, ListType):
-            ok, conversion = self.convert(a.element, e.element)
+            ok, conversion = self.convert(a.element, e.element, joining)
             if ok and conversion is not None:
                 return True, ir.EachElement(conversion)
         elif isinstance(a, TupleType) and isinstance(e, TupleType) and len(a.items) == len(e.items):
-            items = [self.convert(x, y) for x, y in zip(a.items, e.items, strict=True)]
+            items = [self.convert(x, y, joining) for x, y in zip(a.items, e.items, strict=True)]
             if all(ok for ok, _ in items):
                 return True, ir.EachItem(tuple(conversion for _, conversion in items))
         self.substitution = snapshot
@@ -396,11 +398,11 @@ class _Checker:
 
     def coerce(
         self, node: ir.Node, actual: Type, expected: Type | None, span: Span, message: str | None = None,
-        detail_hint: str | None = None, help_name: str | None = None,
+        detail_hint: str | None = None, help_name: str | None = None, joining: bool = False,
     ) -> tuple[ir.Node, Type]:
         if expected is None:
             return node, actual
-        ok, conversion = self.convert(actual, expected)
+        ok, conversion = self.convert(actual, expected, joining)
         if ok:
             return (node if conversion is None else ir.Coerce(node, conversion, span)), expected
         found, wanted = self.zonk(actual), self.zonk(expected)
@@ -418,7 +420,7 @@ class _Checker:
 
     def join(self, branches: list[tuple[ir.Node, Type, Span]], expected: Type | None) -> tuple[list[ir.Node], Type]:
         if expected is not None:
-            return [self.coerce(node, t, expected, span)[0] for node, t, span in branches], expected
+            return [self.coerce(node, t, expected, span, joining=True)[0] for node, t, span in branches], expected
         target: Type = NEVER
         for _, t, span in branches:
             if isinstance(self.resolve(t), Never):
@@ -427,11 +429,11 @@ class _Checker:
                 target = t
                 continue
             snapshot = dict(self.substitution)
-            if self.convert(t, target)[0]:
+            if self.convert(t, target, joining=True)[0]:
                 self.substitution = snapshot
                 continue
             self.substitution = snapshot
-            if self.convert(target, t)[0]:
+            if self.convert(target, t, joining=True)[0]:
                 self.substitution = snapshot
                 target = t
                 continue
@@ -442,7 +444,7 @@ class _Checker:
                 detail="Every branch of an if or match must return the same type.",
             )
             return [node for node, _, _ in branches], target
-        return [self.coerce(node, t, target, span)[0] for node, t, span in branches], target
+        return [self.coerce(node, t, target, span, joining=True)[0] for node, t, span in branches], target
 
     def is_sort_key(self, t: Type) -> bool:
         t = self.resolve(t)
@@ -484,6 +486,9 @@ class _Checker:
             case IntLiteral(value=value, span=span):
                 return self.coerce(ir.Literal(value, span), INT, expected, span)
             case StringLiteral(value=value, span=span):
+                enum = self.expected_enum(expected)
+                if enum is not None:
+                    return self.variant_literal(value, enum, expected, span)
                 return self.coerce(ir.Literal(value, span), STRING, expected, span)
             case BoolLiteral(value=value, span=span):
                 return self.coerce(ir.Literal(value, span), BOOL, expected, span)
@@ -548,6 +553,31 @@ class _Checker:
             fix=suggestion,
         )
         return self.placeholder(span)
+
+    def expected_enum(self, expected: Type | None) -> EnumType | None:
+        if expected is None:
+            return None
+        hint = self.resolve(self.peel(expected) or NEVER)
+        return hint if isinstance(hint, EnumType) else None
+
+    def variant_literal(
+        self, text: str, enum: EnumType, expected: Type | None, span: Span,
+    ) -> tuple[ir.Node, Type]:
+        if not enum.has(text):
+            variants = [name for name, _ in enum.variants]
+            suggestion = closest(text, variants)
+            self.error(
+                "unknown-variant", span, f'"{text}" is not a variant of {enum.name}.',
+                detail="Variants: " + ", ".join(variants), fix=None if suggestion is None else f'"{suggestion}"',
+            )
+            return self.placeholder(span)
+        if enum.payload(text) is not None:
+            self.error(
+                "unknown-variant", span,
+                f'{text} carries a value, so only a core function constructs it. Match on it with ({text} x).',
+            )
+            return self.placeholder(span)
+        return self.coerce(ir.Literal(VariantValue(enum.name, text), span), enum, expected, span)
 
     def enums(self) -> list[EnumType]:
         found = [t for t in self.registry.types.values() if isinstance(t, EnumType)]
@@ -1726,7 +1756,9 @@ class _Checker:
                 checked = [self.check(arg, INT, scope)[0] for arg in args]
                 return self.coerce(ir.Prelude(op, tuple(checked), span), INT, expected, span)
             case "=" | "not=":
-                order = [1, 0] if isinstance(args[0], Symbol) and args[0].name[:1].isupper() else [0, 1]
+                variant_first = isinstance(args[0], Symbol) and args[0].name[:1].isupper()
+                string_first = isinstance(args[0], StringLiteral) and not isinstance(args[1], StringLiteral)
+                order = [1, 0] if variant_first or string_first else [0, 1]
                 first, first_type = self.check(args[order[0]], None, scope)
                 second, _ = self.check(args[order[1]], first_type, scope)
                 pair = (first, second) if order == [0, 1] else (second, first)

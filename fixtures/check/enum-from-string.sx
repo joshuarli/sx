@@ -1,0 +1,3 @@
+; task: dev-failing-ci
+(let [ci (call github.ci {:repo "a" :sha "b"})]
+  [(= (get ci :state) "Passing") (= "Failing" (get ci :state)) (not= (get ci :state) "Unknown")])

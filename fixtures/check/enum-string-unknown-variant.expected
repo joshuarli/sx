@@ -1,0 +1,6 @@
+error[unknown-variant] 3:22-3:31
+    (= (get ci :state) "passing"))
+                       ^^^^^^^^^
+  "passing" is not a variant of ci.State.
+  Variants: Passing, Failing, Pending, Unknown
+  Fix: "Passing"

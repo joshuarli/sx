@@ -839,6 +839,9 @@ def match_value(pattern: ir.MatchPattern, value: Value, env: Env | None) -> tupl
 
 def convert(value: Value, conversion: ir.Conversion) -> Value:
     match conversion:
+        case ir.VariantName():
+            assert isinstance(value, VariantValue)
+            return value.variant
         case ir.ToSome(inner=inner):
             return SomeValue(value if inner is None else convert(value, inner))
         case ir.EachField(fields=fields):

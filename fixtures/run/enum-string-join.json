@@ -1,0 +1,62 @@
+{
+  "description": "A branch returning a nullary enum beside a string joins as a string holding the variant name.",
+  "program": "(map (fn [c] (if (= (get c :level) \"Unknown\") \"missing\" (get c :level))) (call checks.list {}))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list",
+    "rows.add",
+    "checks.list",
+    "checks.add"
+  ],
+  "responses": [
+    {
+      "capability": "checks.list",
+      "input": {},
+      "results": [
+        {
+          "output": [
+            {
+              "name": "build",
+              "level": "Passing"
+            },
+            {
+              "name": "lint",
+              "level": "Unknown"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": [
+      "Passing",
+      "missing"
+    ]
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "checks.list",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": [
+        {
+          "name": "build",
+          "level": "Passing"
+        },
+        {
+          "name": "lint",
+          "level": "Unknown"
+        }
+      ]
+    }
+  ]
+}

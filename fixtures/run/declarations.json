@@ -13,6 +13,7 @@
     {"id": "rows.list", "effect": "read", "input": "Record {}", "output": "List<Row>", "description": "Lists rows."},
     {"id": "rows.add", "effect": "write", "idempotent": true, "input": "Row", "output": "Unit", "description": "Stores a row."},
     {"id": "checks.list", "effect": "read", "input": "Record {}", "output": "List<Check>", "description": "Lists checks."},
+    {"id": "checks.add", "effect": "write", "idempotent": true, "input": "Check", "output": "Unit", "description": "Stores a check."},
     {"id": "job.state", "effect": "read", "input": "Record {id: String}", "output": "String", "description": "Reads a job's state."}
   ]
 }

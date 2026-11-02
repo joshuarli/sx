@@ -1,0 +1,7 @@
+; task: dev-retry-ci
+(map
+  (fn [repo]
+    (match (attempt (call github.latest-ci {:repo repo}))
+      (ok ci) {:repo repo :state (get ci :state)}
+      (err e) {:repo repo :state "missing"}))
+  ["acme/api" "acme/old"])

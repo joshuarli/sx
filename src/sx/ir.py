@@ -80,7 +80,12 @@ class EachElement:
     element: Conversion
 
 
-type Conversion = ToSome | EachField | EachItem | EachElement
+@dataclass(frozen=True, slots=True)
+class VariantName:
+    pass
+
+
+type Conversion = ToSome | EachField | EachItem | EachElement | VariantName
 
 
 @dataclass(frozen=True, slots=True)

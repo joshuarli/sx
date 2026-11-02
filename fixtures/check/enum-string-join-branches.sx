@@ -1,0 +1,5 @@
+; task: dev-retry-ci
+(let [ci (call github.latest-ci {:repo "acme/api"})]
+  [(if (= (get ci :state) "Passing") "ok" (get ci :state))
+   (if (= "Failing" (get ci :state)) (get ci :state) "other")
+   (match (get ci :state) Unknown "unknown" _ (get ci :state))])

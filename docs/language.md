@@ -60,7 +60,21 @@ value of type `T` is accepted and becomes `(some value)`. So `(if empty? none na
 `Option<String>`, and `(recur next ...)` may pass a `String` to a binding of type
 `Option<String>`. Branch results join field by field, so a branch returning
 `{:branch name}` and one returning `{:branch none}` join to `Record {branch: Option<String>}`.
-Promotion never applies when `T` is itself an `Option`, and no other conversion exists.
+Promotion never applies when `T` is itself an `Option`.
+
+There is one more conversion, and only where branches join. A core enum whose variants all carry
+no value joins with `String` as a `String`, and the enum side becomes its variant's name. This
+holds for the branches of `if`, `match`, and `cond`, and field by field, element by element, and
+item by item inside the records, lists, and tuples they return. So `(if failed? "missing" state)`
+has type `String`, and so do the `state` fields of `{:state state}` and `{:state "missing"}`
+joined together. The name is what the JSON encoding already writes for the variant, so the result
+encodes the same either way. No other position converts an enum to a `String`.
+
+A string literal where the checker expects a core enum is the variant it names. So
+`(= (get ci :state) "Passing")` compares with the variant `Passing`, and a record field typed as
+the enum takes `"Failing"`. A string literal that names no variant of the enum, or names a variant
+that carries a value, is an `unknown-variant` error that lists the variants. A string that is not a
+literal never becomes an enum.
 
 A bracket literal is a list when its elements share a type, and a tuple when they do not, or when
 a tuple is expected. `[1 2]` is a `List<Int>`, and `[(- 0 count) tag]` is a

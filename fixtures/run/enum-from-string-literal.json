@@ -1,0 +1,86 @@
+{
+  "description": "A string literal that names a variant is that variant in a comparison and in a record field.",
+  "program": "(let [cs (call checks.list {}) _ (call checks.add {:name \"deploy\" :level \"Failing\"})] (map (fn [c] (= (get c :level) \"Passing\")) cs))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list",
+    "rows.add",
+    "checks.list",
+    "checks.add"
+  ],
+  "responses": [
+    {
+      "capability": "checks.list",
+      "input": {},
+      "results": [
+        {
+          "output": [
+            {
+              "name": "build",
+              "level": "Passing"
+            },
+            {
+              "name": "lint",
+              "level": "Unknown"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "capability": "checks.add",
+      "input": {
+        "name": "deploy",
+        "level": "Failing"
+      },
+      "results": [
+        {
+          "output": null
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": [
+      true,
+      false
+    ]
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "checks.list",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": [
+        {
+          "name": "build",
+          "level": "Passing"
+        },
+        {
+          "name": "lint",
+          "level": "Unknown"
+        }
+      ]
+    },
+    {
+      "request": "r:2",
+      "capability": "checks.add",
+      "input": {
+        "name": "deploy",
+        "level": "Failing"
+      }
+    },
+    {
+      "response": "r:2",
+      "output": null
+    }
+  ]
+}
