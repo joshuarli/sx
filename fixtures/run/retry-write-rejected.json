@@ -1,5 +1,5 @@
 {
-  "description": "retry around a write that is not idempotent is rejected.",
+  "description": "retry around a write that is not idempotent is rejected when its kinds, here the defaults, can leave the outcome unknown.",
   "program": "(retry {:delays [1s]} (call mail.send {:to \"x\"}))",
   "declarations": "declarations.json",
   "allow": [

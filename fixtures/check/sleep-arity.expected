@@ -1,0 +1,6 @@
+error[arity] 2:1-2:14
+  (sleep 1s 2s)
+  ^^^^^^^^^^^^^
+  sleep takes 1 argument, but this call has 2.
+  Signature: (sleep duration)
+  Help: sx help sleep

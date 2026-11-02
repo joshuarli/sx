@@ -1,0 +1,94 @@
+{
+  "id": "fresh-send-replies",
+  "split": "fresh",
+  "kinds": [
+    "retry",
+    "write",
+    "partial-failure"
+  ],
+  "domain": "other",
+  "sx-expressible": true,
+  "description": "Send three replies in order: ticket `T-1` with the text `Fixed in 2.3`, ticket `T-2` with `Please send logs`, and ticket `T-3` with `Closing as duplicate`. A reply cannot be repeated safely, so retry a reply only when it fails with RateLimited, which means nothing was sent: retry up to 2 more times, waiting 5 seconds before each retry. Any other failure is final and is not retried. Return a record with `sent` and `failed`, the ticket ids whose reply was sent and the ones whose reply was not, each in the order above.",
+  "cores": [],
+  "capabilities": [
+    {
+      "id": "desk.reply",
+      "effect": "write",
+      "idempotent": false,
+      "input": "Record {ticket: String, text: String}",
+      "output": "Unit",
+      "description": "Sends a reply to a ticket's requester. Each call sends another message."
+    }
+  ],
+  "responses": [
+    {
+      "capability": "desk.reply",
+      "input": {
+        "ticket": "T-1",
+        "text": "Fixed in 2.3"
+      },
+      "results": [
+        {
+          "error": {
+            "kind": "RateLimited",
+            "message": "slow down"
+          }
+        },
+        {
+          "output": null
+        }
+      ]
+    },
+    {
+      "capability": "desk.reply",
+      "input": {
+        "ticket": "T-2",
+        "text": "Please send logs"
+      },
+      "results": [
+        {
+          "error": {
+            "kind": "Unavailable",
+            "message": "503"
+          }
+        }
+      ]
+    },
+    {
+      "capability": "desk.reply",
+      "input": {
+        "ticket": "T-3",
+        "text": "Closing as duplicate"
+      },
+      "results": [
+        {
+          "error": {
+            "kind": "RateLimited",
+            "message": "slow down"
+          }
+        },
+        {
+          "error": {
+            "kind": "RateLimited",
+            "message": "slow down"
+          }
+        },
+        {
+          "error": {
+            "kind": "RateLimited",
+            "message": "slow down"
+          }
+        }
+      ]
+    }
+  ],
+  "expected": {
+    "sent": [
+      "T-1"
+    ],
+    "failed": [
+      "T-2",
+      "T-3"
+    ]
+  }
+}

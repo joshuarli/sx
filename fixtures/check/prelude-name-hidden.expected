@@ -1,0 +1,6 @@
+error[type-mismatch] 3:4-3:9
+    (count [1 2]))
+     ^^^^^
+  count is an Int here, which hides the function count.
+  A name bound by let, loop, fn, or match hides the function of that name in the rest of its scope. Rename the local.
+  Help: sx help count

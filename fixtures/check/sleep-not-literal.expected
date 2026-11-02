@@ -1,0 +1,6 @@
+error[bad-option] 3:10-3:14
+    (sleep wait))
+           ^^^^
+  sleep takes a duration literal such as 10s.
+  A duration is written with a unit: 250ms, 5s, 2m, or 1h.
+  Help: sx help sleep

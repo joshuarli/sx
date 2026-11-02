@@ -1,0 +1,4 @@
+error[unreachable-clause] 2:26-2:27
+  (match 3 1 "one" 2 "two" 1 "uno" _ "many")
+                           ^
+  This clause can never match, because an earlier clause covers the same case.

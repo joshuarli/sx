@@ -1,0 +1,83 @@
+{
+  "id": "fresh-deploy-rollout",
+  "split": "fresh",
+  "kinds": [
+    "polling",
+    "write",
+    "conditional-call"
+  ],
+  "domain": "repomod",
+  "sx-expressible": true,
+  "description": "Start a deployment of version `2.4.1` of the `checkout` service, then check its status immediately and every 10 seconds after that, making at most 6 checks in total, until its state is `succeeded`, `failed`, or `rolled-back`. Return a record with `state` (the last state seen) and `checks` (how many status checks were made). If the deployment is still unfinished after the sixth check, return `state` as `timeout`.",
+  "types": {
+    "Deploy": "Record {id: String}",
+    "DeployStatus": "Record {id: String, state: String, progress: Int}"
+  },
+  "cores": [],
+  "capabilities": [
+    {
+      "id": "deploys.start",
+      "effect": "write",
+      "idempotent": false,
+      "input": "Record {service: String, version: String}",
+      "output": "Deploy",
+      "description": "Starts a deployment of a service version and returns its id."
+    },
+    {
+      "id": "deploys.status",
+      "effect": "read",
+      "input": "Record {id: String}",
+      "output": "DeployStatus",
+      "description": "Reads a deployment's state: pending, running, succeeded, failed, or rolled-back."
+    }
+  ],
+  "responses": [
+    {
+      "capability": "deploys.start",
+      "input": {
+        "service": "checkout",
+        "version": "2.4.1"
+      },
+      "results": [
+        {
+          "output": {
+            "id": "dep-9"
+          }
+        }
+      ]
+    },
+    {
+      "capability": "deploys.status",
+      "input": {
+        "id": "dep-9"
+      },
+      "results": [
+        {
+          "output": {
+            "id": "dep-9",
+            "state": "pending",
+            "progress": 0
+          }
+        },
+        {
+          "output": {
+            "id": "dep-9",
+            "state": "running",
+            "progress": 60
+          }
+        },
+        {
+          "output": {
+            "id": "dep-9",
+            "state": "rolled-back",
+            "progress": 60
+          }
+        }
+      ]
+    }
+  ],
+  "expected": {
+    "state": "rolled-back",
+    "checks": 3
+  }
+}

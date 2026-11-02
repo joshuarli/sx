@@ -1,0 +1,5 @@
+error[unexpected-close] 4:39-4:40
+                   (some (first tags)))))
+                                        ^
+  This ) is one too many: the [ at 1:6 is still open, because the next line is indented inside it.
+  Fix: remove it

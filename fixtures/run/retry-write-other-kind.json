@@ -1,0 +1,47 @@
+{
+  "description": "A write that is not idempotent is not retried on a kind outside :on, so the first failure ends the program.",
+  "program": "(retry {:delays [250ms] :on [RateLimited]} (call mail.send {:to \"ops\"}))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state"
+  ],
+  "responses": [
+    {
+      "capability": "mail.send",
+      "input": {
+        "to": "ops"
+      },
+      "results": [
+        {
+          "error": {
+            "kind": "Timeout",
+            "message": "no answer"
+          }
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "failed": "call-failed"
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "mail.send",
+      "input": {
+        "to": "ops"
+      }
+    },
+    {
+      "response": "r:1",
+      "error": {
+        "kind": "Timeout",
+        "message": "no answer"
+      }
+    }
+  ]
+}

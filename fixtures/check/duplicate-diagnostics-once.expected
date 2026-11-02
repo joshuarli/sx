@@ -1,0 +1,7 @@
+error[unknown-field] 2:28-2:33
+  (let [label (fn [r] (get r :nmae))]
+                             ^^^^^
+  This record has no field :nmae.
+  Fields: :name
+  Fix: (get r :name)
+  Help: sx help get

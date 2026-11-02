@@ -1,0 +1,95 @@
+{
+  "id": "fresh-rotate-key",
+  "split": "fresh",
+  "kinds": [
+    "polling",
+    "write",
+    "conditional-call"
+  ],
+  "domain": "other",
+  "sx-expressible": true,
+  "description": "Rotate the API key of service `billing`. Create a new key, then check the new key's state immediately and every 5 seconds after that, making at most 12 checks, until it is `active`. Once it is active, revoke the old key `k-old-17`. If the new key is not active after the twelfth check, revoke nothing. Return a record with `key` (the new key's id) and `revoked` (true if the old key was revoked, otherwise false).",
+  "types": {
+    "Key": "Record {id: String}",
+    "KeyState": "Record {state: String}"
+  },
+  "cores": [],
+  "capabilities": [
+    {
+      "id": "keys.create",
+      "effect": "write",
+      "idempotent": false,
+      "input": "Record {service: String}",
+      "output": "Key",
+      "description": "Creates a new API key for a service and returns its id."
+    },
+    {
+      "id": "keys.state",
+      "effect": "read",
+      "input": "Record {id: String}",
+      "output": "KeyState",
+      "description": "Reads a key's state: pending or active."
+    },
+    {
+      "id": "keys.revoke",
+      "effect": "write",
+      "idempotent": true,
+      "input": "Record {id: String}",
+      "output": "Unit",
+      "description": "Revokes a key; revoking a revoked key changes nothing."
+    }
+  ],
+  "responses": [
+    {
+      "capability": "keys.create",
+      "input": {
+        "service": "billing"
+      },
+      "results": [
+        {
+          "output": {
+            "id": "k-new-18"
+          }
+        }
+      ]
+    },
+    {
+      "capability": "keys.state",
+      "input": {
+        "id": "k-new-18"
+      },
+      "results": [
+        {
+          "output": {
+            "state": "pending"
+          }
+        },
+        {
+          "output": {
+            "state": "pending"
+          }
+        },
+        {
+          "output": {
+            "state": "active"
+          }
+        }
+      ]
+    },
+    {
+      "capability": "keys.revoke",
+      "input": {
+        "id": "k-old-17"
+      },
+      "results": [
+        {
+          "output": null
+        }
+      ]
+    }
+  ],
+  "expected": {
+    "key": "k-new-18",
+    "revoked": true
+  }
+}

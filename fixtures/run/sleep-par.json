@@ -1,0 +1,37 @@
+{
+  "description": "sleep works inside par branches, each branch waiting in its own fiber.",
+  "program": "(par (let [_ (sleep 5s)] 1) (let [_ (sleep 2s)] 2))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state"
+  ],
+  "responses": [],
+  "expect": {
+    "completed": [
+      1,
+      2
+    ]
+  },
+  "trace": [
+    {
+      "delay": "r.0:1",
+      "milliseconds": 5000
+    },
+    {
+      "delay": "r.1:1",
+      "milliseconds": 2000
+    },
+    {
+      "response": "r.0:1",
+      "output": null
+    },
+    {
+      "response": "r.1:1",
+      "output": null
+    }
+  ]
+}

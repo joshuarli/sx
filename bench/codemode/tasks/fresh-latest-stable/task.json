@@ -1,0 +1,107 @@
+{
+  "id": "fresh-latest-stable",
+  "split": "fresh",
+  "kinds": [
+    "pagination",
+    "core-composition",
+    "filter-group"
+  ],
+  "domain": "other",
+  "sx-expressible": true,
+  "description": "Find the newest release of package `fastq` that is not yanked. Read every page of its release list, starting with no cursor and then following each page's `next` cursor (at most 10 pages). Ignore releases whose version is not exactly MAJOR.MINOR.PATCH. Return the version string, or null if no release qualifies.",
+  "types": {
+    "Release": "Record {version: String, yanked: Bool}",
+    "ReleasePage": "Record {releases: List<Release>, next: Option<String>}"
+  },
+  "cores": [
+    "semver"
+  ],
+  "capabilities": [
+    {
+      "id": "registry.releases",
+      "effect": "read",
+      "input": "Record {name: String, cursor: Option<String>}",
+      "output": "ReleasePage",
+      "description": "Reads one page of a package's releases; `next` is absent on the last page."
+    }
+  ],
+  "responses": [
+    {
+      "capability": "registry.releases",
+      "input": {
+        "name": "fastq",
+        "cursor": null
+      },
+      "results": [
+        {
+          "output": {
+            "releases": [
+              {
+                "version": "1.0.0",
+                "yanked": false
+              },
+              {
+                "version": "1.1.0",
+                "yanked": false
+              },
+              {
+                "version": "2.0.0-beta",
+                "yanked": false
+              }
+            ],
+            "next": "p2"
+          }
+        }
+      ]
+    },
+    {
+      "capability": "registry.releases",
+      "input": {
+        "name": "fastq",
+        "cursor": "p2"
+      },
+      "results": [
+        {
+          "output": {
+            "releases": [
+              {
+                "version": "2.1.0",
+                "yanked": true
+              },
+              {
+                "version": "1.10.0",
+                "yanked": false
+              }
+            ],
+            "next": "p3"
+          }
+        }
+      ]
+    },
+    {
+      "capability": "registry.releases",
+      "input": {
+        "name": "fastq",
+        "cursor": "p3"
+      },
+      "results": [
+        {
+          "output": {
+            "releases": [
+              {
+                "version": "2.0.0",
+                "yanked": false
+              },
+              {
+                "version": "3.0.0",
+                "yanked": true
+              }
+            ],
+            "next": null
+          }
+        }
+      ]
+    }
+  ],
+  "expected": "2.0.0"
+}

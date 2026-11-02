@@ -1,0 +1,131 @@
+{
+  "id": "fresh-label-unlabeled",
+  "split": "fresh",
+  "kinds": [
+    "write",
+    "partial-failure",
+    "filter-group"
+  ],
+  "domain": "repomod",
+  "sx-expressible": true,
+  "description": "Add the label `needs-triage` to every open issue of `acme/web` that has no labels, in the order the issues are listed. Do not retry. Return a record with `labeled` (the ids of issues that were labeled) and `failed` (records with `id` and `kind`, the name of the error kind, for issues where adding the label failed), each in listed order.",
+  "types": {
+    "Issue": "Record {id: Int, title: String, labels: List<String>}"
+  },
+  "cores": [],
+  "capabilities": [
+    {
+      "id": "issues.open",
+      "effect": "read",
+      "input": "Record {repo: String}",
+      "output": "List<Issue>",
+      "description": "Lists the open issues of a repository with their labels."
+    },
+    {
+      "id": "issues.add-label",
+      "effect": "write",
+      "idempotent": true,
+      "input": "Record {repo: String, id: Int, label: String}",
+      "output": "Unit",
+      "description": "Adds a label to an issue; adding a label it already has changes nothing."
+    }
+  ],
+  "responses": [
+    {
+      "capability": "issues.open",
+      "input": {
+        "repo": "acme/web"
+      },
+      "results": [
+        {
+          "output": [
+            {
+              "id": 101,
+              "title": "Crash on save",
+              "labels": []
+            },
+            {
+              "id": 102,
+              "title": "Typo",
+              "labels": [
+                "bug"
+              ]
+            },
+            {
+              "id": 103,
+              "title": "Slow list",
+              "labels": []
+            },
+            {
+              "id": 104,
+              "title": "Dark mode",
+              "labels": []
+            },
+            {
+              "id": 105,
+              "title": "Docs",
+              "labels": [
+                "docs",
+                "help"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "capability": "issues.add-label",
+      "input": {
+        "repo": "acme/web",
+        "id": 101,
+        "label": "needs-triage"
+      },
+      "results": [
+        {
+          "output": null
+        }
+      ]
+    },
+    {
+      "capability": "issues.add-label",
+      "input": {
+        "repo": "acme/web",
+        "id": 103,
+        "label": "needs-triage"
+      },
+      "results": [
+        {
+          "error": {
+            "kind": "PermissionDenied",
+            "message": "locked"
+          }
+        }
+      ]
+    },
+    {
+      "capability": "issues.add-label",
+      "input": {
+        "repo": "acme/web",
+        "id": 104,
+        "label": "needs-triage"
+      },
+      "results": [
+        {
+          "output": null
+        }
+      ]
+    }
+  ],
+  "expected": {
+    "labeled": [
+      101,
+      104
+    ],
+    "failed": [
+      {
+        "id": 103,
+        "kind": "PermissionDenied"
+      }
+    ]
+  }
+}

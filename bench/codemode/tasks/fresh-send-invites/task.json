@@ -1,0 +1,107 @@
+{
+  "id": "fresh-send-invites",
+  "split": "fresh",
+  "kinds": [
+    "retry",
+    "write",
+    "partial-failure"
+  ],
+  "domain": "other",
+  "sx-expressible": true,
+  "description": "Invite `ana`, `ben`, `cho`, and `dev` to meeting `m-77`, in that order, with one invite call per person. When an invite fails with Unavailable, retry it up to 2 more times, waiting 1 second before each retry. Do not retry other failures. Return a record with `invited` and `rejected`, the people whose invite succeeded and the people whose invite failed, each in the order above.",
+  "cores": [],
+  "capabilities": [
+    {
+      "id": "calendar.invite",
+      "effect": "write",
+      "idempotent": true,
+      "input": "Record {meeting: String, person: String}",
+      "output": "Unit",
+      "description": "Invites a person to a meeting; inviting someone already invited changes nothing."
+    }
+  ],
+  "responses": [
+    {
+      "capability": "calendar.invite",
+      "input": {
+        "meeting": "m-77",
+        "person": "ana"
+      },
+      "results": [
+        {
+          "output": null
+        }
+      ]
+    },
+    {
+      "capability": "calendar.invite",
+      "input": {
+        "meeting": "m-77",
+        "person": "ben"
+      },
+      "results": [
+        {
+          "error": {
+            "kind": "Unavailable",
+            "message": "503"
+          }
+        },
+        {
+          "output": null
+        }
+      ]
+    },
+    {
+      "capability": "calendar.invite",
+      "input": {
+        "meeting": "m-77",
+        "person": "cho"
+      },
+      "results": [
+        {
+          "error": {
+            "kind": "PermissionDenied",
+            "message": "external guest"
+          }
+        }
+      ]
+    },
+    {
+      "capability": "calendar.invite",
+      "input": {
+        "meeting": "m-77",
+        "person": "dev"
+      },
+      "results": [
+        {
+          "error": {
+            "kind": "Unavailable",
+            "message": "503"
+          }
+        },
+        {
+          "error": {
+            "kind": "Unavailable",
+            "message": "503"
+          }
+        },
+        {
+          "error": {
+            "kind": "Unavailable",
+            "message": "503"
+          }
+        }
+      ]
+    }
+  ],
+  "expected": {
+    "invited": [
+      "ana",
+      "ben"
+    ],
+    "rejected": [
+      "cho",
+      "dev"
+    ]
+  }
+}

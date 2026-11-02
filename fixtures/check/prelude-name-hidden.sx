@@ -1,0 +1,3 @@
+; task: dev-failing-ci
+(let [count 3]
+  (count [1 2]))

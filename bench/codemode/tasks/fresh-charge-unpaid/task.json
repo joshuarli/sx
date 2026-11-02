@@ -1,0 +1,156 @@
+{
+  "id": "fresh-charge-unpaid",
+  "split": "fresh",
+  "kinds": [
+    "retry",
+    "write",
+    "partial-failure"
+  ],
+  "domain": "other",
+  "sx-expressible": true,
+  "description": "Charge every unpaid invoice, in the order they are listed. Make one charge call per invoice, with `key` set to `charge-` followed by the invoice id; the key makes repeating the call safe. When a charge fails with Timeout or Unavailable, retry it up to 3 more times, waiting 2, 4, then 8 seconds before each retry. A Conflict failure means the invoice was already paid and counts as paid. Any other failure, or running out of retries, counts as failed, and the failure is not retried. Return a record with `paid` (invoice ids) and `failed` (records with `id` and `kind`, the name of the last error's kind), each in listed order.",
+  "types": {
+    "Invoice": "Record {id: String, amount: Int}"
+  },
+  "cores": [],
+  "capabilities": [
+    {
+      "id": "billing.unpaid",
+      "effect": "read",
+      "input": "Record {}",
+      "output": "List<Invoice>",
+      "description": "Lists unpaid invoices with their amounts in cents."
+    },
+    {
+      "id": "payments.charge",
+      "effect": "write",
+      "idempotent": true,
+      "input": "Record {invoice: String, amount: Int, key: String}",
+      "output": "Unit",
+      "description": "Charges an invoice's amount to the customer's card; a repeated key charges nothing more."
+    }
+  ],
+  "responses": [
+    {
+      "capability": "billing.unpaid",
+      "input": {},
+      "results": [
+        {
+          "output": [
+            {
+              "id": "i1",
+              "amount": 500
+            },
+            {
+              "id": "i2",
+              "amount": 750
+            },
+            {
+              "id": "i3",
+              "amount": 1200
+            },
+            {
+              "id": "i4",
+              "amount": 90
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "capability": "payments.charge",
+      "input": {
+        "invoice": "i1",
+        "amount": 500,
+        "key": "charge-i1"
+      },
+      "results": [
+        {
+          "error": {
+            "kind": "Timeout",
+            "message": "timed out"
+          }
+        },
+        {
+          "output": null
+        }
+      ]
+    },
+    {
+      "capability": "payments.charge",
+      "input": {
+        "invoice": "i2",
+        "amount": 750,
+        "key": "charge-i2"
+      },
+      "results": [
+        {
+          "error": {
+            "kind": "Conflict",
+            "message": "already paid"
+          }
+        }
+      ]
+    },
+    {
+      "capability": "payments.charge",
+      "input": {
+        "invoice": "i3",
+        "amount": 1200,
+        "key": "charge-i3"
+      },
+      "results": [
+        {
+          "error": {
+            "kind": "Unavailable",
+            "message": "503"
+          }
+        },
+        {
+          "error": {
+            "kind": "Unavailable",
+            "message": "503"
+          }
+        },
+        {
+          "error": {
+            "kind": "Unavailable",
+            "message": "503"
+          }
+        },
+        {
+          "error": {
+            "kind": "Unavailable",
+            "message": "503"
+          }
+        }
+      ]
+    },
+    {
+      "capability": "payments.charge",
+      "input": {
+        "invoice": "i4",
+        "amount": 90,
+        "key": "charge-i4"
+      },
+      "results": [
+        {
+          "output": null
+        }
+      ]
+    }
+  ],
+  "expected": {
+    "paid": [
+      "i1",
+      "i2",
+      "i4"
+    ],
+    "failed": [
+      {
+        "id": "i3",
+        "kind": "Unavailable"
+      }
+    ]
+  }
+}
