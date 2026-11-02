@@ -14,8 +14,9 @@ A program is a list of definitions, one per step, followed by one expression, th
 (sort-by identity names)
 ```
 
-`(def name expr)` binds a value, `(defn name [params] body)` binds a function, and later forms see
-earlier names. `(def _ expr)` runs a step for its effect. A function cannot call itself. Keep each
+`(def name expr)` binds a value and `(defn name [params] body)` binds a function. `def`s run in order
+and see earlier names, and a `defn` may use any `defn` or `def` of the program, wherever it is written.
+`(def _ expr)` runs a step for its effect. A function cannot call itself. Keep each
 definition short: a step that grows long becomes two definitions or a helper `defn`.
 
 ## Values
