@@ -516,28 +516,71 @@ class _Checker:
             return [self.coerce(node, t, expected, span, joining=True)[0] for node, t, span in branches], expected
         target: Type = NEVER
         for _, t, span in branches:
-            if isinstance(self.resolve(t), Never):
-                continue
-            if isinstance(self.resolve(target), Never):
-                target = t
-                continue
             snapshot = dict(self.substitution)
-            if self.convert(t, target, joining=True)[0]:
+            joined = self.least_upper_bound(target, t)
+            if joined is None:
                 self.substitution = snapshot
-                continue
-            self.substitution = snapshot
-            if self.convert(target, t, joining=True)[0]:
-                self.substitution = snapshot
-                target = t
-                continue
-            self.substitution = snapshot
-            self.error(
-                "branch-mismatch", span,
-                f"The branches return different types: {show_type(self.zonk(target))} and {show_type(self.zonk(t))}.",
-                detail="Every branch of an if or match must return the same type.",
-            )
-            return [node for node, _, _ in branches], target
+                self.error(
+                    "branch-mismatch", span,
+                    "The branches return different types: "
+                    f"{show_type(self.zonk(target))} and {show_type(self.zonk(t))}.",
+                    detail="Every branch of an if or match must return the same type.",
+                )
+                return [node for node, _, _ in branches], target
+            target = joined
         return [self.coerce(node, t, target, span, joining=True)[0] for node, t, span in branches], target
+
+    def least_upper_bound(self, a: Type, b: Type) -> Type | None:
+        ra, rb = self.resolve(a), self.resolve(b)
+        if isinstance(ra, Never):
+            return b
+        if isinstance(rb, Never):
+            return a
+        snapshot = dict(self.substitution)
+        if self.unify(a, b):
+            return a
+        self.substitution = snapshot
+        match ra, rb:
+            case OptionType(), OptionType():
+                inner = self.least_upper_bound(ra.inner, rb.inner)
+                return None if inner is None else OptionType(inner)
+            case OptionType(), _ if not self.is_open(rb):
+                inner = self.least_upper_bound(ra.inner, rb)
+                return None if inner is None else OptionType(inner)
+            case _, OptionType() if not self.is_open(ra):
+                inner = self.least_upper_bound(ra, rb.inner)
+                return None if inner is None else OptionType(inner)
+            case RecordType(), RecordType() if ra.names == rb.names:
+                fields: list[tuple[str, Type]] = []
+                for name, field_type in ra.fields:
+                    other = rb.field(name)
+                    joined = None if other is None else self.least_upper_bound(field_type, other)
+                    if joined is None:
+                        return None
+                    fields.append((name, joined))
+                return RecordType(tuple(fields))
+            case ListType(), ListType():
+                element = self.least_upper_bound(ra.element, rb.element)
+                return None if element is None else ListType(element)
+            case MapType(), MapType():
+                value = self.least_upper_bound(ra.value, rb.value)
+                return None if value is None else MapType(value)
+            case TupleType(), TupleType() if len(ra.items) == len(rb.items):
+                items: list[Type] = []
+                for left, right in zip(ra.items, rb.items, strict=True):
+                    joined = self.least_upper_bound(left, right)
+                    if joined is None:
+                        return None
+                    items.append(joined)
+                return TupleType(tuple(items))
+            case EnumType(), Primitive() if rb == STRING and self.nullary(ra):
+                return STRING
+            case Primitive(), EnumType() if ra == STRING and self.nullary(rb):
+                return STRING
+        return None
+
+    def nullary(self, t: EnumType) -> bool:
+        return all(payload is None for _, payload in t.variants)
 
     def is_sort_key(self, t: Type) -> bool:
         t = self.resolve(t)
