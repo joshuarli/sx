@@ -42,7 +42,7 @@ fn every_core_vector_holds_through_the_kernel_values_and_signatures() {
             let shown = || dumps(vector, Layout::Spaced).unwrap_or_default();
             match (vector.get("result"), outcome) {
                 (Some(expected), Ok(value)) => {
-                    let actual = encode(&value, &function.output);
+                    let actual = encode(&value);
                     if !python_equal(&actual, expected) {
                         failures.push(format!("{}: got {}", shown(), dumps(&actual, Layout::Spaced).unwrap_or_default()));
                     }

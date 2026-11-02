@@ -44,7 +44,7 @@ fn every_decimal_vector_holds_through_the_kernel() {
         };
         match (vector.get("result"), vector.get("fails"), Cores.apply(name, &values)) {
             (Some(expected), None, Ok(value)) => {
-                let actual = encode(&value, &function.output);
+                let actual = encode(&value);
                 if !python_equal(&actual, expected) {
                     failures.push(format!("{}: got {}", shown(), dumps(&actual, Layout::Spaced).unwrap_or_default()));
                 }
@@ -91,5 +91,5 @@ fn a_decimal_json_number_and_a_malformed_string_are_decode_errors_with_their_pat
     let error = decode(&malformed, &t, "$").expect_err("an exponent is not a decimal literal");
     assert!(error.to_string().starts_with("$[1]: expected decimal.Decimal, found a string that is not valid"), "{error}");
     let canonical = decode(&parse("[\"1.50\", \"-0\"]").expect("json"), &t, "$").expect("both decode");
-    assert_eq!(dumps(&encode(&canonical, &t), Layout::Spaced).expect("json"), "[\"1.5\", \"0\"]");
+    assert_eq!(dumps(&encode(&canonical), Layout::Spaced).expect("json"), "[\"1.5\", \"0\"]");
 }

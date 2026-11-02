@@ -3,7 +3,7 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::Arc;
 
 use crate::json::{Json, dumps_str, python_float_repr, shortest_digits};
-use crate::types::{CALL_ERROR_KIND_NAME, CallErrorKind, Primitive, Type, call_error, show_type};
+use crate::types::{CALL_ERROR_KIND_NAME, CallErrorKind, Primitive, Type, show_type};
 
 pub const INT_MIN: i64 = i64::MIN;
 pub const INT_MAX: i64 = i64::MAX;
@@ -386,7 +386,7 @@ pub fn decode(value: &Json, t: &Type, path: &str) -> Result<Value, DecodeError> 
     }
 }
 
-pub fn encode(value: &Value, t: &Type) -> Json {
+pub fn encode(value: &Value) -> Json {
     match value {
         Value::Bool(b) => Json::Bool(*b),
         Value::Int(n) => Json::Int(*n),
@@ -394,69 +394,18 @@ pub fn encode(value: &Value, t: &Type) -> Json {
         Value::String(s) => Json::String(s.to_string()),
         Value::Bytes(b) => Json::String(base64_encode(b)),
         Value::Unit | Value::None => Json::Null,
-        Value::List(items) => {
-            let element = match t {
-                Type::List(element) => element,
-                _ => t,
-            };
-            Json::Array(items.iter().map(|item| encode(item, element)).collect())
+        Value::List(items) | Value::Tuple(items) => Json::Array(items.iter().map(encode).collect()),
+        Value::Some(inner) => encode(inner),
+        Value::Ok(inner) => Json::object([("ok", encode(inner))]),
+        Value::Err(inner) => Json::object([("err", encode(inner))]),
+        Value::Map(map) => Json::Object(map.entries().iter().map(|(k, v)| (k.to_string(), encode(v))).collect()),
+        Value::Record(record) => {
+            Json::Object(record.fields().iter().map(|(name, v)| (name.to_string(), encode(v))).collect())
         }
-        Value::Tuple(items) => Json::Array(
-            items
-                .iter()
-                .enumerate()
-                .map(|(i, item)| match t {
-                    Type::Tuple(types) => encode(item, types.get(i).unwrap_or(t)),
-                    _ => encode(item, t),
-                })
-                .collect(),
-        ),
-        Value::Some(inner) => match t {
-            Type::Option(inner_type) => encode(inner, inner_type),
-            _ => encode(inner, t),
-        },
-        Value::Ok(inner) => match t {
-            Type::Result(ok, _) => Json::object([("ok", encode(inner, ok))]),
-            _ => Json::object([("ok", encode(inner, t))]),
-        },
-        Value::Err(inner) => match t {
-            Type::Result(_, err) => Json::object([("err", encode(inner, err))]),
-            _ => Json::object([("err", encode(inner, &call_error()))]),
-        },
-        Value::Map(map) => {
-            let value_type = match t {
-                Type::Map(value_type) => value_type,
-                _ => t,
-            };
-            Json::Object(map.entries().iter().map(|(k, v)| (k.to_string(), encode(v, value_type))).collect())
-        }
-        Value::Record(record) => Json::Object(
-            record
-                .fields()
-                .iter()
-                .map(|(name, v)| {
-                    let field_type = match t {
-                        Type::Record(rt) => rt.field(name).unwrap_or(t),
-                        _ => t,
-                    };
-                    (name.to_string(), encode(v, field_type))
-                })
-                .collect(),
-        ),
         Value::Variant(variant) => match &variant.payload {
             None => Json::String(variant.variant.to_string()),
             Some(payload) => {
-                let payload_type = match t {
-                    Type::Enum(e) => match e.variant(&variant.variant) {
-                        Some(Some(p)) => p,
-                        _ => t,
-                    },
-                    _ => t,
-                };
-                Json::object([
-                    ("tag", Json::String(variant.variant.to_string())),
-                    ("value", encode(payload, payload_type)),
-                ])
+                Json::object([("tag", Json::String(variant.variant.to_string())), ("value", encode(payload))])
             }
         },
     }

@@ -54,7 +54,7 @@ fn perform(
     };
     match performed {
         None => failed(format!("{capability} has no native implementation")),
-        Some(Ok(output)) => Response::Output(encode(&output, &signature.output)),
+        Some(Ok(output)) => Response::Output(encode(&output)),
         Some(Err(failure)) => Response::Refusal { kind: failure.kind.name().to_string(), message: failure.message },
     }
 }

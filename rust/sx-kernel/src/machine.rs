@@ -521,7 +521,7 @@ impl<'p> Machine<'p> {
             return Err(internal("The program finished without a result.", None));
         };
         self.check_size(&result, Some(self.program.body.span))?;
-        let json = encode(&result, &self.program.result);
+        let json = encode(&result);
         Ok(Outcome::Completed { value: result, json })
     }
 
@@ -1076,7 +1076,7 @@ impl<'p> Machine<'p> {
                     return Err(internal(format!("{capability} has no signature."), Some(span)));
                 };
                 let argument = plain(single(values)?)?;
-                let input = encode(&argument, &signature.input);
+                let input = encode(&argument);
                 let (request_id, order) = self.next_id(id);
                 let fiber = &mut self.fibers[id];
                 fiber.waiting = Some(Waiting {

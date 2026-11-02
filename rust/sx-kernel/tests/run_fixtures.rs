@@ -197,7 +197,7 @@ fn every_fixture_value_decodes_and_encodes_as_python_does() {
         let t = read_type(get("type"), get("enums")).expect("exported type reads");
         let value = get("value");
         let actual = match decode(value, &t, "$") {
-            Ok(decoded) => Ok(shown(&encode(&decoded, &t))),
+            Ok(decoded) => Ok(shown(&encode(&decoded))),
             Err(error) => Err(error.to_string()),
         };
         let expected = match (get("decoded"), get("error")) {

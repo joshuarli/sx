@@ -33,7 +33,6 @@ fn locked<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 struct Served {
     capability: Capability,
     input: Type,
-    output: Type,
     shape: Shape,
     tool: Json,
 }
@@ -131,7 +130,6 @@ impl Server {
                 Served {
                     capability: capability.clone(),
                     input: capability.input.clone(),
-                    output: capability.output.clone(),
                     shape: exported.shape,
                     tool: exported.tool,
                 },
@@ -176,7 +174,7 @@ impl Server {
         };
         match perform(&self.declared, id, &scope, &value) {
             None => Err(Failure::new(CallErrorKind::Failed, format!("{id} has no native implementation"))),
-            Some(performed) => performed.map(|output| encode(&output, &served.output)),
+            Some(performed) => performed.map(|output| encode(&output)),
         }
     }
 

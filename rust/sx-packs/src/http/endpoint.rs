@@ -376,8 +376,7 @@ impl Endpoint {
             .map(|(name, _)| field(input, name).map(|v| (Arc::from(name.as_str()), v.clone())))
             .collect::<Option<_>>()
             .ok_or_else(|| self.mismatch())?;
-        let shape = Type::Record(RecordType::plain(self.body.clone()));
-        let json = encode(&Value::Record(RecordValue::new(fields)), &shape);
+        let json = encode(&Value::Record(RecordValue::new(fields)));
         let text = dumps(&json, Layout::Spaced).map_err(|e| Failure::new(CallErrorKind::Failed, e.0))?;
         Ok(Some(text.into_bytes()))
     }
