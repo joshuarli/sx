@@ -707,13 +707,17 @@ class _Checker:
                     self.check(f.value, None, scope)
                     continue
                 fields.append((f.key.name, self.check(f.value, wanted, scope)[0]))
-            for name, _ in hint.fields:
-                if name not in given:
-                    where = f"The input to {owner}" if owner is not None else "This record"
-                    self.error(
-                        "missing-field", span, f"{where} is missing the field :{name}.",
-                        detail=f"Expected: {show_type(self.zonk(hint))}",
-                    )
+            for name, field_type in hint.fields:
+                if name in given:
+                    continue
+                if isinstance(self.resolve(field_type), OptionType):
+                    fields.append((name, ir.Literal(NONE_VALUE, span)))
+                    continue
+                where = f"The input to {owner}" if owner is not None else "This record"
+                self.error(
+                    "missing-field", span, f"{where} is missing the field :{name}.",
+                    detail=f"Expected: {show_type(self.zonk(hint))}",
+                )
             order = [name for name, _ in hint.fields]
             fields.sort(key=lambda item: order.index(item[0]))
             return self.coerce(ir.MakeRecord(tuple(fields), span), hint, expected, span)

@@ -1,0 +1,4 @@
+; task: dev-events-pages
+(let [first-page (call audit.page {})
+      second-page (call audit.page {:cursor "c1"})]
+  [(get first-page :events) (get second-page :events)])

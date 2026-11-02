@@ -1,2 +1,2 @@
-; task: dev-events-pages
-(call audit.page {})
+; task: dev-failing-ci
+(call catalog.list {})

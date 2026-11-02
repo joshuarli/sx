@@ -1,0 +1,93 @@
+{
+  "description": "A record literal for a known record type may omit its optional fields, which are none.",
+  "program": "(let [_ (call rows.add {:name \"a\"}) _ (call rows.add {:name \"b\" :note \"n\"})] (count (call rows.list {})))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list",
+    "rows.add",
+    "checks.list",
+    "checks.add"
+  ],
+  "responses": [
+    {
+      "capability": "rows.add",
+      "input": {
+        "name": "a",
+        "note": null,
+        "hits": null
+      },
+      "results": [
+        {
+          "output": null
+        }
+      ]
+    },
+    {
+      "capability": "rows.add",
+      "input": {
+        "name": "b",
+        "note": "n",
+        "hits": null
+      },
+      "results": [
+        {
+          "output": null
+        }
+      ]
+    },
+    {
+      "capability": "rows.list",
+      "input": {},
+      "results": [
+        {
+          "output": []
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": 0
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "rows.add",
+      "input": {
+        "name": "a",
+        "note": null,
+        "hits": null
+      }
+    },
+    {
+      "response": "r:1",
+      "output": null
+    },
+    {
+      "request": "r:2",
+      "capability": "rows.add",
+      "input": {
+        "name": "b",
+        "note": "n",
+        "hits": null
+      }
+    },
+    {
+      "response": "r:2",
+      "output": null
+    },
+    {
+      "request": "r:3",
+      "capability": "rows.list",
+      "input": {}
+    },
+    {
+      "response": "r:3",
+      "output": []
+    }
+  ]
+}

@@ -1,5 +1,5 @@
-error[missing-field] 2:18-2:20
-  (call audit.page {})
-                   ^^
-  The input to audit.page is missing the field :cursor.
-  Expected: Record {cursor: Option<String>}
+error[missing-field] 2:20-2:22
+  (call catalog.list {})
+                     ^^
+  The input to catalog.list is missing the field :tags.
+  Expected: Record {tags: List<String>}

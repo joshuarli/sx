@@ -62,6 +62,11 @@ value of type `T` is accepted and becomes `(some value)`. So `(if empty? none na
 `{:branch name}` and one returning `{:branch none}` join to `Record {branch: Option<String>}`.
 Promotion never applies when `T` is itself an `Option`.
 
+A record literal checked against a known record type, such as a capability's input or a
+record field of that type, may omit any field whose type is `Option<T>`. The omitted field is `none`, so
+`(call audit.page {})` sends `{"cursor": null}`. Omitting a field that is not optional is a
+`missing-field` error. A record literal with no known type has exactly the fields it writes.
+
 There is one more conversion, and only where branches join. A core enum whose variants all carry
 no value joins with `String` as a `String`, and the enum side becomes its variant's name. This
 holds for the branches of `if`, `match`, and `cond`, and field by field, element by element, and
