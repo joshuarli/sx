@@ -1,0 +1,21 @@
+{
+  "capabilities": [
+    {
+      "id": "canary.set-weight",
+      "http": {"method": "PUT", "url": "{{mesh_origin}}/services/{name}/weight", "query": []},
+      "input": "Record {name: String, percent: Int}",
+      "output": "Record open {percent: Int}",
+      "effect": "write",
+      "idempotent": true,
+      "description": "Sets the percentage of a service's traffic sent to its new version."
+    },
+    {
+      "id": "canary.health",
+      "http": {"method": "GET", "url": "{{mesh_origin}}/services/{name}/health", "query": []},
+      "input": "Record {name: String}",
+      "output": "Record open {state: String}",
+      "effect": "read",
+      "description": "Returns the health state of a service's new version: healthy, degraded, or starting."
+    }
+  ]
+}

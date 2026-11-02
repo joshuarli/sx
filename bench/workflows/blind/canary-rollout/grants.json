@@ -1,0 +1,4 @@
+{
+  "canary.set-weight": {"origins": ["{{mesh_origin}}"], "methods": ["PUT"]},
+  "canary.health": {"origins": ["{{mesh_origin}}"], "methods": ["GET"]}
+}

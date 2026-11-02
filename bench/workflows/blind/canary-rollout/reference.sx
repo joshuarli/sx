@@ -1,0 +1,33 @@
+(let [set-weight (fn [name percent]
+                   (retry {:delays [100ms 100ms] :on [RateLimited]}
+                     (call canary.set-weight {:name name :percent percent})))
+      probe (fn [name]
+              (loop {:max 12} [n 1 good 0 bad 0]
+                (let [state (get (call canary.health {:name name}) :state)
+                      g (if (= state "healthy") (+ good 1) 0)
+                      b (if (= state "degraded") (+ bad 1) 0)]
+                  (cond
+                    (>= g 3) {:result "passed" :probes n}
+                    (>= b 2) {:result "degraded" :probes n}
+                    (= n 12) {:result "timeout" :probes n}
+                    :else (let [_ (sleep 50ms)] (recur (+ n 1) g b))))))
+      promote (fn [name]
+                (let [stages (loop {:max 5} [todo [5 25 50 100] done []]
+                               (if (= (count todo) 0)
+                                 done
+                                 (let [percent (first todo)
+                                       _ (set-weight name percent)
+                                       r (probe name)
+                                       entry {:percent percent :result (get r :result) :probes (get r :probes)}]
+                                   (if (= (get r :result) "passed")
+                                     (recur (rest todo) (concat done [entry]))
+                                     (concat done [entry])))))
+                      passed (= (get (nth stages (- (count stages) 1)) :result) "passed")
+                      _ (if passed 0 (get (set-weight name 0) :percent))]
+                  {:service name
+                   :outcome (if passed "promoted" "rolled-back")
+                   :stages stages
+                   :final_weight (if passed 100 0)}))
+      services (map promote ["checkout" "search" "billing"])
+      outcome (fn [o] (count (filter (fn [s] (= (get s :outcome) o)) services)))]
+  {:services services :promoted (outcome "promoted") :rolled_back (outcome "rolled-back")})
