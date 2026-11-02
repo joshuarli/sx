@@ -307,6 +307,9 @@ A shorter guide does not help: after the gate, the `minimal` level on the develo
 retired sets scored 37 of 41 at first attempt against 38 of 41 for `standard`, but cost more
 tokens per solved task (4,773 against 4,602 on development, 7,996 against 6,429 on the retired
 set), because Muse Spark reasons more when the guide says less. `standard` stays.
+Instead, `standard` was tightened from 2,187 to 1,745 tokens by dropping rules for habits Sx now
+accepts, which models follow without being told. On the development and retired sets it scored 40
+of 41 at first attempt, against 38 of 41 before, at about 5 percent fewer tokens per solved task.
 
 **Data model before the Rust port.** `Map`, `Float`, `Bytes`, and open record declarations
 landed ahead of the roadmap's campaign 2, so the port implements one language instead of
