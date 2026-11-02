@@ -572,6 +572,11 @@ fn foreign_keys_are_enforced_and_attach_and_vacuum_into_cannot_leave_the_grant()
     let failure = refused(run_execute(&world, &g, &db, "INSERT INTO c VALUES (1)"));
     assert_eq!(failure.kind, CallErrorKind::Conflict, "{failure}");
     let outside = s.outside_db("stolen.db");
+    let failure = refused(run_execute(&world, &g, &db, "SELECT load_extension('/nonexistent/extension')"));
+    assert_eq!(failure.kind, CallErrorKind::Failed, "{failure}");
+    assert!(failure.message.contains("not authorized"), "{failure}");
+    let failure = refused(run_execute(&world, &g, &db, "CREATE TABLE loader AS SELECT load_extension('/nonexistent/extension') AS x"));
+    assert!(failure.message.contains("not authorized"), "{failure}");
     for (sql, expected) in [
         (format!("ATTACH DATABASE '{outside}' AS other; CREATE TABLE other.t (a)"), "too many attached databases"),
         (format!("VACUUM INTO '{outside}'"), "cannot VACUUM from within a transaction"),
