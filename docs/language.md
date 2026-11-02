@@ -70,7 +70,9 @@ Programs have no type annotations. The checker infers types bidirectionally from
 bindings, prelude and core signatures, capability signatures, and the expected type of each
 argument position. A lambda parameter gets its type from the position the lambda fills. `none`,
 `[]`, `(ok x)`, and `(err e)` take their missing type parameters from the expected type. The
-checker rejects any expression whose type it cannot resolve.
+checker rejects an expression whose type it cannot resolve where the operation needs it: reading
+a field, comparing, or sorting. A type left unresolved in the program's result, such as the
+element type of an empty list, is harmless and allowed.
 
 Equality is structural on every type. Ordering with `<`, `<=`, `>`, and `>=` is defined on `Int`
 and on `String`, where strings compare lexicographically by Unicode code point. Sort keys, used by
@@ -244,7 +246,7 @@ as in Clojure.
 | `map` | `(T -> U) List<T> -> List<U>` |
 | `filter` | `(T -> Bool) List<T> -> List<T>` |
 | `keep` | `(T -> Option<U>) List<T> -> List<U>`, the `some` values in order |
-| `any? all?` | `(T -> Bool) List<T> -> Bool` |
+| `any? all?` | `(T -> Bool) List<T> -> Bool`. Each stops at the first element that decides the answer. |
 | `reduce` | `(A T -> A) A List<T> -> A` |
 | `sort-by` | `(T -> K) List<T> -> List<T>`, stable and ascending. `K` is a [sort key](#types). |
 | `distinct-by` | `(T -> K) List<T> -> List<T>`, keeps the first element for each key |
@@ -288,11 +290,15 @@ outcomes.
 - `Suspended(requests, continuation)`: the program needs capability results.
 - `Failed(error)`: the program stopped. See [Failures](#failures).
 
-Each request has an ID derived from its position in the program and from its index in every
-enclosing repetition: the `par-map` element, the `retry` attempt, the `wait-until` round, and the
-`loop` iteration. IDs never depend on completion order, and no two requests in one run share
-one. One suspension holds every request that is
-ready: one per active `par` branch, and up to `limit` for `par-map`.
+Evaluation runs in fibers. The program starts in one fiber, and each `par` branch and each active
+`par-map` element runs in its own child fiber. A fiber's path lists the branch or element index at
+each level, so the second element of a `par-map` inside the first `par` branch has path `0.1`.
+Within a fiber, evaluation is sequential.
+
+A request's ID is `r`, the fiber path, a colon, and the request's sequence number in that fiber:
+`r:1`, `r.0:2`, `r.0.1:1`. IDs never depend on completion order, and no two requests in one run
+share one. A suspension holds every request that is ready, up to the `concurrency` budget. Any
+others wait for the next suspension, lowest IDs first.
 
 The host resumes with a response for every request in the suspension. Each response is either an
 output value or a `CallError`. The host may run the requests concurrently and in any order. The
@@ -335,8 +341,10 @@ never on the message. `CallErrorKind` is a closed kernel enum:
 
 The host maps each failure to exactly one kind. A failure that fits no other kind is `Failed`.
 
-When a `par` branch fails, the machine waits for the current suspension's responses, then
-reports the failure with the lowest request ID. Effects that already ran are not rolled back.
+When a branch of `par` or `par-map` fails, the form fails with the failure of the lowest-numbered
+failed branch, once every fiber has run as far as it can without new responses. Its other branches
+stop. The host still answers their outstanding requests, and the machine discards those answers.
+Effects that already ran are not rolled back.
 
 ## Inputs
 
@@ -426,8 +434,8 @@ The checker's codes are:
 | Group | Codes |
 | --- | --- |
 | Reading | `unclosed`, `unexpected-close`, `bad-literal`, `bad-symbol`, `int-range`, `bad-escape`, `record-key`, `record-missing-value`, `duplicate-field`, `empty-program`, `multiple-expressions` |
-| Names | `unknown-name`, `unknown-function`, `unknown-capability`, `unknown-field`, `unknown-variant` |
-| Calls | `arity`, `type-mismatch`, `unresolved-type`, `not-a-record` |
+| Names | `unknown-name`, `unknown-function`, `unknown-capability`, `unknown-field`, `missing-field`, `unknown-variant` |
+| Calls | `arity`, `type-mismatch`, `unresolved-type`, `not-a-record`, `no-encoding` |
 | Forms | `condition-not-bool`, `branch-mismatch`, `fn-position`, `bad-pattern`, `bad-option`, `recur-position`, `recur-arity` |
 | Match | `non-exhaustive`, `unreachable-clause` |
 | Effects | `unauthorized`, `parallel-write`, `par-map-limit`, `retry-write`, `wait-write` |
@@ -469,6 +477,7 @@ The host sets every budget. A program cannot read or raise one.
 | `concurrency` | Requests in one suspension. A larger `par-map` limit is rejected. |
 | `value-size` | Size of any intermediate or final value |
 | `applications` | Function argument applications |
+| `instantiations` | Local function bodies the checker types, one per call site |
 
 The host enforces wall-clock time outside the machine.
 

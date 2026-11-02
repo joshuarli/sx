@@ -759,7 +759,7 @@ class _Checker:
             steps.append(("value", binder, value_ir, pattern.span))
         body_nodes = node.items[2:]
         if not body_nodes:
-            self.error("let-body", span, "A let needs a body expression after its bindings.", help="let")
+            self.error("arity", span, "A let needs a body expression after its bindings.", help="let")
             return self.placeholder(span)
         if len(body_nodes) > 1:
             self.habit(
@@ -786,7 +786,7 @@ class _Checker:
             self.error("bad-pattern", node.span, "fn needs a parameter vector and a body: (fn [x] body).", help="fn")
             return False
         if len(node.items) > 3:
-            self.error("let-body", node.items[3].span, "A fn has one body expression.", help="fn")
+            self.error("arity", node.items[3].span, "A fn has one body expression.", help="fn")
             return False
         return True
 
