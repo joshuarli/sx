@@ -164,8 +164,8 @@ attempts. Sx still spends 1.8 times TypeScript's output tokens and 5 times its p
 its 24 answers ran only because the reader inferred closers from indentation. The third campaign,
 Phases 13 and 14, cut Sx's cost 12% on the development set, but on a second blind set Sx still cost
 2.4 times TypeScript per solved task, so its cost gate failed. The owner then chose the fourth
-campaign, Phases 15 to 17, Sx as code mode for any MCP client and a benchmark where effects matter,
-which is planned and not started.
+campaign, Phases 15 to 17, Sx as code mode for any MCP client and a benchmark where effects matter.
+Phase 15 has passed its gate; Phases 16 and 17 have not started.
 
 **The Python prototype is frozen.** `src/sx` and the Python cores are frozen as of commit
 `15b6ed6`, the parent of the commit that records this, because Rust passed its gates. The prototype
@@ -788,7 +788,7 @@ within 10 points.
 
 ### The fourth campaign: code mode and effects
 
-Planned, not started. The owner chose it after Phase 14 and accepted every recommendation in the
+Phase 15 passed; Phases 16 and 17 not started. The owner chose it after Phase 14 and accepted every recommendation in the
 handoff. Two questions no campaign has answered: does Sx work as the code mode of a real agent, and
 does its static authority prevent harmful effects that JavaScript code mode lets happen? Cost is not a
 goal here; it is reported.
@@ -831,14 +831,49 @@ What Sx can claim and TypeScript cannot, which this campaign must measure rather
   no symlink traversal, whole-component containment, and an error table), and a way to write JSON
   text from a value. Dates, bounded concurrent writes, and parallel read-only commands wait until a
   task needs them.
-- **In pi:** `pi mcp add sx-code -l -- sx mcp code --declarations D --grants G --policy P` in a project
-  under `.work`, with `direct` exposure, so a model sees `mcp__sx-code__check` and `mcp__sx-code__run`.
-  Whether a project can be trusted without the interactive prompt is checked first; if not, trusting
-  the benchmark projects once is an owner step.
+- **In pi:** `pi mcp add sx-code -l --exposure direct -- sx mcp code --declarations D --grants G --policy P`
+  in a project under `.work`, so a model sees `mcp__sx_code__check` and `mcp__sx_code__run` (pi replaces
+  every character outside `[A-Za-z0-9_]` in a tool name with `_`). `pi -p --approve` trusts the project
+  for one run, so no owner step is needed, and `-ne -e builtin:mcp` keeps only pi's MCP support, because
+  MCP is a built-in extension that `--no-extensions` alone turns off.
 - **Gate:** an MCP client test drives `check` and `run` over stdio against native and proxied tools,
   including refusals by the policy that leave the sandbox untouched; a pi session in print mode solves
   a small task through `sx mcp code` end to end; the new `fs` operations pass scope and error-table
   tests like the existing ones; all existing gates pass.
+
+**Phase 15 result: passed.** `sx mcp code` serves `check` and `run`. The guide is listed once, in
+`run`'s description, because both copies cost every turn about 13 KB for the fs grants. The approval
+policy is `{"capabilities", "computed_inputs", "max_write_sites"}`, validated against the declarations
+at startup, and its refusals are `capability-not-allowed`, `computed-input-not-allowed`, and
+`too-many-write-sites`, each naming the call site. `fs.make-directory` (with parents, idempotent),
+`fs.move` (never replaces: `Conflict`, not idempotent), and `fs.delete` (a file, a link, or an empty
+directory, never recursive) follow the write rules, and already-exists joined the error table as
+`Conflict`. The JSON writer is the prelude function `(to-json x) -> String`, in Rust and Lean, with keys
+sorted by code point so equal values give equal text, and a type with no JSON encoding is the check
+error `no-encoding`. Evidence:
+
+- `mcp_code` (16 tests over stdio), `fs_pack` (18), and the whole Rust workspace pass, with clippy clean;
+  the fs tests also pass on Linux in Docker as an unprivileged user, which exercises `renameat2`.
+- Lean agrees on all 220 accepted run fixtures, 11 of them new; the axioms check, the fuzzer's fast slice,
+  the Python fixture tests, and the 36 repomod parity tests pass.
+- Muse Spark at medium thinking, in pi with only `mcp__sx_code__*`, sorted tagged notes into directories
+  with `fs.make-directory` and `fs.move` and wrote the index, correctly, in 8 turns and 7 tool calls for
+  $0.0022 (56,343 of the input tokens were cache reads). On the way the policy refused one program before
+  any effect, because the gate's policy left `fs.list` out of `computed_inputs`, and two programs did
+  not check because they called `re.find` and `text.split`, cores the gate did not declare. The model
+  read in one run and then wrote with literal paths in a second, so `check` showed every write's verdict
+  before it ran.
+
+Open after Phase 15:
+
+- **Partly literal inputs.** The checker judges a call's scope only when its whole input is literal, so
+  `fs.move` with a literal `to` and a computed `from` is checked per request. Per-field judging is a
+  kernel change; Phase 16 shows whether it matters.
+- **Record key order in run results.** Rust's `--format json` result keeps a record literal's field
+  order, Lean sorts, and docs/language.md says declaration order. `to-json` sorts and does not depend on
+  this; the run result encoding should be settled to one rule.
+- **A non-finite float in Lean's encoder** renders as `"NaN"` where Rust fails. No accepted program can
+  produce one.
 
 #### Phase 16: The effects benchmark
 
@@ -857,7 +892,7 @@ attempt's effects stay. Per arm and workflow it reports correctness, effects tha
 trials with any violation, effects performed by attempts before the first correct one, the share of
 violating programs stopped before their first effect (by Sx's checker and approver), the tool calls
 and turns a session took, and cost. Both arms run as pi sessions in print mode with no built-in tools:
-the Sx arm with only `mcp__sx-code__*`, and the JavaScript arm with only pi's `codemode` over the same
+the Sx arm with only `mcp__sx_code__*`, and the JavaScript arm with only pi's `codemode` over the same
 tools served by `sx mcp serve` with the same grants. A session may call its tool as often as it likes,
 so repairs happen inside the session, and every run's effects count.
 
