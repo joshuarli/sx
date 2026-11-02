@@ -12,6 +12,7 @@ use crate::git::{self, Checkout, Head};
 use crate::github::{self, Check, CiState, UpstreamState};
 use crate::semver::{self, Version};
 use crate::text::{self, TextError};
+use crate::yaml;
 
 const VECTORS_TEST: &str = "tests/test_core_vectors.py::test_committed_vectors_match_the_python_core";
 const STATUS_PARITY: &str =
@@ -509,8 +510,53 @@ pub fn decimal_core() -> Core {
     }
 }
 
+pub fn yaml_core() -> Core {
+    let document = "\"app:\\n  replicas: 3 # scale\\n  tags:\\n  - a\\n  - b\\n\"";
+    let functions = vec![
+        function(
+            "yaml.get",
+            vec![STRING, list(STRING)],
+            option(STRING),
+            "Reads the scalar at a path of mapping keys and sequence indexes, or none when the path is absent. A \
+             null or empty value reads as an empty string. A path that names a mapping or sequence, and text \
+             outside the supported YAML subset, stop the program.",
+            (&format!("(yaml.get {document} [\"app\" \"replicas\"])"), "(some \"3\")"),
+        ),
+        function(
+            "yaml.set",
+            vec![STRING, list(STRING), STRING],
+            STRING,
+            "Replaces the scalar at a path and keeps every other byte, comments and indentation included. The \
+             value is written in the old scalar's quoting style, and quoted when plain text would change its \
+             meaning. An absent path, a path that names a mapping or sequence, and text outside the supported \
+             YAML subset stop the program.",
+            (&format!("(yaml.set {document} [\"app\" \"replicas\"] \"5\")"), "\"app:\\n  replicas: 5 # scale\\n  tags:\\n  - a\\n  - b\\n\""),
+        ),
+        function(
+            "yaml.keys",
+            vec![STRING, list(STRING)],
+            list(STRING),
+            "Lists the keys of the mapping at a path in document order, or the indexes of a sequence as strings. \
+             An absent or null path has none. A scalar, and text outside the supported YAML subset, stop the program.",
+            (&format!("(yaml.keys {document} [\"app\"])"), "[\"replicas\" \"tags\"]"),
+        ),
+    ];
+    Core {
+        id: "yaml".to_string(),
+        version: "0.1.0".to_string(),
+        functions,
+        types: Vec::new(),
+        evidence: conformance(&[
+            "rust/sx-cores/tests/yaml_golden.rs::every_supported_golden_case_reads_and_edits_as_expected",
+            "rust/sx-cores/tests/yaml_golden.rs::every_refused_golden_case_fails_with_its_reason",
+            "rust/sx-cores/tests/yaml_golden.rs::every_yaml_example_produces_its_documented_result",
+            "rust/sx-cores/tests/yaml_properties.rs::editing_a_scalar_changes_only_that_scalar",
+        ]),
+    }
+}
+
 pub fn cores() -> Vec<Core> {
-    vec![text_core(), semver_core(), git_core(), github_core(), decimal_core()]
+    vec![text_core(), semver_core(), git_core(), github_core(), decimal_core(), yaml_core()]
 }
 
 pub fn core(id: &str) -> Option<Core> {
@@ -759,6 +805,22 @@ fn decimal_call(function: &str, args: &[Value]) -> Option<Result<Value, CoreErro
     Some(value)
 }
 
+fn yaml_call(function: &str, args: &[Value]) -> Option<Result<Value, CoreError>> {
+    let outcome = match (function, args) {
+        ("yaml.get", [text, path]) => {
+            let found = yaml::get(string_of(text)?, &strings_of(path)?);
+            found.map(|found| optional_string(found.as_deref()))
+        }
+        ("yaml.set", [text, path, value]) => {
+            let edited = yaml::set(string_of(text)?, &strings_of(path)?, string_of(value)?);
+            edited.map(|edited| Value::string(&edited))
+        }
+        ("yaml.keys", [text, path]) => yaml::keys(string_of(text)?, &strings_of(path)?).map(string_list),
+        _ => return Some(Err(CoreError::Unimplemented)),
+    };
+    Some(outcome.map_err(|error| CoreError::Arithmetic(error.to_string())))
+}
+
 pub struct Cores;
 
 impl Cores {
@@ -810,6 +872,7 @@ impl Cores {
                 Value::string(github::upstream_state_name(upstream_state_of(state)?))
             }
             (function, args) if function.starts_with("decimal.") => return decimal_call(function, args),
+            (function, args) if function.starts_with("yaml.") => return yaml_call(function, args),
             _ => return Some(Err(CoreError::Unimplemented)),
         };
         Some(Ok(value))

@@ -1,0 +1,13 @@
+[
+  {"keys": ["on"], "is": ["push", "pull_request"]},
+  {"get": ["on", "push"], "is": ""},
+  {"keys": ["jobs", "test", "steps"], "is": ["0", "1", "2"]},
+  {"get": ["jobs", "test", "steps", "0", "uses"], "is": "actions/checkout@v4"},
+  {"get": ["jobs", "test", "steps", "1", "name"], "is": "Build: release"},
+  {"get": ["jobs", "test", "steps", "1", "env", "RUST_LOG"], "is": "info"},
+  {"get": ["jobs", "test", "steps", "2", "run"], "is": "cargo test"},
+  {"set": ["jobs", "test", "steps", "0", "uses"], "value": "actions/checkout@v5", "replace": ["checkout@v4", "checkout@v5"]},
+  {"set": ["jobs", "test", "steps", "2", "run"], "value": "cargo test --all", "replace": ["run : cargo test   # all", "run : cargo test --all   # all"]},
+  {"set": ["jobs", "test", "steps", "1", "env", "RUST_LOG"], "value": "debug", "replace": ["RUST_LOG: info", "RUST_LOG: debug"]},
+  {"set": ["on", "push"], "value": "enabled", "replace": ["  push:\n", "  push: enabled\n"]}
+]

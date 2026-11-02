@@ -62,7 +62,7 @@ Each command takes `--format json`.
 
 `rust/` holds the same command line as a Rust binary, `sx`, with the same options, exit codes, and
 output as the Python one. Build it with `cargo build --release --manifest-path rust/Cargo.toml -p sx-cli`.
-Two things differ on purpose. The Rust binary reads `"cores": ["text", "semver", "git", "github", "decimal"]` in a
+Two things differ on purpose. The Rust binary reads `"cores": ["text", "semver", "git", "github", "decimal", "yaml"]` in a
 declarations file and registers those built-in cores, where the Python command refuses. And it
 validates declarations more strictly than Python's duck typing does, for example `"types": []`.
 `rust/sx-cli/tests/cli_parity.rs` runs every `tests/test_cli.py` scenario, every `fixtures/cli`
@@ -193,6 +193,23 @@ sx run square.sx --declarations decimal.json --input 'price="12.50"'
 
 [docs/language.md](docs/language.md#scripts) has the rules, and
 [the decimal core](docs/language.md#the-decimal-core) its functions and limits.
+
+## Editing YAML in place
+
+The `yaml` core edits block-style YAML without reformatting it. `yaml.get text path` reads a scalar,
+`yaml.keys text path` lists a mapping's keys or a sequence's indexes, and `yaml.set text path value` returns
+the text with that one scalar replaced and every other byte, comments and indentation included, as it was.
+
+```sh
+echo '{"cores": ["yaml"]}' > yaml.json
+echo '(yaml.set "replicas: 2  # web\n" ["replicas"] "5")' > bump.sx
+sx run bump.sx --declarations yaml.json
+```
+
+It reads block mappings, block sequences, comments, and plain, single-quoted, and double-quoted scalars.
+Flow collections, anchors and aliases, tags, multi-line scalars, several documents, and tabs in indentation
+stop the program with the line and the reason instead of being guessed at.
+[docs/language.md](docs/language.md#the-yaml-core) has the exact subset and the quoting rules.
 
 ## MCP tools
 

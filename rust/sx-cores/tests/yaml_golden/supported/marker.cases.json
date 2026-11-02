@@ -1,0 +1,6 @@
+[
+  {"get": ["key"], "is": "value"},
+  {"get": ["list", "0"], "is": "one"},
+  {"keys": [], "is": ["key", "list"]},
+  {"set": ["key"], "value": "changed", "replace": ["key: value", "key: changed"]}
+]

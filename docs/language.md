@@ -1433,6 +1433,74 @@ by `rust/sx-cores/scripts/decimal_vectors.py`. A test regenerates them and fails
 file is stale. The Lean reference runs decimal programs with its own implementation of the core, so
 the agreement check compares two implementations.
 
+## The yaml core
+
+`yaml` is a Rust core, registered by listing `"yaml"` under `cores`. It reads and edits YAML text in
+place and has no dependency: a parser for a documented subset finds each scalar's byte span, and an
+edit replaces that span and nothing else.
+
+| Function | Type |
+| --- | --- |
+| `yaml.get` | `String List<String> -> Option<String>`, the scalar at the path, or `none` when the path is absent |
+| `yaml.set` | `String List<String> String -> String`, the text with the scalar at the path replaced |
+| `yaml.keys` | `String List<String> -> List<String>`, a mapping's keys in document order, or a sequence's indexes |
+
+A path lists mapping keys from the root. Where the node is a sequence, a component is a decimal index
+without a sign or leading zeros (`"0"`, `"12"`), so `["containers" "0" "image"]` reads the first
+container's image. A key is matched on its decoded text, so a quoted key matches its unquoted spelling.
+The empty path names the document root. A path that does not exist, including one that runs through a
+scalar or past the end of a sequence, is absent: `yaml.get` returns `none` and `yaml.keys` returns `[]`.
+A null or empty value (`key:`) reads as the empty string, and a quoted empty string reads the same.
+`yaml.get` and `yaml.set` on a mapping or sequence, `yaml.keys` on a scalar, and `yaml.set` on an
+absent path are failures, since each is a mistake the program should not carry past.
+
+**The subset.** Block mappings and block sequences, nested to any depth, with plain, single-quoted,
+and double-quoted scalars as keys and values; comments on their own line or after a value; blank lines;
+`\n` and `\r\n` line ends; one optional `---` before the content; a sequence under a key at the key's own
+indentation or deeper; and a sequence item that opens a mapping (`- name: web`) or another sequence.
+Double-quoted scalars decode the YAML escapes (`\n`, `\"`, `\\`, `\xNN`, `\uNNNN`, `\UNNNNNNNN`, `\N`, `\L`,
+`\P`, and the rest), and single-quoted scalars decode `''`. A plain scalar ends at the end of its line or
+at ` #`, and a scalar is always read as a string: `3`, `true`, and `null` are the text `3`, `true`, and `null`.
+
+Everything else is refused with a failure that names the line and the construct, and the whole text is
+checked on every call, so a refused construct anywhere fails even a read of a different key:
+
+| Refused | Failure |
+| --- | --- |
+| Flow collections (`[a, b]`, `{a: 1}`) | `flow collections` |
+| Anchors, aliases, tags | `anchors`, `aliases`, `tags` |
+| Block scalars (`\|`, `>`), a plain or quoted scalar that continues on the next line, a scalar placed on the line after its key, an escaped line break | `multi-line scalars` |
+| A second document (`---` or `...` after the content) | `multiple documents or document end markers` |
+| Directives, content after `---`, a byte order mark | `directives`, `content on the document start line`, `a byte order mark` |
+| Tabs in indentation | `tabs used for indentation` |
+| Complex keys (`? key`) | `complex keys` |
+
+Text that is not valid YAML in the subset is refused the same way, with a message about what is wrong:
+a duplicate key in one mapping, a line indented deeper than the structure above it, content that does not
+fit the structure, `a: b: c`, text after a closing quote, an undefined escape, and a plain scalar that starts
+with `@`, a backtick, `,`, `]`, or `}`.
+
+**How a failure reaches the program.** A refusal is `CoreError::Arithmetic`, so the machine stops the
+program with the `arithmetic` failure kind and the message `yaml.get: line 3: flow collections are
+outside the supported YAML subset, so the text is left alone`. `attempt` does not catch it, like every
+`arithmetic` failure. A dedicated failure kind would need a new row in the failure table of the Rust
+machine and the Lean model, and the existing `arithmetic` kind is the one a core can already raise.
+
+**Quoting.** `yaml.set` writes the new value in the style of the scalar it replaces: a double-quoted
+scalar stays double-quoted, a single-quoted one stays single-quoted (double-quoted instead when the value
+has a newline, a control character, or another line break, which single quotes cannot hold), and a plain one
+stays plain when that is safe. Plain text is unsafe for an empty value, a value with leading or trailing
+whitespace, a tab or control character, `: ` or ` #` inside it, a trailing `:`, a leading `,[]{}#&*!|>'"%@`
+or backtick, a leading `-`, `?`, or `:` followed by a space or nothing, or a leading `---` or `...`; the
+value is double-quoted then. A plain scalar that is text also stays text: replacing `tag: stable` with
+`1.10` writes `tag: "1.10"`, because plain `1.10` would be read as a number by other tools. When the old
+scalar was a number, a boolean, a null, or a date, or was empty, the new value is written plain whenever
+the syntax allows, so `replicas: 3` set to `5` is `replicas: 5`. An empty value (`key:`, `-`) gains the
+value after the colon or dash and keeps a trailing comment: `key: # c` becomes `key: v # c`.
+
+An edit replaces the bytes of one scalar, so the text before and after it, comments, blank lines,
+indentation, key order, line ends, and the scalar's own trailing spaces and comment are unchanged.
+
 ## Budgets
 
 The host sets every budget. A program cannot read or raise one.
