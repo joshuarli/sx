@@ -213,7 +213,7 @@ def Machine.deliver (m : Machine) (o : Outstanding) (resp : Response) : Except F
         if callErrorKinds.contains kind then pure (m.setFiber { f with ctrl := .raise (callError kind message) })
         else invalid s!"{o.id}: {kind} is not a call error kind."
       | .wait (.call _ _ cap _ out) _, .output j =>
-        match decode m.ctx.prog.enums out j "$" with
+        match decode m.ctx.prog.decodeEnums out j "$" with
         | .error e => invalid s!"{o.id} ({cap}): {e}"
         | .ok v => do
           checkSize m.ctx.budgets.valueSize v

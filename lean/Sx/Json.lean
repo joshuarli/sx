@@ -47,6 +47,8 @@ partial def parseTy (j : Json) : Except String Ty := do
   match j with
   | .str "Bool" => pure .bool
   | .str "Int" => pure .int
+  | .str "Float" => pure .float
+  | .str "Bytes" => pure .bytes
   | .str "String" => pure .str
   | .str "Unit" => pure .unit
   | .str "Never" => pure .never
@@ -59,13 +61,44 @@ partial def parseTy (j : Json) : Except String Ty := do
       let (a, b) ← asPair p
       return .result (← parseTy a) (← parseTy b)
     if let .ok fs := field j "record" then
-      return .record (← (← asArr fs).mapM fun f => do
+      return .record (sortFields (← (← asArr fs).mapM fun f => do
         let (n, t) ← asPair f
-        pure (← asStr n, ← parseTy t))
+        pure (← asStr n, ← parseTy t)))
     if let .ok n := field j "enum" then return .enum (← asStr n)
     if let .ok n := field j "nominal" then return .nominal (← asStr n) (← parseTy (← field j "base"))
     if let .ok n := field j "var" then return .var (← asNat n)
     throw s!"unknown type {j.compress}"
+
+partial def parseDTy (j : Json) : Except String DTy := do
+  match j with
+  | .str "Bool" => pure .bool
+  | .str "Int" => pure .int
+  | .str "Float" => pure .float
+  | .str "Bytes" => pure .bytes
+  | .str "String" => pure .str
+  | .str "Unit" => pure .unit
+  | .str "Never" => pure .never
+  | _ =>
+    if let .ok t := field j "list" then return .list (← parseDTy t)
+    if let .ok t := field j "map" then return .map (← parseDTy t)
+    if let .ok ts := field j "tuple" then return .tuple (← (← asArr ts).mapM parseDTy)
+    if let .ok t := field j "option" then return .option (← parseDTy t)
+    if let .ok p := field j "result" then
+      let (a, b) ← asPair p
+      return .result (← parseDTy a) (← parseDTy b)
+    if let .ok fs := field j "record" then
+      let isOpen := match fieldLookup (objFields j) "open" with
+        | some (.bool b) => b
+        | _ => false
+      return .record (sortFields (← (← asArr fs).mapM fun f => do
+        let (n, t) ← asPair f
+        pure (← asStr n, ← parseDTy t))) isOpen
+    if let .ok n := field j "enum" then return .enum (← asStr n)
+    if let .ok n := field j "nominal" then return .nominal (← asStr n) (← parseDTy (← field j "base"))
+    if let .ok n := field j "var" then return .var (← asNat n)
+    throw s!"unknown type {j.compress}"
+
+def numberRat (n : JsonNumber) : Bool × Nat × Nat := (n.mantissa < 0, n.mantissa.natAbs, 10 ^ n.exponent)
 
 def parseInt (j : Json) : Except String Int := j.getInt?
 
@@ -81,15 +114,24 @@ partial def parseVal (j : Json) : Except String Val := do
       | .bool b => pure (.bool b)
       | _ => throw "bad bool literal"
     | "int" => pure (.int (← parseInt v))
+    | "float" =>
+      match v with
+      | .num n =>
+        let (neg, a, b) := numberRat n
+        match floatOfRat neg a b with
+        | some f => pure (.float f)
+        | none => throw "a float literal is out of range"
+      | _ => throw "bad float literal"
+    | "bytes" => pure (.bytes (← asStr v))
     | "string" => pure (.str (← asStr v))
     | "some" => pure (.some (← parseVal v))
     | "ok" => pure (.ok (← parseVal v))
     | "err" => pure (.err (← parseVal v))
     | "list" => pure (.list (← (← asArr v).mapM parseVal))
     | "tuple" => pure (.tuple (← (← asArr v).mapM parseVal))
-    | "record" => pure (.record (← (← asArr v).mapM fun f => do
+    | "record" => pure (.record (sortFields (← (← asArr v).mapM fun f => do
         let (n, x) ← asPair f
-        pure (← asStr n, ← parseVal x)))
+        pure (← asStr n, ← parseVal x))))
     | "map" => pure (.map (← (← asArr v).mapM fun f => do
         let (n, x) ← asPair f
         pure (← asStr n, ← parseVal x)))
@@ -123,6 +165,7 @@ partial def parsePat (j : Json) : Except String Pat := do
     | "ok" => pure (.ok (← parsePat v))
     | "err" => pure (.err (← parsePat v))
     | "any" => pure (.any (← parseBinder v))
+    | "literal" => pure (.literal (← parseVal v))
     | _ => throw s!"unknown pattern {j.compress}"
 
 partial def parseConv (j : Json) : Except String Conv := do
@@ -134,9 +177,17 @@ partial def parseConv (j : Json) : Except String Conv := do
     let (tag, v) ← tagOf j
     match tag with
     | "to-some" => pure (.toSome (← opt v))
-    | "each-field" => pure (.eachField (← (← asArr v).mapM fun f => do
+    | "each-field" => pure (.eachField (sortFields (← (← asArr v).mapM fun f => do
         let (n, c) ← asPair f
-        pure (← asStr n, ← opt c)))
+        pure (← asStr n, ← opt c))))
+    | "widen-record" => pure (.widenRecord (sortFields (← (← asArr v).mapM fun f => do
+        match ← asArr f with
+        | [n, present, c, t] =>
+          let present ← match present with
+            | .bool b => pure b
+            | _ => throw "present must be a boolean"
+          pure (← asStr n, present, ← opt c, ← parseTy t)
+        | _ => throw "bad widened field")))
     | "each-item" => pure (.eachItem (← (← asArr v).mapM opt))
     | "each-element" => pure (.eachElement (← parseConv v))
     | _ => throw s!"unknown conversion {j.compress}"
@@ -170,6 +221,11 @@ partial def parseExpr (j : Json) : Except String Expr := do
   | "ApplyLocal" => pure (.applyLocal (← asStr (← field j "name")) (← sub "function") (← subs "args"))
   | "Prelude" =>
     let name ← asStr (← field j "op")
+    if name == "tuple-item" then
+      match ← subs "args" with
+      | [xs, .lit (.int i) .int] =>
+        if i < 0 then throw "tuple-item takes a nonnegative index" else return .tupleItem xs i.toNat
+      | _ => throw "tuple-item takes a tuple and a literal index"
     match Op.ofString name with
     | some op => pure (.prelude op (← subs "args"))
     | none => throw s!"unknown prelude function {name}"
@@ -191,6 +247,7 @@ partial def parseExpr (j : Json) : Except String Expr := do
   | "Attempt" => pure (.attempt (← sub "body"))
   | "Retry" =>
     pure (.retry (← (← asArr (← field j "delays")).mapM asNat) (← (← asArr (← field j "kinds")).mapM asStr) (← sub "body"))
+  | "Sleep" => pure (.sleep (← asNat (← field j "milliseconds")))
   | "WaitUntil" => pure (.waitUntil (← (← asArr (← field j "intervals")).mapM asNat) (← sub "predicate") (← sub "body"))
   | "Loop" =>
     pure (.loop (← asNat (← field j "maximum")) (← (← asArr (← field j "binders")).mapM parseBinder)
@@ -211,6 +268,13 @@ def parseProgram (j : Json) : Except String Program := do
       let (n, p) ← asPair v
       pure (← asStr n, ← if p.isNull then pure none else some <$> parseTy p)
     pure (name, variants)
+  let decodeEnums ← (objFields (← field j "enums")).mapM fun (name, vs) => do
+    let variants ← (← asArr vs).mapM fun v => do
+      let (n, p) ← asPair v
+      pure (← asStr n, ← if p.isNull then pure none else some <$> parseDTy p)
+    pure (name, variants)
+  let capOutputs ← (objFields (← field (← field j "signatures") "capabilities")).mapM fun (id, s) => do
+    pure (id, ← parseDTy (← field s "output"))
   let sigs ← field j "signatures"
   let capSigs ← (objFields (← field sigs "capabilities")).mapM fun (id, s) => do
     let idempotent ← match ← field s "idempotent" with
@@ -230,14 +294,26 @@ def parseProgram (j : Json) : Except String Program := do
     enums := callErrorKindEnum :: enums.filter (·.1 != "CallErrorKind")
     capSigs
     funSigs
+    capOutputs
+    decodeEnums := (callErrorKindEnum.1, callErrorKinds.map fun k => (k, none)) ::
+      decodeEnums.filter (·.1 != "CallErrorKind")
   }
 
 def intJson (i : Int) : Json := .num (JsonNumber.fromInt i)
+
+def floatJson (f : Float) : Json :=
+  match shortestDigits f with
+  | some (c, e) =>
+    let m : Int := if f < 0.0 then -(c : Int) else c
+    if e ≥ 0 then .num ⟨m * 10 ^ e.toNat, 0⟩ else .num ⟨m, (-e).toNat⟩
+  | none => .null
 
 mutual
 def Val.encode : Val → Json
   | .bool b => .bool b
   | .int i => intJson i
+  | .float f => floatJson f
+  | .bytes b => .str b
   | .str s => .str s
   | .unit => .null
   | .none => .null
@@ -266,10 +342,10 @@ def jsonKind : Json → String
   | .arr _ => "an array"
   | .obj _ => "an object"
 
-def enumVariants (enums : Enums) (name : String) : List (String × Option Ty) :=
+def enumVariants (enums : DecodeEnums) (name : String) : List (String × Option DTy) :=
   (fieldLookup enums name).getD []
 
-partial def decode (enums : Enums) (t : Ty) (j : Json) (path : String) : Except String Val := do
+partial def decode (enums : DecodeEnums) (t : DTy) (j : Json) (path : String) : Except String Val := do
   let fail {α : Type} (expected : String) : Except String α :=
     throw s!"{path}: expected {expected}, found {jsonKind j}"
   match t, j with
@@ -280,6 +356,16 @@ partial def decode (enums : Enums) (t : Ty) (j : Json) (path : String) : Except 
     else if intMin ≤ n.mantissa ∧ n.mantissa ≤ intMax then pure (.int n.mantissa)
     else throw s!"{path}: expected Int, found an integer outside the signed 64-bit range"
   | .int, _ => fail "Int"
+  | .float, .num n =>
+    let (neg, a, b) := numberRat n
+    match floatOfRat neg a b with
+    | some f => pure (.float f)
+    | none => throw s!"{path}: expected Float, found a number outside the finite 64-bit Float range"
+  | .float, _ => fail "Float"
+  | .bytes, .str s =>
+    if canonicalBase64 s then pure (.bytes s)
+    else throw s!"{path}: expected Bytes (standard base64 with padding), found a string that is not valid base64"
+  | .bytes, _ => fail "Bytes (a base64 string)"
   | .str, .str s => pure (.str s)
   | .str, _ => fail "String"
   | .unit, .null => pure .unit
@@ -306,12 +392,12 @@ partial def decode (enums : Enums) (t : Ty) (j : Json) (path : String) : Except 
     let es ← (objFields j).mapM fun (k, x) => do pure (k, ← decode enums v x s!"{path}[{(Json.str k).compress}]")
     pure (.map es)
   | .map _, _ => fail "a map"
-  | .record fs, .obj _ => do
+  | .record fs isOpen, .obj _ => do
     let obj := objFields j
     match fs.find? fun (n, _) => (fieldLookup obj n).isNone with
     | some (n, _) => throw s!"{path}.{n}: expected a value, found no field"
     | none =>
-      match obj.find? fun (k, _) => (fieldLookup fs k).isNone with
+      match obj.find? fun (k, _) => !isOpen && (fieldLookup fs k).isNone with
       | some (k, _) => throw s!"{path}.{k}: expected no field, because the record type does not declare it, found a field"
       | none => do
         let vs ← fs.mapM fun (n, ft) => do
@@ -319,7 +405,7 @@ partial def decode (enums : Enums) (t : Ty) (j : Json) (path : String) : Except 
           | some x => pure (n, ← decode enums ft x s!"{path}.{n}")
           | none => throw s!"{path}.{n}: missing"
         pure (.record vs)
-  | .record _, _ => fail "a record"
+  | .record _ _, _ => fail "a record"
   | .enum name, .str s =>
     match (enumVariants enums name).find? fun (v, p) => v == s && p.isNone with
     | some _ => pure (.variant name s none)

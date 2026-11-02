@@ -30,6 +30,13 @@ theorem matchPat_typed {E : Enums} {ρ : Env} :
     cases hv with
     | ok _ => exact .inl (by simp [matchPat])
     | err hw => simpa [matchPat] using matchPat_typed q Γ Γ' _ _ hp hw he
+  | .literal lit, Γ, Γ', t, v, hp, hv, he => by
+    have hΓ : Γ' = Γ := by
+      cases lit <;> cases t <;> simp [patTy] at hp <;> exact hp.symm
+    subst hΓ
+    by_cases hq : v.eqv lit = true
+    · exact .inr ⟨ρ, by simp [matchPat, hq], he⟩
+    · exact .inl (by simp [matchPat, hq])
   | .variant n none, Γ, Γ', t, v, hp, hv, he => by
     cases t with
     | enum e =>
@@ -184,6 +191,18 @@ theorem exhaustive_witness {E : Enums} {ρ : Env} {Γ : TyEnv} {pats : List Pat}
               | _ => simp [Pat.irrefutable] at hirr
           | _ => simp at hqm
       · cases hx
+    | bool =>
+      simp only [Bool.and_eq_true, List.any_eq_true] at hx
+      obtain ⟨⟨pt, hpt, ht⟩, ⟨pf, hpf, hf⟩⟩ := hx
+      cases hv with
+      | @bool b =>
+        cases b
+        · have : pf = .literal (.bool false) := by split at hf <;> simp_all
+          subst this
+          exact ⟨_, hpf, ρ, by simp [matchPat, Val.eqv]⟩
+        · have : pt = .literal (.bool true) := by split at ht <;> simp_all
+          subst this
+          exact ⟨_, hpt, ρ, by simp [matchPat, Val.eqv]⟩
     | never => cases hv
     | _ => simp at hx
 

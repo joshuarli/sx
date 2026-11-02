@@ -16,6 +16,7 @@ def callsOf : Expr → List String
   | .core _ args => callsOfList args
   | .call c arg => c :: callsOf arg
   | .get r _ => callsOf r
+  | .tupleItem e _ => callsOf e
   | .mkRecord fs => callsOfFields fs
   | .mkList es _ => callsOfList es
   | .mkTuple es => callsOfList es
@@ -26,6 +27,7 @@ def callsOf : Expr → List String
   | .attempt e => callsOf e
   | .retry _ _ e => callsOf e
   | .waitUntil _ p e => callsOf p ++ callsOf e
+  | .sleep _ => []
   | .loop _ _ init body => callsOfList init ++ callsOf body
   | .recur args => callsOfList args
   | .par bs => callsOfList bs

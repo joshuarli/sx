@@ -44,7 +44,7 @@ inductive Frame where
   deriving Inhabited
 
 inductive Req where
-  | call (path : List Nat) (seq : Nat) (cap : String) (input : Json) (output : Ty)
+  | call (path : List Nat) (seq : Nat) (cap : String) (input : Json) (output : DTy)
   | delay (path : List Nat) (seq : Nat) (ms : Nat)
   deriving Inhabited
 
@@ -179,6 +179,7 @@ def seqChildren : Expr → Except Failure (List Expr)
   | .recur args => pure args
   | .call _ arg => pure [arg]
   | .get r _ => pure [r]
+  | .tupleItem e _ => pure [e]
   | .mkRecord fs => pure (fs.map Prod.snd)
   | .mkList es _ => pure es
   | .mkTuple es => pure es
@@ -274,8 +275,8 @@ def finishSeq (ctx : Ctx) (g : Glob) (f : Fiber) (stack : List Frame) (origin : 
     let arg ← match done with
       | [r] => plain r
       | _ => internal "A call has one argument."
-    let output ← match fieldLookup ctx.prog.capSigs cap with
-      | some s => pure s.output
+    let output ← match fieldLookup ctx.prog.capOutputs cap with
+      | some o => pure o
       | none => internal s!"{cap} has no signature."
     let (g, n) := nextSeq g f.path
     pure ({ f with stack, ctrl := .wait (.call f.path n cap arg.encode output) false }, [], g)
@@ -286,9 +287,16 @@ def finishSeq (ctx : Ctx) (g : Glob) (f : Fiber) (stack : List Frame) (origin : 
       | some v => ret v
       | none => internal s!"The record has no field {name}."
     | _ => internal "get reads a field from something that is not a record."
+  | .tupleItem _ i =>
+    match done with
+    | [.val (.tuple vs)] =>
+      match vs[i]? with
+      | some v => ret v
+      | none => internal "tuple-item is past the end of the tuple."
+    | _ => internal "tuple-item reads from something that is not a tuple."
   | .mkRecord fs => do
     let vs ← plainAll done
-    let v := Val.record ((fs.map Prod.fst).zip vs)
+    let v := Val.record (sortFields ((fs.map Prod.fst).zip vs))
     checkSize ctx.budgets.valueSize v
     ret v
   | .mkList _ _ => do
@@ -358,6 +366,8 @@ def evalNode (ctx : Ctx) (g : Glob) (f : Fiber) (e : Expr) (env : Env) :
   | .match_ s cs => go (.match_ cs env) s
   | .attempt body => go .attempt body
   | .retry delays kinds body => go (.retry delays kinds body env 0) body
+  | .sleep 0 => pure ({ f with ctrl := .ret (.val .unit) }, [], g)
+  | .sleep ms => requestDelay ctx g f ms stack
   | .waitUntil intervals pred body => do
     let c ← closureOf env pred
     go (.wait intervals c body env 0) body

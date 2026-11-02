@@ -3,6 +3,8 @@ namespace Sx
 inductive Ty where
   | bool
   | int
+  | float
+  | bytes
   | str
   | unit
   | list (t : Ty)
@@ -21,6 +23,8 @@ mutual
 def Ty.beq : Ty → Ty → Bool
   | .bool, .bool => true
   | .int, .int => true
+  | .float, .float => true
+  | .bytes, .bytes => true
   | .str, .str => true
   | .unit, .unit => true
   | .list a, .list b => a.beq b
@@ -49,6 +53,8 @@ instance : BEq Ty := ⟨Ty.beq⟩
 inductive Val where
   | bool (b : Bool)
   | int (i : Int)
+  | float (f : Float)
+  | bytes (base64 : String)
   | str (s : String)
   | unit
   | list (vs : List Val)
@@ -74,19 +80,21 @@ inductive Pat where
   | ok (p : Pat)
   | err (p : Pat)
   | variant (name : String) (inner : Option Pat)
+  | literal (v : Val)
   | any (b : Binder)
   deriving Repr, BEq, Inhabited
 
 inductive Conv where
   | toSome (inner : Option Conv)
   | eachField (fs : List (String × Option Conv))
+  | widenRecord (fs : List (String × Bool × Option Conv × Ty))
   | eachItem (cs : List (Option Conv))
   | eachElement (c : Conv)
   | variantName
   deriving Repr, BEq, Inhabited
 
 inductive Op where
-  | add | sub | mul | quot | rem
+  | add | sub | mul | div | quot | rem | toFloat | round | floor | ceil
   | eq | neq | lt | le | gt | ge
   | not | and | or
   | str
@@ -112,6 +120,7 @@ inductive Expr where
   | core (f : String) (args : List Expr)
   | call (cap : String) (arg : Expr)
   | get (r : Expr) (field : String)
+  | tupleItem (e : Expr) (index : Nat)
   | mkRecord (fs : List (String × Expr))
   | mkList (es : List Expr) (elem : Ty)
   | mkTuple (es : List Expr)
@@ -121,6 +130,7 @@ inductive Expr where
   | attempt (e : Expr)
   | retry (delays : List Nat) (kinds : List String) (e : Expr)
   | waitUntil (intervals : List Nat) (pred : Expr) (e : Expr)
+  | sleep (ms : Nat)
   | loop (max : Nat) (bs : List Binder) (init : List Expr) (body : Expr)
   | recur (args : List Expr)
   | par (bs : List Expr)
@@ -145,6 +155,27 @@ structure FunSig where
 
 abbrev Enums := List (String × List (String × Option Ty))
 
+inductive DTy where
+  | bool
+  | int
+  | float
+  | bytes
+  | str
+  | unit
+  | list (t : DTy)
+  | map (v : DTy)
+  | tuple (ts : List DTy)
+  | option (t : DTy)
+  | result (ok err : DTy)
+  | record (fs : List (String × DTy)) (isOpen : Bool)
+  | enum (name : String)
+  | nominal (name : String) (base : DTy)
+  | var (n : Nat)
+  | never
+  deriving Repr, Inhabited
+
+abbrev DecodeEnums := List (String × List (String × Option DTy))
+
 structure Program where
   body : Expr
   result : Ty
@@ -153,6 +184,8 @@ structure Program where
   enums : Enums
   capSigs : List (String × CapSig)
   funSigs : List (String × FunSig)
+  capOutputs : List (String × DTy)
+  decodeEnums : DecodeEnums
   deriving Inhabited
 
 def callErrorKinds : List String :=
@@ -169,7 +202,9 @@ def Op.higherOrder : Op → Bool
   | _ => false
 
 def Op.ofString : String → Option Op
-  | "+" => some .add | "-" => some .sub | "*" => some .mul | "quot" => some .quot | "rem" => some .rem
+  | "+" => some .add | "-" => some .sub | "*" => some .mul | "/" => some .div | "quot" => some .quot
+  | "rem" => some .rem | "float" => some .toFloat | "round" => some .round | "floor" => some .floor
+  | "ceil" => some .ceil
   | "=" => some .eq | "not=" => some .neq | "<" => some .lt | "<=" => some .le | ">" => some .gt
   | ">=" => some .ge | "not" => some .not | "and" => some .and | "or" => some .or | "str" => some .str
   | "count" => some .count | "first" => some .first | "rest" => some .rest | "nth" => some .nth

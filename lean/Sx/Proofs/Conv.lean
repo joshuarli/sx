@@ -1,4 +1,4 @@
-import Sx.Proofs.Basic
+import Sx.Proofs.Lawful
 
 namespace Sx
 
@@ -24,6 +24,21 @@ theorem nullary_no_payload {E : Enums} {e n : String} {pt : Ty} (hn : nullaryEnu
     have := hn _ (fieldLookup_mem hp)
     simp at this
   · simp at hn
+
+theorem record_lookup {E : Enums} :
+    ∀ (fs : List (String × Val)) (tfs : List (String × Ty)) (n : String) (t : Ty),
+      fs.map Prod.fst = tfs.map Prod.fst → All2 (VT E) (fs.map Prod.snd) (tfs.map Prod.snd) →
+      fieldLookup tfs n = some t → ∃ w, fieldLookup fs n = some w ∧ VT E w t
+  | [], [], _, _, _, _, h => by simp [fieldLookup] at h
+  | (k, v) :: fs, (k', t') :: tfs, n, t, hn, ha, h => by
+    simp at hn; obtain ⟨rfl, hn⟩ := hn
+    cases ha with
+    | cons hv ha =>
+      by_cases hk : k = n
+      · subst hk; rw [fieldLookup_eq] at h ⊢; cases h; exact ⟨v, rfl, hv⟩
+      · rw [fieldLookup_ne _ _ hk] at h ⊢; exact record_lookup fs tfs n t hn ha h
+  | [], _ :: _, _, _, hn, _, _ => by simp at hn
+  | _ :: _, [], _, _, hn, _, _ => by simp at hn
 
 mutual
 theorem convert_typed {E : Enums} :
@@ -62,6 +77,19 @@ theorem convert_typed {E : Enums} :
         cases hv with
         | record hn ha =>
           obtain ⟨wfs, hw, hwn, hwa⟩ := convertFields_typed cs fs fs' _ hfs hn ha
+          exact ⟨_, by simp [convert, hw], .record hwn hwa⟩
+      · cases hc
+    | _ => simp [convTy] at hc
+  | .widenRecord ws, s, t, v, hc, hv => by
+    cases s with
+    | record fs =>
+      simp only [convTy] at hc
+      split at hc
+      · rename_i fs' hfs
+        cases hc
+        cases hv with
+        | @record vfs _ hn ha =>
+          obtain ⟨wfs, hw, hwn, hwa⟩ := widenFields_typed vfs fs hn ha ws fs' hfs
           exact ⟨_, by simp [convert, hw], .record hwn hwa⟩
       · cases hc
     | _ => simp [convTy] at hc
@@ -145,6 +173,50 @@ theorem convertFields_typed {E : Enums} :
               exact ⟨(n, w) :: wfs, by simp [convertFields, hw, hws], by simp [hwn], .cons hwt hwa⟩
             · cases hc
           · cases hc
+theorem widenFields_typed {E : Enums} (vfs : List (String × Val)) (fs : List (String × Ty))
+    (hn : vfs.map Prod.fst = fs.map Prod.fst) (ha : All2 (VT E) (vfs.map Prod.snd) (fs.map Prod.snd)) :
+    ∀ (ws : List (String × Bool × Option Conv × Ty)) (fs' : List (String × Ty)), widenTy E fs ws = some fs' →
+      ∃ wfs, widenFields vfs ws = .ok wfs ∧ wfs.map Prod.fst = fs'.map Prod.fst ∧
+        All2 (VT E) (wfs.map Prod.snd) (fs'.map Prod.snd)
+  | [], fs', h => by
+    simp [widenTy] at h; subst h
+    exact ⟨[], by simp [widenFields], rfl, .nil⟩
+  | (n, false, oc, t) :: ws, fs', h => by
+    simp only [widenTy] at h
+    split at h
+    · rename_i a rest hrest
+      cases h
+      obtain ⟨wfs, hw, hwn, hwa⟩ := widenFields_typed vfs fs hn ha ws rest hrest
+      exact ⟨(n, .none) :: wfs, by simp [widenFields, hw], by simp [hwn], .cons .none hwa⟩
+    · cases h
+  | (n, true, none, t) :: ws, fs', h => by
+    simp only [widenTy] at h
+    split at h
+    · rename_i sty rest hs hrest
+      split at h
+      · rename_i heq
+        have heq := Ty.eq_of_beq _ _ heq
+        subst heq
+        cases h
+        obtain ⟨w, hwl, hwt⟩ := record_lookup vfs fs n _ hn ha hs
+        obtain ⟨wfs, hw, hwn, hwa⟩ := widenFields_typed vfs fs hn ha ws rest hrest
+        exact ⟨(n, w) :: wfs, by simp [widenFields, hwl, hw], by simp [hwn], .cons hwt hwa⟩
+      · cases h
+    · cases h
+  | (n, true, some c, t) :: ws, fs', h => by
+    simp only [widenTy] at h
+    split at h
+    · rename_i sty rest hs hrest
+      split at h
+      · rename_i heq
+        have heq : convTy E c sty = some t := eq_of_beq heq
+        cases h
+        obtain ⟨w0, hwl, hwt0⟩ := record_lookup vfs fs n _ hn ha hs
+        obtain ⟨w, hcw, hwt⟩ := convert_typed c sty t w0 heq hwt0
+        obtain ⟨wfs, hw, hwn, hwa⟩ := widenFields_typed vfs fs hn ha ws rest hrest
+        exact ⟨(n, w) :: wfs, by simp [widenFields, hwl, hcw, hw], by simp [hwn], .cons hwt hwa⟩
+      · cases h
+    · cases h
 theorem convertItems_typed {E : Enums} :
     ∀ (cs : List (Option Conv)) (ts ts' : List Ty) (vs : List Val),
       convItemsTy E cs ts = some ts' → All2 (VT E) vs ts → ∃ ws, convertItems vs cs = .ok ws ∧ All2 (VT E) ws ts'

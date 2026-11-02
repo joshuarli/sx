@@ -1,4 +1,4 @@
-import Sx.Proofs.Basic
+import Sx.Proofs.Conv
 
 namespace Sx
 
@@ -100,14 +100,80 @@ theorem arith_fail {α : Type} {P : α → Prop} {m : String} : SafeE P (failWit
 theorem range_fail {α : Type} {P : α → Prop} {m : String} : SafeE P (failWith .outOfRange m : Except Failure α) :=
   SafeE.fail (by decide)
 
+theorem checkedFloat_safe {E : Enums} (x : Float) : SafeE (fun v => VT E v .float) (checkedFloat x) := by
+  unfold checkedFloat
+  split
+  · exact VT.float
+  · simp [SafeE, failWith]
+
+theorem intFromFloat_safe {E : Enums} (r : Option Int) : SafeE (fun v => VT E v .int) (intFromFloat r) := by
+  unfold intFromFloat
+  split
+  · split
+    · exact VT.int
+    · simp [SafeE, failWith]
+  · simp [SafeE, failWith]
+
+theorem textOf_ok {E : Enums} {v : Val} {t : Ty} (hv : VT E v t) (ht : strArg E t = true) :
+    ∃ s, textOf v = .ok s := by
+  cases hv with
+  | bool => exact ⟨_, rfl⟩
+  | int => exact ⟨_, rfl⟩
+  | float => exact ⟨_, rfl⟩
+  | str => exact ⟨_, rfl⟩
+  | variant _ => exact ⟨_, rfl⟩
+  | variantPayload hp _ => simp only [strArg] at ht; exact (nullary_no_payload ht hp).elim
+  | _ => simp [strArg] at ht
+
+theorem textsOf_ok {E : Enums} : ∀ (vs : List Val) (ts : List Ty), All2 (VT E) vs ts → ts.all (strArg E) = true →
+    ∃ ss, vs.mapM textOf = .ok ss
+  | [], [], _, _ => ⟨[], rfl⟩
+  | v :: vs, t :: ts, .cons hv hvs, ht => by
+    simp only [List.all_cons, Bool.and_eq_true] at ht
+    obtain ⟨s, hs⟩ := textOf_ok hv ht.1
+    obtain ⟨ss, hss⟩ := textsOf_ok vs ts hvs ht.2
+    exact ⟨s :: ss, by simp [List.mapM_cons, hs, hss]⟩
+
 theorem applyOp_typed {E : Enums} {limit : Nat} (op : Op) (ts : List Ty) (t : Ty) (vs : List Val)
-    (h : opTy op ts = some t) (hvs : All2 (VT E) vs ts) : SafeE (fun v => VT E v t) (applyOp limit op vs) := by
+    (h : opTy E op ts = some t) (hvs : All2 (VT E) vs ts) : SafeE (fun v => VT E v t) (applyOp limit op vs) := by
   unfold opTy at h
   split at h <;> (try simp at h)
   next =>
     subst h; rcases hvs with _ | ⟨⟨⟩, _ | ⟨⟨⟩, _ | _⟩⟩
     exact checkedInt_safe _
   next =>
+    subst h; rcases hvs with _ | ⟨⟨⟩, _ | ⟨⟨⟩, _ | _⟩⟩
+    exact checkedFloat_safe _
+  next =>
+    subst h; rcases hvs with _ | ⟨⟨⟩, _ | _⟩
+    exact VT.float
+  next =>
+    subst h; rcases hvs with _ | ⟨⟨⟩, _ | ⟨⟨⟩, _ | _⟩⟩
+    exact checkedFloat_safe _
+  next =>
+    subst h; rcases hvs with _ | ⟨⟨⟩, _ | ⟨⟨⟩, _ | _⟩⟩
+    exact checkedFloat_safe _
+  next =>
+    subst h; rcases hvs with _ | ⟨⟨⟩, _ | ⟨⟨⟩, _ | _⟩⟩
+    simp only [applyOp]; split
+    · exact arith_fail
+    · exact checkedFloat_safe _
+  next =>
+    subst h; rcases hvs with _ | ⟨⟨⟩, _ | _⟩
+    exact VT.float
+  next =>
+    subst h; rcases hvs with _ | ⟨⟨⟩, _ | _⟩
+    exact intFromFloat_safe _
+  next =>
+    subst h; rcases hvs with _ | ⟨⟨⟩, _ | _⟩
+    exact intFromFloat_safe _
+  next =>
+    subst h; rcases hvs with _ | ⟨⟨⟩, _ | _⟩
+    exact intFromFloat_safe _
+  next =>
+    subst h; rcases hvs with _ | ⟨⟨⟩, _ | _⟩
+    exact VT.int
+  next =>
     subst h; rcases hvs with _ | ⟨⟨⟩, _ | _⟩
     exact checkedInt_safe _
   next =>
@@ -158,7 +224,10 @@ theorem applyOp_typed {E : Enums} {limit : Nat} (op : Op) (ts : List Ty) (t : Ty
     subst h; rcases hvs with _ | ⟨⟨⟩, _ | ⟨⟨⟩, _ | _⟩⟩
     exact VT.bool
   next =>
-    obtain ⟨_, rfl⟩ := h
+    obtain ⟨hall, rfl⟩ := h
+    obtain ⟨ss, hss⟩ := textsOf_ok _ _ hvs (by simpa using hall)
+    show SafeE _ (do let parts ← vs.mapM textOf; let v := Val.str (String.join parts); checkSize limit v; pure v)
+    rw [hss]
     exact sized VT.str
   next =>
     subst h; rcases hvs with _ | ⟨⟨⟩, _ | _⟩
@@ -190,7 +259,7 @@ theorem applyOp_typed {E : Enums} {limit : Nat} (op : Op) (ts : List Ty) (t : Ty
     · exact VT.list (fun x hx => hxs x (List.mem_of_mem_take hx))
   next =>
     obtain ⟨hab, rfl⟩ := h
-    have hab := Ty.eq_of_beq' hab; subst hab
+    subst hab
     rcases hvs with _ | ⟨hxs, _ | ⟨hys, _ | _⟩⟩
     cases hxs with | @list xs _ hxs =>
     cases hys with | @list ys _ hys =>
@@ -219,7 +288,7 @@ theorem applyOp_typed {E : Enums} {limit : Nat} (op : Op) (ts : List Ty) (t : Ty
     · exact VT.none
   next =>
     obtain ⟨hvw, rfl⟩ := h
-    have hvw := Ty.eq_of_beq' hvw; subst hvw
+    subst hvw
     rcases hvs with _ | ⟨hes, _ | ⟨⟨⟩, _ | ⟨hw, _ | _⟩⟩⟩
     cases hes with | @map es _ hes =>
     refine sized (VT.map (makeMap_typed ?_))

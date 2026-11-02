@@ -15,6 +15,7 @@ def isPure : Expr → Bool
   | .prelude _ args => isPureList args
   | .core _ args => isPureList args
   | .get r _ => isPure r
+  | .tupleItem e _ => isPure e
   | .mkRecord fs => isPureFields fs
   | .mkList es _ => isPureList es
   | .mkTuple es => isPureList es
@@ -71,6 +72,14 @@ def evalP (P : PureCtx) : Nat → Env → Expr → Except Failure Val
         let ρ' ← bindAll ρd ps vs
         evalP P n ρ' body
       | _ => internal s!"{x} is not a local function here."
+    | .tupleItem xs i => do
+      let v ← evalP P n ρ xs
+      match v with
+      | .tuple vs =>
+        match vs[i]? with
+        | some w => pure w
+        | none => internal "tuple-item is past the end of the tuple."
+      | _ => internal "tuple-item reads from something that is not a tuple."
     | .prelude op args =>
       if op.higherOrder then evalHO P n ρ op args
       else do
@@ -94,7 +103,7 @@ def evalP (P : PureCtx) : Nat → Env → Expr → Except Failure Val
       | _ => internal "get reads a field from something that is not a record."
     | .mkRecord fs => do
       let vs ← evalFields P n ρ fs
-      let v := Val.record ((fs.map Prod.fst).zip vs)
+      let v := Val.record (sortFields ((fs.map Prod.fst).zip vs))
       checkSize P.limit v
       pure v
     | .mkList es _ => do

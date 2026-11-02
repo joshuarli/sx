@@ -23,6 +23,8 @@ def variantPayload (E : Enums) (e n : String) : Option (Option Ty) :=
 inductive VT (E : Enums) : Val → Ty → Prop
   | bool : VT E (.bool b) .bool
   | int : VT E (.int i) .int
+  | float : VT E (.float f) .float
+  | bytes : VT E (.bytes b) .bytes
   | str : VT E (.str s) .str
   | unit : VT E .unit .unit
   | list : (∀ v ∈ vs, VT E v t) → VT E (.list vs) (.list t)
@@ -66,6 +68,9 @@ end
 
 def patTy (E : Enums) (Γ : TyEnv) : Pat → Ty → Option TyEnv
   | .any b, t => bindTy Γ b t
+  | .literal (.int _), .int => some Γ
+  | .literal (.str _), .str => some Γ
+  | .literal (.bool _), .bool => some Γ
   | .none, .option _ => some Γ
   | .some p, .option t => patTy E Γ p t
   | .ok p, .result a _ => patTy E Γ p a
@@ -109,6 +114,7 @@ def exhaustive (E : Enums) (pats : List Pat) (t : Ty) : Bool :=
       match fieldLookup E e with
       | some vs => vs.all fun (n, _) => coversVariant pats n
       | none => false
+    | .bool => pats.any (· matches .literal (.bool true)) && pats.any (· matches .literal (.bool false))
     | .never => true
     | _ => false
 
@@ -127,6 +133,10 @@ def convTy (E : Enums) : Conv → Ty → Option Ty
     | none => none
   | .eachField cs, .record fs =>
     match convFieldsTy E cs fs with
+    | some fs' => some (.record fs')
+    | none => none
+  | .widenRecord ws, .record fs =>
+    match widenTy E fs ws with
     | some fs' => some (.record fs')
     | none => none
   | .eachElement c, .list t =>
@@ -153,6 +163,21 @@ def convFieldsTy (E : Enums) : List (String × Option Conv) → List (String × 
       | _, _ => none
     else none
   | _, _ => none
+def widenTy (E : Enums) (fs : List (String × Ty)) :
+    List (String × Bool × Option Conv × Ty) → Option (List (String × Ty))
+  | [] => some []
+  | (n, false, _, t) :: ws =>
+    match t, widenTy E fs ws with
+    | .option _, some rest => some ((n, t) :: rest)
+    | _, _ => none
+  | (n, true, none, t) :: ws =>
+    match fieldLookup fs n, widenTy E fs ws with
+    | some s, some rest => if s == t then some ((n, t) :: rest) else none
+    | _, _ => none
+  | (n, true, some c, t) :: ws =>
+    match fieldLookup fs n, widenTy E fs ws with
+    | some s, some rest => if convTy E c s == some t then some ((n, t) :: rest) else none
+    | _, _ => none
 def convItemsTy (E : Enums) : List (Option Conv) → List Ty → Option (List Ty)
   | [], [] => some []
   | none :: cs, t :: ts =>
@@ -167,13 +192,13 @@ def convItemsTy (E : Enums) : List (Option Conv) → List Ty → Option (List Ty
 end
 
 def orderablePair : Ty → Ty → Bool
-  | .int, .int | .str, .str => true
+  | .int, .int | .float, .float | .str, .str => true
   | .var _, _ | _, .var _ | .never, _ | _, .never => true
   | _, _ => false
 
 mutual
 def sortKey : Ty → Bool
-  | .int | .str | .bool | .var _ | .never => true
+  | .int | .float | .str | .bool | .var _ | .never => true
   | .tuple ts => sortKeys ts
   | .list t => sortKey t
   | .nominal _ b => sortKey b
@@ -183,13 +208,23 @@ def sortKeys : List Ty → Bool
   | t :: ts => sortKey t && sortKeys ts
 end
 
-def allStr : List Ty → Bool
-  | [] => true
-  | .str :: ts => allStr ts
-  | _ :: _ => false
+def strArg (E : Enums) : Ty → Bool
+  | .str | .int | .bool | .float => true
+  | .enum e => nullaryEnum E e
+  | _ => false
 
-def opTy : Op → List Ty → Option Ty
+def opTy (E : Enums) : Op → List Ty → Option Ty
   | .add, [.int, .int] => some .int
+  | .add, [.float, .float] => some .float
+  | .sub, [.float] => some .float
+  | .sub, [.float, .float] => some .float
+  | .mul, [.float, .float] => some .float
+  | .div, [.float, .float] => some .float
+  | .toFloat, [.int] => some .float
+  | .round, [.float] => some .int
+  | .floor, [.float] => some .int
+  | .ceil, [.float] => some .int
+  | .count, [.bytes] => some .int
   | .sub, [.int] => some .int
   | .sub, [.int, .int] => some .int
   | .mul, [.int, .int] => some .int
@@ -204,7 +239,7 @@ def opTy : Op → List Ty → Option Ty
   | .not, [.bool] => some .bool
   | .and, [.bool, .bool] => some .bool
   | .or, [.bool, .bool] => some .bool
-  | .str, t :: ts => if allStr (t :: ts) then some .str else none
+  | .str, t :: ts => if (t :: ts).all (strArg E) then some .str else none
   | .count, [.list _] => some .int
   | .count, [.map _] => some .int
   | .first, [.list t] => some t
@@ -245,7 +280,7 @@ inductive HasType (S : Sig) : TyEnv → Option (List Ty) → Expr → Ty → Pro
       HasType S Γ L (.match_ s cs) t
   | applyLocal : fieldLookup Γ n = some (.fn Γd) → bindAllTy Γd ps tys = some Γ' → HasType S Γ' none body t →
       HasTypes S Γ args tys → HasType S Γ L (.applyLocal n (.lam ps tys t body cap) args) t
-  | prelude : HasTypes S Γ args ts → opTy op ts = some t → op.higherOrder = false →
+  | prelude : HasTypes S Γ args ts → opTy S.enums op ts = some t → op.higherOrder = false →
       HasType S Γ L (.prelude op args) t
   | map : LamT S Γ f [a] b → HasType S Γ none xs (.list a) → HasType S Γ L (.prelude .map [f, xs]) (.list b)
   | filter : LamT S Γ f [a] .bool → HasType S Γ none xs (.list a) →
@@ -265,8 +300,9 @@ inductive HasType (S : Sig) : TyEnv → Option (List Ty) → Expr → Ty → Pro
   | core : fieldLookup S.funs fname = some sig → HasTypes S Γ args sig.params →
       HasType S Γ L (.core fname args) sig.output
   | call : capInput S c = some sig → HasType S Γ none arg sig.input → HasType S Γ L (.call c arg) sig.output
+  | tupleItem : HasType S Γ none xs (.tuple ts) → ts[i]? = some t → HasType S Γ L (.tupleItem xs i) t
   | get : HasType S Γ none r (.record fs) → fieldLookup fs fld = some t → HasType S Γ L (.get r fld) t
-  | mkRecord : Fields S Γ fs tfs → HasType S Γ L (.mkRecord fs) (.record tfs)
+  | mkRecord : Fields S Γ fs tfs → HasType S Γ L (.mkRecord fs) (.record (sortFields tfs))
   | mkList : AllT S Γ es t → HasType S Γ L (.mkList es t) (.list t)
   | mkTuple : HasTypes S Γ es ts → HasType S Γ L (.mkTuple es) (.tuple ts)
   | wrapSome : HasType S Γ none e t → HasType S Γ L (.wrap .some e (.option t)) (.option t)
@@ -278,6 +314,7 @@ inductive HasType (S : Sig) : TyEnv → Option (List Ty) → Expr → Ty → Pro
   | coerce : HasType S Γ none e s → convTy S.enums c s = some t → HasType S Γ L (.coerce e c) t
   | attempt : HasType S Γ none e t → HasType S Γ L (.attempt e) (.result t callErrorTy)
   | retry : HasType S Γ none e t → HasType S Γ L (.retry ds ks e) t
+  | sleep : HasType S Γ L (.sleep ms) .unit
   | waitUntil : LamT S Γ p [t] .bool → HasType S Γ none e t → HasType S Γ L (.waitUntil is p e) t
   | loop : HasTypes S Γ init ts → bindAllTy Γ bs ts = some Γ' → HasType S Γ' (some ts) body t →
       HasType S Γ L (.loop m bs init body) t

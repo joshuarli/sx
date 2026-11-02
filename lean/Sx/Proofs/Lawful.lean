@@ -4,7 +4,7 @@ namespace Sx
 
 mutual
 theorem Ty.beq_refl : ∀ (a : Ty), Ty.beq a a = true
-  | .bool | .int | .str | .unit | .never => by simp [Ty.beq]
+  | .bool | .int | .float | .bytes | .str | .unit | .never => by simp [Ty.beq]
   | .list a | .map a | .option a => by simp [Ty.beq, Ty.beq_refl a]
   | .result a b => by simp [Ty.beq, Ty.beq_refl a, Ty.beq_refl b]
   | .tuple as => by simp [Ty.beq, Ty.beqList_refl as]

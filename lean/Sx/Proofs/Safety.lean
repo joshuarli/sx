@@ -42,21 +42,6 @@ theorem Fields.names {S : Sig} {Γ : TyEnv} :
   | [], [], _ => rfl
   | _ :: _, _ :: _, .cons _ h => by simp [Fields.names h]
 
-theorem record_lookup {E : Enums} :
-    ∀ (fs : List (String × Val)) (tfs : List (String × Ty)) (n : String) (t : Ty),
-      fs.map Prod.fst = tfs.map Prod.fst → All2 (VT E) (fs.map Prod.snd) (tfs.map Prod.snd) →
-      fieldLookup tfs n = some t → ∃ w, fieldLookup fs n = some w ∧ VT E w t
-  | [], [], _, _, _, _, h => by simp [fieldLookup] at h
-  | (k, v) :: fs, (k', t') :: tfs, n, t, hn, ha, h => by
-    simp at hn; obtain ⟨rfl, hn⟩ := hn
-    cases ha with
-    | cons hv ha =>
-      by_cases hk : k = n
-      · subst hk; rw [fieldLookup_eq] at h ⊢; cases h; exact ⟨v, rfl, hv⟩
-      · rw [fieldLookup_ne _ _ hk] at h ⊢; exact record_lookup fs tfs n t hn ha h
-  | [], _ :: _, _, _, hn, _, _ => by simp at hn
-  | _ :: _, [], _, _, hn, _, _ => by simp at hn
-
 theorem closureOf_typed {S : Sig} {Γ : TyEnv} {ρ : Env} {f : Expr} {tys : List Ty} {res : Ty}
     (hl : LamT S Γ f tys res) (hp : isPure f = true) (he : ET S.enums ρ Γ) :
     ∃ c, closureOf ρ f = .ok c ∧ CloT S c tys res := by
@@ -310,6 +295,18 @@ theorem step_eval {S : Sig} {P : PureCtx} {n : Nat} (hcores : CoresOk S P.cores)
     simp only [isPure] at hp
     simp only [evalP, hfo]
     exact SafeE.bind (ih.2.1 _ _ _ _ hp hargs he) fun vs hvs => applyOp_typed _ _ _ _ hop hvs
+  | tupleItem hxs hti =>
+    simp only [isPure] at hp
+    simp only [evalP]
+    refine SafeE.bind (ih.1 _ _ _ _ hp hxs he) fun v hv => ?_
+    cases hv with
+    | @tuple items _ hitems =>
+      have hlen := All2.length_eq hitems
+      obtain ⟨hlt, heq⟩ := List.getElem?_eq_some_iff.mp hti
+      have hlt' : _ < items.length := hlen ▸ hlt
+      simp only [List.getElem?_eq_getElem hlt']
+      subst heq
+      exact All2.get hitems _ hlt' hlt
   | map hf hxs =>
     simp only [isPure] at hp
     exact ih.2.2.2.2.2.2.2.2 _ _ _ _ _ rfl hp (.map hf hxs) he
@@ -362,9 +359,12 @@ theorem step_eval {S : Sig} {P : PureCtx} {n : Nat} (hcores : CoresOk S P.cores)
     have hl1 : vs.length = _ := All2.length_eq hvs
     have hl2 : fs.length = tfs.length := by
       have := congrArg List.length hn; simpa using this
-    refine sized (VT.record ?_ ?_)
-    · rw [List.map_fst_zip (by simp [hl1, hl2])]; exact hn
-    · rw [List.map_snd_zip (by simp [hl1, hl2])]; exact hvs
+    have hal : Aligned (VT S.enums) ((fs.map Prod.fst).zip vs) tfs := by
+      refine ⟨?_, ?_⟩
+      · rw [List.map_fst_zip (by simp [hl1, hl2])]; exact hn
+      · rw [List.map_snd_zip (by simp [hl1, hl2])]; exact hvs
+    have hs := sortFields_aligned _ _ hal
+    exact sized (VT.record hs.1 hs.2)
   | mkList hes =>
     simp only [isPure] at hp
     simp only [evalP]
@@ -399,6 +399,7 @@ theorem step_eval {S : Sig} {P : PureCtx} {n : Nat} (hcores : CoresOk S P.cores)
   | attempt _ => simp [isPure] at hp
   | retry _ => simp [isPure] at hp
   | waitUntil _ _ => simp [isPure] at hp
+  | sleep => simp [isPure] at hp
   | loop _ _ _ => simp [isPure] at hp
   | par _ => simp [isPure] at hp
   | parMap _ _ => simp [isPure] at hp

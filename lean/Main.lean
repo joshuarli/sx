@@ -1,4 +1,6 @@
-import Sx
+import Sx.Host
+import Sx.Check
+import Sx.Eval
 
 open Lean (Json)
 
@@ -38,7 +40,7 @@ def main (args : List String) : IO UInt32 := do
     let fixture ← readJson fixturePath
     match Sx.parseProgram ir >>= fun prog => Sx.runFixture prog fixture with
     | .ok out =>
-      IO.println out.compress
+      IO.println (Sx.renderJson out)
       pure 0
     | .error e =>
       IO.eprintln s!"sx-ref: {e}"

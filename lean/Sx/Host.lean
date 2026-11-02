@@ -49,6 +49,23 @@ def answer (prog : Program) (entries : List Entry) (r : Req) : Except String (Li
         else go (e :: before) rest
     go [] entries
 
+def trailingZeros : Nat → Nat → Nat × Nat
+  | 0, m => (m, 0)
+  | fuel + 1, m => if m ≠ 0 ∧ m % 10 = 0 then let (r, k) := trailingZeros fuel (m / 10); (r, k + 1) else (m, 0)
+
+def renderNumber (n : Lean.JsonNumber) : String :=
+  if n.exponent = 0 ∧ n.mantissa.natAbs ≥ 10 ^ 21 then
+    let (m, k) := trailingZeros 4000 n.mantissa.natAbs
+    (if n.mantissa < 0 then "-" else "") ++ toString m ++ "e" ++ toString k
+  else (Json.num n).compress
+
+partial def renderJson : Json → String
+  | .num n => renderNumber n
+  | .arr items => "[" ++ ",".intercalate (items.toList.map renderJson) ++ "]"
+  | .obj kvs =>
+    "{" ++ ",".intercalate (kvs.toList.map fun (k, v) => (Json.str k).compress ++ ":" ++ renderJson v) ++ "}"
+  | j => j.compress
+
 def eventJson : Event → Json
   | .request id cap input => Json.mkObj [("request", id), ("capability", cap), ("input", input)]
   | .delay id ms => Json.mkObj [("delay", id), ("milliseconds", (ms : Int))]

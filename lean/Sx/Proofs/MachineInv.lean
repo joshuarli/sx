@@ -144,6 +144,7 @@ theorem seqChildren_ok (e : Expr) : OkP (fun cs => ∀ c ∈ cs, callsOf c ⊆ c
     intro c hc; exact List.Subset.trans (mem_callsOfList hc) (by simp [callsOf])
   | .call _ arg => intro c hc; simp at hc; subst hc; simp [callsOf]
   | .get r _ => intro c hc; simp at hc; subst hc; simp [callsOf]
+  | .tupleItem r _ => intro c hc; simp at hc; subst hc; simp [callsOf]
   | .wrap _ x _ => intro c hc; simp at hc; subst hc; simp [callsOf]
   | .coerce x _ => intro c hc; simp at hc; subst hc; simp [callsOf]
   | .mkRecord fs => intro c hc; exact mem_callsOfFields hc
@@ -151,7 +152,7 @@ theorem seqChildren_ok (e : Expr) : OkP (fun cs => ∀ c ∈ cs, callsOf c ⊆ c
   | .mkVariant _ _ (some x) => intro c hc; simp at hc; subst hc; simp [callsOf]
   | .parMap _ f xs => intro c hc; simp at hc; rcases hc with rfl | rfl <;> simp [callsOf]
   | .lit .. | .var _ | .let_ .. | .localFn .. | .if_ .. | .match_ .. | .lam .. | .attempt _ | .retry .. | .waitUntil ..
-  | .par _ => trivial
+  | .par _ | .sleep _ => trivial
 
 theorem closureOf_ok {C : List String} {env : Env} {e : Expr} (h : callsOf e ⊆ C) :
     OkP (CloOk C) (closureOf env e) := by
@@ -257,7 +258,7 @@ theorem finishSeq_ok {C : List String} {ctx : Ctx} {g : Glob} {f : Fiber} {stack
       · trivial
     · okp_auto
       all_goals first | trivial | exact ⟨⟨trivial, hs⟩, by simp, hg⟩
-  | .core _ _ | .get _ _ | .mkRecord _ | .mkList _ _ | .mkTuple _ | .wrap _ _ _ | .mkVariant _ _ _
+  | .core _ _ | .get _ _ | .tupleItem _ _ | .mkRecord _ | .mkList _ _ | .mkTuple _ | .wrap _ _ _ | .mkVariant _ _ _
   | .coerce _ _ | .recur _ =>
     unfold finishSeq; dsimp only
     okp_auto
@@ -299,7 +300,7 @@ theorem finishSeq_ok {C : List String} {ctx : Ctx} {g : Glob} {f : Fiber} {stack
       exact hc
     · trivial
   | .lit .. | .var _ | .let_ .. | .localFn .. | .if_ .. | .match_ .. | .lam .. | .attempt _ | .retry ..
-  | .waitUntil .. | .par _ => trivial
+  | .waitUntil .. | .par _ | .sleep _ => trivial
 
 theorem evalNode_ok {C : List String} {ctx : Ctx} {g : Glob} {f : Fiber} {e : Expr} {env : Env}
     (hs : StackOk C f.stack) (he : callsOf e ⊆ C) (hg : CountersOk ctx.budgets g.counters) :
@@ -331,6 +332,8 @@ theorem evalNode_ok {C : List String} {ctx : Ctx} {g : Glob} {f : Fiber} {e : Ex
     refine OkP.bind (closureOf_ok (sub (by simp [callsOf]) : callsOf pred ⊆ C)) fun c hc => ?_
     refine ⟨⟨sub (by simp [callsOf]), StackOk.cons ?_ hs⟩, by simp, hg⟩
     exact ⟨hc, sub (by simp [callsOf])⟩
+  | .sleep 0 => exact ⟨⟨trivial, hs⟩, by simp, hg⟩
+  | .sleep (k + 1) => exact requestDelay_ok hs hg
   | .par bs =>
     refine ⟨⟨trivial, StackOk.cons (fun c h => by simp at h) hs⟩, ?_, hg⟩
     intro ch hch
@@ -342,7 +345,7 @@ theorem evalNode_ok {C : List String} {ctx : Ctx} {g : Glob} {f : Fiber} {e : Ex
       obtain ⟨_, _, heq⟩ := List.mem_zipIdx hbi
       rw [heq]; exact List.getElem_mem _
     exact sub (List.Subset.trans (mem_callsOfList hb) (by simp [callsOf]))
-  | .prelude .. | .core .. | .applyLocal .. | .recur _ | .call .. | .get .. | .mkRecord _ | .mkList .. | .mkTuple _
+  | .prelude .. | .core .. | .applyLocal .. | .recur _ | .call .. | .get .. | .tupleItem .. | .mkRecord _ | .mkList .. | .mkTuple _
   | .wrap .. | .coerce .. | .mkVariant .. | .loop .. | .parMap .. =>
     unfold evalNode; dsimp only
     refine OkP.bind (seqChildren_ok _) fun cs hcs => ?_

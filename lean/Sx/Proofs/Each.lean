@@ -21,6 +21,7 @@ theorem cmpKeys_sortKey {E : Enums} :
     ∀ (k : Ty) (a b : Val), sortKey k = true → VT E a k → VT E b k → ∃ o, cmpKeys a b = .ok o
   | .int, a, b, _, ha, hb => by cases ha; cases hb; exact ⟨_, rfl⟩
   | .str, a, b, _, ha, hb => by cases ha; cases hb; exact ⟨_, rfl⟩
+  | .float, a, b, _, ha, hb => by cases ha; cases hb; exact ⟨_, rfl⟩
   | .bool, a, b, _, ha, hb => by cases ha; cases hb; exact ⟨_, rfl⟩
   | .var _, a, b, _, ha, _ => by cases ha
   | .never, a, b, _, ha, _ => by cases ha
@@ -47,6 +48,7 @@ theorem cmpKeys_sortKey {E : Enums} :
       cases hb with
       | nominal hb => exact cmpKeys_sortKey base a b hk ha hb
   | .unit, _, _, hk, _, _ => by simp [sortKey] at hk
+  | .bytes, _, _, hk, _, _ => by simp [sortKey] at hk
   | .map _, _, _, hk, _, _ => by simp [sortKey] at hk
   | .option _, _, _, hk, _, _ => by simp [sortKey] at hk
   | .result _ _, _, _, hk, _, _ => by simp [sortKey] at hk

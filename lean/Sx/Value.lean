@@ -1,4 +1,5 @@
 import Sx.Syntax
+import Sx.Float
 
 namespace Sx
 
@@ -42,6 +43,7 @@ abbrev Env := List (String × Slot)
 mutual
 def Val.size : Val → Nat
   | .str s => 1 + s.length / 32
+  | .bytes b => 1 + base64Length b / 32
   | .list vs => 1 + sizeList vs
   | .tuple vs => 1 + sizeList vs
   | .record fs => 1 + sizeFields fs
@@ -75,6 +77,8 @@ mutual
 def Val.eqv : Val → Val → Bool
   | .bool a, .bool b => a == b
   | .int a, .int b => a == b
+  | .float a, .float b => a == b
+  | .bytes a, .bytes b => a == b
   | .str a, .str b => a == b
   | .unit, .unit => true
   | .none, .none => true
@@ -109,6 +113,8 @@ end
 
 def ordOfBool (b : Bool) : Nat := if b then 1 else 0
 
+def compareFloat (a b : Float) : Ordering := if a < b then .lt else if b < a then .gt else .eq
+
 mutual
 def cmpKeys : Val → Val → Except Failure Ordering
   | .list as, .list bs => cmpKeyLists as bs
@@ -117,6 +123,7 @@ def cmpKeys : Val → Val → Except Failure Ordering
   | .tuple as, .tuple bs => cmpKeyLists as bs
   | .bool a, .bool b => pure (compare (ordOfBool a) (ordOfBool b))
   | .int a, .int b => pure (compare a b)
+  | .float a, .float b => pure (compareFloat a b)
   | .str a, .str b => pure (compare a b)
   | _, _ => internal "A sort key is not an Int, String, Bool, or tuple."
 def cmpKeyLists : List Val → List Val → Except Failure Ordering
@@ -145,6 +152,9 @@ def convert : Val → Conv → Except Failure Val
   | .record fs, .eachField cs => do
     let fs' ← convertFields fs cs
     pure (.record fs')
+  | .record fs, .widenRecord ws => do
+    let fs' ← widenFields fs ws
+    pure (.record fs')
   | .list vs, .eachElement c => do
     let ws ← convertEach vs c
     pure (.list ws)
@@ -163,6 +173,21 @@ def convertFields : List (String × Val) → List (String × Option Conv) → Ex
       pure ((m, w) :: rest)
     else internal "A record conversion names a different field."
   | _, _ => internal "A record conversion has the wrong number of fields."
+def widenFields (fs : List (String × Val)) :
+    List (String × Bool × Option Conv × Ty) → Except Failure (List (String × Val))
+  | [] => pure []
+  | (n, false, _, _) :: ws => do
+    let rest ← widenFields fs ws
+    pure ((n, .none) :: rest)
+  | (n, true, oc, _) :: ws =>
+    match fieldLookup fs n with
+    | some v => do
+      let w ← match oc with
+        | none => pure v
+        | some c => convert v c
+      let rest ← widenFields fs ws
+      pure ((n, w) :: rest)
+    | none => internal "A widened record lost a field."
 def convertEach (vs : List Val) (c : Conv) : Except Failure (List Val) :=
   vs.mapM fun v => convert v c
 def convertItems : List Val → List (Option Conv) → Except Failure (List Val)
@@ -197,6 +222,7 @@ def matchPat (env : Env) : Pat → Val → Except Failure (Option Env)
     pure (some env')
   | .none, .none => pure (some env)
   | .none, _ => pure none
+  | .literal lit, v => pure (if v.eqv lit then some env else none)
   | .some p, .some v => matchPat env p v
   | .some _, _ => pure none
   | .ok p, .ok v => matchPat env p v
@@ -219,13 +245,35 @@ def mapInsert (k : String) (v : Val) : List (String × Val) → List (String × 
     else if k < k' then (k, v) :: (k', v') :: rest
     else (k', v') :: mapInsert k v rest
 
+def insertField {α : Type} (p : String × α) : List (String × α) → List (String × α)
+  | [] => [p]
+  | q :: qs => if p.1 < q.1 then p :: q :: qs else q :: insertField p qs
+
+def sortFields {α : Type} : List (String × α) → List (String × α)
+  | [] => []
+  | p :: ps => insertField p (sortFields ps)
+
 def makeMap (pairs : List (String × Val)) : List (String × Val) :=
   pairs.foldl (fun acc (k, v) => mapInsert k v acc) []
 
-def joinStrings : List Val → String
-  | [] => ""
-  | .str s :: rest => s ++ joinStrings rest
-  | _ :: rest => joinStrings rest
+def textOf : Val → Except Failure String
+  | .bool b => pure (if b then "true" else "false")
+  | .int i => pure (toString i)
+  | .str s => pure s
+  | .float f => pure (floatText f)
+  | .variant _ n none => pure n
+  | _ => internal "str cannot write this value."
+
+def checkedFloat (x : Float) : Except Failure Val :=
+  if x.isFinite then pure (.float x)
+  else failWith .arithmetic "Float overflow: the result is not a finite number, and JSON cannot carry one."
+
+def intFromFloat (r : Option Int) : Except Failure Val :=
+  match r with
+  | some i =>
+    if intMin ≤ i ∧ i ≤ intMax then pure (.int i)
+    else failWith .outOfRange "The Float does not fit in a signed 64-bit Int."
+  | none => failWith .arithmetic "A Float is not finite."
 
 def flattenLists : List Val → Except Failure (List Val)
   | [] => pure []
@@ -250,6 +298,16 @@ def compareWith (op : Op) (o : Ordering) : Bool :=
 
 def applyOp (limit : Nat) : Op → List Val → Except Failure Val
   | .add, [.int a, .int b] => checkedInt (a + b)
+  | .add, [.float a, .float b] => checkedFloat (a + b)
+  | .sub, [.float a] => pure (.float (-a))
+  | .sub, [.float a, .float b] => checkedFloat (a - b)
+  | .mul, [.float a, .float b] => checkedFloat (a * b)
+  | .div, [.float a, .float b] => if b == 0.0 then failWith .arithmetic "/ by zero." else checkedFloat (a / b)
+  | .toFloat, [.int i] => pure (.float (floatOfInt i))
+  | .round, [.float x] => intFromFloat (floatRound x)
+  | .floor, [.float x] => intFromFloat (floatFloor x)
+  | .ceil, [.float x] => intFromFloat (floatCeil x)
+  | .count, [.bytes b] => pure (.int (base64Length b))
   | .sub, [.int a] => checkedInt (-a)
   | .sub, [.int a, .int b] => checkedInt (a - b)
   | .mul, [.int a, .int b] => checkedInt (a * b)
@@ -267,7 +325,8 @@ def applyOp (limit : Nat) : Op → List Val → Except Failure Val
   | .and, [a, b] => pure (.bool (a == .bool true && b == .bool true))
   | .or, [a, b] => pure (.bool (a == .bool true || b == .bool true))
   | .str, args => do
-    let v := Val.str (joinStrings args)
+    let parts ← args.mapM textOf
+    let v := Val.str (String.join parts)
     checkSize limit v
     pure v
   | .count, [.map es] => pure (.int es.length)

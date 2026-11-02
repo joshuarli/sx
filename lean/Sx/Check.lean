@@ -7,6 +7,8 @@ mutual
 def checkVal (E : Enums) : Val → Ty → Bool
   | .bool _, .bool => true
   | .int _, .int => true
+  | .float _, .float => true
+  | .bytes _, .bytes => true
   | .str _, .str => true
   | .unit, .unit => true
   | .list vs, .list t => checkVals E vs t
@@ -171,7 +173,7 @@ def tc (S : Sig) (Γ : TyEnv) (L : Option (List Ty)) (e : Expr) (exp : Option Ty
       | _, _ => none
     else
       match inferAll S Γ args with
-      | some ts => opTy op ts
+      | some ts => opTy S.enums op ts
       | none => none)
   | .core f args =>
     expect exp (match fieldLookup S.funs f with
@@ -181,13 +183,17 @@ def tc (S : Sig) (Γ : TyEnv) (L : Option (List Ty)) (e : Expr) (exp : Option Ty
     expect exp (match capInput S c with
       | some sig => if (tc S Γ none arg (some sig.input)).isSome then some sig.output else none
       | none => none)
+  | .tupleItem xs i =>
+    expect exp (match tc S Γ none xs none with
+      | some (.tuple ts) => ts[i]?
+      | _ => none)
   | .get r fld =>
     expect exp (match tc S Γ none r none with
       | some (.record fs) => fieldLookup fs fld
       | _ => none)
   | .mkRecord fs =>
     expect exp (match inferFields S Γ fs with
-      | some tfs => some (.record tfs)
+      | some tfs => some (.record (sortFields tfs))
       | none => none)
   | .mkList es t => expect exp (if checkEach S Γ es t then some (.list t) else none)
   | .mkTuple es =>
@@ -215,6 +221,7 @@ def tc (S : Sig) (Γ : TyEnv) (L : Option (List Ty)) (e : Expr) (exp : Option Ty
       | some t => some (.result t callErrorTy)
       | none => none)
   | .retry _ _ e => expect exp (tc S Γ none e none)
+  | .sleep _ => expect exp (some .unit)
   | .waitUntil _ p e =>
     expect exp (match tc S Γ none e none with
       | some t => if lamResult S Γ p [t] == some .bool then some t else none
@@ -286,6 +293,8 @@ def isRead (S : Sig) (c : String) : Bool :=
   | some sig => sig.effect == .read
   | none => false
 
+def refusalKinds : List String := ["RateLimited", "NotFound", "PermissionDenied", "Invalid", "Conflict"]
+
 def isRepeatable (S : Sig) (c : String) : Bool :=
   match capInput S c with
   | some sig => sig.effect == .read || sig.idempotent
@@ -305,6 +314,7 @@ def effectsOk (S : Sig) : Expr → Bool
   | .core _ args => effectsOkList S args
   | .call _ arg => effectsOk S arg
   | .get r _ => effectsOk S r
+  | .tupleItem e _ => effectsOk S e
   | .mkRecord fs => effectsOkFields S fs
   | .mkList es _ => effectsOkList S es
   | .mkTuple es => effectsOkList S es
@@ -313,8 +323,11 @@ def effectsOk (S : Sig) : Expr → Bool
   | .mkVariant _ _ (some e) => effectsOk S e
   | .coerce e _ => effectsOk S e
   | .attempt e => effectsOk S e
-  | .retry _ _ e => (callsOf e).all (isRepeatable S) && effectsOk S e
+  | .retry _ ks e =>
+    ((callsOf e).all (isRepeatable S) ||
+      (ks.all refusalKinds.contains && (callsOf e).dropLast.all (isRepeatable S))) && effectsOk S e
   | .waitUntil _ p e => (callsOf e).all (isRead S) && effectsOk S p && effectsOk S e
+  | .sleep _ => true
   | .loop _ _ init body => effectsOkList S init && effectsOk S body
   | .recur args => effectsOkList S args
   | .par bs => (callsOfList bs).all (isRead S) && effectsOkList S bs

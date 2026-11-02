@@ -12,6 +12,8 @@ theorem checkVal_sound {E : Enums} (v : Val) (t : Ty) (h : checkVal E v t = true
   | .int => cases v <;> simp [checkVal] at h; exact .int
   | .str => cases v <;> simp [checkVal] at h; exact .str
   | .unit => cases v <;> simp [checkVal] at h; exact .unit
+  | .float => cases v <;> simp [checkVal] at h; exact .float
+  | .bytes => cases v <;> simp [checkVal] at h; exact .bytes
   | .var _ => cases v <;> simp [checkVal] at h
   | .never => cases v <;> simp [checkVal] at h
   | .list t' =>
@@ -52,8 +54,8 @@ theorem checkVal_sound {E : Enums} (v : Val) (t : Ty) (h : checkVal E v t = true
       · rename_i pt hpt
         exact .variantPayload hpt (checkVal_sound p pt hp)
       · cases hp
-    | .bool _ | .int _ | .str _ | .unit | .list _ | .tuple _ | .record _ | .map _ | .some _ | .none | .ok _
-    | .err _ => simp [checkVal] at h
+    | .bool _ | .int _ | .float _ | .bytes _ | .str _ | .unit | .list _ | .tuple _ | .record _ | .map _ | .some _
+    | .none | .ok _ | .err _ => simp [checkVal] at h
 termination_by (sizeOf v, sizeOf t)
 theorem checkVals_sound {E : Enums} (vs : List Val) (t : Ty) (h : checkVals E vs t = true) : ∀ v ∈ vs, VT E v t := by
   match vs with
@@ -384,6 +386,13 @@ theorem tc_sound {S : Sig} : ∀ (e : Expr) (Γ : TyEnv) (L : Option (List Ty)) 
         exact ⟨.call hsig hat, hexp⟩
       · cases hr
     · cases hr
+  | .tupleItem xs i, Γ, L, exp, t, h => by
+    simp only [tc] at h
+    obtain ⟨hr, hexp⟩ := expect_some h
+    split at hr
+    · rename_i ts hts
+      exact ⟨.tupleItem (tc_sound xs Γ none none _ hts).1 hr, hexp⟩
+    · cases hr
   | .get r fld, Γ, L, exp, t, h => by
     simp only [tc] at h
     obtain ⟨hr, hexp⟩ := expect_some h
@@ -475,6 +484,11 @@ theorem tc_sound {S : Sig} : ∀ (e : Expr) (Γ : TyEnv) (L : Option (List Ty)) 
     · rename_i s hs; cases hr
       exact ⟨.attempt (tc_sound e Γ none none s hs).1, hexp⟩
     · cases hr
+  | .sleep ms, Γ, L, exp, t, h => by
+    simp only [tc] at h
+    obtain ⟨hr, hexp⟩ := expect_some h
+    cases hr
+    exact ⟨.sleep, hexp⟩
   | .retry ds ks e, Γ, L, exp, t, h => by
     simp only [tc] at h
     obtain ⟨hr, hexp⟩ := expect_some h
@@ -512,13 +526,14 @@ theorem tc_sound {S : Sig} : ∀ (e : Expr) (Γ : TyEnv) (L : Option (List Ty)) 
   | .applyLocal _ (.if_ ..) _, _, _, _, _, h | .applyLocal _ (.match_ ..) _, _, _, _, _, h
   | .applyLocal _ (.applyLocal ..) _, _, _, _, _, h | .applyLocal _ (.prelude ..) _, _, _, _, _, h
   | .applyLocal _ (.core ..) _, _, _, _, _, h | .applyLocal _ (.call ..) _, _, _, _, _, h
-  | .applyLocal _ (.get ..) _, _, _, _, _, h | .applyLocal _ (.mkRecord _) _, _, _, _, _, h
+  | .applyLocal _ (.get ..) _, _, _, _, _, h | .applyLocal _ (.tupleItem ..) _, _, _, _, _, h | .applyLocal _ (.mkRecord _) _, _, _, _, _, h
   | .applyLocal _ (.mkList ..) _, _, _, _, _, h | .applyLocal _ (.mkTuple _) _, _, _, _, _, h
   | .applyLocal _ (.wrap ..) _, _, _, _, _, h | .applyLocal _ (.mkVariant ..) _, _, _, _, _, h
   | .applyLocal _ (.coerce ..) _, _, _, _, _, h | .applyLocal _ (.attempt _) _, _, _, _, _, h
   | .applyLocal _ (.retry ..) _, _, _, _, _, h | .applyLocal _ (.waitUntil ..) _, _, _, _, _, h
   | .applyLocal _ (.loop ..) _, _, _, _, _, h | .applyLocal _ (.recur _) _, _, _, _, _, h
-  | .applyLocal _ (.par _) _, _, _, _, _, h | .applyLocal _ (.parMap ..) _, _, _, _, _, h => by simp [tc] at h
+  | .applyLocal _ (.par _) _, _, _, _, _, h | .applyLocal _ (.parMap ..) _, _, _, _, _, h
+  | .applyLocal _ (.sleep _) _, _, _, _, _, h => by simp [tc] at h
 theorem inferAll_sound {S : Sig} : ∀ (es : List Expr) (Γ : TyEnv) (ts : List Ty),
     inferAll S Γ es = some ts → HasTypes S Γ es ts
   | [], Γ, ts, h => by simp [inferAll] at h; subst h; exact .nil
@@ -595,10 +610,11 @@ theorem lamResult_sound {S : Sig} : ∀ (f : Expr) (Γ : TyEnv) (args : List Ty)
     · cases h
   | .lit .., _, _, _, h | .var _, _, _, _, h | .let_ .., _, _, _, h | .localFn .., _, _, _, h
   | .if_ .., _, _, _, h | .match_ .., _, _, _, h | .applyLocal .., _, _, _, h | .prelude .., _, _, _, h
-  | .core .., _, _, _, h | .call .., _, _, _, h | .get .., _, _, _, h | .mkRecord _, _, _, _, h
+  | .core .., _, _, _, h | .call .., _, _, _, h | .get .., _, _, _, h | .tupleItem .., _, _, _, h | .mkRecord _, _, _, _, h
   | .mkList .., _, _, _, h | .mkTuple _, _, _, _, h | .wrap .., _, _, _, h | .mkVariant .., _, _, _, h
   | .coerce .., _, _, _, h | .attempt _, _, _, _, h | .retry .., _, _, _, h | .waitUntil .., _, _, _, h
-  | .loop .., _, _, _, h | .recur _, _, _, _, h | .par _, _, _, _, h | .parMap .., _, _, _, h => by
+  | .loop .., _, _, _, h | .recur _, _, _, _, h | .par _, _, _, _, h | .parMap .., _, _, _, h
+  | .sleep _, _, _, _, h => by
     simp [lamResult] at h
 end
 
