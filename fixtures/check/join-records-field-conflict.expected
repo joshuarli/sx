@@ -1,0 +1,5 @@
+error[branch-mismatch] 2:17-2:30
+  (if true {:a 1} {:a "x" :b 2})
+                  ^^^^^^^^^^^^^
+  The branches return different types: Record {a: Int} and Record {a: String, b: Int}.
+  Every branch of an if or match must return the same type.

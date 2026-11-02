@@ -22,6 +22,7 @@ only the forms and functions below exist.
   fields; they are `none`.
 - Tool enums: write a variant as `Passing`. Where an enum is expected, the string `"Passing"`
   works too, and an `if` or `match` may return a string in one branch and an enum in another.
+- Branches may return records with different fields: a field only some write is optional, `none` in the rest.
 - Results: `(ok x)` or `(err e)`, produced by `attempt`.
 - Durations, only in `retry` and `wait-until` options: `250ms`, `5s`, `2m`, `1h`.
 - Comments start with `;`.

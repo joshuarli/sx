@@ -478,6 +478,25 @@ class _Checker:
                 conversions.append((name, conversion))
             else:
                 return True, ir.EachField(tuple(conversions))
+        elif (
+            joining
+            and isinstance(a, RecordType)
+            and isinstance(e, RecordType)
+            and a.names < e.names
+            and all(isinstance(self.resolve(ft), OptionType) for name, ft in e.fields if name not in a.names)
+        ):
+            widened: list[ir.WidenedField] = []
+            for name, ft in e.fields:
+                source = a.field(name)
+                if source is None:
+                    widened.append(ir.WidenedField(name, False, None))
+                    continue
+                ok, conversion = self.convert(source, ft, joining)
+                if not ok:
+                    break
+                widened.append(ir.WidenedField(name, True, conversion))
+            else:
+                return True, ir.WidenRecord(tuple(widened))
         elif isinstance(a, ListType) and isinstance(e, ListType):
             ok, conversion = self.convert(a.element, e.element, joining)
             if ok and conversion is not None:
@@ -550,11 +569,20 @@ class _Checker:
             case _, OptionType() if not self.is_open(ra):
                 inner = self.least_upper_bound(ra, rb.inner)
                 return None if inner is None else OptionType(inner)
-            case RecordType(), RecordType() if ra.names == rb.names:
+            case RecordType(), RecordType():
                 fields: list[tuple[str, Type]] = []
                 for name, field_type in ra.fields:
                     other = rb.field(name)
-                    joined = None if other is None else self.least_upper_bound(field_type, other)
+                    joined = (
+                        self.optional_field(field_type) if other is None else self.least_upper_bound(field_type, other)
+                    )
+                    if joined is None:
+                        return None
+                    fields.append((name, joined))
+                for name, field_type in rb.fields:
+                    if name in ra.names:
+                        continue
+                    joined = self.optional_field(field_type)
                     if joined is None:
                         return None
                     fields.append((name, joined))
@@ -578,6 +606,12 @@ class _Checker:
             case Primitive(), EnumType() if ra == STRING and self.nullary(rb):
                 return STRING
         return None
+
+    def optional_field(self, t: Type) -> Type | None:
+        resolved = self.resolve(t)
+        if isinstance(resolved, OptionType):
+            return t
+        return None if self.is_open(resolved) else OptionType(t)
 
     def nullary(self, t: EnumType) -> bool:
         return all(payload is None for _, payload in t.variants)

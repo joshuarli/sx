@@ -856,6 +856,9 @@ def convert(value: Value, conversion: ir.Conversion) -> Value:
                 field_conversion = conversions.get(name)
                 converted.append((name, item if field_conversion is None else convert(item, field_conversion)))
             return RecordValue(tuple(converted))
+        case ir.WidenRecord(fields=widened):
+            assert isinstance(value, RecordValue)
+            return RecordValue(tuple((field.name, widen_field(value, field)) for field in widened))
         case ir.EachElement(element=element):
             assert isinstance(value, ListValue)
             return ListValue(tuple(convert(item, element) for item in value.items))
@@ -863,6 +866,13 @@ def convert(value: Value, conversion: ir.Conversion) -> Value:
             assert isinstance(value, TupleValue)
             parts = zip(value.items, items, strict=True)
             return TupleValue(tuple(item if c is None else convert(item, c) for item, c in parts))
+
+
+def widen_field(record: RecordValue, field: ir.WidenedField) -> Value:
+    if not field.present:
+        return NONE_VALUE
+    item = record.get(field.name)
+    return item if field.conversion is None else convert(item, field.conversion)
 
 
 def compare_keys(a: Value, b: Value) -> int:

@@ -1,0 +1,3 @@
+; task: dev-failing-ci
+(let [r (if true {:number 1 :ok true} {:number 2 :ok false :kind "x"})]
+  [(get r :kind) (get r :number)])

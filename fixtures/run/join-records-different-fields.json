@@ -1,0 +1,79 @@
+{
+  "description": "Branches that return records with different fields join to the union of the fields, and a field only one branch writes is optional, none in the other branch.",
+  "program": "(let [rs (map (fn [r] (if (= (get r :name) \"a\") {:id \"a\" :ok true} {:id \"b\" :ok false :kind \"x\"})) (call rows.list {}))] [rs (map (fn [r] (get r :kind \"-\")) rs)])",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list",
+    "rows.add",
+    "checks.list"
+  ],
+  "responses": [
+    {
+      "capability": "rows.list",
+      "input": {},
+      "results": [
+        {
+          "output": [
+            {
+              "name": "a",
+              "note": "fast",
+              "hits": 3
+            },
+            {
+              "name": "b",
+              "note": null,
+              "hits": null
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": [
+      [
+        {
+          "id": "a",
+          "ok": true,
+          "kind": null
+        },
+        {
+          "id": "b",
+          "ok": false,
+          "kind": "x"
+        }
+      ],
+      [
+        "-",
+        "x"
+      ]
+    ]
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "rows.list",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": [
+        {
+          "name": "a",
+          "note": "fast",
+          "hits": 3
+        },
+        {
+          "name": "b",
+          "note": null,
+          "hits": null
+        }
+      ]
+    }
+  ]
+}

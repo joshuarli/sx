@@ -156,6 +156,10 @@ TYPES = (
     entry("Map", "Map<String, V>: (into-map [[key value] ...])", "A JSON object with string keys and values of "
           "one type V, listed in key order. Keys are strings, never keywords: keywords only name record fields.",
           '(get (assoc {} "pen" 3) "pen" 0)', "3"),
+    entry("Record", "Record {k: T, ...}: {:k value ...}", "A group of named fields. Branches that return records "
+          "with different fields join to the union of the fields; a field only some branches write is optional, "
+          "and none in the others.",
+          "(map (fn [n] (if (> n 1) {:n n :big true} {:n n})) [1 2])", "[{:n 1 :big none} {:n 2 :big (some true)}]"),
     entry("Tuple", "Tuple<A, B, ...>: [a b ...]", "A fixed-size group of values of different types, from par, "
           "group-by, and bracket literals of mixed types or that a tuple pattern takes apart.",
           '(let [[n s] [1 "a"]] s)', '"a"'),

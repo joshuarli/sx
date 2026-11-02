@@ -71,6 +71,18 @@ class EachField:
 
 
 @dataclass(frozen=True, slots=True)
+class WidenedField:
+    name: str
+    present: bool
+    conversion: Conversion | None
+
+
+@dataclass(frozen=True, slots=True)
+class WidenRecord:
+    fields: tuple[WidenedField, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class EachItem:
     items: tuple[Conversion | None, ...]
 
@@ -85,7 +97,7 @@ class VariantName:
     pass
 
 
-type Conversion = ToSome | EachField | EachItem | EachElement | VariantName
+type Conversion = ToSome | EachField | WidenRecord | EachItem | EachElement | VariantName
 
 
 @dataclass(frozen=True, slots=True)

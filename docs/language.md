@@ -63,6 +63,14 @@ value of type `T` is accepted and becomes `(some value)`. So `(if empty? none na
 `{:branch name}` and one returning `{:branch none}` join to `Record {branch: Option<String>}`.
 Promotion never applies when `T` is itself an `Option`.
 
+Branches that return records with different fields join to the union of the fields. A field in
+both joins as above. A field in only one record becomes `Option<T>`, or stays `Option<T>`, and the
+other branch's record has `none` for it. The fields keep the first branch's order, then the new
+fields in order of first appearance. So `{:number n :ok true}` and `{:number n :ok false :kind "x"}`
+join to `Record {number: Int, ok: Bool, kind: Option<String>}`, and `(get r :kind)` reads the
+result. This holds wherever branches join: `if`, `match`, `cond`, and inside lists and tuples.
+Records whose shared fields have types that do not join are still a `branch-mismatch`.
+
 A record literal checked against a known record type, such as a capability's input or a
 record field of that type, may omit any field whose type is `Option<T>`. The omitted field is `none`, so
 `(call audit.page {})` sends `{"cursor": null}`. Omitting a field that is not optional is a
