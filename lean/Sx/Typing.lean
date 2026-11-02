@@ -1,4 +1,5 @@
 import Sx.Value
+import Sx.Decimal
 
 namespace Sx
 
@@ -201,7 +202,7 @@ def sortKey : Ty → Bool
   | .int | .float | .str | .bool | .var _ | .never => true
   | .tuple ts => sortKeys ts
   | .list t => sortKey t
-  | .nominal _ b => sortKey b
+  | .nominal n b => (nominalCanon n).isNone && sortKey b
   | _ => false
 def sortKeys : List Ty → Bool
   | [] => true

@@ -1,4 +1,5 @@
 import Sx.Run
+import Sx.Cores
 
 namespace Sx
 
@@ -107,12 +108,30 @@ def runSteps (m : Machine) (o : Outcome) : List Json → Except String (Machine 
         runSteps m o rest
     | _ => throw "the machine finished before the fixture's steps ran out"
 
+def fixtureInputs (prog : Program) (fixture : Json) : Except String (List (String × Val)) := do
+  let given := match fieldLookup (objFields fixture) "inputs" with
+    | some j => objFields j
+    | none => []
+  if let some (name, _) := given.find? fun (name, _) => (fieldLookup prog.inputs name).isNone then
+    throw s!"{name} is not an input of the script"
+  prog.inputs.mapM fun (name, ty) => do
+    match fieldLookup given name, fieldLookup prog.inputDecodes name with
+    | some j, some dty => pure (name, ← decode prog.decodeEnums dty j s!"${name}")
+    | some _, none => throw s!"{name} has no decoding type"
+    | none, _ =>
+      match ty with
+      | .option _ => pure (name, Val.none)
+      | _ => throw s!"the script needs a value for input {name}"
+
 def runFixture (prog : Program) (fixture : Json) : Except String Json := do
   let budgets ← match fieldLookup (objFields fixture) "budgets" with
     | some b => parseBudgets b
     | none => pure {}
-  let ctx : Ctx := { prog, budgets, cores := fun _ => none }
-  let (m, o) := (Machine.init ctx []).run
+  let ctx : Ctx := { prog, budgets, cores := coreLibrary }
+  let inputs ← match fixtureInputs prog fixture with
+    | .ok inputs => pure inputs
+    | .error message => return Json.mkObj [("outcome", Json.mkObj [("invalid-input", message)]), ("trace", Json.arr #[])]
+  let (m, o) := (Machine.init ctx inputs).run
   let (m, o) ← match fieldLookup (objFields fixture) "steps" with
     | some steps => runSteps m o (← asArr steps)
     | none => do

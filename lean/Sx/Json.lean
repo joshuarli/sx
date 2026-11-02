@@ -1,5 +1,6 @@
 import Lean.Data.Json
 import Sx.Value
+import Sx.Decimal
 
 namespace Sx
 
@@ -286,6 +287,7 @@ def parseProgram (j : Json) : Except String Program := do
     pure (name, ({ params := ← (← asArr (← field s "params")).mapM parseTy,
                    output := ← parseTy (← field s "output") } : FunSig))
   let inputs ← (objFields (← field j "inputs")).mapM fun (n, t) => do pure (n, ← parseTy t)
+  let inputDecodes ← (objFields (← field j "inputs")).mapM fun (n, t) => do pure (n, ← parseDTy t)
   pure {
     body := ← parseExpr (← field j "body")
     result := ← parseTy (← field j "result")
@@ -295,6 +297,7 @@ def parseProgram (j : Json) : Except String Program := do
     capSigs
     funSigs
     capOutputs
+    inputDecodes
     decodeEnums := (callErrorKindEnum.1, callErrorKinds.map fun k => (k, none)) ::
       decodeEnums.filter (·.1 != "CallErrorKind")
   }
@@ -418,7 +421,16 @@ partial def decode (enums : DecodeEnums) (t : DTy) (j : Json) (path : String) : 
       | _ => fail name
     | _ => fail name
   | .enum name, _ => fail name
-  | .nominal _ base, _ => decode enums base j path
+  | .nominal name base, _ =>
+    match nominalCanon name with
+    | none => decode enums base j path
+    | some canon =>
+      match j with
+      | .str s =>
+        match canon s with
+        | .ok canonical => pure (.str canonical)
+        | .error reason => throw s!"{path}: expected {name}, found a string that is not valid: {reason}"
+      | _ => fail s!"{name} (a string)"
   | .var _, _ => throw s!"{path}: expected a known type, found a type the checker could not resolve"
   | _, _ => fail "a value of a type with no encoding"
 

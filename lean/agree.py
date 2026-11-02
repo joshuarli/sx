@@ -95,6 +95,26 @@ def lone_surrogate_refused(binary: Path) -> bool:
     return ran.returncode != 0 and "lone surrogate" in ran.stderr
 
 
+def outcome_matches(outcome: dict[str, Any], expected: dict[str, Any]) -> bool:
+    if "invalid-input" in expected:
+        message = outcome.get("invalid-input")
+        return isinstance(message, str) and expected["invalid-input"] in message
+    return outcome == expected
+
+
+def decimal_vectors(binary: Path) -> tuple[int, bool]:
+    ran = subprocess.run(
+        [binary, "decimal-vectors", ROOT / "fixtures" / "cores" / "decimal.json"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if ran.stderr:
+        print(ran.stderr, end="")
+    summary = json.loads(ran.stdout)
+    return summary["vectors"], ran.returncode == 0
+
+
 def main() -> int:
     subprocess.run([lake(), "build", "sx-ref"], cwd=LEAN, check=True, capture_output=True)
     binary = LEAN / ".lake" / "build" / "bin" / "sx-ref"
@@ -119,7 +139,7 @@ def main() -> int:
         checked_by_lean = subprocess.run([binary, "check", ir], capture_output=True, text=True, check=False)
         if checked_by_lean.returncode != 0:
             unchecked.append((path.stem, checked_by_lean.stderr.strip()))
-        if "budgets" not in case:
+        if "budgets" not in case and "inputs" not in case:
             pure = subprocess.run([binary, "pure", ir], capture_output=True, text=True, check=True)
             evaluated = json.loads(pure.stdout)
             if "outcome" in evaluated:
@@ -132,10 +152,10 @@ def main() -> int:
             disagreements.append((path.stem, ran.stderr.strip()))
             continue
         result = json.loads(ran.stdout)
-        if result["outcome"] != case["expect"]:
+        if not outcome_matches(result["outcome"], case["expect"]):
             disagreements.append((path.stem, f"outcome {result['outcome']} != {case['expect']}"))
-        elif result["trace"] != case["trace"]:
-            disagreements.append((path.stem, f"trace {result['trace']} != {case['trace']}"))
+        elif result["trace"] != case.get("trace", []):
+            disagreements.append((path.stem, f"trace {result['trace']} != {case.get('trace', [])}"))
     for name, reason in disagreements:
         print(f"disagree {name}: {reason}")
     for name, reason in unchecked:
@@ -148,9 +168,11 @@ def main() -> int:
     for name in wrongly_accepted:
         print(f"lean checker accepts the retry-write twin of {name}")
     print(f"the Lean checker rejects {twins - len(wrongly_accepted)} of {twins} retry-write twins")
+    vectors, vectors_agree = decimal_vectors(binary)
+    print(f"the Lean decimal core {'reproduces' if vectors_agree else 'DISAGREES with'} {vectors} decimal vectors")
     surrogate_refused = lone_surrogate_refused(binary)
     print(f"the Lean reader {'refuses' if surrogate_refused else 'accepts'} a lone surrogate escape in a string")
-    return 1 if disagreements or unchecked or wrongly_accepted or not surrogate_refused else 0
+    return 1 if disagreements or unchecked or wrongly_accepted or not surrogate_refused or not vectors_agree else 0
 
 
 if __name__ == "__main__":

@@ -42,11 +42,11 @@ theorem cmpKeys_sortKey {E : Enums} :
         obtain ⟨o, ho⟩ := cmpKeyLists_tuple ts as bs hk has hbs
         exact ⟨o, by simp only [cmpKeys]; exact ho⟩
   | .nominal _ base, a, b, hk, ha, hb => by
-    simp only [sortKey] at hk
+    simp only [sortKey, Bool.and_eq_true] at hk
     cases ha with
     | nominal ha =>
       cases hb with
-      | nominal hb => exact cmpKeys_sortKey base a b hk ha hb
+      | nominal hb => exact cmpKeys_sortKey base a b hk.2 ha hb
   | .unit, _, _, hk, _, _ => by simp [sortKey] at hk
   | .bytes, _, _, hk, _, _ => by simp [sortKey] at hk
   | .map _, _, _, hk, _, _ => by simp [sortKey] at hk

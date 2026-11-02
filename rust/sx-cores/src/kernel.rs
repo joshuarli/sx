@@ -490,11 +490,22 @@ pub fn decimal_core() -> Core {
         version: "0.1.0".to_string(),
         functions,
         types: vec![("decimal.Decimal".to_string(), decimal), ("decimal.Rounding".to_string(), rounding)],
-        evidence: conformance(&[
-            "rust/sx-cores/tests/decimal_vectors.rs::every_decimal_vector_holds_through_the_kernel",
-            "rust/sx-cores/tests/decimal_vectors.rs::every_decimal_example_produces_its_documented_result",
-            "tests/test_decimal_vectors.py::test_committed_vectors_match_python_decimal",
-        ]),
+        evidence: vec![
+            Evidence {
+                level: Assurance::ConformanceTested,
+                references: [
+                    "rust/sx-cores/tests/decimal_vectors.rs::every_decimal_vector_holds_through_the_kernel",
+                    "rust/sx-cores/tests/decimal_vectors.rs::every_decimal_example_produces_its_documented_result",
+                    "tests/test_decimal_vectors.py::test_committed_vectors_match_python_decimal",
+                ]
+                .map(str::to_string)
+                .to_vec(),
+            },
+            Evidence {
+                level: Assurance::Specified,
+                references: ["lean/Sx/Decimal.lean", "lean/agree.py::decimal_vectors"].map(str::to_string).to_vec(),
+            },
+        ],
     }
 }
 

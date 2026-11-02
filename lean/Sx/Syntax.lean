@@ -185,6 +185,7 @@ structure Program where
   capSigs : List (String × CapSig)
   funSigs : List (String × FunSig)
   capOutputs : List (String × DTy)
+  inputDecodes : List (String × DTy)
   decodeEnums : DecodeEnums
   deriving Inhabited
 
