@@ -271,6 +271,20 @@ gate. Its answers and failures are now development evidence. A fresh held-out se
 agent whose tasks are never read by the language designer, replaces it for any later gate, under
 the same freeze rule.
 
+**Changes after the gate.** With the first held-out set as development evidence:
+- A checker bug: branch joins picked one branch's type instead of a least upper bound, so records
+  needing different fields promoted failed. Every `held-room-booking` answer hit it.
+- `str` writes integers, booleans, and enum values. The machine's `str` had silently dropped
+  non-strings.
+- Records with different fields join, with one-sided fields optional; `retry` of a
+  non-idempotent write is allowed when every retried kind is a refusal and the write is the last
+  call; literal patterns; reserved form names; one report per duplicate diagnostic; `sleep`;
+  literal tuple indexes; an extra closer inside an open bracket is called extra.
+
+New Muse Spark answers after these changes, one sample: development 16 of 17 and the retired set
+22 of 24 at first attempt, all correct at final. The retired set informed the changes, so this is
+not a gate result. The fresh set's gate run used commit 8027f85.
+
 Out of the revision: `Map` and dynamic keys (`assoc`, `keys`), which also make up the
 expressiveness gap, belong to the type-set work in the roadmap.
 
