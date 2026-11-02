@@ -6,6 +6,7 @@ from typing import Any
 
 from sx import ir
 from sx.checker import DEFAULT_BUDGETS, Budgets
+from sx.diagnostics import render
 from sx.machine import (
     CallRequest,
     Completed,
@@ -18,7 +19,9 @@ from sx.machine import (
     Response,
     Suspended,
 )
+from sx.program import compile_source
 from sx.registry import Effect, Registry
+from sx.types import Type
 from sx.values import Value
 
 
@@ -95,3 +98,23 @@ def run(
         outcome = machine.resume([(request.id, host.answer(request)) for request in outcome.requests])
     assert isinstance(outcome, Completed | Failed)
     return Run(outcome, machine)
+
+
+class EvaluationError(Exception):
+    pass
+
+
+def evaluate(
+    registry: Registry, source: str, inputs: Mapping[str, tuple[Type, Value]] | None = None
+) -> Value:
+    given = inputs or {}
+    checked = compile_source(
+        source, registry, allowed=frozenset(), inputs={name: t for name, (t, _) in given.items()}
+    )
+    if checked.program is None:
+        raise EvaluationError(render(source, checked.diagnostics))
+    outcome = run(checked.program, FixtureHost(registry), {name: v for name, (_, v) in given.items()}).outcome
+    if not isinstance(outcome, Completed):
+        assert isinstance(outcome, Failed)
+        raise EvaluationError(f"{outcome.failure.kind.value}: {outcome.failure.message}")
+    return outcome.value

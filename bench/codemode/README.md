@@ -86,8 +86,8 @@ The default export is an async function that receives one object, `api`, and ret
   field `open-prs` is read as `pr["open-prs"]`. A tool whose input is `Record {}` may be called
   with no argument.
 - A failed call throws an error with `.kind` and `.message`.
-- `api.text` and `api.semver` hold the core functions listed in `cores.json`, when the task lists
-  those cores.
+- `api.text` and `api.semver` hold the core functions of the `sx-text` and `sx-semver` packages, implemented in
+  `cores.mjs`, when the task lists those cores. `cores.py` builds the Python side from the packages.
 - `await api.sleep(ms)` waits. Time is virtual, so sleeping costs nothing.
 
 Write the solution a careful engineer would write. Do not golf it.

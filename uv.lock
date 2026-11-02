@@ -2,6 +2,16 @@ version = 1
 revision = 5
 requires-python = ">=3.15"
 
+[manifest]
+members = [
+    "sx",
+    "sx-git",
+    "sx-github",
+    "sx-repomod",
+    "sx-semver",
+    "sx-text",
+]
+
 [[package]]
 name = "colorama"
 version = "0.4.6"
@@ -97,6 +107,11 @@ source = { editable = "." }
 dev = [
     { name = "pytest" },
     { name = "ruff" },
+    { name = "sx-git" },
+    { name = "sx-github" },
+    { name = "sx-repomod" },
+    { name = "sx-semver" },
+    { name = "sx-text" },
     { name = "ty" },
 ]
 
@@ -106,8 +121,76 @@ dev = [
 dev = [
     { name = "pytest", specifier = ">=9.1.1" },
     { name = "ruff", specifier = ">=0.15" },
+    { name = "sx-git", editable = "cores/git" },
+    { name = "sx-github", editable = "cores/github" },
+    { name = "sx-repomod", editable = "hosts/repomod" },
+    { name = "sx-semver", editable = "cores/semver" },
+    { name = "sx-text", editable = "cores/text" },
     { name = "ty", specifier = ">=0.0.84" },
 ]
+
+[[package]]
+name = "sx-git"
+version = "0.1.0"
+source = { editable = "cores/git" }
+dependencies = [
+    { name = "sx" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "sx", editable = "." }]
+
+[[package]]
+name = "sx-github"
+version = "0.1.0"
+source = { editable = "cores/github" }
+dependencies = [
+    { name = "sx" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "sx", editable = "." }]
+
+[[package]]
+name = "sx-repomod"
+version = "0.1.0"
+source = { editable = "hosts/repomod" }
+dependencies = [
+    { name = "sx" },
+    { name = "sx-git" },
+    { name = "sx-github" },
+    { name = "sx-text" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "sx", editable = "." },
+    { name = "sx-git", editable = "cores/git" },
+    { name = "sx-github", editable = "cores/github" },
+    { name = "sx-text", editable = "cores/text" },
+]
+
+[[package]]
+name = "sx-semver"
+version = "0.1.0"
+source = { editable = "cores/semver" }
+dependencies = [
+    { name = "sx" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "sx", editable = "." }]
+
+[[package]]
+name = "sx-text"
+version = "0.1.0"
+source = { editable = "cores/text" }
+dependencies = [
+    { name = "sx" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "sx", editable = "." }]
 
 [[package]]
 name = "ty"

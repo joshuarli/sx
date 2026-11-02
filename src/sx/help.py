@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from importlib.resources import files
 from typing import Any
 
-from sx.registry import Capability, Effect, Function, Registry, load_declarations
+from sx.registry import Assurance, Capability, Core, Effect, Function, Registry, load_declarations
 from sx.types import CALL_ERROR_KINDS, EnumType, RecordType, Type, show_definition, show_type
 
 
@@ -299,9 +299,42 @@ def named_types(types: Iterable[Type], registry: Registry) -> list[str]:
     return lines
 
 
+UNVERIFIED_MEANING = "the interface was validated when the core registered"
+
+
+def render_assurance(core: Core) -> list[str]:
+    lines: list[str] = ["Assurance:"]
+    for level, references in core.assurance.items():
+        if level is Assurance.UNVERIFIED:
+            lines.append(f"  {level.value}: {UNVERIFIED_MEANING}")
+            continue
+        lines.append(f"  {level.value}:")
+        lines += [f"    {reference}" for reference in references]
+    lines += [f"  {level.value}: none" for level in Assurance if level not in core.assurance]
+    return lines
+
+
+def render_core(core: Core) -> str:
+    lines = [f"{core.id} {core.version}  [core]", *render_assurance(core), "Functions:"]
+    for function in core.functions:
+        params = " ".join(show_type(p) for p in function.params)
+        lines.append(f"  ({function.name} {params}) -> {show_type(function.output)}")
+    return "\n".join(lines) + "\n"
+
+
+def render_cores(registry: Registry) -> str:
+    return "".join(
+        f"{core.id} {core.version}  {', '.join(level.value for level in core.assurance)}\n"
+        for core in registry.cores.values()
+    )
+
+
 def lookup(name: str, registry: Registry) -> str | None:
     if name in ENTRIES:
         return render_entry(ENTRIES[name])
+    core = registry.core(name)
+    if core is not None:
+        return render_core(core)
     function = registry.function(name)
     if function is not None:
         return render_function(function)
@@ -315,7 +348,7 @@ def lookup(name: str, registry: Registry) -> str | None:
 
 
 def names(registry: Registry) -> list[str]:
-    return [*ENTRIES, *registry.functions, *registry.capabilities, *registry.types]
+    return [*ENTRIES, *registry.cores, *registry.functions, *registry.capabilities, *registry.types]
 
 
 def tool_listing(registry: Registry, capability_ids: Iterable[str], core_ids: Iterable[str]) -> str:

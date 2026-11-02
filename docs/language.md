@@ -503,6 +503,10 @@ lists the inputs a program uses.
 
 In v0 only the host declares inputs. A script file cannot declare its own.
 
+A host maps command-line options to inputs. In the repomod host, `discover --owner acme --owner beta`
+reaches `discover.sx` as `owners`, a `List<String>`, and `status --offline --dirty` reaches
+`status-offline.sx` as `only-dirty`, a `Bool`.
+
 ## Values and JSON
 
 Capability inputs and outputs, program results, and fixtures use one JSON encoding. Decoding
@@ -632,6 +636,33 @@ core function or type, or a capability. An entry has:
 The registry generates core and capability entries from their declarations. Every example is a
 test, so a help entry cannot drift from the interpreter.
 
+### Cores and assurance
+
+A core registers through the Python API with `Registry.add_core`. `sx help CORE` prints a core's
+version, its assurance, and the signature of each function, and `sx cores` lists every registered
+core with the levels it has reached. `--format json` gives the same for a host. The plain `sx`
+command registers no cores, because cores are Python packages that a host registers. A host
+embeds the command with `sx.cli.main(argv, new_registry)`, where `new_registry` builds its
+registry, so `sx-repomod help text` and `sx-repomod cores` answer for the cores that host
+registers.
+
+A core reports the evidence that exists for it, level by level, and never a single "verified"
+flag. A level that has no evidence says `none`.
+
+| Level | Evidence |
+| --- | --- |
+| `unverified` | The interface was validated. Every registered core has this. |
+| `conformance-tested` | Named fixture and parity tests pass. |
+| `specified` | A Lean model of the core exists. |
+| `proved-properties` | Named theorems about that model check. |
+
+A core declares its evidence as `Evidence(level, references)`, where the references name the tests,
+the model file, or the theorems. The registry rejects a claim that names nothing, a second claim
+at one level, a claim of `unverified`, and `proved-properties` without `specified`. A test requires
+every named conformance test to exist. A theorem is about the Lean model only. It says nothing
+about the Python or Rust code, or about real Git and GitHub behavior, without separate
+conformance evidence.
+
 ## Budgets
 
 The host sets every budget. A program cannot read or raise one.
@@ -653,20 +684,17 @@ The host enforces wall-clock time outside the machine.
 
 ## Example
 
-This sketch shows the intended shape of `discover.sx`. The capability signatures are not fixed
-yet.
+`discover` from the repomod host is a complete program. It reads the catalog, asks GitHub about
+each owner in parallel, and compares the two lists by case-folded name. The host passes `owners`
+as an [input](#inputs), and `catalog.select`, `catalog.owner`, and `github.owner-repos` are
+capabilities. The full text is in `hosts/repomod/src/sx_repomod/programs/discover.sx`, next to
+`status-offline.sx`. Its core of comparing names looks like this:
 
 ```
-(let [catalog (call catalog.load {})
-      pages (par-map {:limit 8}
-              (fn [owner] (call github.owner-repos {:owner owner}))
-              (get catalog :owners))
-      found (sort-by text.casefold (distinct-by text.casefold (flatten pages)))
+(let [found (sort-by text.casefold (distinct-by text.casefold (flatten pages)))
       found-keys (map text.casefold found)
-      known-keys (map text.casefold (get catalog :repos))]
-  {:owners (get catalog :owners)
-   :uncatalogued (filter (fn [name] (not (contains? known-keys (text.casefold name)))) found)
+      known-keys (map text.casefold known)]
+  {:uncatalogued (filter (fn [name] (not (contains? known-keys (text.casefold name)))) found)
    :missing (sort-by text.casefold
-              (filter (fn [name] (not (contains? found-keys (text.casefold name))))
-                      (get catalog :repos)))})
+              (filter (fn [name] (not (contains? found-keys (text.casefold name)))) known))})
 ```

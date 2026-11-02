@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from typing import Any, cast
@@ -44,12 +44,30 @@ class Capability:
     idempotent: bool = False
 
 
+class Assurance(StrEnum):
+    UNVERIFIED = "unverified"
+    CONFORMANCE_TESTED = "conformance-tested"
+    SPECIFIED = "specified"
+    PROVED_PROPERTIES = "proved-properties"
+
+
+@dataclass(frozen=True, slots=True)
+class Evidence:
+    level: Assurance
+    references: tuple[str, ...]
+
+
 @dataclass(frozen=True, slots=True)
 class Core:
     id: str
     version: str
     functions: tuple[Function, ...]
     types: Mapping[str, Type] = field(default_factory=dict)
+    evidence: tuple[Evidence, ...] = ()
+
+    @property
+    def assurance(self) -> Mapping[Assurance, tuple[str, ...]]:
+        return {Assurance.UNVERIFIED: (), **{e.level: e.references for e in self.evidence}}
 
 
 class RegistryError(ValueError):
@@ -68,6 +86,7 @@ class Registry:
             raise RegistryError(f"core id {core.id!r} is not lowercase words joined by -")
         if core.id in self._cores:
             raise RegistryError(f"core {core.id!r} is already registered")
+        self._check_evidence(core)
         for name in core.types:
             self._add_type(name, core.types[name], owner=core.id)
         for function in core.functions:
@@ -82,6 +101,19 @@ class Registry:
                 raise RegistryError(f"function {function.name!r} needs an example with its result")
             self._functions[function.name] = function
         self._cores[core.id] = core
+
+    @staticmethod
+    def _check_evidence(core: Core) -> None:
+        levels = [e.level for e in core.evidence]
+        if Assurance.UNVERIFIED in levels:
+            raise RegistryError(f"core {core.id!r} declares unverified evidence; registering the interface is that")
+        if len(set(levels)) != len(levels):
+            raise RegistryError(f"core {core.id!r} declares one level of evidence twice")
+        for evidence in core.evidence:
+            if not evidence.references:
+                raise RegistryError(f"core {core.id!r} claims {evidence.level.value} without naming its evidence")
+        if Assurance.PROVED_PROPERTIES in levels and Assurance.SPECIFIED not in levels:
+            raise RegistryError(f"core {core.id!r} claims proved properties of a model it does not specify")
 
     def add_capability(self, capability: Capability) -> None:
         namespace, _, member = capability.id.partition(".")
@@ -107,6 +139,13 @@ class Registry:
 
     def function(self, name: str) -> Function | None:
         return self._functions.get(name)
+
+    def core(self, core_id: str) -> Core | None:
+        return self._cores.get(core_id)
+
+    @property
+    def cores(self) -> Mapping[str, Core]:
+        return self._cores
 
     def capability(self, capability_id: str) -> Capability | None:
         return self._capabilities.get(capability_id)
@@ -171,44 +210,3 @@ def load_declarations(registry: Registry, declarations: Mapping[str, Any]) -> No
                 idempotent=bool(entry.get("idempotent", False)),
             )
         )
-
-
-def signatures_core(
-    core_id: str, entries: Iterable[Mapping[str, Any]], types: Mapping[str, str], registry: Registry
-) -> Core:
-    core_types = {
-        name: with_name(name, registry.parse(definition))
-        for name, definition in types.items()
-        if name.startswith(f"{core_id}.")
-    }
-    named = {**registry.types, **core_types}
-
-    def parse(text: str) -> Type:
-        try:
-            return parse_type(text, named)
-        except TypeSyntaxError as error:
-            raise RegistryError(str(error)) from error
-
-    functions = []
-    for entry in entries:
-        if not entry["name"].startswith(f"{core_id}."):
-            continue
-        example = entry.get("example")
-        functions.append(
-            Function(
-                name=entry["name"],
-                params=tuple(parse(param) for param in entry["params"]),
-                output=parse(entry["output"]),
-                description=entry["description"],
-                example=None if example is None else Example(example[0], example[1]),
-            )
-        )
-    return Core(id=core_id, version="0.0.0", functions=tuple(functions), types=core_types)
-
-
-def declared_registry(declarations: Mapping[str, Any], core_signatures: Mapping[str, Any]) -> Registry:
-    registry = Registry()
-    load_declarations(registry, declarations)
-    for core_id in declarations.get("cores", []):
-        registry.add_core(signatures_core(core_id, core_signatures["functions"], core_signatures["types"], registry))
-    return registry

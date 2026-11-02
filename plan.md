@@ -136,6 +136,8 @@ sx/
   src/sx/                 kernel: reader, checker, machine, registry, prelude
   cores/text/             text core (casefold, split, join)
   cores/semver/           unrelated sample core used to prove extensibility
+  cores/git/              checkout enum and local status decisions
+  cores/github/           CI and upstream states and check aggregation
   hosts/repomod/          sx-repomod: capabilities wrapping repomod, Sx programs, parity tests
   bench/codemode/         Phase 2 probe: task corpus, Sx and JS arms, scoring
   fixtures/               semantic fixtures shared by Python, Lean, and Rust
@@ -310,6 +312,26 @@ Held-out exposure before the revision: the aggregate report, diagnostic codes wi
 and the judge's reason line for each final failure. No held-out task or model answer was read.
 The bracket-diagnostic change (item 8) matches the held-out `unclosed` repair rate as well as the
 development evidence.
+
+**Phase 3.** The `text`, `semver`, `git`, and `github` cores are workspace packages that register
+through the Python API with no kernel change, and each reports its evidence by level through `sx help
+CORE` and `sx cores`. `sx-repomod` runs `discover.sx` and `status-offline.sx` over read-only
+capabilities and prints through repomod's own text code. Gate evidence:
+
+- The parity tests (26 in `hosts/repomod/tests`) match the Python commands' parsed `--json`, text,
+  and exit status on a 16-repository fleet that covers every checkout variant and CI cache shape, on
+  11 option sets for `status` and 5 for `discover`, and on every error path. A read-only shadow run
+  against the live catalog matched too: `status --offline` on 34 repositories, `--failed` on 27, and
+  `discover`.
+- `uv run python -c "import importlib.util, sys; sys.exit(importlib.util.find_spec('repomod') is not
+  None)" && uv run pytest tests cores` passes without repomod installed.
+- repomod's suite, run from a copy, gives 595 passed and 1 skipped, and `../repomod` is unchanged.
+
+Three deviations from the phase text. `Invalid` carries its error text, because the report prints
+it. The host finds repomod on `PYTHONPATH` instead of declaring a path dependency, since a
+dependency makes uv build into `../repomod` and the worktree layout moves it. `status` has no
+`--checkout` or `--details`. The programs keep repomod's flat JSON row, so a missing checkout still
+reports zero changes there, but the cores and the program decide on the enum.
 
 Decided at the Phase 0 checkpoint:
 
