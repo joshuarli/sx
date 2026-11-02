@@ -1180,6 +1180,7 @@ compare traces sorted by request ID.
 | `loop-limit` | A `loop` reached its `:max` and its body asked to `recur` again | No |
 | `budget-exhausted` | A budget ran out. The error names the budget. | No |
 | `arithmetic` | Overflow, division by zero, a `Float` result that is infinite or not a number, negative `take` count, or a core function whose arithmetic fails, such as a `decimal` result beyond 38 digits | No |
+| `invalid-input` | A core function refused an input outside its domain; the message says why, as in `yaml.get` on a flow collection or `text.split` with an empty separator | No |
 | `out-of-range` | `first` of an empty list, `nth` past the end, or `round`, `floor`, or `ceil` beyond the `Int` range | No |
 | `internal` | Interpreter bug | No |
 
@@ -1551,8 +1552,9 @@ positive infinity. A tie only matters to the two half modes.
 A place count outside 0 to 38, division by zero (`0` divided by `0` included), and a result beyond
 either limit fail the program with `arithmetic`. A result is judged in canonical form: `9999999999999999999999999999999999999.5` plus `0.5` is `10000000000000000000000000000000000000` and fits, while
 `99999999999999999999999999999999999999` plus `1` does not. A core reports such a failure
-as `CoreError::Arithmetic`, which the machine turns into `arithmetic` with the function's name; any
-other `CoreError::Failed` is `internal`.
+as `CoreError::Arithmetic`, which the machine turns into `arithmetic` with the function's name. A
+core that refuses an input outside its domain returns `CoreError::InvalidInput`, which becomes
+`invalid-input`; any other `CoreError::Failed` is `internal`.
 
 `fixtures/cores/decimal.json` holds the conformance vectors, generated from Python's `decimal` module
 by `rust/sx-cores/scripts/decimal_vectors.py`. A test regenerates them and fails when the committed
@@ -1606,11 +1608,10 @@ a duplicate key in one mapping, a line indented deeper than the structure above 
 fit the structure, `a: b: c`, text after a closing quote, an undefined escape, and a plain scalar that starts
 with `@`, a backtick, `,`, `]`, or `}`.
 
-**How a failure reaches the program.** A refusal is `CoreError::Arithmetic`, so the machine stops the
-program with the `arithmetic` failure kind and the message `yaml.get: line 3: flow collections are
+**How a failure reaches the program.** A refusal is `CoreError::InvalidInput`, so the machine stops the
+program with the `invalid-input` failure kind and the message `yaml.get: line 3: flow collections are
 outside the supported YAML subset, so the text is left alone`. `attempt` does not catch it, like every
-`arithmetic` failure. A dedicated failure kind would need a new row in the failure table of the Rust
-machine and the Lean model, and the existing `arithmetic` kind is the one a core can already raise.
+`invalid-input` failure.
 
 **Quoting.** `yaml.set` writes the new value in the style of the scalar it replaces: a double-quoted
 scalar stays double-quoted, a single-quoted one stays single-quoted (double-quoted instead when the value

@@ -18,7 +18,7 @@ definition of what each core function does until the Lean model covers the cores
 | `function` | The function ID, such as `text.casefold` |
 | `args` | The arguments, in the [JSON form of their declared types](../../docs/language.md#inputs) |
 | `result` | The result in the same form, present unless the call fails |
-| `fails` | Present instead of `result` when the Python function raises. The only failure is `"ValueError"`, from `text.split` with an empty separator. |
+| `fails` | Present instead of `result` when the Python function raises. The only failure is `"ValueError"`, from `text.split` with an empty separator, which the Rust core reports as `invalid-input`. |
 
 `scripts/core_vectors.py` in the crate builds the vectors by decoding each argument with the
 function's declared type, calling the registered implementation, and encoding the result. The

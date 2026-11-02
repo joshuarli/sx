@@ -8,6 +8,7 @@ inductive FailKind where
   | invalidHostResponse
   | budgetExhausted
   | arithmetic
+  | invalidInput
   | outOfRange
   | loopLimit
   | internal
@@ -18,6 +19,7 @@ def FailKind.name : FailKind → String
   | .invalidHostResponse => "invalid-host-response"
   | .budgetExhausted => "budget-exhausted"
   | .arithmetic => "arithmetic"
+  | .invalidInput => "invalid-input"
   | .outOfRange => "out-of-range"
   | .loopLimit => "loop-limit"
   | .internal => "internal"

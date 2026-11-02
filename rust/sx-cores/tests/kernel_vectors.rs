@@ -47,7 +47,7 @@ fn every_core_vector_holds_through_the_kernel_values_and_signatures() {
                         failures.push(format!("{}: got {}", shown(), dumps(&actual, Layout::Spaced).unwrap_or_default()));
                     }
                 }
-                (None, Err(CoreError::Failed(_))) if vector.get("fails").is_some() => {}
+                (None, Err(CoreError::InvalidInput(_))) if vector.get("fails").is_some() => {}
                 (_, other) => failures.push(format!("{}: got {other:?}", shown())),
             }
         }

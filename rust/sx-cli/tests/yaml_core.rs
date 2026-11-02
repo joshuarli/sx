@@ -100,7 +100,7 @@ fn text_outside_the_supported_subset_stops_the_program_with_a_reason() {
     let outcome = parse(&ran.stdout).expect("json");
     assert_eq!(outcome.get("outcome").and_then(Json::as_str), Some("failed"));
     let failure = outcome.get("failure").expect("failure");
-    assert_eq!(failure.get("kind").and_then(Json::as_str), Some("arithmetic"));
+    assert_eq!(failure.get("kind").and_then(Json::as_str), Some("invalid-input"));
     let message = failure.get("message").and_then(Json::as_str).expect("message");
     assert!(message.starts_with("yaml.set: line 2: flow collections are outside the supported YAML subset"), "{message}");
     assert_eq!(fs::read_to_string(&path).expect("manifest"), "services:\n  web: {image: nginx}\n");
