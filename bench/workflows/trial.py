@@ -1,4 +1,5 @@
 import json
+import re
 import time
 from collections.abc import Callable
 from dataclasses import asdict
@@ -6,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import arms
+import definition
 from arms import NO_CORES, Arm, ArmRun
 from definition import Evidence, Workflow
 from pilot import ask as ask_model
@@ -22,14 +24,38 @@ LANGUAGE: dict[str, str] = {"sx": "sx", "js": "ts"}
 
 
 TAILORED = "tailored"
+CORPUS = "corpus"
+EXAMPLE_ORIGIN = re.compile(r"\{\{([a-z][a-z0-9]*)_origin\}\}")
 REPLY_SX = "Reply with one Sx program in a ```sx code block, and nothing else."
+
+
+def example_text(template: str) -> str:
+    return EXAMPLE_ORIGIN.sub(lambda found: f"http://{found.group(1)}.test", template).replace("{{root}}", "/srv/work")
+
+
+def corpus(exclude: str) -> str:
+    parts = [
+        "## Example programs",
+        "",
+        "Each example below is a task another host gave, with a correct Sx program for it. The examples used their "
+        "own tools; your tools are the ones listed above.",
+    ]
+    for example_id in definition.available():
+        if example_id in (exclude, "example-summary"):
+            continue
+        example = definition.load(example_id)
+        task = example_text(example.task).strip()
+        program = example_text(example.reference("sx")).strip()
+        parts += ["", f"### {example_id}", "", task, "", "```sx", program, "```"]
+    return "\n".join(parts)
 
 
 def sx_prompt(workflow: Workflow, sandbox: Sandbox, level: str) -> str:
     task = workflow.render(workflow.task, sandbox).strip()
-    if level == TAILORED:
+    if level in (TAILORED, CORPUS):
         tailored = arms.sx_guide(workflow, sandbox, notes=False).rstrip()
-        return "\n".join([tailored, "", "## Your task", "", task, "", REPLY_SX]) + "\n"
+        examples = [corpus(workflow.id), ""] if level == CORPUS else []
+        return "\n".join([tailored, "", *examples, "## Your task", "", task, "", REPLY_SX]) + "\n"
     return "\n".join([
         guide(level), "", "## Your task", "", task, "", arms.sx_listing(workflow, sandbox),
         REPLY_SX,
