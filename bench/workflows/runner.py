@@ -1,7 +1,9 @@
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import definition
+import report
 import trial
 from arms import Arm, require_toolchain
 from probe import tokens
@@ -26,28 +28,41 @@ def run_references(ids: list[str], arm_names: tuple[Arm, ...]) -> bool:
 def run_trials(args: argparse.Namespace, ids: list[str], arm_names: tuple[Arm, ...]) -> None:
     out = Path(args.out).resolve()
     out.mkdir(parents=True, exist_ok=True)
-    for workflow_id in ids:
-        workflow = definition.load(workflow_id)
-        for arm in arm_names:
-            for sample in range(args.samples):
-                finished = trial.run_trial(workflow, arm, args.model, args.thinking, args.guide, sample, out)
-                statuses = [a.status for a in finished.attempts]
-                print(f"{workflow.id:24} {arm:3} {sample} {statuses} tokens {tokens(finished)}", flush=True)
+    with ThreadPoolExecutor(max_workers=args.jobs) as pool:
+        jobs = [
+            pool.submit(
+                trial.run_trial, definition.load(workflow_id), arm, args.model, args.thinking, args.guide, sample, out
+            )
+            for workflow_id in ids
+            for arm in arm_names
+            for sample in range(args.samples)
+        ]
+        for job in jobs:
+            finished = job.result()
+            statuses = [a.status for a in finished.attempts]
+            line = f"{finished.task:24} {finished.arm:3} {finished.sample} {statuses} tokens {tokens(finished)}"
+            print(line, flush=True)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run workflows in Sx and in TypeScript on Bun.")
-    parser.add_argument("mode", choices=["reference", "trials"])
+    parser.add_argument("mode", choices=["reference", "trials", "report"])
     parser.add_argument("--workflow", action="append", help="Workflow ids; every workflow by default")
     parser.add_argument("--arm", action="append", choices=list(ARMS))
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--thinking", default="medium")
     parser.add_argument("--guide", default="standard")
     parser.add_argument("--samples", type=int, default=2)
+    parser.add_argument("--jobs", type=int, default=4)
     parser.add_argument("--out", type=Path)
     args = parser.parse_args()
     ids = args.workflow or definition.available()
     arm_names = ARMS if not args.arm else tuple(arm for arm in ARMS if arm in args.arm)
+    if args.mode == "report":
+        if args.out is None:
+            parser.error("report needs --out")
+        print(report.render(Path(args.out).resolve()))
+        return
     if "js" in arm_names:
         require_toolchain()
     if args.mode == "reference":

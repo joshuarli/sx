@@ -3,6 +3,7 @@ import json
 import re
 import shutil
 import tempfile
+import threading
 from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
@@ -17,6 +18,7 @@ SHAPES = (("main", 0), ("feature/login", 1), ("fix/cache", 2), ("topic/parser", 
 CHECKS_PATH = re.compile(r"^/repos/(repo-\d{3})/commits/([0-9a-f]{40})/checks$")
 PEAK_LIMIT = 8
 LATENCY = 0.03
+LOCK = threading.Lock()
 
 
 def name(index: int) -> str:
@@ -45,8 +47,13 @@ class Template:
     head: str
 
 
-@cache
 def templates() -> dict[tuple[str, int], Template]:
+    with LOCK:
+        return build_templates()
+
+
+@cache
+def build_templates() -> dict[tuple[str, int], Template]:
     SCRATCH.mkdir(parents=True, exist_ok=True)
     base = Path(tempfile.mkdtemp(prefix="git-ci-audit-", dir=SCRATCH)).resolve()
     atexit.register(shutil.rmtree, base, True)
