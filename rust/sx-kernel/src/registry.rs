@@ -3,7 +3,7 @@ use std::fmt;
 use std::sync::Arc;
 
 use crate::json::{Json, python_repr, repr_str};
-use crate::types::{EnumType, Type, TypeSyntaxError, parse_type};
+use crate::types::{EnumType, TYPE_NESTING_LIMIT, Type, TypeSyntaxError, parse_type, type_depth};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Effect {
@@ -256,6 +256,12 @@ impl Registry {
                 "type {} of core {} must be named {owner}.NAME",
                 repr_str(name),
                 repr_str(owner)
+            )));
+        }
+        if type_depth(&t) > TYPE_NESTING_LIMIT {
+            return Err(RegistryError(format!(
+                "type {} nests more than {TYPE_NESTING_LIMIT} levels deep",
+                repr_str(name)
             )));
         }
         if self.types.get(name).is_some_and(|existing| *existing != t) {

@@ -209,14 +209,7 @@ fn python_checks(label: &str, cases: &[Case]) -> Vec<Checked> {
 }
 
 fn on_large_stack<R: Send>(work: impl FnOnce() -> R + Send) -> R {
-    std::thread::scope(|threads| {
-        std::thread::Builder::new()
-            .stack_size(64 * 1024 * 1024)
-            .spawn_scoped(threads, work)
-            .expect("test thread starts")
-            .join()
-            .unwrap_or_else(|panic| std::panic::resume_unwind(panic))
-    })
+    sx_kernel::stack::on_sized_stack(work).expect("the worker thread starts")
 }
 
 fn rust_check(case: &Case) -> (Checked, Option<sx_kernel::ir::Program>) {

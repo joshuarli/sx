@@ -9,7 +9,7 @@ use crate::ir::{
 };
 use crate::registry::{Capability, Effect, Function, Registry};
 use crate::syntax::{Items, Node, NodeKind, Span, show};
-use crate::types::{
+use crate::types::{type_depth, 
     BOOL, BYTES, CallErrorKind, EnumType, FLOAT, INT, Primitive, RecordType, STRING, Type, UNIT, call_error,
     call_error_kind, encodable_problem, show_type,
 };
@@ -1036,7 +1036,7 @@ impl<'r> Checker<'r> {
 
 impl<'r> Checker<'r> {
     fn check<'a>(&mut self, syntax: &'a Node, expected: Option<&Type>, scope: &Scope<'a>) -> Checked {
-        if self.nesting >= NESTING_LIMIT {
+        if self.nesting >= NESTING_LIMIT || crate::stack::exhausted() {
             self.overflowed.set(true);
             return self.placeholder(syntax.span);
         }
@@ -3936,17 +3936,6 @@ impl Checker<'_> {
 
 const NESTING_LIMIT: usize = 500;
 const DEPTH_LIMIT: usize = 1000;
-const CHECKER_STACK: usize = 64 * 1024 * 1024;
-
-fn type_depth(t: &Type) -> usize {
-    1 + match t {
-        Type::List(inner) | Type::Map(inner) | Type::Option(inner) | Type::Nominal { base: inner, .. } => type_depth(inner),
-        Type::Tuple(items) => items.iter().map(type_depth).max().unwrap_or(0),
-        Type::Result(ok, err) => type_depth(ok).max(type_depth(err)),
-        Type::Record(record) => record.fields.iter().map(|(_, ft)| type_depth(ft)).max().unwrap_or(0),
-        Type::Enum(_) | Type::Primitive(_) | Type::Variable(_) | Type::Never => 0,
-    }
-}
 
 pub fn check(
     program: &Node,
@@ -3955,15 +3944,8 @@ pub fn check(
     inputs: &BTreeMap<String, Type>,
     budgets: Budgets,
 ) -> CheckResult {
-    let checked = std::thread::scope(|threads| {
-        std::thread::Builder::new()
-            .stack_size(CHECKER_STACK)
-            .spawn_scoped(threads, || elaborate(program, registry, allowed, inputs, budgets))
-            .map(|handle| handle.join())
-    });
-    match checked {
-        Ok(Ok(result)) => result,
-        Ok(Err(panic)) => std::panic::resume_unwind(panic),
+    match crate::stack::on_sized_stack(|| elaborate(program, registry, allowed, inputs, budgets)) {
+        Ok(result) => result,
         Err(error) => {
             let message = format!("The checker could not start a thread for this program: {error}.");
             CheckResult { program: None, diagnostics: vec![Diagnostic::new("too-large", program.span, message)] }

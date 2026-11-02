@@ -268,9 +268,21 @@ fn tokenize(text: &str) -> Vec<String> {
     tokens
 }
 
+pub const TYPE_NESTING_LIMIT: usize = 1000;
+
+pub fn type_depth(t: &Type) -> usize {
+    1 + match t {
+        Type::List(inner) | Type::Map(inner) | Type::Option(inner) | Type::Nominal { base: inner, .. } => type_depth(inner),
+        Type::Tuple(items) => items.iter().map(type_depth).max().unwrap_or(0),
+        Type::Result(ok, err) => type_depth(ok).max(type_depth(err)),
+        Type::Record(record) => record.fields.iter().map(|(_, ft)| type_depth(ft)).max().unwrap_or(0),
+        Type::Enum(_) | Type::Primitive(_) | Type::Variable(_) | Type::Never => 0,
+    }
+}
+
 pub fn parse_type(text: &str, named: &BTreeMap<String, Type>) -> Result<Type, TypeSyntaxError> {
     let tokens = tokenize(text);
-    let mut parser = TypeParser { tokens: &tokens, named, text, at: 0 };
+    let mut parser = TypeParser { tokens: &tokens, named, text, at: 0, depth: 0 };
     let result = parser.parse()?;
     if parser.at < tokens.len() {
         return Err(TypeSyntaxError(format!(
@@ -287,6 +299,7 @@ struct TypeParser<'a> {
     named: &'a BTreeMap<String, Type>,
     text: &'a str,
     at: usize,
+    depth: usize,
 }
 
 impl TypeParser<'_> {
@@ -334,6 +347,16 @@ impl TypeParser<'_> {
     }
 
     fn parse(&mut self) -> Result<Type, TypeSyntaxError> {
+        if self.depth >= TYPE_NESTING_LIMIT {
+            return Err(TypeSyntaxError(format!("a type nests more than {TYPE_NESTING_LIMIT} levels deep")));
+        }
+        self.depth += 1;
+        let parsed = self.parse_one();
+        self.depth -= 1;
+        parsed
+    }
+
+    fn parse_one(&mut self) -> Result<Type, TypeSyntaxError> {
         let name = self.take(None)?;
         if let Some(p) = Primitive::from_name(&name) {
             return Ok(Type::Primitive(p));

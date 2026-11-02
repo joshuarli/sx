@@ -21,7 +21,13 @@ fn main() -> ExitCode {
     if args.first().is_some_and(|arg| arg == "serve") {
         return serve::main(&args[1..]);
     }
-    let exit = sx_cli::run(&args, &Registry::new);
+    let exit = match sx_kernel::stack::on_sized_stack(|| sx_cli::run(&args, &Registry::new)) {
+        Ok(exit) => exit,
+        Err(error) => {
+            eprintln!("sx: cannot start the worker thread: {error}");
+            return ExitCode::from(70);
+        }
+    };
     let _ = std::io::stdout().write_all(exit.stdout.as_bytes());
     let _ = std::io::stderr().write_all(exit.stderr.as_bytes());
     ExitCode::from(u8::try_from(exit.code).unwrap_or(1))

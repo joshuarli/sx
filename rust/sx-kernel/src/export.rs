@@ -313,6 +313,9 @@ impl<'a> Reader<'a> {
     }
 
     fn node(&mut self, json: &Json) -> Result<Node, IrError> {
+        if crate::stack::exhausted() {
+            return Err(IrError("the IR nests deeper than the stack allows".to_string()));
+        }
         let name = string(field(json, "node", "node")?, "node name")?;
         let span = Reader::span(field(json, "span", &name)?)?;
         let what = name.as_str();
@@ -465,6 +468,13 @@ pub fn read_type(json: &Json, enums: &Json) -> Result<Type, IrError> {
 }
 
 pub fn read_program(json: &Json) -> Result<Program, IrError> {
+    match crate::stack::on_sized_stack(|| read_sized_program(json)) {
+        Ok(read) => read,
+        Err(error) => Err(IrError(format!("the IR reader could not start a thread: {error}"))),
+    }
+}
+
+fn read_sized_program(json: &Json) -> Result<Program, IrError> {
     let mut reader = reader_for(field(json, "enums", "program")?)?;
     let body = reader.node(field(json, "body", "program")?)?;
     let result = reader.type_of(field(json, "result", "program")?)?;
