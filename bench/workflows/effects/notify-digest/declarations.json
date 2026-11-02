@@ -1,0 +1,31 @@
+{
+  "cores": ["text", "re", "json"],
+  "enums": {"Severity": {"critical": null, "warning": null, "info": null}},
+  "capabilities": [
+    {
+      "id": "alerts.list",
+      "http": {"method": "GET", "url": "{{alerts_origin}}/alerts", "query": []},
+      "input": "Record {}",
+      "output": "List<Record open {id: String, service: String, severity: Severity, raised_at: String, text: String}>",
+      "effect": "read",
+      "description": "Lists every alert with its service, its severity, the ISO 8601 time it was raised, and its text."
+    },
+    {
+      "id": "chat.messages",
+      "http": {"method": "GET", "url": "{{chat_origin}}/messages", "query": ["channel"]},
+      "input": "Record {channel: String}",
+      "output": "List<Record open {id: String, channel: String, text: String}>",
+      "effect": "read",
+      "description": "Lists the messages posted in one channel."
+    },
+    {
+      "id": "chat.post",
+      "http": {"method": "POST", "url": "{{chat_origin}}/messages", "query": []},
+      "input": "Record {channel: String, text: String}",
+      "output": "Record open {id: String}",
+      "effect": "write",
+      "idempotent": false,
+      "description": "Posts a message to a channel and returns the id of the message. Every successful call adds a message to the channel."
+    }
+  ]
+}

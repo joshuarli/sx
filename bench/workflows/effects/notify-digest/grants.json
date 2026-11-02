@@ -1,0 +1,5 @@
+{
+  "alerts.list": {"origins": ["{{alerts_origin}}"], "methods": ["GET"]},
+  "chat.messages": {"origins": ["{{chat_origin}}"], "methods": ["GET"]},
+  "chat.post": {"origins": ["{{chat_origin}}"], "methods": ["POST"]}
+}

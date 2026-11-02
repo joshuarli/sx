@@ -1,0 +1,5 @@
+{
+  "capabilities": ["alerts.list", "chat.messages", "chat.post"],
+  "computed_inputs": ["chat.messages", "chat.post"],
+  "max_write_sites": 2
+}

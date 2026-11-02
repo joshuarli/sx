@@ -1,0 +1,12 @@
+(let [alerts (call alerts.list {})
+      critical (sort-by (fn [a] (get a :raised_at)) (filter (fn [a] (= (get a :severity) "critical")) alerts))
+      newest (map (fn [k] (nth critical (- (count critical) k))) [1 2 3])
+      announce (fn [a]
+                 (let [id (get a :id)
+                       request {:channel "ops" :text (str "Critical alert " id " on " (get a :service) ": " (get a :text))}]
+                   (match (attempt (retry {:delays [1s 2s] :on [RateLimited]} (call chat.post request)))
+                     (ok _) id
+                     (err _) (let [held (filter (fn [m] (re.test id (get m :text))) (call chat.messages {:channel "ops"}))
+                                   _ (when (= (count held) 0) (call chat.post request))]
+                               id))))]
+  (map announce newest))
