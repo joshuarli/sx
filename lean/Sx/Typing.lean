@@ -259,6 +259,10 @@ def opTy (E : Enums) : Op → List Ty → Option Ty
   | .vals, [.map v] => some (.list v)
   | .entries, [.map v] => some (.list (.tuple [.str, v]))
   | .intoMap, [.list (.tuple [.str, v])] => some (.map v)
+  | .range, [.int, .int] => some (.list .int)
+  | .range, [.int, .int, .int] => some (.list .int)
+  | .enumerate, [.list t] => some (.list (.tuple [.int, t]))
+  | .safeInt, [.int] => some .int
   | _, _ => none
 
 def lamBase (Γ : TyEnv) : Option String → Option TyEnv
@@ -315,6 +319,9 @@ inductive HasType (S : Sig) : TyEnv → Option (List Ty) → Expr → Ty → Pro
       HasType S Γ L (.mkVariant en n (some p)) (.enum en)
   | coerce : HasType S Γ none e s → convTy S.enums c s = some t → HasType S Γ L (.coerce e c) t
   | attempt : HasType S Γ none e t → HasType S Γ L (.attempt e) (.result t callErrorTy)
+  | failStr : HasType S Γ none m .str → HasType S Γ L (.fail m) t
+  | failErr : HasType S Γ none m callErrorTy → HasType S Γ L (.fail m) t
+  | log : HasTypes S Γ args ts → HasType S Γ L (.log args) .unit
   | retry : HasType S Γ none e t → HasType S Γ L (.retry ds ks e) t
   | sleep : HasType S Γ L (.sleep ms) .unit
   | waitUntil : LamT S Γ p [t] .bool → HasType S Γ none e t → HasType S Γ L (.waitUntil is p e) t

@@ -246,6 +246,8 @@ partial def parseExpr (j : Json) : Except String Expr := do
     pure (.mkVariant (← asStr (← field j "enum")) (← asStr (← field j "variant")) p)
   | "Coerce" => pure (.coerce (← sub "value") (← parseConv (← field j "conversion")))
   | "Attempt" => pure (.attempt (← sub "body"))
+  | "Fail" => pure (.fail (← sub "message"))
+  | "Log" => pure (.log (← subs "args"))
   | "Retry" =>
     pure (.retry (← (← asArr (← field j "delays")).mapM asNat) (← (← asArr (← field j "kinds")).mapM asStr) (← sub "body"))
   | "Sleep" => pure (.sleep (← asNat (← field j "milliseconds")))

@@ -189,6 +189,7 @@ def Machine.loop (m : Machine) (fuel : Nat) : Nat → Machine × Outcome
         | .call =>
           (m', .failed ⟨.callFailed, s!"A tool call failed with {kindOf raised.err}: {failureMessage raised.err}"⟩)
         | .coreRefusal => (m', .failed ⟨.invalidInput, failureMessage raised.err⟩)
+        | .thrown => (m', .failed ⟨.thrown, failureMessage raised.err⟩)
       | _ =>
         if m'.fibers.any (·.runnable) then m'.loop fuel n
         else

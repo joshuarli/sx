@@ -19,6 +19,7 @@ inductive Res where
 inductive Cause where
   | call
   | coreRefusal
+  | thrown
   deriving Repr, BEq, DecidableEq, Inhabited
 
 structure Raised where
@@ -122,6 +123,7 @@ structure Glob where
   counters : Counters
   nextFiber : Nat
   sequences : List (List Nat × Nat)
+  logs : List String := []
 
 structure Ctx where
   prog : Program
@@ -195,6 +197,8 @@ def seqChildren : Expr → Except Failure (List Expr)
   | .mkTuple es => pure es
   | .wrap _ e _ => pure [e]
   | .coerce e _ => pure [e]
+  | .fail m => pure [m]
+  | .log args => pure args
   | .mkVariant _ _ none => pure []
   | .mkVariant _ _ (some e) => pure [e]
   | .loop _ _ init _ => pure init
@@ -342,6 +346,22 @@ def finishSeq (ctx : Ctx) (g : Glob) (f : Fiber) (stack : List Frame) (origin : 
       let (g, ctrl) ← apply ctx g ⟨ps, body, defEnv⟩ vs
       pure ({ f with stack, ctrl }, [], g)
     | _, _ => internal s!"{name} is not a local function here."
+  | .fail _ =>
+    match done with
+    | [r] => do
+      match ← plain r with
+      | .str m => pure ({ f with stack, ctrl := .raise ⟨callError "Failed" m, .thrown⟩ }, [], g)
+      | .record fs => pure ({ f with stack, ctrl := .raise ⟨.record fs, .thrown⟩ }, [], g)
+      | _ => internal "fail needs a String or a CallError."
+    | _ => internal "fail has one argument."
+  | .log _ => do
+    let vs ← plainAll done
+    let line := Val.str (" ".intercalate (← vs.mapM logText))
+    checkSize ctx.budgets.valueSize line
+    let g := { g with logs := g.logs ++ [match line with | .str s => s | _ => ""] }
+    if (g.logs.map fun l => (Val.str l).size).sum > ctx.budgets.valueSize then
+      budgetFail s!"The program logged more than the value-size budget of {ctx.budgets.valueSize}."
+    else pure ({ f with stack, ctrl := .ret (.val .unit) }, [], g)
   | .recur _ => do
     let vs ← plainAll done
     pure ({ f with stack, ctrl := .ret (.recur vs) }, [], g)

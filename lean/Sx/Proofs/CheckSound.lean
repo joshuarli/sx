@@ -134,6 +134,7 @@ end Sx
 
 namespace Sx
 
+set_option maxHeartbeats 800000 in
 mutual
 theorem tc_sound {S : Sig} : ∀ (e : Expr) (Γ : TyEnv) (L : Option (List Ty)) (exp : Option Ty) (t : Ty),
     tc S Γ L e exp = some t → HasType S Γ L e t ∧ ∀ u, exp = some u → t = u
@@ -195,7 +196,19 @@ theorem tc_sound {S : Sig} : ∀ (e : Expr) (Γ : TyEnv) (L : Option (List Ty)) 
             rw [hzu t0 rfl] at htz
             simp only [Option.some.injEq] at h; rw [← h]
             exact ⟨.if_ hct (tc_sound th Γ L none t0 h0).1 htz, fun u hu => by cases hu⟩
-          · cases h
+          · split at h
+            · split at h
+              · rename_i u hu
+                split at h
+                · rename_i hth
+                  obtain ⟨y, hy⟩ := some_of_isSome hth
+                  obtain ⟨hty, hyu⟩ := tc_sound th Γ L (some u) y hy
+                  rw [hyu u rfl] at hty
+                  simp only [Option.some.injEq] at h; rw [← h]
+                  exact ⟨.if_ hct hty (tc_sound el Γ L none u hu).1, fun w hw => by cases hw⟩
+                · cases h
+              · cases h
+            · cases h
         · split at h
           · rename_i t0 h0
             split at h
@@ -489,6 +502,32 @@ theorem tc_sound {S : Sig} : ∀ (e : Expr) (Γ : TyEnv) (L : Option (List Ty)) 
     obtain ⟨hr, hexp⟩ := expect_some h
     cases hr
     exact ⟨.sleep, hexp⟩
+  | .fail m, Γ, L, exp, t, h => by
+    simp only [tc] at h
+    split at h
+    · rename_i u hu
+      have hm := (tc_sound m Γ none none u hu).1
+      split at h
+      · rename_i hc
+        simp only [Bool.or_eq_true, beq_iff_eq] at hc
+        have hty : HasType S Γ L (.fail m) t := by
+          rcases hc with rfl | rfl
+          · exact .failStr hm
+          · exact .failErr hm
+        refine ⟨hty, ?_⟩
+        intro w hw
+        subst hw
+        simp only [Option.some.injEq] at h
+        exact h.symm
+      · cases h
+    · cases h
+  | .log args, Γ, L, exp, t, h => by
+    simp only [tc] at h
+    obtain ⟨hr, hexp⟩ := expect_some h
+    split at hr
+    · rename_i ts hts; cases hr
+      exact ⟨.log (inferAll_sound args Γ ts hts), hexp⟩
+    · cases hr
   | .retry ds ks e, Γ, L, exp, t, h => by
     simp only [tc] at h
     obtain ⟨hr, hexp⟩ := expect_some h
@@ -533,6 +572,7 @@ theorem tc_sound {S : Sig} : ∀ (e : Expr) (Γ : TyEnv) (L : Option (List Ty)) 
   | .applyLocal _ (.retry ..) _, _, _, _, _, h | .applyLocal _ (.waitUntil ..) _, _, _, _, _, h
   | .applyLocal _ (.loop ..) _, _, _, _, _, h | .applyLocal _ (.recur _) _, _, _, _, _, h
   | .applyLocal _ (.par _) _, _, _, _, _, h | .applyLocal _ (.parMap ..) _, _, _, _, _, h
+  | .applyLocal _ (.fail _) _, _, _, _, _, h | .applyLocal _ (.log _) _, _, _, _, _, h
   | .applyLocal _ (.sleep _) _, _, _, _, _, h => by simp [tc] at h
 theorem inferAll_sound {S : Sig} : ∀ (es : List Expr) (Γ : TyEnv) (ts : List Ty),
     inferAll S Γ es = some ts → HasTypes S Γ es ts
@@ -614,6 +654,7 @@ theorem lamResult_sound {S : Sig} : ∀ (f : Expr) (Γ : TyEnv) (args : List Ty)
   | .mkList .., _, _, _, h | .mkTuple _, _, _, _, h | .wrap .., _, _, _, h | .mkVariant .., _, _, _, h
   | .coerce .., _, _, _, h | .attempt _, _, _, _, h | .retry .., _, _, _, h | .waitUntil .., _, _, _, h
   | .loop .., _, _, _, h | .recur _, _, _, _, h | .par _, _, _, _, h | .parMap .., _, _, _, h
+  | .fail _, _, _, _, h | .log _, _, _, _, h
   | .sleep _, _, _, _, h => by
     simp [lamResult] at h
 end

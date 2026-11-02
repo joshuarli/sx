@@ -130,7 +130,8 @@ def runFixture (prog : Program) (fixture : Json) : Except String Json := do
   let ctx : Ctx := { prog, budgets, cores := coreLibrary }
   let inputs ← match fixtureInputs prog fixture with
     | .ok inputs => pure inputs
-    | .error message => return Json.mkObj [("outcome", Json.mkObj [("invalid-input", message)]), ("trace", Json.arr #[])]
+    | .error message => return Json.mkObj [("outcome", Json.mkObj [("invalid-input", message)]), ("logs", Json.arr #[]),
+      ("trace", Json.arr #[])]
   let (m, o) := (Machine.init ctx inputs).run
   let (m, o) ← match fieldLookup (objFields fixture) "steps" with
     | some steps => runSteps m o (← asArr steps)
@@ -142,6 +143,7 @@ def runFixture (prog : Program) (fixture : Json) : Except String Json := do
         pure ({ cap := ← asStr (← field r "capability"), input := ← field r "input",
                 results := ← asArr (← field r "results"), served := 0 } : Entry)
       runResponses prog entries m o 10000000
-  pure (Json.mkObj [("outcome", outcomeJson o), ("trace", Json.arr (m.trace.map eventJson).toArray)])
+  pure (Json.mkObj [("outcome", outcomeJson o), ("logs", Json.arr (m.glob.logs.map Json.str).toArray),
+    ("trace", Json.arr (m.trace.map eventJson).toArray)])
 
 end Sx

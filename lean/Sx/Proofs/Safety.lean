@@ -397,6 +397,9 @@ theorem step_eval {S : Sig} {P : PureCtx} {n : Nat} (hcores : CoresOk S P.cores)
     obtain ⟨w, hw, hwt⟩ := convert_typed _ _ _ _ hc hv
     rw [hw]; exact hwt
   | attempt _ => simp [isPure] at hp
+  | failStr _ => simp [isPure] at hp
+  | failErr _ => simp [isPure] at hp
+  | log _ => simp [isPure] at hp
   | retry _ => simp [isPure] at hp
   | waitUntil _ _ => simp [isPure] at hp
   | sleep => simp [isPure] at hp

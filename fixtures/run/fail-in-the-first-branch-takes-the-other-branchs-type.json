@@ -1,0 +1,17 @@
+{
+  "description": "When the first branch of an if or match is a fail and nothing fixes the type, the other branch gives the type.",
+  "python": false,
+  "program": "(let [a (if (> (count [1]) 5) (fail \"big\") 3) b (match (ok 1) (ok x) (fail \"no\") (err e) 2) c (cond (> a 9) (fail \"huge\") :else 4)] [a b c])",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list"
+  ],
+  "expect": {
+    "failed": "thrown"
+  }
+}

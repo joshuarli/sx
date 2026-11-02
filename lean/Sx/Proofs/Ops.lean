@@ -134,6 +134,19 @@ theorem textsOf_ok {E : Enums} : ∀ (vs : List Val) (ts : List Ty), All2 (VT E)
     obtain ⟨ss, hss⟩ := textsOf_ok vs ts hvs ht.2
     exact ⟨s :: ss, by simp [List.mapM_cons, hs, hss]⟩
 
+theorem rangeList_safe {E : Enums} (limit : Nat) (a b s : Int) :
+    SafeE (fun v => VT E v (.list .int)) (rangeList limit a b s) := by
+  unfold rangeList
+  split
+  · exact arith_fail
+  · split
+    · exact SafeE.fail (by decide)
+    · refine VT.list ?_
+      intro x hx
+      simp at hx
+      obtain ⟨i, _, rfl⟩ := hx
+      exact VT.int
+
 theorem applyOp_typed {E : Enums} {limit : Nat} (op : Op) (ts : List Ty) (t : Ty) (vs : List Val)
     (h : opTy E op ts = some t) (hvs : All2 (VT E) vs ts) : SafeE (fun v => VT E v t) (applyOp limit op vs) := by
   unfold opTy at h
@@ -322,5 +335,25 @@ theorem applyOp_typed {E : Enums} {limit : Nat} (op : Op) (ts : List Ty) (t : Ty
     obtain ⟨ps, hps, hp⟩ := pairsOf_typed xs hxs
     show SafeE _ (do let ps ← pairsOf xs; let m := Val.map (makeMap ps); checkSize limit m; pure m)
     rw [hps]; exact sized (VT.map (makeMap_typed hp))
+  next =>
+    subst h; rcases hvs with _ | ⟨⟨⟩, _ | ⟨⟨⟩, _ | _⟩⟩
+    exact rangeList_safe _ _ _ _
+  next =>
+    subst h; rcases hvs with _ | ⟨⟨⟩, _ | ⟨⟨⟩, _ | ⟨⟨⟩, _ | _⟩⟩⟩
+    exact rangeList_safe _ _ _ _
+  next =>
+    subst h; rcases hvs with _ | ⟨hxs, _ | _⟩
+    cases hxs with | @list xs _ hxs =>
+    refine sized (VT.list ?_)
+    intro x hx
+    simp at hx
+    obtain ⟨y, i, hy, rfl⟩ := hx
+    have hyeq := List.mem_zipIdx hy
+    exact VT.tuple (.cons VT.int (.cons (hxs y (hyeq.2.2 ▸ List.getElem_mem _)) .nil))
+  next =>
+    subst h; rcases hvs with _ | ⟨⟨⟩, _ | _⟩
+    simp only [applyOp]; split
+    · exact arith_fail
+    · exact VT.int
 
 end Sx

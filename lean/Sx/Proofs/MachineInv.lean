@@ -136,6 +136,8 @@ theorem seqChildren_ok (e : Expr) : OkP (fun cs => ∀ c ∈ cs, callsOf c ⊆ c
   | .prelude _ args => intro c hc; exact mem_callsOfList hc
   | .core _ args => intro c hc; exact mem_callsOfList hc
   | .recur args => intro c hc; exact mem_callsOfList hc
+  | .log args => intro c hc; exact mem_callsOfList hc
+  | .fail m => intro c hc; simp at hc; subst hc; simp [callsOf]
   | .mkList es _ => intro c hc; exact mem_callsOfList hc
   | .mkTuple es => intro c hc; exact mem_callsOfList hc
   | .applyLocal _ _ args =>
@@ -259,7 +261,7 @@ theorem finishSeq_ok {C : List String} {ctx : Ctx} {g : Glob} {f : Fiber} {stack
     · okp_auto
       all_goals first | trivial | exact ⟨⟨trivial, hs⟩, by simp, hg⟩
   | .core _ _ | .get _ _ | .tupleItem _ _ | .mkRecord _ | .mkList _ _ | .mkTuple _ | .wrap _ _ _ | .mkVariant _ _ _
-  | .coerce _ _ | .recur _ =>
+  | .coerce _ _ | .recur _ | .fail _ | .log _ =>
     unfold finishSeq; dsimp only
     okp_auto
     all_goals first | trivial | exact ⟨⟨trivial, hs⟩, by simp, hg⟩
@@ -346,7 +348,7 @@ theorem evalNode_ok {C : List String} {ctx : Ctx} {g : Glob} {f : Fiber} {e : Ex
       rw [heq]; exact List.getElem_mem _
     exact sub (List.Subset.trans (mem_callsOfList hb) (by simp [callsOf]))
   | .prelude .. | .core .. | .applyLocal .. | .recur _ | .call .. | .get .. | .tupleItem .. | .mkRecord _ | .mkList .. | .mkTuple _
-  | .wrap .. | .coerce .. | .mkVariant .. | .loop .. | .parMap .. =>
+  | .wrap .. | .coerce .. | .mkVariant .. | .loop .. | .parMap .. | .fail _ | .log _ =>
     unfold evalNode; dsimp only
     refine OkP.bind (seqChildren_ok _) fun cs hcs => ?_
     split

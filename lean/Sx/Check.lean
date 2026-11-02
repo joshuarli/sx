@@ -79,7 +79,13 @@ def tc (S : Sig) (Γ : TyEnv) (L : Option (List Ty)) (e : Expr) (exp : Option Ty
       | some t => if (tc S Γ L th (some t)).isSome && (tc S Γ L el (some t)).isSome then some t else none
       | none =>
         match tc S Γ L th none with
-        | some t => if (tc S Γ L el (some t)).isSome then some t else none
+        | some t =>
+          if (tc S Γ L el (some t)).isSome then some t
+          else if t == .never then
+            match tc S Γ L el none with
+            | some u => if (tc S Γ L th (some u)).isSome then some u else none
+            | none => none
+          else none
         | none =>
           match tc S Γ L el none with
           | some t => if (tc S Γ L th (some t)).isSome then some t else none
@@ -222,6 +228,14 @@ def tc (S : Sig) (Γ : TyEnv) (L : Option (List Ty)) (e : Expr) (exp : Option Ty
       | none => none)
   | .retry _ _ e => expect exp (tc S Γ none e none)
   | .sleep _ => expect exp (some .unit)
+  | .fail m =>
+    match tc S Γ none m none with
+    | some u => if u == .str || u == callErrorTy then (match exp with | some t => some t | none => some .never) else none
+    | none => none
+  | .log args =>
+    expect exp (match inferAll S Γ args with
+      | some _ => some .unit
+      | none => none)
   | .waitUntil _ p e =>
     expect exp (match tc S Γ none e none with
       | some t => if lamResult S Γ p [t] == some .bool then some t else none
@@ -263,7 +277,12 @@ def inferClauses (S : Sig) (Γ : TyEnv) (L : Option (List Ty)) : List (Pat × Ex
     match patTy S.enums Γ p ts with
     | some Γ' =>
       match tc S Γ' L body none with
-      | some t => some t
+      | some t =>
+        if t == .never then
+          match inferClauses S Γ L cs ts with
+          | some u => some u
+          | none => some t
+        else some t
       | none => inferClauses S Γ L cs ts
     | none => none
 def checkClauses (S : Sig) (Γ : TyEnv) (L : Option (List Ty)) : List (Pat × Expr) → Ty → Ty → Bool
@@ -323,6 +342,8 @@ def effectsOk (S : Sig) : Expr → Bool
   | .mkVariant _ _ (some e) => effectsOk S e
   | .coerce e _ => effectsOk S e
   | .attempt e => effectsOk S e
+  | .fail m => effectsOk S m
+  | .log args => effectsOkList S args
   | .retry _ ks e =>
     let calls := callsIn false e
     (calls.all (fun c => isRepeatable S c.1) ||

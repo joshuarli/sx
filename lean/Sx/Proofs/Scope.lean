@@ -50,6 +50,8 @@ def knownCalls : Expr → List (String × Val)
   | .mkVariant _ _ (some e) => knownCalls e
   | .coerce e _ => knownCalls e
   | .attempt e => knownCalls e
+  | .fail m => knownCalls m
+  | .log args => knownCallsList args
   | .retry _ _ e => knownCalls e
   | .waitUntil _ p e => knownCalls p ++ knownCalls e
   | .sleep _ => []

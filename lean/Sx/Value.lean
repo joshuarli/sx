@@ -11,6 +11,7 @@ inductive FailKind where
   | invalidInput
   | outOfRange
   | loopLimit
+  | thrown
   | internal
   deriving Repr, BEq, DecidableEq, Inhabited
 
@@ -22,6 +23,7 @@ def FailKind.name : FailKind → String
   | .invalidInput => "invalid-input"
   | .outOfRange => "out-of-range"
   | .loopLimit => "loop-limit"
+  | .thrown => "thrown"
   | .internal => "internal"
 
 structure Failure where
@@ -333,6 +335,26 @@ def pairsOf : List Val → Except Failure (List (String × Val))
     pure ((k, v) :: ps)
   | _ :: _ => internal "into-map met an element that is not a [String value] pair."
 
+def logText : Val → Except Failure String
+  | .str s => pure s
+  | v@(.bool _) => textOf v
+  | v@(.int _) => textOf v
+  | v@(.float _) => textOf v
+  | v@(.variant _ _ none) => textOf v
+  | v => pure v.jsonText
+
+def safeIntLimit : Int := 9007199254740992
+
+def rangeCount (a b s : Int) : Nat :=
+  let distance := if s > 0 then b - a else a - b
+  if distance > 0 then ((distance + s.natAbs - 1) / s.natAbs).toNat else 0
+
+def rangeList (limit : Nat) (a b s : Int) : Except Failure Val :=
+  if s = 0 then failWith .arithmetic "range with a zero step."
+  else if rangeCount a b s + 1 > limit then
+    failWith .budgetExhausted s!"A value grew past the value-size budget of {limit}."
+  else pure (.list ((List.range (rangeCount a b s)).map fun (i : Nat) => .int (a + s * (i : Int))))
+
 def compareWith (op : Op) (o : Ordering) : Bool :=
   match op with
   | .lt => o == .lt
@@ -414,6 +436,16 @@ def applyOp (limit : Nat) : Op → List Val → Except Failure Val
     let m := Val.map (makeMap ps)
     checkSize limit m
     pure m
+  | .range, [.int a, .int b] => rangeList limit a b 1
+  | .range, [.int a, .int b, .int s] => rangeList limit a b s
+  | .enumerate, [.list vs] => do
+    let v := Val.list (vs.zipIdx.map fun (x, i) => .tuple [.int i, x])
+    checkSize limit v
+    pure v
+  | .safeInt, [.int n] =>
+    if n.natAbs > safeIntLimit.toNat then
+      failWith .arithmetic s!"Integer {n} is outside the range of exact doubles, plus or minus 2^53."
+    else pure (.int n)
   | _, _ => internal "A prelude function got arguments that do not fit its signature."
 
 def sortStable (key : α → Val) : List α → Except Failure (List α)

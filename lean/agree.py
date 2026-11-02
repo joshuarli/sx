@@ -170,6 +170,8 @@ def main() -> int:
             disagreements.append((path.stem, f"outcome {result['outcome']} != {case['expect']}"))
         elif result["trace"] != case.get("trace", []):
             disagreements.append((path.stem, f"trace {result['trace']} != {case.get('trace', [])}"))
+        elif result["logs"] != case.get("logs", []):
+            disagreements.append((path.stem, f"logs {result['logs']} != {case.get('logs', [])}"))
     for name, reason in disagreements:
         print(f"disagree {name}: {reason}")
     for name, reason in unchecked:

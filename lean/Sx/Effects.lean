@@ -25,6 +25,8 @@ def callsOf : Expr → List String
   | .mkVariant _ _ (some e) => callsOf e
   | .coerce e _ => callsOf e
   | .attempt e => callsOf e
+  | .fail m => callsOf m
+  | .log args => callsOfList args
   | .retry _ _ e => callsOf e
   | .waitUntil _ p e => callsOf p ++ callsOf e
   | .sleep _ => []
@@ -66,6 +68,8 @@ def callsIn (rep : Bool) : Expr → List (String × Bool)
   | .mkVariant _ _ (some e) => callsIn rep e
   | .coerce e _ => callsIn rep e
   | .attempt e => callsIn rep e
+  | .fail m => callsIn rep m
+  | .log args => callsInList rep args
   | .retry _ _ e => callsIn rep e
   | .waitUntil _ p e => callsIn rep e ++ callsIn rep p
   | .sleep _ => []

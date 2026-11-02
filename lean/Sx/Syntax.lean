@@ -99,7 +99,7 @@ inductive Op where
   | not | and | or
   | str | toJson
   | count | first | rest | nth | take | concat | flatten | contains
-  | mapGet | assoc | dissoc | keys | vals | entries | intoMap
+  | mapGet | assoc | dissoc | keys | vals | entries | intoMap | range | enumerate | safeInt
   | map | filter | keep | any | all | reduce | sortBy | distinctBy | groupBy
   deriving Repr, BEq, DecidableEq, Inhabited
 
@@ -128,6 +128,8 @@ inductive Expr where
   | mkVariant (enum name : String) (payload : Option Expr)
   | coerce (e : Expr) (c : Conv)
   | attempt (e : Expr)
+  | fail (m : Expr)
+  | log (args : List Expr)
   | retry (delays : List Nat) (kinds : List String) (e : Expr)
   | waitUntil (intervals : List Nat) (pred : Expr) (e : Expr)
   | sleep (ms : Nat)
@@ -213,7 +215,8 @@ def Op.ofString : String → Option Op
   | "take" => some .take | "concat" => some .concat | "flatten" => some .flatten
   | "contains?" => some .contains | "map-get" => some .mapGet | "assoc" => some .assoc
   | "dissoc" => some .dissoc | "keys" => some .keys | "vals" => some .vals | "entries" => some .entries
-  | "into-map" => some .intoMap | "map" => some .map | "filter" => some .filter | "keep" => some .keep
+  | "into-map" => some .intoMap | "range" => some .range | "enumerate" => some .enumerate
+  | "safe-int" => some .safeInt | "map" => some .map | "filter" => some .filter | "keep" => some .keep
   | "any?" => some .any | "all?" => some .all | "reduce" => some .reduce | "sort-by" => some .sortBy
   | "distinct-by" => some .distinctBy | "group-by" => some .groupBy
   | _ => none
