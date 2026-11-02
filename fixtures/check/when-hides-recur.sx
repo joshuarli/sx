@@ -1,0 +1,6 @@
+; declarations: fixtures/run/declarations.json
+; python: no
+(loop {:max 5} [i 0]
+  (if (< i 3)
+    (when true (recur (+ i 1)))
+    i))

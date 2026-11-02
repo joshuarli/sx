@@ -1,0 +1,6 @@
+; declarations: fixtures/run/declarations.json
+; allow: store.put
+; python: no
+(loop {:max 3} [i 0]
+  (do (call store.put {:id "l" :size i})
+      (if (< i 1) (recur (+ i 1)) i)))

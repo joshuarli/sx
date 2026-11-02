@@ -1,0 +1,7 @@
+error[type-mismatch] 3:6-3:19
+  (+ 1 (when true 2))
+       ^^^^^^^^^^^^^
+  This is an Option<Int>, but an Int is needed here.
+  Expected: Int
+  Found: Option<Int>
+  This value is optional. Take it apart first: (match x (some v) ... none ...).

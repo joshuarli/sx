@@ -1,0 +1,4 @@
+error[type-mismatch] 4:4-4:8
+    (when true 1))
+     ^^^^
+  when is an Int, not a function.

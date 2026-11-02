@@ -1,0 +1,5 @@
+error[recur-position] 5:16-5:31
+      (when true (recur (+ i 1)))
+                 ^^^^^^^^^^^^^^^
+  recur must be the last step of a loop body, and never inside a fn.
+  Help: sx help loop

@@ -1,0 +1,29 @@
+{
+  "description": "when is an optional that is none when its test is false and runs its expression only when the test holds; do runs its steps in order and returns the last, which may recur.",
+  "python": false,
+  "program": "(let [item (call store.get {:id \"a\"}) big (when (> (get item :size) 5) (get (call store.get {:id \"b\"}) :size)) small (when (< (get item :size) 5) (get (call store.get {:id \"c\"}) :size)) kept (keep (fn [id] (when (not= id \"b\") (str id \"!\"))) [\"a\" \"b\" \"c\"])] (do (call store.put {:id \"z\" :size 1}) (loop {:max 3} [i 0] (do (call store.put {:id \"l\" :size i}) (if (< i 1) (recur (+ i 1)) {:big big :small small :kept kept :i i})))))",
+  "declarations": "declarations.json",
+  "allow": ["store.get", "store.put"],
+  "responses": [
+    {"capability": "store.get", "input": {"id": "a"}, "results": [{"output": {"id": "a", "size": 7}}]},
+    {"capability": "store.get", "input": {"id": "b"}, "results": [{"output": {"id": "b", "size": 9}}]},
+    {"capability": "store.put", "input": {"id": "z", "size": 1}, "results": [{"output": null}]},
+    {"capability": "store.put", "input": {"id": "l", "size": 0}, "results": [{"output": null}]},
+    {"capability": "store.put", "input": {"id": "l", "size": 1}, "results": [{"output": null}]}
+  ],
+  "expect": {
+    "completed": {"big": 9, "small": null, "kept": ["a!", "c!"], "i": 1}
+  },
+  "trace": [
+    {"request": "r:1", "capability": "store.get", "input": {"id": "a"}},
+    {"response": "r:1", "output": {"id": "a", "size": 7}},
+    {"request": "r:2", "capability": "store.get", "input": {"id": "b"}},
+    {"response": "r:2", "output": {"id": "b", "size": 9}},
+    {"request": "r:3", "capability": "store.put", "input": {"id": "z", "size": 1}},
+    {"response": "r:3", "output": null},
+    {"request": "r:4", "capability": "store.put", "input": {"id": "l", "size": 0}},
+    {"response": "r:4", "output": null},
+    {"request": "r:5", "capability": "store.put", "input": {"id": "l", "size": 1}},
+    {"response": "r:5", "output": null}
+  ]
+}

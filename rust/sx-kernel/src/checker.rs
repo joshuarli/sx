@@ -117,12 +117,10 @@ const HABIT_HEADS: [(&str, &str, &str); 12] = [
         "dissoc takes a Map and a string key. For a record, build a new record literal without the field.",
     ),
 ];
-const MISSING_FUNCTIONS: [(&str, &str); 22] = [
+const MISSING_FUNCTIONS: [(&str, &str); 20] = [
     ("inc", "Add 1 instead: (+ x 1)."),
     ("dec", "Subtract 1 instead: (- x 1)."),
     ("last", "Use (nth xs (- (count xs) 1))."),
-    ("when", "Use if with an else value."),
-    ("do", "Bind each step with let, and use _ for steps you run only for their effect."),
     ("empty?", "Use (= (count xs) 0)."),
     ("nil?", "Match on the optional value: (match x (some v) ... none ...)."),
     ("some?", "Match on the optional value: (match x (some v) ... none ...)."),
@@ -148,6 +146,8 @@ const FLOAT_TO_INT_HINT: &str =
 const BYTES_HINT: &str = "Bytes come from tools. No Sx function builds them from a string or a list.";
 const OPTIONAL_HINT: &str = "This value is optional. Take it apart first: (match x (some v) ... none ...).";
 const UNFILLED_LOOP_HINT: &str = "A loop binding that starts as [], {}, or none gets its type from the values that recur gives it, and no recur here does. Give recur a value of the right shape, or start the binding with one.";
+const UNDOCUMENTED_FORMS: [&str; 2] = ["when", "do"];
+const WHEN_HINT: &str = "when is optional: none when its test is false. Use if with an else value, or match on it: (match x (some v) ... none ...).";
 const MAX_REPEATS: usize = 10_000;
 
 fn is_special_form(name: &str) -> bool {
@@ -179,7 +179,15 @@ fn missing_function(name: &str) -> Option<&'static str> {
 }
 
 fn test_subject(who: &str) -> &'static str {
-    if who == "if" { "An if condition" } else { "A cond test" }
+    match who {
+        "if" => "An if condition",
+        "when" => "A when condition",
+        _ => "A cond test",
+    }
+}
+
+fn test_help(who: &str) -> &str {
+    if who == "when" { "if" } else { who }
 }
 
 fn binary_signature(op: &str) -> Option<&'static str> {
@@ -1524,6 +1532,13 @@ impl<'r> Checker<'r> {
         if name == "recur" {
             return self.form_recur(span, items, scope);
         }
+        if matches!(name, "when" | "do") && scope.get(name).is_none() {
+            return if name == "when" {
+                self.outside_tail(|c| c.form_when(span, items, expected, scope))
+            } else {
+                self.form_do(span, items, expected, scope)
+            };
+        }
         self.outside_tail(|c| {
             if is_special_form(name) {
                 return c.special_form(name, syntax, items, expected, scope);
@@ -1634,7 +1649,7 @@ impl<'r> Checker<'r> {
         self.report(
             Diagnostic::new("arity", span, format!("{name} takes {wanted} argument{plural}, but this call has {given}."))
                 .detail(format!("Signature: ({name} {signature})").trim_end().to_string())
-                .help(name),
+                .maybe_help((!UNDOCUMENTED_FORMS.contains(&name)).then(|| name.to_string())),
         );
         false
     }
@@ -1921,7 +1936,7 @@ impl<'r> Checker<'r> {
                              Match on it instead: (match {} (some v) ... none ...).",
                             show(condition_node)
                         ))
-                        .help(who),
+                        .help(test_help(who)),
                 );
                 return Test { condition, presence: false, name: None, inner: None };
             }
@@ -1947,7 +1962,7 @@ impl<'r> Checker<'r> {
                 describe(&self.zonk(&condition_type))
             );
             self.report(
-                Diagnostic::new("condition-not-bool", condition_node.span, message).maybe_detail(hint).help(who),
+                Diagnostic::new("condition-not-bool", condition_node.span, message).maybe_detail(hint).help(test_help(who)),
             );
         }
         Test { condition, presence: false, name: None, inner: None }
@@ -1968,7 +1983,7 @@ impl<'r> Checker<'r> {
                          Match on it instead: (match {} (some v) ... none ...).",
                         test.shown
                     ))
-                    .help(test.who),
+                    .help(test_help(test.who)),
                 );
             }
         }
@@ -2036,6 +2051,53 @@ impl<'r> Checker<'r> {
             return self.placeholder(span);
         };
         (Checker::lower_test(test, then, otherwise, span), t)
+    }
+
+    fn form_when<'a>(&mut self, span: Span, items: &'a [Node], expected: Option<&Type>, scope: &Scope<'a>) -> Checked {
+        if items.len() > 3 {
+            self.report(
+                habit("when-body", items[3].span, format!("A when has one expression, but this one has {}.", items.len() - 2))
+                    .detail("Run several steps in order with do: (when test (do step1 step2)).")
+                    .fix(format!("(when {} (do {}))", show(&items[1]), items[2..].iter().map(show).collect::<Vec<_>>().join(" "))),
+            );
+            self.check_test(&items[1], scope, "when");
+            for item in &items[2..] {
+                self.check(item, None, scope);
+            }
+            return self.placeholder(span);
+        }
+        if !self.arity(span, items, 2, Some(2), "condition expression") {
+            return self.placeholder(span);
+        }
+        let test = self.check_test(&items[1], scope, "when");
+        let inner_expected = match expected.map(|e| self.resolve(e)) {
+            Some(Type::Option(inner)) => Some(*inner),
+            _ => None,
+        };
+        let (value, t) = self.check(&items[2], inner_expected.as_ref(), &Checker::narrowed(&test, scope));
+        let wrapped = option(t);
+        let some = node(Ir::Wrap { kind: WrapKind::Some, value: Box::new(value), wrapped_type: wrapped.clone() }, span);
+        let none = literal(Value::None, wrapped.clone(), span);
+        let made = Checker::lower_test(test, some, none, span);
+        let options = Coercion { detail_hint: Some(WHEN_HINT.to_string()), ..Coercion::default() };
+        self.coerce_with(made, &wrapped, expected, span, options)
+    }
+
+    fn form_do<'a>(&mut self, span: Span, items: &'a [Node], expected: Option<&Type>, scope: &Scope<'a>) -> Checked {
+        if !self.arity(span, items, 1, None, "expression ...") {
+            return self.placeholder(span);
+        }
+        let Some((last, steps)) = items[1..].split_last() else {
+            return self.placeholder(span);
+        };
+        let values: Vec<(ir::Node, Span)> =
+            steps.iter().map(|step| (self.outside_tail(|c| c.check(step, None, scope)).0, step.span)).collect();
+        let (mut body, t) = self.check(last, expected, scope);
+        for (value, step_span) in values.into_iter().rev() {
+            let step = ir::Let { binder: Binder::Discard, value: Box::new(value), body: Box::new(body) };
+            body = node(Ir::Let(step), step_span);
+        }
+        (body, t)
     }
 
     fn form_cond<'a>(&mut self, span: Span, items: &'a [Node], expected: Option<&Type>, scope: &Scope<'a>) -> Checked {

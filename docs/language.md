@@ -191,6 +191,8 @@ because its text does not order like its value: the diagnostic names the core's 
 | `(if c then else)` | `c` is `Bool`, or an `Option<T>` presence test. See [Conditions](#conditions). Both branches have the same type. |
 | `(cond t1 e1 t2 e2 ... :else e)` | Evaluates `t1`, `t2`, and so on in order, and returns the `e` after the first true test, or the `:else` result. `:else` is required and last. Each test follows the rules of an `if` condition, and all results have the same type. See [Conditions](#conditions). |
 | `(match e clause...)` | See [Match](#match). |
+| `(when c e)` | `Option<T>`, where `e` has type `T`. It is `(some e)` when `c` holds, and `none` otherwise, and `e` evaluates only then. `c` follows the rules of an `if` condition, so an optional name is narrowed inside `e`. Its value is optional, so a place that needs `T` takes it apart with `match` or `get` with a default, as for any optional. A `when` with more than one expression is the `when-body` habit, and `recur` inside `e` is `recur-position`. |
+| `(do e1 ... en)` | The type of `en`. It means `(let [_ e1 ... _ e(n-1)] en)`: each `e` before the last runs for its effect and its value is dropped, and `en` is the result and may be a `recur` in tail position. |
 | `(fn [p ...] body)` | A function argument, or the value of a `let` binding. See [Functions](#functions). |
 | `(get r :field)` | `r` is a record with `field`. A missing field is rejected by the checker. |
 | `(get m key)` | `m` is a `Map<String, V>` and `key` is a `String`. The result is `Option<V>`, `none` when the key is absent. A keyword key, as in `(get m :name)`, is rejected with the habit `keyword-value` and the fix `"name"`, because keywords only name record fields. |
@@ -224,6 +226,8 @@ binding, such as `(attempt ...)` after `[attempt 1]`, would call the local inste
 Prelude and core function names are not reserved, so a local may be named `count`. Inside its
 scope the local hides the function: using it in head position, as in `(count xs)`, is a
 `type-mismatch` that says the local hides the function.
+`when` and `do` are not reserved either: a local named `when` hides the form, and `(when ...)` is then a
+`type-mismatch` that says the name is not a function.
 
 ### Conditions
 
@@ -1549,7 +1553,7 @@ The checker's codes are:
 | Effects | `unauthorized`, `out-of-scope`, `parallel-write`, `par-map-limit`, `retry-write`, `wait-write` |
 | Script | `script-position`, `script-header`, `script-key`, `input-type`. See [Scripts](#scripts). |
 | Size | `too-large`, naming the `source-bytes`, `nodes`, or `depth` budget |
-| Habits | `habit`, naming the construct. The reader detects `nil`, `capitalized-boolean`, `quote`, `reader-macro`, `anonymous-fn-shorthand`, `set-literal`, `threading`, `js-operator`, `js-object-key`, `method-call`, and `namespace-slash`. The checker detects `defn`, `keyword-call`, `keyword-value`, `argument-order`, `assoc`, `let-body`, `while`, and `loop-without-max`. |
+| Habits | `habit`, naming the construct. The reader detects `nil`, `capitalized-boolean`, `quote`, `reader-macro`, `anonymous-fn-shorthand`, `set-literal`, `threading`, `js-operator`, `js-object-key`, `method-call`, and `namespace-slash`. The checker detects `defn`, `keyword-call`, `keyword-value`, `argument-order`, `assoc`, `let-body`, `when-body`, `while`, and `loop-without-max`. |
 
 A habit diagnostic names the language the construct comes from and gives the Sx form. For
 example, `(:name repo)` gets `Fix: (get repo :name)`.

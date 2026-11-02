@@ -1,0 +1,7 @@
+; declarations: fixtures/run/declarations.json
+; allow: store.put
+; python: no
+(let [_ (when true
+          (call store.put {:id "a" :size 1})
+          (call store.put {:id "b" :size 2}))]
+  1)

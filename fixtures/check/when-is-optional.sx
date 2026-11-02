@@ -1,0 +1,6 @@
+; declarations: fixtures/run/declarations.json
+; python: no
+(let [ids ["a" "b" "c"]
+      kept (keep (fn [id] (when (not= id "b") (str id "!"))) ids)
+      note (when (> (count ids) 2) "many")]
+  [kept note (match note (some n) n none "few")])

@@ -1,0 +1,4 @@
+; declarations: fixtures/run/declarations.json
+; python: no
+(let [found (some 3)]
+  (when found (+ found 1)))

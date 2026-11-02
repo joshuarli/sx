@@ -1,0 +1,4 @@
+; declarations: fixtures/run/declarations.json
+; python: no
+(let [when 3]
+  (when true 1))

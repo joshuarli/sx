@@ -1,0 +1,6 @@
+error[habit:when-body] 6:11-6:45
+            (call store.put {:id "b" :size 2}))]
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  A when has one expression, but this one has 2.
+  Run several steps in order with do: (when test (do step1 step2)).
+  Fix: (when true (do (call store.put {:id "a" :size 1}) (call store.put {:id "b" :size 2})))
