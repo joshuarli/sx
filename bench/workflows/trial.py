@@ -21,18 +21,32 @@ type Ask = Callable[[Path, str, str, Path], tuple[str, dict[str, int], str | Non
 LANGUAGE: dict[str, str] = {"sx": "sx", "js": "ts"}
 
 
+TAILORED = "tailored"
+REPLY_SX = "Reply with one Sx program in a ```sx code block, and nothing else."
+
+
 def sx_prompt(workflow: Workflow, sandbox: Sandbox, level: str) -> str:
     task = workflow.render(workflow.task, sandbox).strip()
+    if level == TAILORED:
+        tailored = arms.sx_guide(workflow, sandbox, notes=False).rstrip()
+        return "\n".join([tailored, "", "## Your task", "", task, "", REPLY_SX]) + "\n"
     return "\n".join([
         guide(level), "", "## Your task", "", task, "", arms.sx_listing(workflow, sandbox),
-        "Reply with one Sx program in a ```sx code block, and nothing else.",
+        REPLY_SX,
     ]) + "\n"
 
 
-def js_arm_prompt(workflow: Workflow, sandbox: Sandbox) -> str:
+def js_arm_prompt(workflow: Workflow, sandbox: Sandbox, *, notes: bool) -> str:
     task = {"description": workflow.render(workflow.task, sandbox).strip()}
     prompt = js_prompt({**arms.described_for(workflow, sandbox), **task}, NO_CORES)
-    return prompt.replace(arms.VIRTUAL_WAIT, arms.REAL_WAIT)
+    prompt = prompt.replace(arms.VIRTUAL_WAIT, arms.REAL_WAIT)
+    if not notes:
+        return prompt
+    behavior = arms.sx_guide(workflow, sandbox, notes=True).strip()
+    if not behavior:
+        return prompt
+    reply = prompt.rindex("Reply with the module")
+    return f"{prompt[:reply]}## How the tools behave\n\n{behavior}\n\n{prompt[reply:]}"
 
 
 def verdict_of(workflow: Workflow, sandbox: Sandbox, run: ArmRun, program: str) -> tuple[str, str]:
@@ -51,14 +65,18 @@ def reference(workflow: Workflow, arm: Arm) -> tuple[ArmRun, str, str]:
 
 
 def run_trial(
-    workflow: Workflow, arm: Arm, model: str, thinking: str, level: str, sample: int, out: Path, ask: Ask = ask_model
+    workflow: Workflow, arm: Arm, model: str, thinking: str, level: str, sample: int, out: Path, ask: Ask = ask_model,
+    *, ts_notes: bool,
 ) -> Trial:
-    directory = out / workflow.id / f"{arm if arm == 'js' else 'sx-' + level}-{sample}"
+    js_label = "js-notes" if ts_notes else "js"
+    directory = out / workflow.id / f"{js_label if arm == 'js' else 'sx-' + level}-{sample}"
     directory.mkdir(parents=True, exist_ok=True)
     attempts: list[Attempt] = []
     extras: list[Json] = []
     with workflow.sandbox() as sandbox:
-        original = sx_prompt(workflow, sandbox, level) if arm == "sx" else js_arm_prompt(workflow, sandbox)
+        original = (
+            sx_prompt(workflow, sandbox, level) if arm == "sx" else js_arm_prompt(workflow, sandbox, notes=ts_notes)
+        )
         prompt = original
         for index in range(REPAIRS + 1):
             prompt_file = directory / f"prompt-{index}.md"
@@ -84,7 +102,7 @@ def run_trial(
             if status == "correct" or run.feedback is None:
                 break
             prompt = repair_prompt(original, attempts, LANGUAGE[arm])
-    guide_level = level if arm == "sx" else "none"
+    guide_level = level if arm == "sx" else ("notes" if ts_notes else "none")
     trial = Trial(workflow.id, arm, model, thinking, guide_level, sample, attempts)
     (directory / "trial.json").write_text(json.dumps(asdict(trial), indent=2))
     (directory / "extras.json").write_text(json.dumps(extras, indent=2))

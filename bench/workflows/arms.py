@@ -143,6 +143,16 @@ def sx_listing(workflow: Workflow, sandbox: Sandbox) -> str:
     return "\n\n".join(shown)
 
 
+def sx_guide(workflow: Workflow, sandbox: Sandbox, *, notes: bool) -> str:
+    with tempfile.TemporaryDirectory(dir=scratch()) as directory:
+        files = Files(workflow, sandbox, Path(directory))
+        arguments = ["guide", "--declarations", str(files.declarations), "--grants", str(files.grants)]
+        completed = sx_output([*arguments, "--notes"] if notes else arguments)
+    if completed.returncode != 0:
+        raise RuntimeError(f"sx guide exited {completed.returncode}: {completed.stderr.strip()}")
+    return completed.stdout
+
+
 def run_sx(workflow: Workflow, sandbox: Sandbox, program: str) -> ArmRun:
     with tempfile.TemporaryDirectory(dir=scratch()) as directory:
         files = Files(workflow, sandbox, Path(directory))

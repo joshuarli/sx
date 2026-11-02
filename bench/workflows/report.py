@@ -17,7 +17,8 @@ def lines_of(path: Path) -> int:
 
 
 def extras_of(out: Path, trial: Trial) -> list[Json]:
-    folder = trial.arm if trial.arm == "js" else f"sx-{trial.guide}"
+    js_folder = "js-notes" if trial.guide == "notes" else "js"
+    folder = js_folder if trial.arm == "js" else f"sx-{trial.guide}"
     path = out / trial.task / f"{folder}-{trial.sample}" / "extras.json"
     loaded: list[Json] = json.loads(path.read_text())
     return loaded

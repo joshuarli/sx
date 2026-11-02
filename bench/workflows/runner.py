@@ -31,7 +31,9 @@ def run_trials(args: argparse.Namespace, ids: list[str], arm_names: tuple[Arm, .
     with ThreadPoolExecutor(max_workers=args.jobs) as pool:
         jobs = [
             pool.submit(
-                trial.run_trial, definition.load(workflow_id), arm, args.model, args.thinking, args.guide, sample, out
+                trial.run_trial,
+                definition.load(workflow_id), arm, args.model, args.thinking, args.guide, sample, out,
+                ts_notes=args.ts_notes,
             )
             for workflow_id in ids
             for arm in arm_names
@@ -52,6 +54,7 @@ def main() -> None:
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--thinking", default="medium")
     parser.add_argument("--guide", default="standard")
+    parser.add_argument("--ts-notes", action="store_true", help="Give the TypeScript arm the tools' behavior notes")
     parser.add_argument("--samples", type=int, default=2)
     parser.add_argument("--jobs", type=int, default=4)
     parser.add_argument("--out", type=Path)

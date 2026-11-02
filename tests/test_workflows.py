@@ -194,7 +194,7 @@ def test_a_model_trial_repairs_a_rejected_answer_and_counts_tokens(arm: Arm, tmp
         answers.append("repaired")
         return reply(workflow.reference(arm).replace("{{root}}", root_path))
 
-    finished = trial.run_trial(workflow, arm, "fake", "none", "standard", 0, tmp_path, fake_model)
+    finished = trial.run_trial(workflow, arm, "fake", "none", "standard", 0, tmp_path, fake_model, ts_notes=False)
     assert [a.status for a in finished.attempts] == ["rejected", "correct"]
     assert tokens(finished) == 220
     assert "It failed:" in prompts[1]
