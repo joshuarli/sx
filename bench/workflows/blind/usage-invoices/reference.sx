@@ -1,0 +1,50 @@
+(let [accounts (loop {:max 20} [page 1 acc []]
+                 (let [answer (call billing.accounts {:page page})
+                       all (concat acc (get answer :accounts))]
+                   (if (< page (get answer :pages)) (recur (+ page 1) all) all)))
+      recorded (map (fn [r] (get r :account)) (call ledger.all {}))
+      ledgered (filter (fn [a] (contains? recorded (get a :id))) accounts)
+      todo (filter (fn [a] (and (not= (get a :plan) "free") (not (contains? recorded (get a :id))))) accounts)
+      usage (par-map {:limit 5}
+                     (fn [a]
+                       (match (attempt (retry {:delays [50ms 50ms] :on [Unavailable]}
+                                         (call billing.usage {:account (get a :id)})))
+                         (ok u) {:id (get a :id) :plan (get a :plan) :state "ok" :events (get u :events)}
+                         (err e) {:id (get a :id) :plan (get a :plan)
+                                  :state (if (= (get e :kind) "NotFound") "unknown" "failed") :events []}))
+                     todo)
+      total-of (fn [events metric]
+                 (reduce + 0 (map (fn [e] (get e :quantity)) (filter (fn [e] (= (get e :metric) metric)) events))))
+      subtotal (fn [u]
+                 (let [api (total-of (get u :events) "api")
+                       storage (total-of (get u :events) "storage")]
+                   (if (= (get u :plan) "standard")
+                     (+ (+ (* (if (> api 1000) (- (if (> api 10000) 10000 api) 1000) 0) 3)
+                           (* (if (> api 10000) (- api 10000) 0) 2))
+                        (* storage 50))
+                     (let [raw (+ (if (> api 10000) (- api 10000) 0) (* storage 30))]
+                       (if (and (> raw 0) (< raw 5000)) 5000 raw)))))
+      priced (map (fn [u] {:id (get u :id) :cents (let [s (subtotal u)] (+ s (quot (+ (* s 7) 50) 100)))
+                           :subtotal (subtotal u)})
+                  (sort-by (fn [u] (get u :id)) (filter (fn [u] (= (get u :state) "ok")) usage)))
+      no-charge (filter (fn [p] (= (get p :subtotal) 0)) priced)
+      owed (filter (fn [p] (> (get p :subtotal) 0)) priced)
+      issued (map (fn [p]
+                    (match (attempt (retry {:delays [100ms 100ms] :on [RateLimited]}
+                                      (call billing.invoice {:account (get p :id) :cents (get p :cents)})))
+                      (ok r) (let [_ (call ledger.record {:account (get p :id) :invoice (get r :invoice) :cents (get p :cents)})]
+                               {:id (get p :id) :state "invoiced" :cents (get p :cents) :invoice (get r :invoice)})
+                      (err e) {:id (get p :id) :state (if (= (get e :kind) "Conflict") "already" "failed") :cents 0 :invoice ""}))
+                  owed)
+      ids (fn [xs] (sort-by identity (map (fn [x] (get x :id)) xs)))
+      invoiced (filter (fn [i] (= (get i :state) "invoiced")) issued)]
+  {:accounts (count accounts)
+   :free (count (filter (fn [a] (= (get a :plan) "free")) accounts))
+   :ledgered (ids ledgered)
+   :unknown (ids (filter (fn [u] (= (get u :state) "unknown")) usage))
+   :no_charge (ids no-charge)
+   :already (ids (filter (fn [i] (= (get i :state) "already")) issued))
+   :failed (sort-by identity (concat (ids (filter (fn [u] (= (get u :state) "failed")) usage))
+                                     (ids (filter (fn [i] (= (get i :state) "failed")) issued))))
+   :invoiced (map (fn [i] {:account (get i :id) :cents (get i :cents) :invoice (get i :invoice)}) invoiced)
+   :total_cents (reduce + 0 (map (fn [i] (get i :cents)) invoiced))})

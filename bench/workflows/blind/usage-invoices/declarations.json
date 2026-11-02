@@ -1,0 +1,47 @@
+{
+  "packs": ["sqlite"],
+  "capabilities": [
+    {
+      "id": "billing.accounts",
+      "http": {"method": "GET", "url": "{{billing_origin}}/accounts", "query": ["page"]},
+      "input": "Record {page: Int}",
+      "output": "Record {page: Int, pages: Int, accounts: List<Record open {id: String, plan: String}>}",
+      "effect": "read",
+      "description": "Returns one page of accounts and the number of pages."
+    },
+    {
+      "id": "billing.usage",
+      "http": {"method": "GET", "url": "{{billing_origin}}/usage/{account}", "query": []},
+      "input": "Record {account: String}",
+      "output": "Record open {events: List<Record open {metric: String, quantity: Int}>}",
+      "effect": "read",
+      "description": "Returns the usage events of an account for the month."
+    },
+    {
+      "id": "billing.invoice",
+      "http": {"method": "POST", "url": "{{billing_origin}}/invoices", "query": []},
+      "input": "Record {account: String, cents: Int}",
+      "output": "Record open {invoice: String}",
+      "effect": "write",
+      "idempotent": false,
+      "description": "Creates an invoice for an account and returns its id."
+    },
+    {
+      "id": "ledger.all",
+      "sqlite": {"database": "{{root}}/ledger.db", "statement": "SELECT account FROM invoices ORDER BY account"},
+      "input": "Record {}",
+      "output": "List<Record {account: String}>",
+      "effect": "read",
+      "description": "Returns the accounts that already have a recorded invoice."
+    },
+    {
+      "id": "ledger.record",
+      "sqlite": {"database": "{{root}}/ledger.db", "statement": "INSERT INTO invoices(account, invoice, cents) VALUES (:account, :invoice, :cents)"},
+      "input": "Record {account: String, invoice: String, cents: Int}",
+      "output": "Int",
+      "effect": "write",
+      "idempotent": false,
+      "description": "Records an invoice."
+    }
+  ]
+}

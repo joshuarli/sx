@@ -1,0 +1,7 @@
+{
+  "billing.accounts": {"origins": ["{{billing_origin}}"], "methods": ["GET"]},
+  "billing.usage": {"origins": ["{{billing_origin}}"], "methods": ["GET"]},
+  "billing.invoice": {"origins": ["{{billing_origin}}"], "methods": ["POST"]},
+  "ledger.all": {"roots": ["{{root}}"]},
+  "ledger.record": {"roots": ["{{root}}"]}
+}
