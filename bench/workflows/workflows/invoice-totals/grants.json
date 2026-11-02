@@ -1,0 +1,4 @@
+{
+  "fs.list": {"roots": ["{{root}}/invoices"]},
+  "fs.read-text": {"roots": ["{{root}}/invoices"]}
+}

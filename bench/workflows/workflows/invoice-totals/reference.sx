@@ -1,0 +1,32 @@
+(let [dir "{{root}}/invoices"
+      names (sort-by identity
+                     (map (fn [e] (get e :name))
+                          (filter (fn [e] (and (= (get e :kind) File) (text.ends-with? (get e :name) ".csv")))
+                                  (call fs.list {:path dir}))))
+      dec (fn [s] (match (decimal.parse (text.trim s)) (some d) d none (decimal.from-int 0)))
+      hundred (decimal.from-int 100)
+      amount (fn [fields]
+               (decimal.round
+                 (decimal.div
+                   (decimal.mul (decimal.mul (dec (nth fields 1)) (dec (nth fields 2)))
+                                (decimal.sub hundred (dec (nth fields 3))))
+                   hundred 10 HalfUp)
+                 2 HalfUp))
+      parse (fn [source]
+              (let [rows (map (fn [l] (text.split (text.trim l) ","))
+                              (filter (fn [l] (not= (text.trim l) "")) (text.split source "\n")))
+                    head (first rows)]
+                {:id (nth head 1)
+                 :customer (nth head 2)
+                 :stated (dec (nth head 3))
+                 :computed (reduce decimal.add (decimal.from-int 0) (map amount (rest rows)))}))
+      invoices (map (fn [n] (parse (call fs.read-text {:path (str dir "/" n)}))) names)
+      customers (sort-by (fn [g] (first g)) (group-by (fn [i] (get i :customer)) invoices))
+      money (fn [d] (decimal.format d 2))]
+  {:customers (map (fn [g]
+                     {:customer (first g)
+                      :invoices (count (nth g 1))
+                      :total (money (reduce decimal.add (decimal.from-int 0) (map (fn [i] (get i :computed)) (nth g 1))))})
+                   customers)
+   :mismatched (map (fn [i] {:invoice (get i :id) :stated (money (get i :stated)) :computed (money (get i :computed))})
+                    (sort-by (fn [i] (get i :id)) (filter (fn [i] (not= (get i :stated) (get i :computed))) invoices)))})
