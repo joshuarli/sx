@@ -1,7 +1,5 @@
-error[type-mismatch] 3:39-3:48
+error[unknown-variant] 3:39-3:48
   (decimal.round (decimal.from-int 1) 0 "Nearest")
                                         ^^^^^^^^^
-  decimal.round takes a decimal.Rounding here, but this is a String.
-  Expected: decimal.Rounding
-  Found: String
-  Help: sx help decimal.round
+  "Nearest" is not a variant of decimal.Rounding.
+  Variants: HalfEven, HalfUp, Down, Up, Floor, Ceiling

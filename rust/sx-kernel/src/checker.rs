@@ -3334,7 +3334,8 @@ impl<'r> Checker<'r> {
         }
         let mut args = Vec::new();
         for (arg, param) in items[1..].iter().zip(&function.params) {
-            let (value, t) = self.check(arg, None, scope);
+            let names_a_variant = matches!(arg.kind, NodeKind::String(_)) && matches!(param, Type::Enum(_));
+            let (value, t) = self.check(arg, names_a_variant.then_some(param), scope);
             let message = format!(
                 "{} takes {} here, but this is {}.",
                 function.name,

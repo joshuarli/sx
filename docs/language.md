@@ -94,8 +94,9 @@ joined together. The name is what the JSON encoding already writes for the varia
 encodes the same either way. No other position converts an enum to a `String`.
 
 A string literal where the checker expects a core enum is the variant it names. So
-`(= (get ci :state) "Passing")` compares with the variant `Passing`, and a record field typed as
-the enum takes `"Failing"`. A string literal that names no variant of the enum, or names a variant
+`(= (get ci :state) "Passing")` compares with the variant `Passing`, a record field typed as the
+enum takes `"Failing"`, and a core function's enum parameter takes
+`(decimal.round x 2 "HalfEven")`. A string literal that names no variant of the enum, or names a variant
 that carries a value, is an `unknown-variant` error that lists the variants. A string that is not a
 literal never becomes an enum.
 
