@@ -1,7 +1,8 @@
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 
 pub mod fs;
+pub mod process;
 
 use std::fmt;
 
@@ -30,7 +31,7 @@ impl fmt::Display for Failure {
 pub type Performer = fn(&Value, &Value) -> Result<Value, Failure>;
 
 pub fn packs() -> Vec<Pack> {
-    vec![fs::pack()]
+    vec![fs::pack(), process::pack()]
 }
 
 pub fn pack(id: &str) -> Option<Pack> {
@@ -38,5 +39,5 @@ pub fn pack(id: &str) -> Option<Pack> {
 }
 
 pub fn performer(capability: &str) -> Option<Performer> {
-    fs::performer(capability)
+    fs::performer(capability).or_else(|| process::performer(capability))
 }
