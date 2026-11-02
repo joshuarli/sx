@@ -10,6 +10,7 @@ declaration.
 | `function label(r) { return r.name + ": " + r.state; }` | `(defn label [r] (str (get r :name) ": " (get r :state)))` |
 | `await api.ns.tool({ a: 1, b: "x" })` | `(call ns.tool {:a 1 :b "x"})` |
 | `await api.ns.write(x);` as a statement | `(def _ (call ns.write {:x x}))` |
+| `if (failed) await api.ns.undo(x);` | `(def _ (when failed (call ns.undo {:x x})))` |
 | `return result;` at the end | the last form of the program |
 | `r.field` | `(get r :field)` |
 | `r.maybe ?? fallback` | `(get r :maybe fallback)` |

@@ -26,8 +26,8 @@ definition short: a step that grows long becomes two definitions or a helper `de
 - Lists: `[1 2 3]`. Tuples: `[1 "a"]`, a bracket literal with mixed types or taken apart as `[a b]`.
 - Records: `{:name "ada" :age 36}`. Keywords only name fields; use strings such as `"failing"`
   for labels. Tool enum variants are written `Passing`; one that is not a capitalized name, such as
-  `rush`, is written as a string: `"rush"`. Names that start with a capital letter are variants, so
-  name your own values in lowercase.
+  `rush`, is written as a string: `"rush"`. Name your own values in lowercase, since a capitalized
+  name that is also a variant is an error.
 - Optional values: `(some x)` or `none`. There is no `nil` or `null`. A plain value works where an
   optional is expected. `(if x then else)` on an optional name tests whether it is present, and
   `x` is the plain value inside `then`. `(get r :field default)` reads a field and gives `default`
@@ -45,6 +45,8 @@ definition short: a step that grows long becomes two definitions or a helper `de
       f (fn [x] ...)]     ; a local function, called as (f x)
   body)                   ; one body
 (if test then else)       ; test is true or false, or an optional name
+(when test expr)          ; (some expr) when test holds, else none: (def _ (when failed (call ...)))
+(do e1 e2 last)           ; runs each in order, gives last
 (cond t1 r1 t2 r2 :else r)
 (get record :field)
 (call tool.name {:field value})
