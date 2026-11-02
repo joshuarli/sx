@@ -1,0 +1,25 @@
+(let [reports ["sales" "refunds" "payouts" "adjustments"]
+      create (fn [report]
+               (get (retry {:delays [50ms 50ms] :on [RateLimited]}
+                      (call exports.create {:report report :month "2026-03"}))
+                    :id))
+      watch (fn [id]
+              (attempt (wait-until {:backoff [50ms 200ms] :within 1s}
+                         (fn [s] (not (or (= (get s :state) "queued") (= (get s :state) "running"))))
+                         (call exports.status {:id id}))))
+      transient? (fn [s] (match (get s :reason) (some r) (= r "transient") none false))
+      export (fn [report]
+               (loop {:max 3} [jobs []]
+                 (let [id (create report)
+                       all (concat jobs [id])]
+                   (match (watch id)
+                     (ok s)
+                     (cond (= (get s :state) "done")
+                           (let [lines (get (call exports.download {:id id}) :lines)
+                                 _ (call fs.write-text {:path (str "{{root}}/exports/" report ".csv")
+                                                        :text (str (text.join "\n" lines) "\n")})]
+                             {:report report :outcome "exported" :jobs all :rows (some (count lines))})
+                           (and (transient? s) (< (count all) 3)) (recur all)
+                           :else {:report report :outcome "failed" :jobs all :rows none})
+                     (err _) {:report report :outcome "timeout" :jobs all :rows none}))))]
+  {:reports (map export reports)})

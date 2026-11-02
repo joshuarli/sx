@@ -1,0 +1,30 @@
+{
+  "packs": ["fs"],
+  "capabilities": [
+    {
+      "id": "exports.create",
+      "http": {"method": "POST", "url": "{{reports_origin}}/exports", "query": []},
+      "input": "Record {report: String, month: String}",
+      "output": "Record open {id: String}",
+      "effect": "write",
+      "idempotent": false,
+      "description": "Starts an export job for a report and a month and returns its id."
+    },
+    {
+      "id": "exports.status",
+      "http": {"method": "GET", "url": "{{reports_origin}}/exports/{id}", "query": []},
+      "input": "Record {id: String}",
+      "output": "Record open {state: String, reason: Option<String>}",
+      "effect": "read",
+      "description": "Returns the state of an export job and, for a failed job, the reason."
+    },
+    {
+      "id": "exports.download",
+      "http": {"method": "GET", "url": "{{reports_origin}}/exports/{id}/file", "query": []},
+      "input": "Record {id: String}",
+      "output": "Record open {lines: List<String>}",
+      "effect": "read",
+      "description": "Returns the lines of the file of a finished export job."
+    }
+  ]
+}

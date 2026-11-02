@@ -1,0 +1,6 @@
+{
+  "exports.create": {"origins": ["{{reports_origin}}"], "methods": ["POST"]},
+  "exports.status": {"origins": ["{{reports_origin}}"], "methods": ["GET"]},
+  "exports.download": {"origins": ["{{reports_origin}}"], "methods": ["GET"]},
+  "fs.write-text": {"roots": ["{{root}}/exports"]}
+}
