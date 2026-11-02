@@ -96,7 +96,9 @@ encodes the same either way. No other position converts an enum to a `String`.
 A string literal where the checker expects a core enum is the variant it names. So
 `(= (get ci :state) "Passing")` compares with the variant `Passing`, a record field typed as the
 enum takes `"Failing"`, and a core function's enum parameter takes
-`(decimal.round x 2 "HalfEven")`. A string literal that names no variant of the enum, or names a variant
+`(decimal.round x 2 "HalfEven")`. A variant whose name is not a capitalized symbol, such as an imported
+`rush`, can only be written as a string, and `unknown-variant` for a bare `Rush` names that
+spelling and offers it as the fix. A string literal that names no variant of the enum, or names a variant
 that carries a value, is an `unknown-variant` error that lists the variants. A string that is not a
 literal never becomes an enum.
 

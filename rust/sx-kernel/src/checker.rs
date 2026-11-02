@@ -1225,6 +1225,20 @@ impl<'r> Checker<'r> {
         found
     }
 
+    fn variant_spelled_otherwise(&self, name: &str, expected: Option<&Type>) -> Option<(String, String)> {
+        let lowered = name.to_lowercase();
+        let hinted = match self.hint(expected) {
+            Type::Enum(hint) => vec![hint],
+            _ => Vec::new(),
+        };
+        hinted.into_iter().chain(self.enums()).find_map(|e| {
+            e.variants
+                .iter()
+                .find(|(variant, payload)| payload.is_none() && variant.to_lowercase() == lowered && variant != name)
+                .map(|(variant, _)| (e.name.clone(), variant.clone()))
+        })
+    }
+
     fn variant(&mut self, name: &str, span: Span, expected: Option<&Type>) -> Checked {
         let candidates: Vec<Arc<EnumType>> = match self.hint(expected) {
             Type::Enum(hint) if hint.has(name) => vec![hint],
@@ -1232,11 +1246,20 @@ impl<'r> Checker<'r> {
         };
         let enum_type = match candidates.as_slice() {
             [] => {
-                self.report(Diagnostic::new(
-                    "unknown-variant",
-                    span,
-                    format!("{name} is not a variant of any enum in scope."),
-                ));
+                let diagnostic =
+                    Diagnostic::new("unknown-variant", span, format!("{name} is not a variant of any enum in scope."));
+                let diagnostic = match self.variant_spelled_otherwise(name, expected) {
+                    Some((enum_name, spelled)) if first_upper(&spelled) => diagnostic
+                        .detail(format!("{enum_name} spells it {spelled}."))
+                        .fix(spelled),
+                    Some((enum_name, spelled)) => diagnostic
+                        .detail(format!(
+                            "{enum_name} spells it \"{spelled}\", which is not a name, so write it as a string."
+                        ))
+                        .fix(format!("\"{spelled}\"")),
+                    None => diagnostic,
+                };
+                self.report(diagnostic);
                 return self.placeholder(span);
             }
             [one] => one.clone(),

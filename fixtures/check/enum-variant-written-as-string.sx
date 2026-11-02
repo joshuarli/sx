@@ -1,0 +1,4 @@
+; declarations: fixtures/check/wire-enum-declarations.json
+; allow: orders.place
+; python: no
+(call orders.place {:sku "a1" :priority Rush})

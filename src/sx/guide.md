@@ -11,7 +11,8 @@ below exist.
   `(floor x)`, and `(ceil x)` give an Int, and `(/ a b)` divides Floats. Bytes are opaque.
 - Lists: `[1 2 3]`. Tuples: `[1 "a"]`, a bracket literal with mixed types or taken apart as `[a b]`.
 - Records: `{:name "ada" :age 36}`. Keywords only name fields; use strings such as `"failing"`
-  for labels. Tool enum variants are written `Passing`.
+  for labels. Tool enum variants are written `Passing`; one that is not a capitalized name, such as
+  `rush`, is written as a string: `"rush"`.
 - Optional values: `(some x)` or `none`. There is no `nil` or `null`. A plain value works where an
   optional is expected. `(if x then else)` on an optional name tests whether it is present, and
   `x` is the plain value inside `then`. `(get r :field default)` reads an optional field.

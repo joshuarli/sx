@@ -1,0 +1,6 @@
+error[unknown-variant] 4:41-4:45
+  (call orders.place {:sku "a1" :priority Rush})
+                                          ^^^^
+  Rush is not a variant of any enum in scope.
+  Priority spells it "rush", which is not a name, so write it as a string.
+  Fix: "rush"

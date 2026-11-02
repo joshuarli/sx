@@ -1,0 +1,6 @@
+{
+  "enums": {"Priority": {"rush": null, "normal": null}},
+  "capabilities": [
+    {"id": "orders.place", "effect": "write", "idempotent": false, "input": "Record {sku: String, priority: Priority}", "output": "String", "description": "Places an order."}
+  ]
+}
