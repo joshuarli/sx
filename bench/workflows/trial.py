@@ -7,7 +7,7 @@ from typing import Any
 
 import arms
 from arms import NO_CORES, Arm, ArmRun
-from definition import Workflow
+from definition import Evidence, Workflow
 from pilot import ask as ask_model
 from pilot import extract
 from probe import REPAIRS, Attempt, Trial, js_prompt, repair_prompt
@@ -35,17 +35,18 @@ def js_arm_prompt(workflow: Workflow, sandbox: Sandbox) -> str:
     return prompt.replace(arms.VIRTUAL_WAIT, arms.REAL_WAIT)
 
 
-def verdict_of(workflow: Workflow, sandbox: Sandbox, run: ArmRun) -> tuple[str, str]:
+def verdict_of(workflow: Workflow, sandbox: Sandbox, run: ArmRun, program: str) -> tuple[str, str]:
     if run.status != "completed":
         return run.status, run.detail
-    verdict = workflow.check(sandbox, run.result)
+    verdict = workflow.check(sandbox, run.result, Evidence(program, run.transcript))
     return verdict.status, verdict.detail
 
 
 def reference(workflow: Workflow, arm: Arm) -> tuple[ArmRun, str, str]:
     with workflow.sandbox() as sandbox:
-        run = arms.run_arm(arm, workflow, sandbox, workflow.render(workflow.reference(arm), sandbox))
-        status, detail = verdict_of(workflow, sandbox, run)
+        program = workflow.render(workflow.reference(arm), sandbox)
+        run = arms.run_arm(arm, workflow, sandbox, program)
+        status, detail = verdict_of(workflow, sandbox, run, program)
     return run, status, detail
 
 
@@ -73,7 +74,7 @@ def run_trial(
             sandbox.reset()
             workflow.setup(sandbox)
             run = arms.run_arm(arm, workflow, sandbox, code)
-            status, detail = verdict_of(workflow, sandbox, run)
+            status, detail = verdict_of(workflow, sandbox, run, code)
             attempt = Attempt(reply, code, tokens, error, status, detail, run.feedback, run.labels, len(run.calls))
             attempts.append(attempt)
             extras.append({

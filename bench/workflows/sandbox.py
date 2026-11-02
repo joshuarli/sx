@@ -30,6 +30,7 @@ class Request:
     path: str
     headers: Mapping[str, str]
     body: bytes
+    received: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,7 +64,9 @@ class Service:
 
             def respond(self) -> None:
                 length = int(self.headers.get("content-length") or 0)
-                request = Request(self.command, self.path, dict(self.headers.items()), self.rfile.read(length))
+                request = Request(
+                    self.command, self.path, dict(self.headers.items()), self.rfile.read(length), time.monotonic()
+                )
                 with outer.guard:
                     outer.requests.append(request)
                     outer.active += 1

@@ -1,0 +1,36 @@
+{
+  "packs": ["sqlite"],
+  "capabilities": [
+    {
+      "id": "orders.page",
+      "http": {"method": "GET", "url": "{{api_origin}}/v1/orders", "query": ["limit", "cursor"]},
+      "input": "Record {limit: Int, cursor: Option<String>}",
+      "output": "Record {items: List<Record {id: Int, customer: String, cents: Int, status: String, note: Option<String>}>, next: Option<String>}",
+      "effect": "read",
+      "description": "Returns one page of orders and the cursor of the next page, if any."
+    },
+    {
+      "id": "orders.add",
+      "sqlite": {
+        "database": "{{root}}/orders.db",
+        "statement": "INSERT INTO orders(id, customer, cents, status, note) VALUES (:id, :customer, :cents, :status, :note) ON CONFLICT(id) DO UPDATE SET customer = excluded.customer, cents = excluded.cents, status = excluded.status, note = excluded.note"
+      },
+      "input": "Record {id: Int, customer: String, cents: Int, status: String, note: Option<String>}",
+      "output": "Int",
+      "effect": "write",
+      "idempotent": true,
+      "description": "Inserts an order, or replaces the order with the same id."
+    },
+    {
+      "id": "orders.summary",
+      "sqlite": {
+        "database": "{{root}}/orders.db",
+        "statement": "SELECT status, count(*) AS n, sum(cents) AS cents FROM orders GROUP BY status ORDER BY status"
+      },
+      "input": "Record {}",
+      "output": "List<Record {status: String, n: Int, cents: Int}>",
+      "effect": "read",
+      "description": "Counts the orders and totals their cents for each status."
+    }
+  ]
+}

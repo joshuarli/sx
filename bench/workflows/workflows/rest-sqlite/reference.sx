@@ -1,0 +1,19 @@
+(let [_ (call sqlite.execute
+              {:database "{{root}}/orders.db"
+               :sql "CREATE TABLE orders (id INTEGER PRIMARY KEY, customer TEXT NOT NULL, cents INTEGER NOT NULL, status TEXT NOT NULL, note TEXT)"})
+      fetch (fn [cursor]
+              (retry {:delays [50ms 100ms 200ms] :on [RateLimited Unavailable]}
+                (call orders.page {:limit 25 :cursor cursor})))
+      pages (loop {:max 20} [cursor none acc []]
+              (let [page (fetch cursor)
+                    all (concat acc [page])]
+                (match (get page :next)
+                  (some next) (recur next all)
+                  none all)))
+      items (flatten (map (fn [p] (get p :items)) pages))
+      _ (map (fn [item] (call orders.add item)) items)
+      statuses (call orders.summary {})]
+  {:pages (count pages)
+   :fetched (count items)
+   :stored (reduce + 0 (map (fn [r] (get r :n)) statuses))
+   :statuses statuses})

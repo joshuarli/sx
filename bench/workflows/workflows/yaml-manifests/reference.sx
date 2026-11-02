@@ -1,0 +1,31 @@
+(let [dir "{{root}}/manifests"
+      names (filter (fn [n] (and (text.ends-with? n ".yaml") (not= n "legacy.yaml")))
+                    (map (fn [e] (get e :name)) (filter (fn [e] (= (get e :kind) File)) (call fs.list {:path dir}))))
+      bump (fn [version]
+             (let [parts (text.split version ".")
+                   patch (match (text.to-int (nth parts 2)) (some p) p none 0)]
+               (str (nth parts 0) "." (nth parts 1) "." (text.from-int (+ patch 1)))))
+      plans (map (fn [n]
+                   (let [source (call fs.read-text {:path (str dir "/" n)})
+                         owner (yaml.get source ["metadata" "owner"])
+                         version (yaml.get source ["metadata" "version"])]
+                     {:file n :source source :owner owner :version version}))
+                 names)
+      frozen (fn [p] (match (get p :owner) (some o) (= o "frozen") none false))
+      edit (fn [p]
+             (let [old (match (get p :version) (some v) v none "")
+                   new (bump old)
+                   a (yaml.set (get p :source) ["metadata" "version"] new)
+                   b (match (yaml.get a ["spec" "image" "tag"])
+                       (some t) (if (= t old) (yaml.set a ["spec" "image" "tag"] new) a)
+                       none a)
+                   c (match (yaml.get b ["spec" "replicas"])
+                       (some r) (match (text.to-int r)
+                                  (some k) (if (< k 2) (yaml.set b ["spec" "replicas"] "2") b)
+                                  none b)
+                       none b)]
+               {:file (get p :file) :version new :text c}))
+      edits (map edit (filter (fn [p] (not (frozen p))) plans))
+      _ (map (fn [e] (call fs.write-text {:path (str dir "/" (get e :file)) :text (get e :text)})) edits)]
+  {:updated (map (fn [e] {:file (get e :file) :version (get e :version)}) edits)
+   :skipped (map (fn [p] (get p :file)) (filter frozen plans))})

@@ -1,4 +1,4 @@
-from definition import Verdict
+from definition import Evidence, Verdict
 from sandbox import Sandbox
 
 FILES = {"alpha.txt": "abc", "beta.txt": "hello world\n", "gamma.log": "x" * 100}
@@ -10,7 +10,7 @@ def setup(sandbox: Sandbox) -> None:
     sandbox.write("data/nested/inner.txt", "not counted")
 
 
-def check(sandbox: Sandbox, result: object) -> Verdict:
+def check(sandbox: Sandbox, result: object, evidence: Evidence) -> Verdict:
     count, size = len(FILES), sum(len(text) for text in FILES.values())
     if result != {"count": count, "bytes": size}:
         return Verdict.wrong(f"the result was {result!r}, not count {count} and bytes {size}")

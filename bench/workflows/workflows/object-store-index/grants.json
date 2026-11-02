@@ -1,0 +1,10 @@
+{
+  "fs.list": {"roots": ["{{root}}/docs"]},
+  "fs.read-text": {"roots": ["{{root}}/docs"]},
+  "fs.stat": {"roots": ["{{root}}/docs"]},
+  "store.put": {
+    "origins": ["{{store_origin}}"],
+    "methods": ["PUT"],
+    "headers": {"{{store_origin}}": {"authorization": {"env": "SX_WORKFLOW_STORE_TOKEN"}}}
+  }
+}

@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
 
-from definition import Verdict
+from definition import Evidence, Verdict
 from sandbox import SCRATCH, Request, Response, Sandbox, run_git
 
 COUNT = 100
@@ -126,7 +126,7 @@ def expected() -> dict[str, object]:
     return {"failing": failing, "unreadable": unreadable, "unknown": unknown}
 
 
-def check(sandbox: Sandbox, result: object) -> Verdict:
+def check(sandbox: Sandbox, result: object, evidence: Evidence) -> Verdict:
     want = expected()
     if result != want:
         return Verdict.wrong(f"the result was {json.dumps(result)[:400]}, not {json.dumps(want)[:400]}")

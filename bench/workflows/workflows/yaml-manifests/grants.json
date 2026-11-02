@@ -1,0 +1,5 @@
+{
+  "fs.list": {"roots": ["{{root}}/manifests"]},
+  "fs.read-text": {"roots": ["{{root}}/manifests"]},
+  "fs.write-text": {"roots": ["{{root}}/manifests"]}
+}

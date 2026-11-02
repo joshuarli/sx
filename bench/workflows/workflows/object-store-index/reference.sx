@@ -1,0 +1,21 @@
+(let [root "{{root}}/docs"
+      markdown? (fn [name] (text.ends-with? name ".md"))
+      top (call fs.list {:path root})
+      top-files (map (fn [e] (get e :name)) (filter (fn [e] (and (= (get e :kind) File) (markdown? (get e :name)))) top))
+      dirs (map (fn [e] (get e :name)) (filter (fn [e] (= (get e :kind) Directory)) top))
+      nested (flatten (map (fn [d]
+                             (map (fn [e] (str d "/" (get e :name)))
+                                  (filter (fn [e] (and (= (get e :kind) File) (markdown? (get e :name))))
+                                          (call fs.list {:path (str root "/" d)}))))
+                           dirs))
+      paths (sort-by identity (concat top-files nested))
+      entries (map (fn [p]
+                     (let [body (call fs.read-text {:path (str root "/" p)})
+                           heading (filter (fn [l] (text.starts-with? l "# ")) (text.split body "\n"))
+                           size (match (call fs.stat {:path (str root "/" p)}) (some s) (get s :size) none 0)]
+                       {:path p
+                        :bytes size
+                        :title (if (= (count heading) 0) "" (text.replace (first heading) "# " ""))}))
+                   paths)
+      stored (call store.put {:key "docs-index.json" :count (count entries) :files entries})]
+  {:count (count entries) :etag (get stored :etag)})

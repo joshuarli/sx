@@ -30,8 +30,14 @@ class Verdict:
         return Verdict("wrong", detail)
 
 
+@dataclass(frozen=True, slots=True)
+class Evidence:
+    program: str
+    transcript: str
+
+
 type Setup = Callable[[Sandbox], None]
-type Check = Callable[[Sandbox, object], Verdict]
+type Check = Callable[[Sandbox, object, Evidence], Verdict]
 
 
 @dataclass(frozen=True, slots=True)

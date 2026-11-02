@@ -48,6 +48,7 @@ class ArmRun:
     program_seconds: float
     labels: list[str] = field(default_factory=list)
     explain: Json | None = None
+    transcript: str = ""
 
 
 def require_toolchain() -> str:
@@ -158,7 +159,9 @@ def run_sx(workflow: Workflow, sandbox: Sandbox, program: str) -> ArmRun:
             diagnostics = json.loads(completed.stdout)["diagnostics"]
             rendered = sx_output(["check", *arguments]).stdout
             labels = [label(d) for d in diagnostics]
-            return ArmRun("sx", "rejected", None, rendered, rendered, [], seconds, seconds, labels, explain)
+            return ArmRun(
+                "sx", "rejected", None, rendered, rendered, [], seconds, seconds, labels, explain, completed.stdout
+            )
     if completed.returncode not in (SX_EXITS["ok"], SX_EXITS["failed"]):
         raise RuntimeError(f"sx run exited {completed.returncode}: {completed.stderr.strip()}")
     report: Json = json.loads(completed.stdout)
@@ -167,8 +170,14 @@ def run_sx(workflow: Workflow, sandbox: Sandbox, program: str) -> ArmRun:
         failure = report["failure"]
         where = f" at {show_span(failure['span'])}" if failure["span"] is not None else ""
         message = f"The program failed{where} with {failure['kind']}: {failure['message']}"
-        return ArmRun("sx", "failed", None, message, message, calls, seconds, seconds, [], explain)
-    return ArmRun("sx", "completed", report["result"], "", None, calls, seconds, seconds, [], explain)
+        return ArmRun(
+            "sx", "failed", None, message, message, calls, seconds, seconds,
+            explain=explain, transcript=completed.stdout,
+        )
+    return ArmRun(
+        "sx", "completed", report["result"], "", None, calls, seconds, seconds, explain=explain,
+        transcript=completed.stdout,
+    )
 
 
 def typecheck(directory: Path) -> tuple[str, list[str]] | None:
@@ -226,8 +235,12 @@ def run_js(workflow: Workflow, sandbox: Sandbox, program: str) -> ArmRun:
             if report["kind"] == "host"
             else f"The module threw: {message}"
         )
-        return ArmRun("js", "failed", None, message, feedback, calls, seconds, program_seconds)
-    return ArmRun("js", "completed", report["result"], "", None, calls, seconds, program_seconds)
+        return ArmRun(
+            "js", "failed", None, message, feedback, calls, seconds, program_seconds, transcript=completed.stdout
+        )
+    return ArmRun(
+        "js", "completed", report["result"], "", None, calls, seconds, program_seconds, transcript=completed.stdout
+    )
 
 
 def run_arm(arm: Arm, workflow: Workflow, sandbox: Sandbox, program: str) -> ArmRun:

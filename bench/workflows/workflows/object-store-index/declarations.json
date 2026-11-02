@@ -1,0 +1,15 @@
+{
+  "cores": ["text"],
+  "packs": ["fs"],
+  "capabilities": [
+    {
+      "id": "store.put",
+      "http": {"method": "PUT", "url": "{{store_origin}}/objects/{key}", "query": []},
+      "input": "Record {key: String, count: Int, files: List<Record {path: String, bytes: Int, title: String}>}",
+      "output": "Record open {etag: String}",
+      "effect": "write",
+      "idempotent": true,
+      "description": "Stores a JSON document under a key in the object store."
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "sqlite.execute": {"roots": ["{{root}}"]},
+  "orders.add": {"roots": ["{{root}}"]},
+  "orders.summary": {"roots": ["{{root}}"]},
+  "orders.page": {"origins": ["{{api_origin}}"], "methods": ["GET"]}
+}

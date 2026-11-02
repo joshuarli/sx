@@ -1,6 +1,7 @@
 import json
 import re
 import subprocess
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -9,12 +10,19 @@ import definition
 import pytest
 import trial
 from arms import Arm, ToolchainMissingError, run_arm
+from definition import Evidence
 from probe import TSC, tokens
 from sandbox import Response, Sandbox
 
 BOTH: list[Arm] = ["sx", "js"]
 HARNESS = Path(__file__).parent.parent / "bench" / "workflows" / "harness"
 EXAMPLE = "example-summary"
+OPEN_STORE_GRANTS = json.dumps({
+    "fs.list": {"roots": ["{{root}}/docs"]},
+    "fs.read-text": {"roots": ["{{root}}/docs"]},
+    "fs.stat": {"roots": ["{{root}}/docs"]},
+    "store.put": {"origins": ["{{store_origin}}"], "methods": ["PUT"]},
+})
 BROKEN = {
     "sx": '(call fs.read-text {:path "/x"})',
     "js": "export default async function main() { return nope; }",
@@ -26,6 +34,15 @@ BROKEN = {
 def test_every_workflow_reference_passes_in_both_arms(workflow_id: str, arm: Arm) -> None:
     _, status, detail = trial.reference(definition.load(workflow_id), arm)
     assert (status, detail) == ("correct", "")
+
+
+@pytest.mark.parametrize("arm", BOTH)
+def test_without_the_granted_credential_the_object_store_refuses_the_publish(arm: Arm) -> None:
+    workflow = replace(definition.load("object-store-index"), grants=OPEN_STORE_GRANTS)
+    with workflow.sandbox() as sandbox:
+        run = run_arm(arm, workflow, sandbox, workflow.render(workflow.reference(arm), sandbox))
+    assert run.status == "failed"
+    assert "PermissionDenied" in run.detail or "credential required" in run.detail
 
 
 @pytest.mark.parametrize("arm", BOTH)
@@ -47,7 +64,7 @@ def test_the_check_inspects_the_sandbox_not_only_the_result(arm: Arm, program: s
     with workflow.sandbox() as sandbox:
         run = run_arm(arm, workflow, sandbox, workflow.render(program, sandbox))
         assert run.status == "completed"
-        verdict = workflow.check(sandbox, run.result)
+        verdict = workflow.check(sandbox, run.result, Evidence("", run.transcript))
     assert verdict.status == "wrong"
 
 

@@ -3,7 +3,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from definition import Verdict
+from definition import Evidence, Verdict
 from sandbox import SCRATCH, Sandbox
 
 SOURCE = (Path(__file__).parent / "main.c.txt").read_text()
@@ -36,7 +36,7 @@ def repaired_text(fixed_lines: list[int]) -> str:
     return "\n".join(lines)
 
 
-def check(sandbox: Sandbox, result: object) -> Verdict:
+def check(sandbox: Sandbox, result: object, evidence: Evidence) -> Verdict:
     directory = sandbox.root / "src"
     with tempfile.TemporaryDirectory(dir=SCRATCH) as original:
         Path(original, "main.c").write_text(SOURCE)

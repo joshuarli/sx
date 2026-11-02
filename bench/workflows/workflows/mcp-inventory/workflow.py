@@ -2,7 +2,7 @@ import json
 import sys
 from pathlib import Path
 
-from definition import Verdict
+from definition import Evidence, Verdict
 from sandbox import Sandbox
 
 SERVER = Path(__file__).parent / "server.py"
@@ -24,7 +24,7 @@ def setup(sandbox: Sandbox) -> None:
     sandbox.write("ledger.jsonl", "")
 
 
-def check(sandbox: Sandbox, result: object) -> Verdict:
+def check(sandbox: Sandbox, result: object, evidence: Evidence) -> Verdict:
     if result != EXPECTED:
         return Verdict.wrong(f"the result was {json.dumps(result)}, not {json.dumps(EXPECTED)}")
     entries = [json.loads(line) for line in (sandbox.root / "ledger.jsonl").read_text().splitlines()]
