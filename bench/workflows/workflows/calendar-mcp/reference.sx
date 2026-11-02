@@ -1,0 +1,47 @@
+(let [day "2026-03-02"
+      reads (par-map {:limit 4} (fn [p] (call mcp-calendar.get-availability {:person p :day day})) ["ana" "ben" "chen" "dara"])
+      calendars (map (fn [a]
+                       {:person (get a :person)
+                        :from (match (get a :working_hours) (some h) (get h :start) none 540)
+                        :to (match (get a :working_hours) (some h) (get h :end) none 1020)
+                        :busy (map (fn [b] [(get b :start) (get b :end)]) (get a :busy))})
+                     reads)
+      grid (loop {:max 100} [t 0 acc []]
+             (if (> t 1425) acc (recur (+ t 15) (concat acc [t]))))
+      free (fn [c start end]
+             (and (>= start (get c :from))
+                  (and (<= end (get c :to))
+                       (not (any? (fn [b] (and (< start (nth b 1)) (< (first b) end))) (get c :busy))))))
+      candidates (fn [cals attendees length after]
+                   (filter (fn [start]
+                             (and (> start after)
+                                  (all? (fn [c] (or (not (contains? attendees (get c :person)))
+                                                    (free c start (+ start length))))
+                                        cals)))
+                           grid))
+      plan [{:title "Planning" :attendees ["ana" "ben" "chen"] :length 60}
+            {:title "Design review" :attendees ["ben" "chen" "dara"] :length 45}
+            {:title "Retro" :attendees ["ana" "ben"] :length 30}]
+      booked (loop {:max 4} [todo plan cals calendars done []]
+               (if (= (count todo) 0)
+                 done
+                 (let [m (first todo)
+                       result (loop {:max 3} [after -1 refused 0]
+                                (let [start (first (candidates cals (get m :attendees) (get m :length) after))
+                                      end (+ start (get m :length))
+                                      tried (attempt (call mcp-calendar.book-meeting
+                                                      {:title (get m :title) :day day :start start :end end
+                                                       :attendees (get m :attendees)}))]
+                                  (match tried
+                                    (ok r) {:title (get m :title) :id (get (get r :meeting) :id)
+                                            :start start :end end :room (get (get r :meeting) :room)
+                                            :refused refused}
+                                    (err _) (recur start (+ refused 1)))))
+                       updated (map (fn [c]
+                                      (if (contains? (get m :attendees) (get c :person))
+                                        {:person (get c :person) :from (get c :from) :to (get c :to)
+                                         :busy (concat (get c :busy) [[(get result :start) (get result :end)]])}
+                                        c))
+                                    cals)]
+                   (recur (rest todo) updated (concat done [result])))))]
+  {:meetings booked})
