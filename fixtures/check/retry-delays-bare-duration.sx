@@ -1,0 +1,2 @@
+; task: dev-retry-ci
+(retry {:delays 2s} (call github.latest-ci {:repo "acme/api"}))

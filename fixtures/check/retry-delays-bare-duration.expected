@@ -1,0 +1,7 @@
+error[bad-option] 2:17-2:19
+  (retry {:delays 2s} (call github.latest-ci {:repo "acme/api"}))
+                  ^^
+  :delays takes a list of durations, one per retry.
+  A list states how many times to retry; [2s] retries once.
+  Fix: [2s]
+  Help: sx help retry

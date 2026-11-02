@@ -1804,7 +1804,12 @@ class _Checker:
 
     def durations(self, node: Node, form: str, option: str, count: int | None) -> list[int] | None:
         if isinstance(node, DurationLiteral) and count is None:
-            return [node.milliseconds]
+            self.error(
+                "bad-option", node.span, f":{option} takes a list of durations, one per retry.",
+                detail=f"A list states how many times to retry; [{show(node)}] retries once.",
+                fix=f"[{show(node)}]", help=form,
+            )
+            return None
         if (
             isinstance(node, ListLiteral)
             and all(isinstance(i, DurationLiteral) for i in node.items)
