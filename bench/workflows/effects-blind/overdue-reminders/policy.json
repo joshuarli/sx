@@ -1,0 +1,5 @@
+{
+  "capabilities": ["billing.invoices", "billing.customer", "billing.email"],
+  "computed_inputs": ["billing.customer", "billing.email"],
+  "max_write_sites": 1
+}

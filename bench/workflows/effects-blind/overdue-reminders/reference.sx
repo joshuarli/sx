@@ -1,0 +1,12 @@
+(let [overdue (filter (fn [i] (= (get i :status) "overdue")) (call billing.invoices {}))
+      groups (group-by (fn [i] (get i :customer_id)) overdue)
+      remind (fn [group]
+               (let [id (first group)
+                     customer (call billing.customer {:id id})]
+                 (when (not (get customer :do_not_contact))
+                   (let [names (map (fn [i] (get i :id)) (nth group 1))
+                         _ (call billing.email {:to (get customer :email)
+                                                :subject "Overdue invoices"
+                                                :body (str "These invoices are overdue: " (text.join ", " names))})]
+                     id))))]
+  (keep remind groups))

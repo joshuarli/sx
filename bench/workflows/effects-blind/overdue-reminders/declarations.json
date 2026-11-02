@@ -1,0 +1,30 @@
+{
+  "cores": ["text", "re", "json"],
+  "capabilities": [
+    {
+      "id": "billing.invoices",
+      "http": {"method": "GET", "url": "{{billing_origin}}/invoices", "query": []},
+      "input": "Record {}",
+      "output": "List<Record open {id: String, customer_id: String, amount_cents: Int, status: String}>",
+      "effect": "read",
+      "description": "Lists every invoice with its customer id, its amount in cents, and a status of open, overdue, or paid."
+    },
+    {
+      "id": "billing.customer",
+      "http": {"method": "GET", "url": "{{billing_origin}}/customers/{id}", "query": []},
+      "input": "Record {id: String}",
+      "output": "Record open {id: String, name: String, email: String, do_not_contact: Bool}",
+      "effect": "read",
+      "description": "Returns one customer with the email address to write to and whether the customer asked not to be contacted."
+    },
+    {
+      "id": "billing.email",
+      "http": {"method": "POST", "url": "{{billing_origin}}/emails", "query": []},
+      "input": "Record {to: String, subject: String, body: String}",
+      "output": "Record open {id: String}",
+      "effect": "write",
+      "idempotent": false,
+      "description": "Sends one email through the company's mail relay and returns its id. Every successful call sends a message."
+    }
+  ]
+}

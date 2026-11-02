@@ -1,0 +1,5 @@
+{
+  "billing.invoices": {"origins": ["{{billing_origin}}"], "methods": ["GET"]},
+  "billing.customer": {"origins": ["{{billing_origin}}"], "methods": ["GET"]},
+  "billing.email": {"origins": ["{{billing_origin}}"], "methods": ["POST"]}
+}
