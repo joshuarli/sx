@@ -106,6 +106,7 @@ by element.
 | --- | --- |
 | `(let [p1 e1 p2 e2 ...] body)` | Each `e` is visible to later bindings and to `body`. The body is one expression. |
 | `(if c then else)` | `c` is `Bool`, or an `Option<T>` presence test. See [Conditions](#conditions). Both branches have the same type. |
+| `(cond t1 e1 t2 e2 ... :else e)` | Evaluates `t1`, `t2`, and so on in order, and returns the `e` after the first true test, or the `:else` result. `:else` is required and last. Each test follows the rules of an `if` condition, and all results have the same type. See [Conditions](#conditions). |
 | `(match e clause...)` | See [Match](#match). |
 | `(fn [p ...] body)` | A function argument, or the value of a `let` binding. See [Functions](#functions). |
 | `(get r :field)` | `r` is a record with `field`. A missing field is rejected by the checker. |
@@ -137,7 +138,14 @@ value, of type `T`:
 Any other optional expression, such as `(get page :next)`, is a presence test without narrowing.
 Narrowing covers only a bare name, never a field path such as `(get x :f)`. An `Option<Bool>`
 condition is rejected with `condition-not-bool`, because `(some false)` is present but false, and
-the diagnostic shows the `match` to write. The same rules apply to the tests of `cond`.
+the diagnostic shows the `match` to write.
+
+`cond` tests its clauses in order and is the same as nested `if` forms:
+`(cond t1 e1 t2 e2 :else e3)` means `(if t1 e1 (if t2 e2 e3))`. Each test follows the rules above,
+including presence tests and narrowing a bare name, and the narrowed name is visible only in the
+result after its test. A `cond` that does not end with `:else` and a result is rejected with
+`missing-else`. An `:else` before the last clause is `unreachable-clause`, and an `:else` with no
+result after it is `arity`.
 
 ### Functions
 
@@ -292,6 +300,7 @@ as in Clojure.
 | `concat` | `List<T> List<T> -> List<T>` |
 | `flatten` | `List<List<T>> -> List<T>` |
 | `contains?` | `List<T> T -> Bool` |
+| `identity` | `T -> T`, for use as a function argument such as `(group-by identity xs)` |
 | `map` | `(T -> U) List<T> -> List<U>` |
 | `filter` | `(T -> Bool) List<T> -> List<T>` |
 | `keep` | `(T -> Option<U>) List<T> -> List<U>`, the `some` values in order |
@@ -485,7 +494,7 @@ The checker's codes are:
 | Reading | `unclosed`, `unexpected-close`, `bad-literal`, `bad-symbol`, `int-range`, `bad-escape`, `record-key`, `record-missing-value`, `duplicate-field`, `empty-program`, `multiple-expressions` |
 | Names | `unknown-name`, `unknown-function`, `unknown-capability`, `unknown-field`, `missing-field`, `unknown-variant` |
 | Calls | `arity`, `type-mismatch`, `unresolved-type`, `not-a-record`, `no-encoding` |
-| Forms | `condition-not-bool`, `branch-mismatch`, `fn-position`, `bad-pattern`, `bad-option`, `recur-position`, `recur-arity` |
+| Forms | `condition-not-bool`, `missing-else`, `branch-mismatch`, `fn-position`, `bad-pattern`, `bad-option`, `recur-position`, `recur-arity` |
 | Match | `non-exhaustive`, `unreachable-clause` |
 | Effects | `unauthorized`, `parallel-write`, `par-map-limit`, `retry-write`, `wait-write` |
 | Size | `too-large`, naming the `source-bytes`, `nodes`, or `depth` budget |

@@ -1,0 +1,7 @@
+; task: dev-ticket-actions
+(map
+  (fn [t]
+    (cond
+      (> (get t :age) 30) "escalate"
+      (> (get t :age) 7) "remind"))
+  (call support.open-tickets {}))

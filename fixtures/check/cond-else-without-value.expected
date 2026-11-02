@@ -1,0 +1,6 @@
+error[arity] 2:48-2:53
+  (map (fn [t] (cond (> (get t :age) 7) "remind" :else)) (call support.open-tickets {}))
+                                                 ^^^^^
+  :else needs a value after it.
+  End a cond with :else and a value: (cond test result ... :else value).
+  Help: sx help cond

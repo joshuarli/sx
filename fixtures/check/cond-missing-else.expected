@@ -1,0 +1,6 @@
+error[missing-else] 4:5-6:35
+      (cond
+      ^^^^^
+  A cond must end with :else and a value for when no test is true.
+  End it like this: (cond test result ... :else value).
+  Help: sx help cond

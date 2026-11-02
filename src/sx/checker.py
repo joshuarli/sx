@@ -50,18 +50,18 @@ from sx.types import (
 from sx.values import NONE_VALUE, UNIT_VALUE, VariantValue
 
 SPECIAL_FORMS = frozenset({
-    "let", "if", "match", "fn", "get", "call", "attempt", "retry", "wait-until", "loop", "recur", "par", "par-map",
-    "some", "ok", "err",
+    "let", "if", "cond", "match", "fn", "get", "call", "attempt", "retry", "wait-until", "loop", "recur", "par",
+    "par-map", "some", "ok", "err",
 })
 HIGHER_ORDER = frozenset({"map", "filter", "keep", "any?", "all?", "reduce", "sort-by", "distinct-by", "group-by"})
 PRELUDE = frozenset({
     "+", "-", "*", "quot", "rem", "=", "not=", "<", "<=", ">", ">=", "not", "and", "or", "str", "count", "first",
-    "rest", "nth", "take", "concat", "flatten", "contains?",
+    "rest", "nth", "take", "concat", "flatten", "contains?", "identity",
 }) | HIGHER_ORDER
 FIXED_ARITY = {
     "+": 2, "*": 2, "quot": 2, "rem": 2, "=": 2, "not=": 2, "<": 2, "<=": 2, ">": 2, ">=": 2, "not": 1, "and": 2,
-    "or": 2, "count": 1, "first": 1, "rest": 1, "nth": 2, "take": 2, "concat": 2, "flatten": 1, "contains?": 2,
-    "map": 2, "filter": 2, "keep": 2, "any?": 2, "all?": 2, "reduce": 3, "sort-by": 2, "distinct-by": 2,
+    "identity": 1, "or": 2, "count": 1, "first": 1, "rest": 1, "nth": 2, "take": 2, "concat": 2, "flatten": 1,
+    "contains?": 2, "map": 2, "filter": 2, "keep": 2, "any?": 2, "all?": 2, "reduce": 3, "sort-by": 2, "distinct-by": 2,
     "group-by": 2,
 }
 HABIT_HEADS = {
@@ -82,7 +82,6 @@ MISSING_FUNCTIONS = {
     "inc": "Add 1 instead: (+ x 1).",
     "dec": "Subtract 1 instead: (- x 1).",
     "last": "Use (nth xs (- (count xs) 1)).",
-    "cond": "Nest if forms, or match on a value.",
     "when": "Use if with an else value.",
     "do": "Bind each step with let, and use _ for steps you run only for their effect.",
     "empty?": "Use (= (count xs) 0).",
@@ -202,6 +201,10 @@ def head_name(node: Node) -> str | None:
 
 def is_function_form(node: Node) -> TypeIs[Form]:
     return head_name(node) == "fn"
+
+
+def is_else(node: Node) -> bool:
+    return isinstance(node, Keyword) and node.name == "else"
 
 
 def pattern_names(node: Node) -> list[str]:
@@ -738,7 +741,7 @@ class _Checker:
             self.error("bad-literal", head.span, "A form starts with the name of a form or function.")
             return self.placeholder(span)
         name = head.name
-        if name in {"let", "if", "match", "loop"}:
+        if name in {"let", "if", "cond", "match", "loop"}:
             return self.special_form(name, node, expected, scope)
         if name == "recur":
             return self.form_recur(node, scope)
@@ -810,6 +813,8 @@ class _Checker:
                 return self.form_let(node, expected, scope)
             case "if":
                 return self.form_if(node, expected, scope)
+            case "cond":
+                return self.form_cond(node, expected, scope)
             case "match":
                 return self.form_match(node, expected, scope)
             case "loop":
@@ -1022,6 +1027,49 @@ class _Checker:
             [(then, then_type, then_node.span), (otherwise, else_type, else_node.span)], expected,
         )
         return self.lower_test(test, then, otherwise, node.span), t
+
+    def form_cond(self, node: Form, expected: Type | None, scope: Mapping[str, Binding]) -> tuple[ir.Node, Type]:
+        span = node.span
+        args = node.items[1:]
+        ends_with_else = len(args) >= 2 and len(args) % 2 == 0 and is_else(args[-2])
+        if not ends_with_else:
+            if args and is_else(args[-1]):
+                self.error(
+                    "arity", args[-1].span, ":else needs a value after it.",
+                    detail="End a cond with :else and a value: (cond test result ... :else value).", help="cond",
+                )
+            else:
+                self.error(
+                    "missing-else", span, "A cond must end with :else and a value for when no test is true.",
+                    detail="End it like this: (cond test result ... :else value).", help="cond",
+                )
+            with self.outside_tail():
+                for item in args:
+                    if not isinstance(item, Keyword):
+                        self.check(item, None, scope)
+            return self.placeholder(span)
+        tests: list[Test] = []
+        branches: list[tuple[ir.Node, Type, Span]] = []
+        for test_node, result_node in zip(args[:-2:2], args[1:-2:2], strict=True):
+            if is_else(test_node):
+                self.error(
+                    "unreachable-clause", test_node.span,
+                    "This :else comes before the last clause, so the clauses after it can never run.", help="cond",
+                )
+                with self.outside_tail():
+                    self.check(result_node, None, scope)
+                continue
+            test = self.check_test(test_node, scope, "cond")
+            result, result_type = self.check(result_node, expected, self.narrowed(test, scope))
+            tests.append(test)
+            branches.append((result, result_type, result_node.span))
+        final, final_type = self.check(args[-1], expected, scope)
+        branches.append((final, final_type, args[-1].span))
+        nodes, t = self.join(branches, expected)
+        body = nodes[-1]
+        for test, branch in zip(reversed(tests), reversed(nodes[:-1]), strict=True):
+            body = self.lower_test(test, branch, body, span)
+        return body, t
 
     def form_match(self, node: Form, expected: Type | None, scope: Mapping[str, Binding]) -> tuple[ir.Node, Type]:
         span = node.span
@@ -1838,6 +1886,8 @@ class _Checker:
             case "and" | "or":
                 checked = [self.check(arg, BOOL, scope)[0] for arg in args]
                 return self.coerce(ir.Prelude(op, tuple(checked), span), BOOL, expected, span)
+            case "identity":
+                return self.check(args[0], expected, scope)
             case "count":
                 items, t = self.check(args[0], None, scope)
                 self.list_element(t, args[0], "count")
@@ -1892,7 +1942,7 @@ class _Checker:
             "=": "a b", "not=": "a b", "<": "a b", "<=": "a b", ">": "a b", ">=": "a b",
             "not": "Bool", "and": "Bool Bool", "or": "Bool Bool",
             "count": "xs", "first": "xs", "rest": "xs", "nth": "xs i", "take": "n xs", "concat": "xs ys",
-            "flatten": "xss", "contains?": "xs x", "reduce": "f init xs",
+            "flatten": "xss", "contains?": "xs x", "reduce": "f init xs", "identity": "x",
         }.get(op, BINARY_SIGNATURE.get(op, "f xs"))
 
     def looks_like_function(self, node: Node, scope: Mapping[str, Binding]) -> bool:

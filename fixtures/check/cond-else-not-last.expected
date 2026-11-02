@@ -1,0 +1,5 @@
+error[unreachable-clause] 2:20-2:25
+  (map (fn [t] (cond :else "x" (> (get t :age) 7) "remind" :else "y")) (call support.open-tickets {}))
+                     ^^^^^
+  This :else comes before the last clause, so the clauses after it can never run.
+  Help: sx help cond

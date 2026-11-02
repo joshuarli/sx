@@ -1,0 +1,6 @@
+; task: dev-latest-version
+(let [versions (call registry.versions {:name "x"})]
+  [(keep semver.parse versions)
+   (map text.trim versions)
+   (reduce + 0 (map text.length versions))
+   (group-by identity versions)])

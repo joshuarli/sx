@@ -1,0 +1,9 @@
+; task: dev-ticket-actions
+(map
+  (fn [t]
+    (let [owner (get t :assignee)]
+      (cond
+        (> (get t :age) 30) "escalate"
+        owner (str "assigned to " owner)
+        :else "unassigned")))
+  (call support.open-tickets {}))

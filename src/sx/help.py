@@ -30,6 +30,9 @@ FORMS = (
           "optional, which tests that a value is present. When the condition is an optional name, the "
           "then-branch sees the value inside it.",
           '(let [n (some 3)] (if n (+ n 1) 0))', "4"),
+    entry("cond", "(cond test result ... :else result)", "Returns the result of the first true test, or the "
+          ":else result when none is true. :else is required and last. A test may be an optional, as in if.",
+          '(cond (> 1 2) "big" (> 3 2) "medium" :else "small")', '"medium"'),
     entry("match", "(match value pattern result ...)", "Chooses the first clause whose pattern matches. "
           "Patterns: (some x) none (ok x) (err e) Variant (Variant x) _, or a name that binds the "
           "whole value like _.",
@@ -99,6 +102,8 @@ PRELUDE = (
     entry("flatten", "(flatten xss) -> List<T>", "Joins a list of lists.", "(flatten [[1] [2 3]])", "[1 2 3]"),
     entry("contains?", "(contains? xs x) -> Bool", "True when the list holds the value.", "(contains? [1 2] 2)",
           "true"),
+    entry("identity", "(identity x) -> T", "Returns its argument. Pass it as a function, for example as the key of "
+          "group-by.", "(group-by identity [1 2 1])", "[[1 [1 1]] [2 [2]]]"),
     entry("map", "(map f xs) -> List<U>", "Applies f to each element, in order.", "(map (fn [x] (* x x)) [1 2 3])",
           "[1 4 9]"),
     entry("filter", "(filter f xs) -> List<T>", "Keeps the elements for which f returns true.",

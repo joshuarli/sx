@@ -29,6 +29,7 @@ only the forms and functions below exist.
       f (fn [x] ...)]     ; a local function, called as (f x)
   body)                   ; exactly one body expression
 (if condition then else)  ; condition must be true or false
+(cond test1 result1 test2 result2 :else other)   ; first true test wins; :else is required
 (get record :field)       ; read a record field
 (call tool.name {:field value})          ; call a tool with a record
 (fn [x] body)             ; only as an argument to map, filter, and the like
@@ -68,6 +69,7 @@ only the forms and functions below exist.
 - `(count xs)`, `(first xs)`, `(rest xs)`, `(nth xs i)`, `(take n xs)`, `(concat xs ys)`,
   `(flatten xss)`, `(contains? xs x)`. `first` and `nth` stop the program on a list that is too
   short, so check `(count xs)` first when it may be.
+- `(identity x)` returns `x`.
 - `(map f xs)`, `(filter f xs)`, `(any? f xs)`, `(all? f xs)`, `(reduce f init xs)`
 - `(keep f xs)` applies `f`, which returns an optional, and keeps the `some` values unwrapped.
 - `(sort-by f xs)` sorts ascending by a key: an integer, a string, or a tuple of keys compared in

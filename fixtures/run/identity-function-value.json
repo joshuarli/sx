@@ -1,0 +1,108 @@
+{
+  "description": "A prelude name is a function value, and identity returns its argument.",
+  "program": "(group-by identity (map (fn [r] (get r :hits 0)) (call rows.list {})))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list",
+    "rows.add",
+    "checks.list",
+    "checks.add"
+  ],
+  "responses": [
+    {
+      "capability": "rows.list",
+      "input": {},
+      "results": [
+        {
+          "output": [
+            {
+              "name": "a",
+              "note": "fast",
+              "hits": 9
+            },
+            {
+              "name": "b",
+              "note": "slow",
+              "hits": 2
+            },
+            {
+              "name": "c",
+              "note": null,
+              "hits": 1
+            },
+            {
+              "name": "d",
+              "note": null,
+              "hits": 12
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": [
+      [
+        9,
+        [
+          9
+        ]
+      ],
+      [
+        2,
+        [
+          2
+        ]
+      ],
+      [
+        1,
+        [
+          1
+        ]
+      ],
+      [
+        12,
+        [
+          12
+        ]
+      ]
+    ]
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "rows.list",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": [
+        {
+          "name": "a",
+          "note": "fast",
+          "hits": 9
+        },
+        {
+          "name": "b",
+          "note": "slow",
+          "hits": 2
+        },
+        {
+          "name": "c",
+          "note": null,
+          "hits": 1
+        },
+        {
+          "name": "d",
+          "note": null,
+          "hits": 12
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,3 @@
+; task: dev-ticket-actions
+(map (fn [[priority tickets]] {:priority priority :count (count tickets)})
+     (group-by identity (map (fn [t] (get t :priority)) (call support.open-tickets {}))))

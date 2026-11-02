@@ -1,0 +1,88 @@
+{
+  "description": "A cond returns the result of the first true test, narrows an optional name in its result, and falls to :else.",
+  "program": "(map (fn [r] (let [note (get r :note)] (cond (> (get r :hits 0) 10) \"hot\" note (str \"noted \" note) :else \"plain\"))) (call rows.list {}))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list",
+    "rows.add",
+    "checks.list",
+    "checks.add"
+  ],
+  "responses": [
+    {
+      "capability": "rows.list",
+      "input": {},
+      "results": [
+        {
+          "output": [
+            {
+              "name": "a",
+              "note": "fast",
+              "hits": 9
+            },
+            {
+              "name": "b",
+              "note": "slow",
+              "hits": 2
+            },
+            {
+              "name": "c",
+              "note": null,
+              "hits": 1
+            },
+            {
+              "name": "d",
+              "note": null,
+              "hits": 12
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": [
+      "noted fast",
+      "noted slow",
+      "plain",
+      "hot"
+    ]
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "rows.list",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": [
+        {
+          "name": "a",
+          "note": "fast",
+          "hits": 9
+        },
+        {
+          "name": "b",
+          "note": "slow",
+          "hits": 2
+        },
+        {
+          "name": "c",
+          "note": null,
+          "hits": 1
+        },
+        {
+          "name": "d",
+          "note": null,
+          "hits": 12
+        }
+      ]
+    }
+  ]
+}
