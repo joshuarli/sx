@@ -24,7 +24,7 @@ def main() -> int:
     subprocess.run([lake(), "build", "sx-ref"], cwd=LEAN, check=True, capture_output=True)
     binary = LEAN / ".lake" / "build" / "bin" / "sx-ref"
     SCRATCH.mkdir(parents=True, exist_ok=True)
-    compared, rejected, disagreements, unchecked = 0, [], [], []
+    compared, pure_compared, rejected, disagreements, unchecked = 0, 0, [], [], []
     for path in sorted(p for p in FIXTURES.glob("*.json") if p.name != "declarations.json"):
         case = json.loads(path.read_text())
         registry = Registry()
@@ -39,6 +39,13 @@ def main() -> int:
         checked_by_lean = subprocess.run([binary, "check", ir], capture_output=True, text=True, check=False)
         if checked_by_lean.returncode != 0:
             unchecked.append((path.stem, checked_by_lean.stderr.strip()))
+        if "budgets" not in case:
+            pure = subprocess.run([binary, "pure", ir], capture_output=True, text=True, check=True)
+            evaluated = json.loads(pure.stdout)
+            if "outcome" in evaluated:
+                pure_compared += 1
+                if evaluated["outcome"] != case["expect"]:
+                    disagreements.append((path.stem, f"pure evaluator {evaluated['outcome']} != {case['expect']}"))
         ran = subprocess.run([binary, ir, path], capture_output=True, text=True, check=False)
         compared += 1
         if ran.returncode != 0:
@@ -55,6 +62,7 @@ def main() -> int:
         print(f"lean checker rejects {name}: {reason}")
     print(f"compared {compared} accepted fixtures, {len(disagreements)} disagree; "
           f"{len(rejected)} rejected fixtures are elaborator behavior and are not compared: {', '.join(rejected)}")
+    print(f"the pure evaluator agrees on {pure_compared} call-free fixtures")
     print(f"the Lean checker accepts {compared - len(unchecked)} of {compared} exported programs")
     return 1 if disagreements or unchecked else 0
 

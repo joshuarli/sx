@@ -7,3 +7,4 @@ import Sx.Host
 import Sx.Typing
 import Sx.Effects
 import Sx.Check
+import Sx.Eval

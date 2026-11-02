@@ -152,12 +152,17 @@ def convert : Val → Conv → Except Failure Val
     let ws ← convertItems vs cs
     pure (.tuple ws)
   | _, _ => internal "A conversion does not fit its value."
-def convertFields (fs : List (String × Val)) : List (String × Option Conv) → Except Failure (List (String × Val))
-  | [] => pure fs
-  | (_, none) :: cs => convertFields fs cs
-  | (n, some c) :: cs => do
-    let fs' ← fs.mapM fun (m, v) => if m = n then (do let w ← convert v c; pure (m, w)) else pure (m, v)
-    convertFields fs' cs
+def convertFields : List (String × Val) → List (String × Option Conv) → Except Failure (List (String × Val))
+  | [], [] => pure []
+  | (m, v) :: fs, (n, oc) :: cs =>
+    if m = n then do
+      let w ← match oc with
+        | none => pure v
+        | some c => convert v c
+      let rest ← convertFields fs cs
+      pure ((m, w) :: rest)
+    else internal "A record conversion names a different field."
+  | _, _ => internal "A record conversion has the wrong number of fields."
 def convertEach (vs : List Val) (c : Conv) : Except Failure (List Val) :=
   vs.mapM fun v => convert v c
 def convertItems : List Val → List (Option Conv) → Except Failure (List Val)
