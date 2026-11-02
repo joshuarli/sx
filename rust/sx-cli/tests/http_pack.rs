@@ -2,8 +2,9 @@
 mod support;
 
 use std::fs;
+use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use support::{Reply, Server};
@@ -126,4 +127,120 @@ fn typed_endpoints_and_raw_requests_run_end_to_end() {
     let sent = server.requests();
     assert_eq!(sent[0].header("accept"), Some("application/vnd.github+json"));
     assert_eq!(sent[2].text(), r#"{"title": "hi"}"#);
+}
+
+#[test]
+fn a_literal_call_outside_its_grant_is_rejected_before_any_request() {
+    let server = Server::start(github);
+    let origin = server.origin();
+    let elsewhere = Server::start(github);
+    let w = Workspace::new("static", &declarations(&elsewhere.origin()), &grants(&origin, r#""GET""#));
+    let program = r#"(call github.repo {:owner "acme" :name "widget"})"#;
+    let checked = w.sx("check", program, &["--format", "json"]);
+    assert_eq!(checked.code, 1, "{checked:?}");
+    let diagnostics = parse(&checked.stdout).expect("JSON");
+    let first = diagnostics.get("diagnostics").and_then(Json::as_array).and_then(<[Json]>::first).expect("a diagnostic");
+    assert_eq!(first.get("code").and_then(Json::as_str), Some("out-of-scope"));
+    let message = first.get("message").and_then(Json::as_str).expect("message");
+    assert!(message.contains("outside every granted origin"), "{message}");
+    let ran = w.sx("run", program, &["--format", "json"]);
+    assert_eq!(ran.code, 1, "{ran:?}");
+    assert!(ran.stderr.is_empty(), "{ran:?}");
+    assert_eq!((server.connections(), elsewhere.connections()), (0, 0));
+}
+
+#[test]
+fn a_literal_call_outside_its_granted_methods_is_rejected() {
+    let server = Server::start(github);
+    let w = Workspace::new("methods", &declarations(&server.origin()), &grants(&server.origin(), r#""POST""#));
+    let checked = w.sx("check", r#"(call github.repo {:owner "acme" :name "widget"})"#, &["--format", "json"]);
+    assert_eq!(checked.code, 1, "{checked:?}");
+    assert!(checked.stdout.contains("method GET is not granted"), "{checked:?}");
+    let accepted = w.sx("check", r#"(call github.open-issue {:owner "acme" :name "widget" :title "t"})"#, &["--format", "json"]);
+    assert_eq!(accepted.code, 0, "{accepted:?}");
+}
+
+#[test]
+fn explain_shows_a_verdict_for_every_call_site() {
+    let server = Server::start(github);
+    let origin = server.origin();
+    let w = Workspace::new("explain", &declarations(&origin), &grants(&origin, r#""GET""#));
+    let program = format!(
+        r#"(let [a (call github.repo {{:owner "acme" :name "widget"}})
+               b (call github.open-issue {{:owner "acme" :name "widget" :title "t"}})
+               c (call http.get {{:url (str "{origin}" "/repos/acme/widget") :headers {{}}}})]
+           a)"#
+    );
+    let explained = w.explain(&program);
+    let tools = explained.get("tools").and_then(Json::as_array).expect("tools");
+    let verdicts = |id: &str| {
+        let tool = tools.iter().find(|t| t.get("id").and_then(Json::as_str) == Some(id)).expect("tool");
+        shown(tool.get("verdicts").expect("verdicts"))
+    };
+    assert_eq!(verdicts("github.repo"), r#"[{"verdict": "allowed"}]"#);
+    assert!(verdicts("github.open-issue").contains("method POST is not granted"), "{}", verdicts("github.open-issue"));
+    assert_eq!(verdicts("http.get"), r#"[{"verdict": "checked per request"}]"#);
+    let text = w.sx("explain", &program, &[]);
+    assert!(text.stdout.contains("scope: denied: method POST is not granted"), "{text:?}");
+}
+
+#[test]
+fn a_computed_url_outside_the_grant_is_refused_without_a_socket() {
+    let inside = Server::start(github);
+    let outside = Server::start(github);
+    let w = Workspace::new("computed", &declarations(&inside.origin()), &grants(&inside.origin(), r#""GET""#));
+    let outcome = w.result(&format!(
+        r#"(attempt (call http.get {{:url (str "{}" "/repos/acme/widget") :headers {{}}}}))"#,
+        outside.origin()
+    ));
+    assert_eq!(outcome.get("err").and_then(|e| e.get("kind")).and_then(Json::as_str), Some("PermissionDenied"));
+    let userinfo = w.result(&format!(
+        r#"(attempt (call http.get {{:url (str "http://user@127.0.0.1:" "{}" "/") :headers {{}}}}))"#,
+        inside.port()
+    ));
+    assert_eq!(userinfo.get("err").and_then(|e| e.get("kind")).and_then(Json::as_str), Some("PermissionDenied"));
+    assert_eq!((inside.connections(), outside.connections()), (0, 0));
+}
+
+#[test]
+fn a_protocol_host_declares_endpoints_and_asks_for_verdicts() {
+    let server = Server::start(github);
+    let origin = server.origin();
+    let mut child = Command::new(env!("CARGO_BIN_EXE_sx"))
+        .arg("serve")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .expect("sx serve starts");
+    let mut stdin = child.stdin.take().expect("stdin");
+    let mut stdout = BufReader::new(child.stdout.take().expect("stdout"));
+    let mut exchange = |message: &Json| {
+        writeln!(stdin, "{}", shown(message)).expect("kernel reads");
+        let mut line = String::new();
+        stdout.read_line(&mut line).expect("kernel answers");
+        parse(&line).unwrap_or_else(|e| panic!("{e}: {line}"))
+    };
+    let start = |grants: &str| {
+        Json::object([
+            ("version", Json::Int(1)),
+            ("type", Json::string("start")),
+            ("program", Json::string(r#"(call github.repo {:owner "acme" :name "widget"})"#)),
+            ("declarations", parse(&declarations(&origin)).expect("JSON")),
+            ("grants", parse(grants).expect("JSON")),
+        ])
+    };
+    let requests = exchange(&start(&grants(&origin, r#""GET""#)));
+    assert_eq!(requests.get("type").and_then(Json::as_str), Some("requests"), "{}", shown(&requests));
+    let id = requests.get("requests").and_then(Json::as_array).and_then(<[Json]>::first).and_then(|r| r.get("id")).and_then(Json::as_str).expect("id").to_string();
+    let verdict = exchange(&Json::object([("type", Json::string("check-scope")), ("id", Json::string(id))]));
+    assert_eq!(verdict.get("verdict").and_then(Json::as_str), Some("allowed"), "{}", shown(&verdict));
+    let cancelled = exchange(&Json::object([("type", Json::string("cancel"))]));
+    assert_eq!(cancelled.get("type").and_then(Json::as_str), Some("failed"), "{}", shown(&cancelled));
+    let rejected = exchange(&start(&grants("http://127.0.0.1:1", r#""GET""#)));
+    assert_eq!(rejected.get("type").and_then(Json::as_str), Some("rejected"), "{}", shown(&rejected));
+    assert!(shown(&rejected).contains("out-of-scope"), "{}", shown(&rejected));
+    let _ = child.kill();
+    let _ = child.wait();
+    assert_eq!(server.connections(), 0);
 }

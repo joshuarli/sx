@@ -465,7 +465,8 @@ a request's input to allowed, or denied with a reason. The check runs in two pla
 
 - **Before the run.** When a call's input is known before the run, the checker applies the check and
   rejects a denied call with `out-of-scope`. An input is known when it is built only from literals:
-  a `Bool`, `Int`, `Float`, or `String` literal, or a record or list literal of known values. Any
+  a `Bool`, `Int`, `Float`, or `String` literal, `none`, `(some x)` of a known `x`, or a record or
+  list literal of known values, including a record that omits optional fields, which are `none`. Any
   other input, including a name bound to a literal, is computed, and only the run-time check sees it.
 - **During the run.** The host applies the check to every request before performing it, and refuses
   a denied one with a `CallError` of kind `PermissionDenied` whose message is the reason. That is a
@@ -551,6 +552,100 @@ native host, which drives the machine, performs each suspension's requests concu
 more than the `concurrency` budget, and waits for real on delays. A program that calls a capability
 no pack implements is a usage error before the run starts. With `--responses`, `sx run` answers from
 the recorded responses as before, after refusing out-of-scope requests the same way.
+
+### The process pack
+
+A declarations file registers it with `"packs": ["process"]`. It declares one capability:
+
+| Capability | Input | Output | Effect |
+| --- | --- | --- | --- |
+| `process.run` | `{program: String, args: List<String>, cwd: String, stdin: Option<String>}` | `process.Output` | write, not idempotent |
+
+`process.Output` is `Record {status: Int, stdout: String, stderr: String}`. `status` is the exit code,
+and a nonzero code is a value, not an error, so a program branches on it. Sx never offers a capability
+that runs an arbitrary command: a host grants specific programs with specific argument patterns, and
+a grant of nothing runs nothing. `process.run` executes the program directly with exactly the given
+arguments. No shell reads them, so `$HOME`, `*`, `;`, and backquotes reach the program as they are.
+
+**Scope.** The scope type is `Record {commands: List<process.Command>, roots: List<String>}`.
+`process.Command` is `Record {program: String, args: List<process.Arg>}`, and `process.Arg` is an
+enum with payloads, which the grants JSON writes as the kernel [encodes](#values-and-json) every
+enum: a variant with a value is `{"tag": NAME, "value": x}`, and one without is its name as a string.
+
+| Pattern | JSON | Matches |
+| --- | --- | --- |
+| `(Exact s)` | `{"tag": "Exact", "value": "s"}` | one argument equal to `s` |
+| `(OneOf [s ...])` | `{"tag": "OneOf", "value": ["s", ...]}` | one argument equal to any of the strings |
+| `(AnyOne)` | `"AnyOne"` | any single argument, including an empty one |
+| `(Rest)` | `"Rest"` | all remaining arguments, including none |
+
+```json
+{"process.run": {
+  "commands": [
+    {"program": "/usr/bin/git", "args": [{"tag": "Exact", "value": "status"}, {"tag": "OneOf", "value": ["--short", "--porcelain"]}]},
+    {"program": "/bin/echo", "args": ["Rest"]}
+  ],
+  "roots": ["/srv/work"]
+}}
+```
+
+A request is allowed when some command lists the request's program and its patterns match the
+request's arguments by position: each pattern consumes one argument, `(Rest)` consumes the remainder,
+and without `(Rest)` the counts must be equal. A program may appear in any number of commands, and
+any one of them may allow the request. A command with no patterns allows no arguments. Loading a grant
+refuses a `(Rest)` that is not last, a `(OneOf [])`, which matches nothing, a NUL character in a
+pattern, an empty `commands` or `roots` list, and any `roots` problem the `fs` pack refuses.
+
+A program must be an absolute path to an executable regular file. Granting canonicalizes it,
+following symlinks. A request's `program` must also be absolute, with no NUL character, and it is
+canonicalized the same way and compared with the granted programs as a whole path, so `echo` and
+`./echo` are denied, `PATH` is never searched, and a symlink to a program that is not granted is
+denied, while one to a granted program is allowed. The program is then started through its canonical
+path with the request's path as `argv[0]`, so a multi-call binary such as busybox still sees the name
+it was called by. A grant is on the file, not the name: granting `/bin/echo` on a system where it is a
+link to busybox grants every name that links to busybox. A request argument with a NUL character is
+denied. `cwd` must resolve inside one of the scope's `roots` by the [fs pack's rules](#the-fs-pack):
+absolute, symlinks followed, whole-component containment. A `cwd` that does not exist fails with
+`NotFound`, and one that is not a directory with `Invalid`, before anything starts.
+
+**Execution.** The child gets an empty environment: no `PATH`, `HOME`, `LANG`, or anything inherited
+from the host. A shell started this way chooses its own default `PATH`. Standard input is the
+`stdin` text when it is `some`, or an empty input (the null device) when it is `none`. A program that
+exits without reading all of its input is not an error. Standard output and standard error are
+captured separately, at most 1 MiB (1,048,576 bytes) each, and the whole request has 60 seconds.
+The child runs in a new process group, and the host kills the group with `SIGKILL` on every way out:
+a normal exit, which also ends any background process the program left behind, an exceeded limit, and
+a failure. A request therefore returns only after it has killed the group and reaped the process it
+started. A process that
+escapes the group, for example with `setsid`, is not killed. If it holds the output open past the
+timeout, the request fails with `Timeout`.
+
+**Errors.** The mapping is closed. A nonzero exit status is not an error.
+
+| Situation | Kind | Took effect |
+| --- | --- | --- |
+| The scope check denies the request, including a program that does not exist | `PermissionDenied` | no |
+| `cwd` does not exist | `NotFound` | no |
+| `cwd` is not a directory | `Invalid` | no |
+| The program or its interpreter cannot be found when it starts | `NotFound` | no |
+| The program cannot be executed | `PermissionDenied` | no |
+| Any other failure to start | `Failed` | no |
+| The 60 seconds pass; the group is killed | `Timeout` | yes |
+| Output past 1 MiB on either stream; the group is killed | `Failed` | yes |
+| The program was killed by a signal, named in the message | `Failed` | yes |
+| The program wrote invalid UTF-8 to either stream | `Failed` | yes |
+
+The last four rows are not refusal kinds, because the program ran. Invalid UTF-8 in particular is
+`Failed`, not `Invalid`: the checker allows a retry of this write on refusal kinds only, and an
+`Invalid` would let a retry run the program again.
+
+**What the scope does not do.** It decides which program starts, with which arguments, and from
+where. It does not confine the program. A granted program runs as the host's user and can read or
+write any file that user can, whatever `roots` says. An argument pattern that lets a program run
+other programs, such as `(Rest)` after `sh -c` or an interpreter's script argument, grants everything
+that program can reach. Grant the narrowest patterns that do the job. As in the `fs` pack, the check
+resolves paths and the start then uses the resolved path, so a process that rewrites the tree between
+the two can redirect it.
 
 ## Execution
 
@@ -710,7 +805,7 @@ Host to kernel:
 `capabilities`, and `inputs` (names mapped to type text). It also takes `cores`, a list of core
 IDs that the kernel registers before the rest, so a capability can name a core type such as
 `git.Checkout`, and `packs`, a list of capability packs registered after the cores. The kernel
-binary links the `text`, `semver`, `git`, and `github` cores and the `fs` pack.
+binary links the `text`, `semver`, `git`, and `github` cores and the `fs` and `process` packs.
 
 Kernel to host:
 

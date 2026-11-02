@@ -8,6 +8,8 @@ def literalOf : Expr → Option Val
   | .lit (.int i) _ => some (.int i)
   | .lit (.float x) _ => some (.float x)
   | .lit (.str s) _ => some (.str s)
+  | .lit Val.none _ => some Val.none
+  | .wrap .some e _ => (literalOf e).map Val.some
   | .mkRecord fs => (literalFields fs).map .record
   | .mkList es _ => (literalList es).map .list
   | _ => none

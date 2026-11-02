@@ -1,6 +1,6 @@
 {
   "description": "A record literal for a known record type may omit its optional fields, which are none.",
-  "program": "(let [_ (call rows.add {:name \"a\"}) _ (call rows.add {:name \"b\" :note \"n\"})] (count (call rows.list {})))",
+  "program": "(let [_ (call rows.add {:name (str \"a\" \"\")}) _ (call rows.add {:name (str \"b\" \"\") :note \"n\"})] (count (call rows.list {})))",
   "declarations": "declarations.json",
   "allow": [
     "store.get",

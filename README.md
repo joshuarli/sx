@@ -91,6 +91,27 @@ each call site's verdict, or `checked per request` for a computed path. `run` wi
 `PermissionDenied` before it touches the file system. With `--responses` it answers from the recorded
 responses, after the same refusal. [docs/language.md](docs/language.md#grants-and-scopes) has the rules.
 
+## The process pack
+
+`"packs": ["process"]` registers `process.run`, which runs one program with exactly the given arguments,
+never through a shell, and returns its exit status and captured output. A grant lists each program by
+absolute path with argument patterns, and the roots a working directory may lie in:
+
+```sh
+echo '{"packs": ["process"]}' > process.json
+cat > grants.json <<'JSON'
+{"process.run": {"commands": [{"program": "/bin/echo", "args": [{"tag": "Exact", "value": "hi"}, "Rest"]}],
+                 "roots": ["/srv/work"]}}
+JSON
+echo '(call process.run {:program "/bin/echo" :args ["hi" "there"] :cwd "/srv/work"})' > hi.sx
+sx run hi.sx --declarations process.json --grants grants.json
+```
+
+The child gets an empty environment, 60 seconds, and 1 MiB per output stream, and it and anything it
+started are killed when the request ends. `check` rejects a literal call the grant does not cover, and
+`explain` shows each call's verdict. [docs/language.md](docs/language.md#the-process-pack) has the
+pattern rules, the error table, and what the scope does not confine.
+
 ## Verify
 
 ```sh
