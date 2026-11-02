@@ -11,6 +11,8 @@ import trial
 from arms import Arm, require_toolchain
 from probe import tokens
 
+PROVIDER_STOP_RERUNS = 2
+
 ARMS: tuple[Arm, ...] = ("sx", "js")
 DEFAULT_MODEL = "opencode-go/muse-spark-1.3-contributor"
 
@@ -50,8 +52,8 @@ def run_sessions(args: argparse.Namespace, ids: list[str], arm_names: tuple[Arm,
     with ThreadPoolExecutor(max_workers=args.jobs) as pool:
         jobs = [
             pool.submit(
-                session.run_session, definition.load_effects(workflow_id, root), arm, args.model, args.thinking,
-                sample, out,
+                session.run_measured_session, definition.load_effects(workflow_id, root), arm, args.model,
+                args.thinking, sample, out, PROVIDER_STOP_RERUNS,
             )
             for workflow_id in ids
             for arm in arm_names

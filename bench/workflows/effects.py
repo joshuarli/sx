@@ -137,10 +137,13 @@ def usage_of(events: list[Stamped]) -> Usage:
     return Usage(turns, input_tokens, output, cache_read, cost)
 
 
+MODEL_STOPPED = "the model stopped with "
+
+
 def session_error(events: list[Stamped]) -> str | None:
     for message in replies(events):
         if message.get("stopReason") in ("error", "aborted"):
-            return f"the model stopped with {message['stopReason']}: {message.get('errorMessage', '')}"
+            return f"{MODEL_STOPPED}{message['stopReason']}: {message.get('errorMessage', '')}"
     return None
 
 
@@ -157,7 +160,7 @@ FS_PACK_CLASSES: dict[str, EffectClass] = {
 
 
 def effect_classes(declarations: Json) -> dict[str, EffectClass]:
-    declared = {
+    declared: dict[str, EffectClass] = {
         capability["id"]: narrowed(capability["effect"], EFFECT_CLASSES)
         for capability in declarations.get("capabilities", [])
     }

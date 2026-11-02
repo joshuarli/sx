@@ -352,3 +352,54 @@ def test_the_fs_pack_capabilities_of_a_workflow_are_classified_without_being_dec
         classes = effects.effect_classes(workflow.declarations_json(sandbox))
     assert classes["fs.delete"] == "write"
     assert classes["fs.list"] == "read"
+
+
+def stand_in_sessions(errors: list[str | None], verdicts: list[definition.Verdict]):
+    outcomes = list(zip(errors, verdicts, strict=True))
+
+    def run(workflow, arm, model, thinking, sample, out, environment=None) -> session.SessionRecord:
+        error, verdict = outcomes.pop(0)
+        directory = out / workflow.id / f"{arm}-{sample}"
+        directory.mkdir(parents=True)
+        record = session.SessionRecord(
+            workflow.id, arm, sample, model, thinking, error, 0.0, NO_USAGE, [], [], verdict, [],
+        )
+        (directory / "session.json").write_text(json.dumps(record.to_json()))
+        return record
+
+    return run
+
+
+def test_a_session_the_provider_stopped_before_it_was_correct_is_rerun_and_kept_aside(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import effects_report
+
+    stopped = f"{effects.MODEL_STOPPED}error: opencode-go API error (503)"
+    wrong, right = definition.Verdict.wrong("nothing charged"), definition.Verdict.correct()
+    monkeypatch.setattr(session, "run_session", stand_in_sessions([stopped, stopped, None], [wrong, wrong, right]))
+    record = session.run_measured_session(definition.load_effects(LEDGER), "js", MODEL_FLAG, "off", 0, tmp_path, 2)
+    assert (record.error, record.verdict.status) == (None, "correct")
+    assert sorted(p.name for p in (tmp_path / LEDGER / "stopped").iterdir()) == ["js-0-0", "js-0-1"]
+    assert [(r.arm, r.verdict.status) for r in effects_report.load_records(tmp_path)] == [("js", "correct")]
+
+
+def test_a_session_the_provider_stopped_after_it_was_correct_keeps_its_measurement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stopped = f"{effects.MODEL_STOPPED}error: opencode-go API error (503)"
+    monkeypatch.setattr(session, "run_session", stand_in_sessions([stopped], [definition.Verdict.correct()]))
+    record = session.run_measured_session(definition.load_effects(LEDGER), "sx", MODEL_FLAG, "off", 0, tmp_path, 2)
+    assert record.error == stopped
+    assert not (tmp_path / LEDGER / "stopped").exists()
+
+
+def test_reruns_stop_at_their_limit_and_report_the_last_stopped_session(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stopped = f"{effects.MODEL_STOPPED}error: opencode-go API error (503)"
+    wrong = definition.Verdict.wrong("nothing charged")
+    monkeypatch.setattr(session, "run_session", stand_in_sessions([stopped, stopped], [wrong, wrong]))
+    record = session.run_measured_session(definition.load_effects(LEDGER), "sx", MODEL_FLAG, "off", 0, tmp_path, 1)
+    assert record.error == stopped
+    assert [p.name for p in (tmp_path / LEDGER / "stopped").iterdir()] == ["sx-0-0"]

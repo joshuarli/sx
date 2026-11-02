@@ -34,7 +34,8 @@ SESSION_TIMEOUT_SECONDS = 900
 SX_SERVER = "sx-code"
 SX_TOOLS_PATTERN = "mcp__sx_code__*"
 JS_TOOLS_PATTERN = f"codemode,mcp__{effects.JS_SERVER}__*"
-CODEMODE_SETTINGS = {"codemode": {"mode": "only"}}
+PROVIDER_RETRY_SETTINGS = {"retry": {"maxRetries": 8, "baseDelayMs": 5000, "maxAgentDelayMs": 120000}}
+CODEMODE_SETTINGS = {"codemode": {"mode": "only"}, **PROVIDER_RETRY_SETTINGS}
 MCP_TIMEOUT_SECONDS = 300
 PI_ISOLATION = (
     "-p", "--mode", "json", "--approve", "--no-session", "--no-extensions", "--no-skills", "--no-context-files",
@@ -56,6 +57,10 @@ class SessionRecord:
     effects: list[Effect]
     verdict: Verdict
     violations: list[Violation]
+
+    def needs_rerun(self) -> bool:
+        stopped = self.error is not None and self.error.startswith(effects.MODEL_STOPPED)
+        return stopped and self.verdict.status != "correct"
 
     def measure(self) -> Measure:
         return measure(
@@ -110,7 +115,7 @@ class Wiring:
     server: list[str]
     tools: str
     extensions: tuple[str, ...]
-    settings: Json | None
+    settings: Json
     append_system_prompt: str | None
 
 
@@ -125,7 +130,7 @@ def wiring(arm: Arm, workflow: EffectsWorkflow, sandbox: Sandbox, files: Files, 
             sx, "mcp", "code", "--declarations", str(files.declarations), "--grants", str(files.grants),
             "--policy", str(policy),
         ]
-        return Wiring(SX_SERVER, server, SX_TOOLS_PATTERN, ("builtin:mcp",), None, None)
+        return Wiring(SX_SERVER, server, SX_TOOLS_PATTERN, ("builtin:mcp",), PROVIDER_RETRY_SETTINGS, None)
     notes = directory / "notes.md"
     notes.write_text(arms.sx_guide(workflow, sandbox, notes=True))
     server = [
@@ -143,8 +148,7 @@ def write_project(wired: Wiring, project: Path, proxy_log: Path) -> None:
     command = recorded(proxy_log, wired.server)
     entry = {"command": command[0], "args": command[1:], "exposure": "direct", "timeout": MCP_TIMEOUT_SECONDS}
     (configuration / "mcp.json").write_text(json.dumps({"mcpServers": {wired.server_name: entry}}, indent=2))
-    if wired.settings is not None:
-        (configuration / "settings.json").write_text(json.dumps(wired.settings, indent=2))
+    (configuration / "settings.json").write_text(json.dumps(wired.settings, indent=2))
 
 
 def pi_command(wired: Wiring, model: str, thinking: str, prompt: str) -> list[str]:
@@ -237,3 +241,18 @@ def run_session(
     )
     (directory / "session.json").write_text(json.dumps(record.to_json(), indent=2))
     return record
+
+
+def run_measured_session(
+    workflow: EffectsWorkflow, arm: Arm, model: str, thinking: str, sample: int, out: Path, reruns: int,
+    environment: dict[str, str] | None = None,
+) -> SessionRecord:
+    stopped = 0
+    while True:
+        record = run_session(workflow, arm, model, thinking, sample, out, environment)
+        if not record.needs_rerun() or stopped == reruns:
+            return record
+        kept = out / workflow.id / "stopped" / f"{arm}-{sample}-{stopped}"
+        kept.parent.mkdir(parents=True, exist_ok=True)
+        (out / workflow.id / f"{arm}-{sample}").rename(kept)
+        stopped += 1
