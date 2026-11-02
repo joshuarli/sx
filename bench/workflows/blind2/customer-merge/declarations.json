@@ -1,0 +1,66 @@
+{
+  "cores": ["text"],
+  "capabilities": [
+    {
+      "id": "customers.all",
+      "sqlite": {"database": "{{root}}/crm.db", "statement": "SELECT id, email, name, created FROM customers ORDER BY id"},
+      "input": "Record {}",
+      "output": "List<Record {id: Int, email: String, name: String, created: Int}>",
+      "effect": "read",
+      "description": "Lists every customer."
+    },
+    {
+      "id": "customers.set-email",
+      "sqlite": {"database": "{{root}}/crm.db", "statement": "UPDATE customers SET email = :email WHERE id = :id"},
+      "input": "Record {id: Int, email: String}",
+      "output": "Int",
+      "effect": "write",
+      "idempotent": true,
+      "description": "Sets the stored email of a customer."
+    },
+    {
+      "id": "customers.delete",
+      "sqlite": {"database": "{{root}}/crm.db", "statement": "DELETE FROM customers WHERE id = :id"},
+      "input": "Record {id: Int}",
+      "output": "Int",
+      "effect": "write",
+      "idempotent": true,
+      "description": "Deletes a customer that no order or note points at."
+    },
+    {
+      "id": "orders.move",
+      "sqlite": {"database": "{{root}}/crm.db", "statement": "UPDATE orders SET customer_id = :to_id WHERE customer_id = :from_id"},
+      "input": "Record {from_id: Int, to_id: Int}",
+      "output": "Int",
+      "effect": "write",
+      "idempotent": true,
+      "description": "Moves every order of one customer to another and returns how many moved."
+    },
+    {
+      "id": "notes.for-customer",
+      "sqlite": {"database": "{{root}}/crm.db", "statement": "SELECT id, body FROM notes WHERE customer_id = :customer_id ORDER BY id"},
+      "input": "Record {customer_id: Int}",
+      "output": "List<Record {id: Int, body: String}>",
+      "effect": "read",
+      "description": "Lists the notes about one customer."
+    },
+    {
+      "id": "notes.move",
+      "sqlite": {"database": "{{root}}/crm.db", "statement": "UPDATE notes SET customer_id = :to_id WHERE id = :id"},
+      "input": "Record {id: Int, to_id: Int}",
+      "output": "Int",
+      "effect": "write",
+      "idempotent": true,
+      "description": "Moves one note to another customer. Fails with a conflict when that customer has a note with the same body."
+    },
+    {
+      "id": "notes.delete",
+      "sqlite": {"database": "{{root}}/crm.db", "statement": "DELETE FROM notes WHERE id = :id"},
+      "input": "Record {id: Int}",
+      "output": "Int",
+      "effect": "write",
+      "idempotent": true,
+      "description": "Deletes one note."
+    }
+  ]
+}

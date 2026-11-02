@@ -1,0 +1,34 @@
+(let [customers (call customers.all {})
+      normalize (fn [email] (text.casefold (text.trim email)))
+      groups (filter (fn [g] (> (count (nth g 1)) 1))
+                     (group-by (fn [c] (normalize (get c :email))) customers))
+      plans (sort-by (fn [p] (get p :survivor))
+                     (map (fn [g]
+                            (let [members (sort-by (fn [c] [(get c :created) (get c :id)]) (nth g 1))]
+                              {:survivor (get (first members) :id)
+                               :removed (sort-by identity (map (fn [c] (get c :id)) (rest members)))}))
+                          groups))
+      merge-one (fn [survivor from]
+                  (let [orders (call orders.move {:from_id from :to_id survivor})
+                        outcomes (map (fn [n]
+                                        (match (attempt (call notes.move {:id (get n :id) :to_id survivor}))
+                                          (ok _) 1
+                                          (err _) (let [_ (call notes.delete {:id (get n :id)})] 0)))
+                                      (call notes.for-customer {:customer_id from}))
+                        _ (call customers.delete {:id from})]
+                    {:orders orders :moved (reduce + 0 outcomes) :dropped (- (count outcomes) (reduce + 0 outcomes))}))
+      merged (map (fn [p]
+                    (let [parts (map (fn [from] (merge-one (get p :survivor) from)) (get p :removed))]
+                      {:survivor (get p :survivor)
+                       :removed (get p :removed)
+                       :orders (reduce + 0 (map (fn [m] (get m :orders)) parts))
+                       :notes_moved (reduce + 0 (map (fn [m] (get m :moved)) parts))
+                       :notes_dropped (reduce + 0 (map (fn [m] (get m :dropped)) parts))}))
+                  plans)
+      gone (flatten (map (fn [p] (get p :removed)) plans))
+      remaining (filter (fn [c] (not (contains? gone (get c :id)))) customers)
+      stale (filter (fn [c] (not= (get c :email) (normalize (get c :email)))) remaining)
+      _ (map (fn [c] (call customers.set-email {:id (get c :id) :email (normalize (get c :email))})) stale)]
+  {:merged merged
+   :emails_changed (map (fn [c] (get c :id)) stale)
+   :customers (count remaining)})

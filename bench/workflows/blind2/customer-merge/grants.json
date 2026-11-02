@@ -1,0 +1,9 @@
+{
+  "customers.all": {"roots": ["{{root}}"]},
+  "customers.set-email": {"roots": ["{{root}}"]},
+  "customers.delete": {"roots": ["{{root}}"]},
+  "orders.move": {"roots": ["{{root}}"]},
+  "notes.for-customer": {"roots": ["{{root}}"]},
+  "notes.move": {"roots": ["{{root}}"]},
+  "notes.delete": {"roots": ["{{root}}"]}
+}
