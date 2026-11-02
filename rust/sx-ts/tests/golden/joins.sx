@@ -1,0 +1,27 @@
+(let [count' 0
+      tag "none"
+      files (call fs.list {:path "."})
+      [count' tag] (if (> (js.length files) 3)
+                     (let [count' 3 tag "many"] [count' tag])
+                     (let [count' (if (> (js.length files) 0)
+                                    (let [count' (+ count' 1)] count')
+                                    count')]
+                       [count' tag]))
+      [_ count'] (reduce (fn [[done'1 count'] i]
+                           (if done'1
+                             [done'1 count']
+                             (if (= i 3) [true count'] (let [count' (+ count' 1)] [false count']))))
+                   [false count']
+                   (range 0 5))
+      flag (let [t'2 (> (js.length files) 1)] (if (truthy t'2) (> count' 0) t'2))
+      pick (let [t'3 tag] (if (truthy t'3) t'3 "fallback"))
+      value (if (truthy (js.length files)) (get (nth files 0) :name) "")
+      _ (log count' tag flag pick)]
+  {:count count'
+   :tag tag
+   :flag flag
+   :pick pick
+   :value value
+   :kind (typeof count')
+   :first (nth files 0)
+   :last (nth files (- (js.length files) 1))})

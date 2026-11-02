@@ -41,7 +41,7 @@ pub struct Lexer {
     newline: bool,
 }
 
-type LexResult<T> = Result<T, Diagnostic>;
+type LexResult<T> = Result<T, Box<Diagnostic>>;
 
 impl Lexer {
     pub fn new(source: &str) -> Lexer {
@@ -69,8 +69,8 @@ impl Lexer {
         Some(c)
     }
 
-    fn error(&self, start: Position, message: &str) -> Diagnostic {
-        diag("ts-syntax", Span::new(start, self.position()), message)
+    fn error(&self, start: Position, message: &str) -> Box<Diagnostic> {
+        Box::new(diag("ts-syntax", Span::new(start, self.position()), message))
     }
 
     fn starts_with(&self, text: &str) -> bool {

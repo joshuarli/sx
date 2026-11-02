@@ -10,6 +10,7 @@ use crate::lexer::{Lexer, Tok, Token};
 pub struct Program {
     pub body: Vec<Stmt>,
     pub types: BTreeMap<String, TypeAnn>,
+    pub diagnostics: Vec<Diagnostic>,
 }
 
 struct Stop;
@@ -17,7 +18,7 @@ struct Stop;
 type Parse<T> = Result<T, Stop>;
 
 pub fn parse(source: &str) -> Result<Program, Vec<Diagnostic>> {
-    let tokens = Lexer::new(source).tokenize().map_err(|d| vec![d])?;
+    let tokens = Lexer::new(source).tokenize().map_err(|d| vec![*d])?;
     let mut parser = Parser { tokens, at: 0, diagnostics: Vec::new(), types: BTreeMap::new() };
     let mut body = Vec::new();
     let finished = loop {
@@ -29,13 +30,11 @@ pub fn parse(source: &str) -> Result<Program, Vec<Diagnostic>> {
             Err(Stop) => break false,
         }
     };
-    let _ = finished;
-    if parser.diagnostics.is_empty() {
-        Ok(Program { body, types: parser.types })
-    } else {
+    if !finished {
         parser.diagnostics.sort_by_key(|d| (d.span.start.line, d.span.start.column));
-        Err(parser.diagnostics)
+        return Err(parser.diagnostics);
     }
+    Ok(Program { body, types: parser.types, diagnostics: parser.diagnostics })
 }
 
 struct Parser {
@@ -192,7 +191,7 @@ impl Parser {
         let span = diagnostic.span;
         self.report(diagnostic);
         self.skip_statement();
-        Ok(Stmt { kind: StmtKind::Rejected, span })
+        Ok(Stmt { kind: StmtKind::Rejected(Vec::new()), span })
     }
 
     fn statement(&mut self) -> Parse<Stmt> {
@@ -202,8 +201,11 @@ impl Parser {
         };
         let next_is_colon = self.is_punct_at(1, ":") && !matches!(word.as_str(), "default");
         if next_is_colon && !word.is_empty() {
-            let d = diag("ts-label", start, "Labels are not supported");
-            return self.reject_statement(d.fix("remove the label"));
+            self.report(diag("ts-label", start, "Labels are not supported").fix("remove the label"));
+            self.next();
+            self.next();
+            let inner = self.statement()?;
+            return Ok(Stmt { kind: StmtKind::Rejected(vec![inner]), span: start });
         }
         match word.as_str() {
             "const" | "let" => {
@@ -229,13 +231,52 @@ impl Parser {
             "if" => self.if_statement(start),
             "for" => self.for_statement(start),
             "while" | "do" => {
-                let d = diag("ts-while", start, "Loops must be bounded")
-                    .fix("retry({ ... }, () => call), waitUntil, loop({ max: N }, state, fn), or for (const x of xs)");
-                self.reject_statement(d)
+                self.report(
+                    diag("ts-while", start, "Loops must be bounded")
+                        .fix("retry({ ... }, () => call), waitUntil, loop({ max: N }, state, fn), or for (const x of xs)"),
+                );
+                self.next();
+                let body = if word == "while" {
+                    self.expect("(")?;
+                    self.expression()?;
+                    self.expect(")")?;
+                    self.statement()?
+                } else {
+                    let body = self.statement()?;
+                    if self.eat_word("while") {
+                        self.expect("(")?;
+                        self.expression()?;
+                        self.expect(")")?;
+                    }
+                    self.eat(";");
+                    body
+                };
+                Ok(Stmt { kind: StmtKind::Rejected(vec![body]), span: start })
             }
             "switch" => {
-                let d = diag("ts-switch", start, "switch is not supported").fix("use an if chain");
-                self.reject_statement(d)
+                self.report(diag("ts-switch", start, "switch is not supported").fix("use an if chain"));
+                self.next();
+                self.expect("(")?;
+                self.expression()?;
+                self.expect(")")?;
+                self.expect("{")?;
+                let mut children = Vec::new();
+                while !self.is_punct("}") {
+                    if matches!(self.peek().tok, Tok::Eof) {
+                        let span = self.span();
+                        return self.fail(span, "Expected `}`, found the end of the program");
+                    }
+                    if self.eat_word("case") {
+                        self.expression()?;
+                        self.expect(":")?;
+                    } else if self.eat_word("default") {
+                        self.expect(":")?;
+                    } else {
+                        children.push(self.statement()?);
+                    }
+                }
+                self.next();
+                Ok(Stmt { kind: StmtKind::Rejected(children), span: start })
             }
             "try" => self.try_statement(start),
             "throw" => {
@@ -524,8 +565,12 @@ impl Parser {
                 return Ok(Stmt { kind: StmtKind::ForOf { pattern, source, body }, span: self.since(start) });
             }
             if self.is_word("in") {
-                let d = diag("ts-for-in", start, "for…in is not supported").fix("Object.keys(m).sort()");
-                return self.reject_statement(d);
+                self.report(diag("ts-for-in", start, "for…in is not supported").fix("Object.keys(m).sort()"));
+                self.next();
+                self.expression()?;
+                self.expect(")")?;
+                let body = self.statement()?;
+                return Ok(Stmt { kind: StmtKind::Rejected(vec![body]), span: start });
             }
             let mut decls = vec![self.declarator_rest(pattern)?];
             while self.eat(",") {

@@ -242,10 +242,10 @@ impl<'a> Lowerer<'a> {
         }
     }
 
-    pub fn layout_pattern(&self, layout: &Layout, span: Span, keep_flags: bool) -> Node {
+    pub fn layout_pattern(&self, layout: &Layout, span: Span) -> Node {
         let mut nodes: Vec<Node> = Vec::new();
         for flag in [&layout.done, &layout.brk, &layout.cont, &layout.ret].into_iter().flatten() {
-            nodes.push(sym(if keep_flags { flag } else { flag }, span));
+            nodes.push(sym(flag, span));
         }
         nodes.extend(layout.vars.iter().map(|n| sym(&self.sx_name(n), span)));
         match nodes.len() {
@@ -286,10 +286,10 @@ impl<'a> Lowerer<'a> {
         let state = self.state_node(&vars, span);
         if layout.vars.len() == 1 {
             nodes.push(state);
-        } else if !layout.vars.is_empty() {
-            if let sx_kernel::syntax::NodeKind::List(items) = state.kind {
-                nodes.extend(items.into_vec());
-            }
+        } else if !layout.vars.is_empty()
+            && let sx_kernel::syntax::NodeKind::List(items) = state.kind
+        {
+            nodes.extend(items.into_vec());
         }
         match nodes.len() {
             0 => unit(span),
@@ -352,6 +352,7 @@ impl<'a> Lowerer<'a> {
 
 pub fn lower(program: &Program, source: &str, registry: &Registry) -> Result<Node, Vec<Diagnostic>> {
     let mut lowerer = Lowerer::new(source, &program.types, registry);
+    lowerer.diagnostics.extend(program.diagnostics.iter().cloned());
     lowerer.compute_throwing(&program.body);
     lowerer.mutated = vec![all_mutated(&program.body)];
     let (defns, main) = lowerer.body(&program.body, &|l: &mut Lowerer<'_>| unit(l.end_span()), true);

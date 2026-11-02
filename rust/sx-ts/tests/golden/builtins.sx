@@ -1,0 +1,44 @@
+(let [s " Hello, World "
+      parts (text.split (js.to-lower (js.trim s)) ",")
+      joined (js.join "-" parts)
+      has (text.contains? joined "hello")
+      idx (js.index-of [1 2 3] 2)
+      sl (js.slice joined 1 3)
+      padded (js.pad-start "7" 3 "0")
+      r (+
+          (+
+            (+
+              (+
+                (let [x'1 2.5 f'2 (floor x'1)] (if (>= (- x'1 (float f'2)) 0.5) (+ f'2 1) f'2))
+                (floor 1.5))
+              (let [x'3 -3] (if (< x'3 0) (- x'3) x'3)))
+            (let [a'4 1 b'5 2] (if (> a'4 b'5) a'4 b'5)))
+          (let [x'6 -1.5] (if (< x'6 0.0) (ceil x'6) (floor x'6))))
+      rem' (rem 7 3)
+      div (/ 7 2)
+      num (js.parse-int "12")
+      str' (str num (str 5))
+      json (js.stringify {:a 1 :b [1 2]} 2)
+      sorted (sort-by (fn [a] (- a)) (map (fn [x] x) [3 1 2]))
+      names (sort-by identity ["b" "a"])
+      entries' (into-map [["k" 1]])
+      ks (sort-by identity (keys entries'))
+      cnt (count entries')
+      isArr (js.is-array parts)
+      t (= (typeof s) "string")]
+  {:parts parts
+   :has has
+   :idx idx
+   :sl sl
+   :padded padded
+   :r r
+   :rem rem'
+   :div div
+   :str str'
+   :json json
+   :sorted sorted
+   :names names
+   :ks ks
+   :cnt cnt
+   :isArr isArr
+   :t t})

@@ -1,0 +1,8 @@
+(let [out []
+      out (reduce (fn [out i] (let [out (concat out [(* i 2)])] out)) out (range 0 3))
+      out (reduce (fn [out j] (let [out (concat out [j])] out)) out (range 10 -1 -5))
+      out (reduce (fn [out k]
+                    (let [out (concat out [(call fs.read-text {:path (str "f" k)})])] out))
+            out
+            (range 1 5))]
+  out)

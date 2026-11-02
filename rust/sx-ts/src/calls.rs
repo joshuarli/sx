@@ -31,7 +31,7 @@ impl<'a> Lowerer<'a> {
                 }
                 self.method_call(receiver, method, args, span)
             }
-            _ => self.reject("ts-unsupported", span, "Only named functions, tools and builtins can be called"),
+            _ => self.reject("ts-function-value", span, "Only named functions, tools and builtins can be called"),
         }
     }
 
@@ -96,7 +96,7 @@ impl<'a> Lowerer<'a> {
             "String" => match args {
                 [value] => {
                     let v = self.stringified_value(value);
-                    app("str", vec![v], span)
+                    if head(&v) == Some("str") { v } else { app("str", vec![v], span) }
                 }
                 _ => self.reject("ts-unknown-builtin", span, "String takes one value"),
             },
@@ -239,7 +239,7 @@ impl<'a> Lowerer<'a> {
             return self.reject_fix("ts-promise-value", span, "Await calls where they are made", "await Promise.all(…)");
         }
         let [arg] = args else {
-            return self.reject("ts-unsupported", span, "Promise.all takes one array");
+            return self.reject("ts-promise-value", span, "Promise.all takes one array");
         };
         self.parallel += 1;
         let result = match &arg.kind {
@@ -268,9 +268,9 @@ impl<'a> Lowerer<'a> {
                     let function = if settled { self.wrap_attempt(function, span) } else { function };
                     app("par-map", vec![record(vec![("limit".to_string(), int(16, span))], span), function, items], span)
                 }
-                _ => self.reject("ts-unsupported", span, "Promise.all takes an array literal or xs.map(f)"),
+                _ => self.reject("ts-promise-value", span, "Promise.all takes an array literal or xs.map(f)"),
             },
-            _ => self.reject("ts-unsupported", span, "Promise.all takes an array literal or xs.map(f)"),
+            _ => self.reject("ts-promise-value", span, "Promise.all takes an array literal or xs.map(f)"),
         };
         self.parallel -= 1;
         result
@@ -292,21 +292,27 @@ impl<'a> Lowerer<'a> {
     }
 
     pub fn callback(&mut self, f: &Expr, index_ok: bool, promise_ok: bool) -> (Node, bool) {
+        self.callback_with(f, if index_ok { 2 } else { 1 }, index_ok, promise_ok)
+    }
+
+    pub fn callback_with(&mut self, f: &Expr, max_params: usize, index_ok: bool, promise_ok: bool) -> (Node, bool) {
         match &f.kind {
             ExprKind::Arrow(function) => {
                 let n = function.params.len();
-                if n > 2 || (n == 2 && !index_ok) {
+                if n > max_params {
                     self.param_hint = None;
                     let node = self.reject("ts-callback-arity", f.span, "The builtin supplies only the element and, where the index is allowed, its index");
                     return (node, false);
                 }
-                let (params, body) = self.function_parts(function, promise_ok, n == 2);
-                (form(vec![sym("fn", f.span), params, body], f.span), n == 2)
+                let indexed = n == 2 && index_ok;
+                let (params, body) = self.function_parts(function, promise_ok, indexed);
+                (form(vec![sym("fn", f.span), params, body], f.span), indexed)
             }
             ExprKind::Ident(name) => {
                 self.param_hint = None;
                 match self.lookup(name).cloned() {
                     Some(var) if var.function.is_some() => (sym(&var.sx, f.span), false),
+                    None => (self.reject("ts-unknown-builtin", f.span, format!("No builtin {name} as a callback")), false),
                     _ => (self.reject("ts-function-value", f.span, "A function may only be an arrow or the name of a declared function"), false),
                 }
             }
@@ -396,7 +402,7 @@ impl<'a> Lowerer<'a> {
                     return self.reject_fix("ts-reduce-init", span, "reduce needs an initial value", "xs.reduce(f, init)");
                 };
                 self.param_hint = None;
-                let (function, _) = self.callback(f, false, false);
+                let (function, _) = self.callback_with(f, 2, false, false);
                 let initial = self.expr_t(init, false, false);
                 app("reduce", vec![function, initial, r], span)
             }

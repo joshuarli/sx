@@ -198,5 +198,5 @@ pub enum StmtKind {
     Function(Function),
     TypeDecl(String, TypeAnn),
     Empty,
-    Rejected,
+    Rejected(Vec<Stmt>),
 }

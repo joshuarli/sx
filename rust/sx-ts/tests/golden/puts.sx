@@ -1,0 +1,16 @@
+(let [config {:name "x" :counts {:a 1}}
+      config (put config "name" "y")
+      config (put
+               config
+               "counts"
+               (put (get config :counts) "a" (+ (get (get config :counts) :a) 2)))
+      index {}
+      index (reduce (fn [index f] (let [index (put index (get f :name) (get f :size))] index))
+              index
+              (call fs.list {:path "."}))
+      rows (map (fn [n] n) [3 1 2])
+      rows (sort-by (fn [a] a) rows)
+      rows (js.reverse rows)
+      label "n:"
+      label (+ label (js.length rows))]
+  {:config config :index index :rows rows :label label})

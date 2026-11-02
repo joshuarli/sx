@@ -391,17 +391,18 @@ pub fn calls_user_function(stmts: &[Stmt], names: &HashSet<String>) -> bool {
 
 pub fn can_throw_plain(stmts: &[Stmt], throwing: &HashSet<String>) -> bool {
     let mut found = false;
-    let mut visit = |e: &Expr| match &e.kind {
-        ExprKind::Call(callee, _) => match &callee.kind {
-            ExprKind::Ident(n) if throwing.contains(n) => found = true,
-            ExprKind::Field(receiver, method)
-                if method == "parse" && matches!(&receiver.kind, ExprKind::Ident(n) if n == "JSON") =>
-            {
-                found = true
+    let mut visit = |e: &Expr| {
+        if let ExprKind::Call(callee, _) = &e.kind {
+            match &callee.kind {
+                ExprKind::Ident(n) if throwing.contains(n) => found = true,
+                ExprKind::Field(receiver, method)
+                    if method == "parse" && matches!(&receiver.kind, ExprKind::Ident(n) if n == "JSON") =>
+                {
+                    found = true
+                }
+                _ => {}
             }
-            _ => {}
-        },
-        _ => {}
+        }
     };
     walk_stmts(stmts, &mut visit);
     found || contains_throw(stmts)
@@ -443,20 +444,21 @@ pub fn try_events(stmts: &[Stmt], throwing: &HashSet<String>) -> Vec<Event> {
 
 fn expr_throws(expr: &Expr, throwing: &HashSet<String>) -> bool {
     let mut found = false;
-    walk_expr(expr, &mut |e| match &e.kind {
-        ExprKind::Call(callee, _) => match &callee.kind {
-            ExprKind::Field(receiver, method) => {
-                if matches!(&receiver.kind, ExprKind::Field(inner, _) if matches!(&inner.kind, ExprKind::Ident(n) if n == "tools")) {
-                    found = true;
+    walk_expr(expr, &mut |e| {
+        if let ExprKind::Call(callee, _) = &e.kind {
+            match &callee.kind {
+                ExprKind::Field(receiver, method) => {
+                    if matches!(&receiver.kind, ExprKind::Field(inner, _) if matches!(&inner.kind, ExprKind::Ident(n) if n == "tools")) {
+                        found = true;
+                    }
+                    if method == "parse" && matches!(&receiver.kind, ExprKind::Ident(n) if n == "JSON") {
+                        found = true;
+                    }
                 }
-                if method == "parse" && matches!(&receiver.kind, ExprKind::Ident(n) if n == "JSON") {
-                    found = true;
-                }
+                ExprKind::Ident(n) if throwing.contains(n) || matches!(n.as_str(), "retry" | "waitUntil" | "loop" | "parMap") => found = true,
+                _ => {}
             }
-            ExprKind::Ident(n) if throwing.contains(n) || matches!(n.as_str(), "retry" | "waitUntil" | "loop" | "parMap") => found = true,
-            _ => {}
-        },
-        _ => {}
+        }
     });
     found
 }

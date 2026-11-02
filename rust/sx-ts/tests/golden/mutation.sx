@@ -1,11 +1,9 @@
 (let [total 0
       names []
-      [total names] (reduce
-                      (fn
-                        [[total names] f]
-                        (let [total (+ total (get f :size))
-                              names (concat names [(get f :name)])]
-                          [total names]))
+      [total names] (reduce (fn [[total names] f]
+                              (let [total (+ total (get f :size))
+                                    names (concat names [(get f :name)])]
+                                [total names]))
                       [total names]
                       (call fs.list {:path "."}))]
   {:total total :names names})

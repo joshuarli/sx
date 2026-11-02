@@ -370,7 +370,15 @@ impl<'a> Lowerer<'a> {
     fn stmt(&mut self, first: &Stmt, rest: &[Stmt], k: Cont<'_, 'a>) -> Node {
         let span = first.span;
         match &first.kind {
-            StmtKind::Empty | StmtKind::TypeDecl(..) | StmtKind::Rejected => self.stmts(rest, k),
+            StmtKind::Empty | StmtKind::TypeDecl(..) => self.stmts(rest, k),
+            StmtKind::Rejected(children) => {
+                self.frames.push(Frame::Loop(Layout::default()));
+                let saved = self.scopes.clone();
+                let _ = self.stmts(children, &|l: &mut Lowerer<'a>| unit(l.end_span()));
+                self.scopes = saved;
+                self.frames.pop();
+                self.stmts(rest, k)
+            }
             StmtKind::Decl(kind, decls) => self.decl(*kind, decls, span, rest, k),
             StmtKind::Expr(expr) => self.expr_stmt(expr, span, rest, k),
             StmtKind::Function(function) => {
@@ -396,7 +404,7 @@ impl<'a> Lowerer<'a> {
             StmtKind::If(condition, then, otherwise) => self.if_stmt(condition, then, otherwise.as_deref(), span, rest, k),
             StmtKind::ForOf { pattern, source, body } => {
                 let source_node = self.value_of(source, false);
-                self.for_of(pattern, source_node, body, span, rest, k, true)
+                self.for_of(pattern, source_node, body, span, rest, k)
             }
             StmtKind::For { init, test, update, body } => self.counted_for(init.as_deref(), test.as_ref(), update.as_ref(), body, span, rest, k),
             StmtKind::Try { block, param, handler } => self.try_stmt(block, param.as_ref(), handler, span, rest, k),
@@ -589,6 +597,7 @@ impl<'a> Lowerer<'a> {
                 }
                 match op {
                     AssignOp::Set => rhs,
+                    AssignOp::Add if var.hint == Hint::Text => app("str", vec![current, rhs], span),
                     other => self.arithmetic(other, current, rhs, span),
                 }
             }
@@ -651,9 +660,7 @@ impl<'a> Lowerer<'a> {
         app("put", vec![base, key, new], span)
     }
 
-    #[allow(clippy::too_many_arguments)]
-    pub fn for_of(&mut self, pattern: &Pattern, source: Node, body: &Stmt, span: Span, rest: &[Stmt], k: Cont<'_, 'a>, tuple_free: bool) -> Node {
-        let _ = tuple_free;
+    pub fn for_of(&mut self, pattern: &Pattern, source: Node, body: &Stmt, span: Span, rest: &[Stmt], k: Cont<'_, 'a>) -> Node {
         let vars = self.existing(assigned_outer_stmt(body));
         let exit = stmt_exits_of(body);
         let layout = Layout {
@@ -689,10 +696,10 @@ impl<'a> Lowerer<'a> {
             let rest_node = self.stmts(rest, k);
             return seq(mapped, rest_node, span);
         }
-        let state_param = self.layout_pattern(&layout, span, true);
+        let state_param = self.layout_pattern(&layout, span);
         let guarded = match &layout.done {
             Some(done) => {
-                let again = self.layout_pattern(&layout, span, true);
+                let again = self.layout_pattern(&layout, span);
                 app("if", vec![sym(done, span), again, body_node], span)
             }
             None => body_node,
@@ -822,7 +829,7 @@ impl<'a> Lowerer<'a> {
         }
         let source = app("range", args, span);
         let pattern = Pattern { kind: PatternKind::Ident(counter.clone()), span: decl.pattern.span };
-        self.for_of(&pattern, source, body, span, rest, k, true)
+        self.for_of(&pattern, source, body, span, rest, k)
     }
 
     fn invariant_bound(&self, bound: &Expr, assigned: &[String], counter: &str) -> bool {
@@ -871,6 +878,7 @@ impl<'a> Lowerer<'a> {
                 }
             }
         }
+        let handler_exits = diverges(handler);
         let json_parse = {
             let mut found = false;
             walk_stmts(block, &mut |e| {
@@ -886,6 +894,46 @@ impl<'a> Lowerer<'a> {
         };
         let mixed = contains_throw(block) || json_parse || calls_user_function(block, &self.throwing);
         let catch_kind = if mixed { CatchKind::Mixed { json_parse } } else { CatchKind::ToolOnly };
+        if handler_exits && !exits(block).any() {
+            let vars_t = self.existing(assigned_outer(block));
+            let fall = |l: &mut Lowerer<'a>| l.state_node(&vars_t, span);
+            let attempted = self.branch_list(block, &fall);
+            self.scopes.push(Scope::new());
+            let error_sx = match param {
+                Some(Pattern { kind: PatternKind::Ident(name), .. }) => {
+                    let mut template = self.plain_var();
+                    template.catch = Some(catch_kind);
+                    template.is_const = true;
+                    self.declare(name, template)
+                }
+                Some(other) => {
+                    self.report(diag("ts-error-use", other.span, "A catch parameter may not be destructured").fix("e.message"));
+                    "_".to_string()
+                }
+                None => "_".to_string(),
+            };
+            let caught = self.branch_list(handler, &|l: &mut Lowerer<'a>| unit(l.end_span()));
+            self.scopes.pop();
+            for name in &vars_t {
+                if let Some(var) = self.lookup_mut(name) {
+                    var.uninit = false;
+                }
+            }
+            let rest_node = self.stmts(rest, k);
+            let pattern = self.state_pattern(&vars_t, span);
+            let ok_pattern = if vars_t.is_empty() { sym("_", span) } else { pattern };
+            return form(
+                vec![
+                    sym("match", span),
+                    app("attempt", vec![attempted], span),
+                    app("ok", vec![ok_pattern], span),
+                    rest_node,
+                    app("err", vec![sym(&error_sx, span)], span),
+                    caught,
+                ],
+                span,
+            );
+        }
         let layout = Layout {
             done: None,
             brk: ex.brk.then(|| self.fresh("brk")),
@@ -959,6 +1007,15 @@ impl<'a> Lowerer<'a> {
             }
         };
         let_(vec![(pattern, joined)], after, span)
+    }
+}
+
+pub fn diverges(stmts: &[Stmt]) -> bool {
+    match stmts.iter().rev().find(|s| !matches!(s.kind, StmtKind::Empty)).map(|s| &s.kind) {
+        Some(StmtKind::Return(_) | StmtKind::Break | StmtKind::Continue | StmtKind::Throw(_)) => true,
+        Some(StmtKind::Block(body)) => diverges(body),
+        Some(StmtKind::If(_, a, Some(b))) => diverges(std::slice::from_ref(a)) && diverges(std::slice::from_ref(b)),
+        _ => false,
     }
 }
 

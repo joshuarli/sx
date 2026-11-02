@@ -1,0 +1,4 @@
+(let [text (call fs.read-text {:path "package.json"})
+      pkg (js.parse "Record {name: String, version: Option<String>, deps: List<String>}" text)
+      raw (js.parse "Record {n: Float, tags: Map<String, Float>}" "{}")]
+  {:pkg pkg :raw raw})

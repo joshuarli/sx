@@ -1,0 +1,9 @@
+(let [[a b] (par (call fs.read-text {:path "a"}) (call fs.list {:path "."}))
+      paths ["x" "y"]
+      texts (par-map {:limit 16} (fn [p] (call fs.read-text {:path p})) paths)
+      settled (par-map {:limit 16} (fn [p] (attempt (call fs.read-text {:path p}))) paths)
+      firsts (map (fn [s] (if (= (js.settled-status s) "fulfilled") (js.settled-value s) ""))
+               settled)
+      [r1 r2] (par (attempt (call fs.read-text {:path "q"})) (attempt (call fs.list {:path "z"})))
+      t (if (= (js.settled-status r1) "fulfilled") (js.settled-value r1) "")]
+  {:a a :b b :texts texts :firsts firsts :t t :r2 r2})

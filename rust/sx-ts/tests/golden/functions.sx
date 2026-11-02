@@ -1,0 +1,7 @@
+(let [double (fn [n] (* n 2))
+      triple (fn [n] (* n 3))
+      load (fn [path] (call fs.read-text {:path path}))]
+  (let [prefix "p-"
+        label (fn [n] (str prefix n))
+        t (load "a")]
+    {:d (double 2) :t3 (triple 3) :l (label 1) :t t}))

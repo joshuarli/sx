@@ -1,0 +1,10 @@
+const files = await tools.fs.list({ path: "." });
+const named = files.map(({ name, size }) => `${name}:${size}`);
+const indexed = files.map((f, i) => `${i}:${f.name}`);
+const found = files.find((f) => f.size > 10);
+const first = files.filter((f, i) => i < 2);
+const total = files.reduce((acc, f) => acc + f.size, 0);
+const any = files.some((f) => f.size === 0);
+const names = files.flatMap((f) => [f.name, f.name]);
+files.forEach((f) => console.log(f.name));
+return { named, indexed, found, first, total, any, names };

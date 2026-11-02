@@ -141,7 +141,10 @@ impl<'a> Lowerer<'a> {
             ExprKind::Call(callee, args) => self.call_expr(e, callee, args, false, promise_ok),
             ExprKind::Await(inner) => match &inner.kind {
                 ExprKind::Call(callee, args) => self.call_expr(inner, callee, args, true, promise_ok),
-                _ => self.reject_fix("ts-promise-value", span, "Await calls where they are made", "await a call directly"),
+                _ => {
+                    self.expr_t(inner, false, false);
+                    self.reject_fix("ts-promise-value", span, "Await calls where they are made", "await a call directly")
+                }
             },
             ExprKind::Arrow(_) => self.reject("ts-function-value", span, "A function may only be passed to a builtin or called by name"),
             ExprKind::Unary(op, inner) => self.unary(*op, inner, span),
@@ -202,6 +205,9 @@ impl<'a> Lowerer<'a> {
             return sym(&var.sx, span);
         }
         match name {
+            "searchTools" | "describeTool" | "describeNamespace" | "ALL_TOOLS" => {
+                self.reject_fix("ts-tools-escape", span, "tools can only be called as tools.namespace.name(…)", "tools.namespace.name(input)")
+            }
             "tools" => self.reject_fix("ts-tools-escape", span, "tools can only be called as tools.namespace.name(…)", "tools.namespace.name(input)"),
             "undefined" => self.reject_fix("ts-undefined", span, "undefined does not exist; absent values are null", "== null"),
             "this" => self.reject_fix("ts-class", span, "Classes are not supported", "use object literals"),
@@ -480,8 +486,9 @@ impl<'a> Lowerer<'a> {
                     let absent = if negate { boolean(false, span) } else { boolean(true, span) };
                     return app("if", vec![v, present, absent], span);
                 }
-                let a = self.expr_t(l, false, false);
-                let b = self.expr_t(r, false, false);
+                let literal = |e: &Expr| matches!(e.kind, ExprKind::Str(_) | ExprKind::Number(_) | ExprKind::Bool(_));
+                let a = self.expr_t(l, literal(r), false);
+                let b = self.expr_t(r, literal(l), false);
                 app(if negate { "not=" } else { "=" }, vec![a, b], span)
             }
             BinaryOp::LooseEqNull | BinaryOp::LooseNeNull => {
@@ -561,7 +568,7 @@ impl<'a> Lowerer<'a> {
             let applied = self.apply_links(inner_head, &remaining);
             self.expr_t(&applied, false, false)
         };
-        form(vec![sym("match", span), base_node, app("some", vec![sym(&temp_sx, span)], span), inner, none(span)], span)
+        form(vec![sym("match", span), base_node, app("some", vec![sym(&temp_sx, span)], span), inner, none(span), none(span)], span)
     }
 
     pub fn type_text(&self, annotation: &TypeAnn, depth: usize) -> Option<String> {

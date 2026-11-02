@@ -1,0 +1,13 @@
+(let [t (retry {:delays [1s 2s] :on [Timeout Unavailable]} (call fs.read-text {:path "a"}))
+      u (retry {:backoff [100ms 5s] :within 30s} (call fs.read-text {:path "b"}))
+      job (wait-until {:within 10m :every 15s}
+            (fn [v] (= (get v :state) "done"))
+            (call jobs.status {:id "j"}))
+      _ (sleep 2s)
+      sizes (par-map {:limit 8} (fn [p] (call fs.read-text {:path p})) ["a" "b"])
+      all (loop {:max 50}
+            [cursor none events []]
+            (let [page (call mcp-github.list-issues {:repo "r" :cursor cursor})
+                  acc (concat events (get page :items))]
+              (if (get page :next) (recur (get page :next) acc) acc)))]
+  {:t t :u u :job job :sizes sizes :all all})

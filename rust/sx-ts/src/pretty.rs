@@ -82,9 +82,15 @@ fn write_form(items: &[Node], indent: usize, out: &mut String) {
         return;
     }
     out.push('(');
+    let mut column = indent + 1;
     for (i, item) in items.iter().enumerate() {
         if i == 0 {
-            write(item, indent + 1, out);
+            let name = show(item);
+            column += name.chars().count();
+            out.push_str(&name);
+        } else if i == 1 && head.is_some() && matches!(head, Some("fn" | "if" | "match" | "loop" | "reduce" | "map" | "filter" | "attempt" | "retry" | "wait-until" | "par-map")) {
+            out.push(' ');
+            write(item, column + 1, out);
         } else {
             pad(out, indent + 2);
             write(item, indent + 2, out);

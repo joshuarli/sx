@@ -1,0 +1,15 @@
+(let [files (call fs.list {:path "."})
+      named (map (fn [arg'1]
+                   (let [obj'2 arg'1
+                         name (get obj'2 :name)
+                         size (get obj'2 :size)]
+                     (str name ":" size)))
+              files)
+      indexed (map (fn [[i f]] (str i ":" (get f :name))) (enumerate files))
+      found (js.find (fn [f] (> (get f :size) 10)) files)
+      first' (map (fn [p'3] (nth p'3 1)) (filter (fn [[i f]] (< i 2)) (enumerate files)))
+      total (reduce (fn [acc f] (+ acc (get f :size))) 0 files)
+      any (any? (fn [f] (= (get f :size) 0)) files)
+      names (flatten (map (fn [f] [(get f :name) (get f :name)]) files))
+      _ (let [_ (map (fn [f] (log (get f :name))) files)] unit)]
+  {:named named :indexed indexed :found found :first first' :total total :any any :names names})

@@ -160,6 +160,8 @@ options:
         "(ok value), or (err {:kind K :message m}) if a tool call failed.",
         "(ok value), or (err {:kind K :message m}) if a tool call failed or a core refused its input.",
     ),
+    ("argument --emit: invalid choice: 'xml' (choose from 'ir')", "argument --emit: invalid choice: 'xml' (choose from 'ir', 'sx')"),
+    ("argument --emit: invalid choice: 'ri' (choose from 'ir')", "argument --emit: invalid choice: 'ri' (choose from 'ir', 'sx')"),
     ("sx help: nothing is named ho. Did you mean *?", "sx help: nothing is named ho. Did you mean do?"),
 ];
 
