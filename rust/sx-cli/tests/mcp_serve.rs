@@ -375,3 +375,103 @@ fn describe_lists_the_served_capabilities_with_the_named_types_they_use() {
         .collect();
     assert_eq!(ids, ["fs.list", "fs.stat"]);
 }
+
+fn exported(w: &Workspace) -> (Json, String) {
+    let at = |name: &str| w.base.join(name).to_str().expect("UTF-8 path").to_string();
+    let args = ["mcp", "export", "--declarations", &at("declarations.json")];
+    let output = Command::new(SX).args(args).stdin(Stdio::null()).output().expect("sx runs");
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    assert_eq!(output.status.code(), Some(0), "{stderr}");
+    (json(&String::from_utf8(output.stdout).expect("UTF-8")), stderr)
+}
+
+fn tool_named<'a>(tools: &'a [Json], name: &str) -> &'a Json {
+    tools.iter().find(|tool| tool.get("name").and_then(Json::as_str) == Some(name)).unwrap_or_else(|| panic!("{name} is not listed"))
+}
+
+#[test]
+fn export_lists_what_serve_lists_and_names_each_result_shape() {
+    let w = Workspace::new("export", ROUND_TRIP, ROUND_TRIP_GRANTS);
+    let mut client = Client::start(&w.arguments());
+    client.initialize();
+    client.send(r#"{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}"#);
+    let served = client.next(WAIT).expect("listed");
+    let served = served.get("result").and_then(|r| r.get("tools")).and_then(Json::as_array).expect("tools").to_vec();
+    drop(client);
+
+    let (listing, _) = exported(&w);
+    let tools = listing.get("tools").and_then(Json::as_array).expect("tools");
+    assert!(tools.len() > served.len(), "export lists the capabilities nobody granted too");
+    assert!(!served.is_empty());
+    for tool in &served {
+        let name = tool.get("name").and_then(Json::as_str).expect("name");
+        assert_eq!(shown(tool_named(tools, name)), shown(tool), "{name}");
+    }
+    let names: Vec<&str> = tools.iter().filter_map(|tool| tool.get("name").and_then(Json::as_str)).collect();
+    let mut sorted = names.clone();
+    sorted.sort_unstable();
+    assert_eq!(names, sorted);
+
+    let shapes = listing.get("shapes").expect("shapes");
+    let shape = |id: &str| shapes.get(id).and_then(Json::as_str).unwrap_or_else(|| panic!("no shape for {id}")).to_string();
+    assert_eq!(shape("rt.put"), "text");
+    assert_eq!(shape("rt.echo"), "structured");
+    assert_eq!(shape("fs.list"), "wrapped");
+    assert_eq!(shapes.as_object().map(<[_]>::len), Some(names.len()));
+}
+
+#[test]
+fn importing_an_exported_listing_reads_back_what_importing_the_server_reads() {
+    let w = Workspace::new("export-import", ROUND_TRIP, ROUND_TRIP_GRANTS);
+    let (listing, _) = exported(&w);
+    fs::write(w.base.join("listing.json"), shown(&listing)).expect("listing");
+    let import = |tail: Vec<String>| {
+        let mut args = vec!["mcp".to_string(), "import".into(), "--name".into(), "rt".into()];
+        args.extend(tail);
+        let done = Command::new(SX).args(&args).stdin(Stdio::null()).output().expect("sx runs");
+        assert_eq!(done.status.code(), Some(0), "{}", String::from_utf8_lossy(&done.stderr));
+        json(&String::from_utf8(done.stdout).expect("UTF-8"))
+    };
+    let listing_path = w.base.join("listing.json").to_str().expect("UTF-8 path").to_string();
+    let from_listing = import(vec!["--tools".into(), listing_path]);
+    let mut command = vec!["--".to_string(), SX.into()];
+    command.extend(w.arguments());
+    let from_server = import(command);
+
+    let capabilities = |declarations: &Json| declarations.get("capabilities").and_then(Json::as_array).expect("capabilities").to_vec();
+    let (listed, served) = (capabilities(&from_listing), capabilities(&from_server));
+    let id_of = |capability: &Json| capability.get("id").and_then(Json::as_str).expect("id").to_string();
+    assert!(served.len() >= 4);
+    for capability in &served {
+        let id = id_of(capability);
+        let read_back = listed.iter().find(|candidate| id_of(candidate) == id).unwrap_or_else(|| panic!("{id} was not imported"));
+        for key in ["effect", "idempotent", "input", "output", "mcp"] {
+            assert_eq!(read_back.get(key).map(shown), capability.get(key).map(shown), "{id} {key}");
+        }
+    }
+    let declared = json(&fs::read_to_string(w.base.join("declarations.json")).expect("declarations"));
+    let original = |id: &str| capabilities(&declared).into_iter().find(|c| id_of(c) == id).expect("declared");
+    for (id, imported) in [("rt.echo", "mcp-rt.rt-echo"), ("rt.peek", "mcp-rt.rt-peek"), ("rt.put", "mcp-rt.rt-put")] {
+        let read_back = listed.iter().find(|c| id_of(c) == imported).expect("imported");
+        for key in ["input", "output", "effect"] {
+            assert_eq!(shown(original(id).get(key).expect(key)), shown(read_back.get(key).expect(key)), "{id} {key}");
+        }
+    }
+}
+
+#[test]
+fn export_names_a_capability_it_cannot_describe_and_lists_the_rest() {
+    let w = Workspace::new(
+        "export-skip",
+        r#"{"capabilities": [
+            {"id": "demo.echo", "effect": "read", "input": "Record {}", "output": "String", "description": "Echoes."},
+            {"id": "demo.bare", "effect": "read", "input": "String", "output": "String", "description": "Takes a bare string."}
+        ]}"#,
+        "{}",
+    );
+    let (listing, stderr) = exported(&w);
+    let tools = listing.get("tools").and_then(Json::as_array).expect("tools");
+    assert_eq!(tools.len(), 1);
+    assert_eq!(tools[0].get("name").and_then(Json::as_str), Some("demo.echo"));
+    assert!(stderr.contains("not exporting demo.bare"), "{stderr}");
+}

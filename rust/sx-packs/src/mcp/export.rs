@@ -3,6 +3,7 @@ use sx_kernel::registry::{Capability, Effect};
 use sx_kernel::types::{Primitive, STRING, Type};
 
 use super::schema::Side;
+use super::server::NotServed;
 
 pub const WRAPPED_KEY: &str = "result";
 pub const RESULT_META: &str = "sx/result";
@@ -21,6 +22,16 @@ impl Shape {
             Type::Record(_) | Type::Map(_) => Shape::Structured,
             other if *other == STRING => Shape::Text,
             _ => Shape::Wrapped,
+        }
+    }
+}
+
+impl Shape {
+    pub fn name(self) -> &'static str {
+        match self {
+            Shape::Text => "text",
+            Shape::Structured => "structured",
+            Shape::Wrapped => "wrapped",
         }
     }
 }
@@ -200,4 +211,27 @@ pub fn export(capability: &Capability) -> Result<Exported, String> {
     }
     entries.push(("annotations".to_string(), annotations(capability.effect, capability.idempotent)));
     Ok(Exported { shape, tool: Json::Object(entries) })
+}
+
+#[derive(Clone, Debug)]
+pub struct Listing {
+    pub tools: Vec<Json>,
+    pub shapes: Vec<(String, Shape)>,
+    pub skipped: Vec<NotServed>,
+}
+
+pub fn listing<'c>(capabilities: impl IntoIterator<Item = &'c Capability>) -> Listing {
+    let mut ordered: Vec<&Capability> = capabilities.into_iter().collect();
+    ordered.sort_by(|a, b| a.id.cmp(&b.id));
+    let mut listing = Listing { tools: Vec::new(), shapes: Vec::new(), skipped: Vec::new() };
+    for capability in ordered {
+        match export(capability) {
+            Ok(exported) => {
+                listing.tools.push(exported.tool);
+                listing.shapes.push((capability.id.clone(), exported.shape));
+            }
+            Err(reason) => listing.skipped.push(NotServed { id: capability.id.clone(), reason }),
+        }
+    }
+    listing
 }

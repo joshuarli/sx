@@ -1270,6 +1270,7 @@ its standard input and output, so a client in another language reaches the same 
 ```
 sx mcp serve    --declarations FILE [--grants FILE] [--allow ID ...]
 sx mcp describe --declarations FILE [--grants FILE] [--allow ID ...]
+sx mcp export   --declarations FILE
 ```
 
 **What is served.** Exactly the granted capabilities that the binary performs natively: the pack
@@ -1352,6 +1353,21 @@ property path.
 record types they use, in the shape of a declarations file. A client that generates types from Sx
 declarations, such as the TypeScript declarations of `bench/codemode/typescript.py`, reads this instead of
 parsing `sx help`.
+
+**`export`.** Prints `{"tools", "shapes"}` for a host that serves the declared capabilities from another
+language and does not perform them in Rust. `tools` is the `tools/list` result such a server should return:
+for every capability the declarations define, in ID order, the same tool `serve` would list, because both
+build it with the same function, with the same `name`, `inputSchema`, `outputSchema`, `_meta`, and
+`annotations`. `shapes` maps each tool name to `text`, `structured`, or `wrapped`, the three forms of the
+**Results** paragraph, so a server answers a call the way `serve` does: a `text` result is one `text` block
+holding the string, a `structured` result carries the value as `structuredContent` and as JSON in a `text`
+block, and a `wrapped` result is `{"result": VALUE}` in the same two places. The call errors are the **Errors**
+table. `export` reads only `--declarations`, needs no grants, starts no server, and performs nothing, so it
+lists capabilities the binary does not perform natively, which `serve` leaves out and names on standard error.
+A capability that has no JSON Schema or a valid tool name is left out and named on standard error
+(`not exporting ID: REASON`), and the exit status is 0, where `serve` makes it a usage error. The `tools`
+list is a saved `tools/list` result, so `sx mcp import --name NAME --tools FILE` reads it, and it reads back
+what importing `sx mcp serve` reads back, with the same four differences as the **Round trip** paragraph.
 
 ### Sx as the code mode of an MCP client
 

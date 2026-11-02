@@ -1,9 +1,9 @@
 use std::io;
 
 use sx_kernel::authority::{GrantError, Grants};
-use sx_kernel::json::{Layout, dumps};
+use sx_kernel::json::{Json, Layout, dumps};
 use sx_kernel::registry::Registry;
-use sx_packs::mcp::{Server, serve as serve_connection};
+use sx_packs::mcp::{Server, listing, serve as serve_connection};
 
 use crate::commands::{Stop, load_registry, read_json};
 use crate::mcp::{Options, scan, usage};
@@ -77,5 +77,35 @@ pub(crate) fn serve(args: &[String], new_registry: &dyn Fn() -> Registry) -> Exi
     match serve_connection(&server, io::stdin().lock(), io::stdout()) {
         Ok(()) => Exit { code: EXIT_OK, stdout: String::new(), stderr: String::new() },
         Err(message) => Exit { code: EXIT_FAILED, stdout: String::new(), stderr: format!("sx mcp: {message}\n") },
+    }
+}
+
+pub(crate) fn export(args: &[String], new_registry: &dyn Fn() -> Registry) -> Exit {
+    let options = match scan(args, &["--declarations"]) {
+        Ok(options) => options,
+        Err(message) => return usage(&message),
+    };
+    if let Some(extra) = options.positional.first() {
+        return usage(&format!("unrecognized argument {extra}"));
+    }
+    if options.command.is_some() {
+        return usage("sx mcp export starts no server command");
+    }
+    let Some(declarations) = options.last("--declarations") else {
+        return usage("sx mcp export needs --declarations FILE");
+    };
+    let registry = match load_registry(Some(declarations), new_registry()) {
+        Ok((registry, _, _)) => registry,
+        Err(stop) => return stopped(stop),
+    };
+    let listed = listing(registry.capabilities());
+    for skipped in &listed.skipped {
+        eprintln!("sx mcp export: not exporting {}: {}", skipped.id, skipped.reason);
+    }
+    let shapes = Json::Object(listed.shapes.iter().map(|(id, shape)| (id.clone(), Json::string(shape.name()))).collect());
+    let exported = Json::object([("tools", Json::Array(listed.tools)), ("shapes", shapes)]);
+    match dumps(&exported, Layout::Indented) {
+        Ok(text) => Exit { code: EXIT_OK, stdout: format!("{text}\n"), stderr: String::new() },
+        Err(error) => Exit { code: EXIT_FAILED, stdout: String::new(), stderr: format!("sx mcp: {}\n", error.0) },
     }
 }

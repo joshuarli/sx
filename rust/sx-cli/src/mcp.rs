@@ -16,15 +16,18 @@ const MCP_HELP: &str = r#"usage: sx mcp import --name NAME (--tools FILE | -- CO
                   [--timeout-ms MS] -- COMMAND [ARG ...]
        sx mcp serve --declarations FILE [--grants FILE] [--allow ID ...]
        sx mcp describe --declarations FILE [--grants FILE] [--allow ID ...]
+       sx mcp export --declarations FILE
        sx mcp code --declarations FILE --policy FILE [--grants FILE]
                    [--allow ID ...] [--name NAME] [--timeout-ms MS]
                    [-- COMMAND [ARG ...]]
 
 Import the tools of an MCP server as Sx declarations, run a program
 against that server over stdio, and serve granted capabilities as an MCP
-server on standard input and output, or describe what serve would list in
-Sx terms. Code serves two tools, check and run, that take a program in Sx,
-and runs it only when the approval policy allows.
+server on standard input and output, describe what serve would list in
+Sx terms, or export the tools/list result and result shapes of every declared
+capability for an MCP server in another language. Code serves two tools,
+check and run, that take a program in Sx, and runs it only when the approval
+policy allows.
 
 import options:
   --name NAME       Server name; its tools become capabilities mcp-NAME.TOOL
@@ -45,6 +48,10 @@ serve and describe options:
   --declarations FILE  Declarations of the capabilities and packs
   --grants FILE        JSON object granting capabilities, with their scopes
   --allow ID           Grant one capability that declares no scope
+
+export reads --declarations only and needs no grants: it lists every capability
+the declarations define, not only those the binary performs, and names on
+standard error each one with no JSON Schema.
 
 code options (the serve options, and):
   --policy FILE        JSON object judged against the explain report of each
@@ -145,9 +152,10 @@ pub fn run(args: &[String], new_registry: &dyn Fn() -> Registry) -> Exit {
         Some((word, rest)) if word == "run" => run_program(rest, new_registry),
         Some((word, rest)) if word == "serve" => crate::mcp_serve::serve(rest, new_registry),
         Some((word, rest)) if word == "describe" => crate::mcp_serve::describe(rest, new_registry),
+        Some((word, rest)) if word == "export" => crate::mcp_serve::export(rest, new_registry),
         Some((word, rest)) if word == "code" => crate::mcp_code::serve(rest, new_registry),
-        Some((word, _)) => usage(&format!("{word:?} is not a subcommand; choose import, run, serve, describe, or code")),
-        None => usage("choose a subcommand: import, run, serve, describe, or code"),
+        Some((word, _)) => usage(&format!("{word:?} is not a subcommand; choose import, run, serve, describe, export, or code")),
+        None => usage("choose a subcommand: import, run, serve, describe, export, or code"),
     }
 }
 

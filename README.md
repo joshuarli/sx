@@ -247,8 +247,10 @@ timeout are in [docs/language.md](docs/language.md#mcp-tools).
 performs natively (`fs`, `process`, `http`, and declared endpoints) as an MCP server on standard input and
 output, with schemas generated from the Sx types, annotations from the effects, the grant's scope check on
 every call, and each failure returned as an `isError` result that names its call error kind. A client in
-another language gets the same performers as `sx run`. `sx mcp describe` lists them in Sx terms. The rules are
-in [docs/language.md](docs/language.md#serving-tools-over-mcp), and `bench/workflows/` runs workflows in Sx and
+another language gets the same performers as `sx run`. `sx mcp describe` lists them in Sx terms, and
+`sx mcp export --declarations D` prints the `tools/list` result and result shapes of every declared capability,
+for a server in another language that performs them itself. The rules are in
+[docs/language.md](docs/language.md#serving-tools-over-mcp), and `bench/workflows/` runs workflows in Sx and
 in TypeScript on Bun against it.
 
 `sx mcp code --declarations D --grants G --policy P [-- COMMAND]` makes Sx the code mode of any MCP client. It
