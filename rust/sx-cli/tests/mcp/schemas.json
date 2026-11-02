@@ -211,6 +211,8 @@
     {"name": "skip_undeclared_required", "inputSchema": {"type": "object", "properties": {}, "required": ["ghost"]}},
     {"name": "skip_empty_enum_value", "inputSchema": {"type": "object", "properties": {"v": {"type": "string", "enum": [""]}}}},
     {"name": "2fa", "inputSchema": {"type": "object"}},
-    {"name": "bad name!", "inputSchema": {"type": "object"}}
+    {"name": "bad name!", "inputSchema": {"type": "object"}},
+    {"name": "wrapped_list", "description": "A list result, wrapped the way sx mcp export writes it.", "inputSchema": {"type": "object", "properties": {}}, "outputSchema": {"type": "object", "properties": {"result": {"type": "array", "items": {"type": "integer"}}}, "required": ["result"], "additionalProperties": false}, "_meta": {"sx/result": "wrapped"}, "annotations": {"readOnlyHint": true}},
+    {"name": "wrapped_bad", "description": "Marked wrapped, but its output is not one result property.", "inputSchema": {"type": "object", "properties": {}}, "outputSchema": {"type": "object", "properties": {"result": {"type": "integer"}, "more": {"type": "integer"}}, "required": ["result", "more"], "additionalProperties": false}, "_meta": {"sx/result": "wrapped"}, "annotations": {"readOnlyHint": true}}
   ]
 }

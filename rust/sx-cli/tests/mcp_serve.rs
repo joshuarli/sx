@@ -278,7 +278,11 @@ const ROUND_TRIP: &str = r#"{
     {"id": "rt.put", "effect": "write", "idempotent": true,
      "http": {"method": "PUT", "url": "http://127.0.0.1:9/put"},
      "input": "Record {key: String, value: String}",
-     "output": "String"}
+     "output": "String"},
+    {"id": "rt.rows", "effect": "read",
+     "http": {"method": "GET", "url": "http://127.0.0.1:9/rows"},
+     "input": "Record {}",
+     "output": "List<Record {k: String, n: Option<Int>}>"}
   ]
 }"#;
 
@@ -287,6 +291,8 @@ const ROUND_TRIP_GRANTS: &str = r#"{
   "rt.peek": {"origins": ["http://127.0.0.1:9"], "methods": ["GET"]},
   "rt.put": {"origins": ["http://127.0.0.1:9"], "methods": ["PUT"]},
   "rt.shape": {"origins": ["http://127.0.0.1:9"], "methods": ["GET"]},
+  "rt.rows": {"origins": ["http://127.0.0.1:9"], "methods": ["GET"]},
+  "fs.list": {"roots": ["ROOT"]},
   "fs.read-text": {"roots": ["ROOT"]},
   "fs.write-text": {"roots": ["ROOT"]}
 }"#;
@@ -315,6 +321,7 @@ fn importing_what_sx_serves_reproduces_the_declared_types() {
         ("rt.peek", "mcp-rt.rt-peek"),
         ("rt.put", "mcp-rt.rt-put"),
         ("rt.shape", "mcp-rt.rt-shape"),
+        ("rt.rows", "mcp-rt.rt-rows"),
     ] {
         let (original, round) = (find(&declared, id), find(&imported, imported_id));
         for key in ["input", "output", "effect"] {
@@ -331,6 +338,8 @@ fn importing_what_sx_serves_reproduces_the_declared_types() {
     let read = find(&imported, "mcp-rt.fs-read-text");
     assert_eq!(read.get("output").and_then(Json::as_str), Some("String"));
     assert_eq!(shown(read.get("mcp").expect("mcp")), r#"{"server": "rt", "tool": "fs.read-text", "result": "text"}"#);
+    let rows = find(&imported, "mcp-rt.rt-rows");
+    assert_eq!(shown(rows.get("mcp").expect("mcp")), r#"{"server": "rt", "tool": "rt.rows", "result": "wrapped"}"#);
 }
 
 #[test]
@@ -341,7 +350,11 @@ fn a_program_runs_against_what_sx_serves_with_the_same_result_as_natively() {
     command.extend(w.arguments());
     let imported = Command::new(SX).args(&command).stdin(Stdio::null()).output().expect("sx runs");
     fs::write(w.base.join("imported.json"), &imported.stdout).expect("imported declarations");
-    let source = format!("(call mcp-rt.fs-read-text {{:path \"{}\"}})", w.root().join("note.txt").display());
+    let source = format!(
+        "[(call mcp-rt.fs-read-text {{:path \"{}\"}}) (map (fn [entry] (get entry :name)) (call mcp-rt.fs-list {{:path \"{}\"}}))]",
+        w.root().join("note.txt").display(),
+        w.root().display()
+    );
     fs::write(w.base.join("program.sx"), source).expect("program");
     let mut args: Vec<String> = ["mcp", "run"].map(str::to_string).to_vec();
     args.extend([
@@ -350,6 +363,8 @@ fn a_program_runs_against_what_sx_serves_with_the_same_result_as_natively() {
         w.base.join("imported.json").to_str().expect("UTF-8").to_string(),
         "--allow".into(),
         "mcp-rt.fs-read-text".into(),
+        "--allow".into(),
+        "mcp-rt.fs-list".into(),
         "--format".into(),
         "json".into(),
         "--".into(),
@@ -358,7 +373,13 @@ fn a_program_runs_against_what_sx_serves_with_the_same_result_as_natively() {
     args.extend(w.arguments());
     let ran = Command::new(SX).args(&args).stdin(Stdio::null()).output().expect("sx runs");
     let report = json(&String::from_utf8(ran.stdout).expect("UTF-8"));
-    assert_eq!(report.get("result").and_then(Json::as_str), Some("inside"), "{}", String::from_utf8_lossy(&ran.stderr));
+    let mut names: Vec<String> = fs::read_dir(w.root())
+        .expect("root")
+        .map(|entry| entry.expect("entry").file_name().into_string().expect("UTF-8"))
+        .collect();
+    names.sort();
+    let expected = Json::Array(vec![Json::string("inside"), Json::Array(names.into_iter().map(Json::string).collect())]);
+    assert_eq!(report.get("result").map(shown), Some(shown(&expected)), "{}", String::from_utf8_lossy(&ran.stderr));
 }
 
 #[test]
@@ -471,6 +492,7 @@ fn importing_an_exported_listing_reads_back_what_importing_the_server_reads() {
         ("rt.peek", "mcp-rt.rt-peek"),
         ("rt.put", "mcp-rt.rt-put"),
         ("rt.shape", "mcp-rt.rt-shape"),
+        ("rt.rows", "mcp-rt.rt-rows"),
     ] {
         let read_back = listed.iter().find(|c| id_of(c) == imported).expect("imported");
         for key in ["input", "output", "effect"] {

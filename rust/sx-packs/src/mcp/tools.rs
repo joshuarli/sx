@@ -7,6 +7,7 @@ use sx_kernel::types::{CallErrorKind, STRING, Type};
 use sx_kernel::values::{Value, decode};
 
 use super::client::{Connection, RpcError, STANDARD_TIMEOUT};
+use super::export::{Shape, WRAPPED_KEY};
 use super::import::ResultKind;
 use crate::Failure;
 
@@ -61,7 +62,7 @@ fn declared(entry: &Json) -> Result<Option<Declared<'_>>, String> {
         mcp.get(key).and_then(Json::as_str).ok_or_else(|| named(format!("mcp needs a string {}", repr_str(key))))
     };
     let result = ResultKind::from_name(text("result")?)
-        .ok_or_else(|| named("mcp result must be \"text\" or \"structured\"".to_string()))?;
+        .ok_or_else(|| named("mcp result must be \"text\", \"structured\", or \"wrapped\"".to_string()))?;
     Ok(Some(Declared { id, server: text("server")?, tool: text("tool")?, result }))
 }
 
@@ -96,6 +97,7 @@ impl Bindings {
             let fits = match found.result {
                 ResultKind::Text => capability.output == STRING,
                 ResultKind::Structured => matches!(capability.output, Type::Record(_) | Type::Map(_)),
+                ResultKind::Wrapped => Shape::of(&capability.output) == Shape::Wrapped,
             };
             if !fits {
                 return Err(format!(
@@ -298,6 +300,13 @@ impl Session {
                 };
                 decode(&filled(structured, &binding.output), &binding.output, "$")
                     .map_err(|error| mismatch(format!("structuredContent does not match the declared output: {error}")))
+            }
+            ResultKind::Wrapped => {
+                let Some(wrapped) = result.get("structuredContent").and_then(|structured| structured.get(WRAPPED_KEY)) else {
+                    return Err(mismatch(format!("the result has no structuredContent.{WRAPPED_KEY} for the wrapped output")));
+                };
+                decode(&filled(wrapped, &binding.output), &binding.output, "$")
+                    .map_err(|error| mismatch(format!("structuredContent.{WRAPPED_KEY} does not match the declared output: {error}")))
             }
         }
     }

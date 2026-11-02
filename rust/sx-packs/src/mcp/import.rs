@@ -4,8 +4,9 @@ use std::sync::Arc;
 
 use sx_kernel::json::Json;
 use sx_kernel::registry::{Effect, Registry, load_declarations};
-use sx_kernel::types::{EnumType, STRING, show_type};
+use sx_kernel::types::{EnumType, RecordType, STRING, Type, show_type};
 
+use super::export::{RESULT_META, WRAPPED_KEY, WRAPPED_META, unkeyed};
 use super::schema::{Side, map, pascal};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -47,6 +48,7 @@ impl std::error::Error for ImportError {}
 pub enum ResultKind {
     Text,
     Structured,
+    Wrapped,
 }
 
 impl ResultKind {
@@ -54,6 +56,7 @@ impl ResultKind {
         match self {
             ResultKind::Text => "text",
             ResultKind::Structured => "structured",
+            ResultKind::Wrapped => "wrapped",
         }
     }
 
@@ -61,6 +64,7 @@ impl ResultKind {
         match name {
             "text" => Some(ResultKind::Text),
             "structured" => Some(ResultKind::Structured),
+            "wrapped" => Some(ResultKind::Wrapped),
             _ => None,
         }
     }
@@ -130,6 +134,28 @@ fn describe(tool: &Json, name: &str, server: &str) -> String {
         .map_or_else(|| format!("The MCP tool {name} of the server {server}."), str::to_string)
 }
 
+fn is_wrapped(tool: &Json, schema: &Json) -> Result<bool, String> {
+    let marked = tool.get("_meta").and_then(|meta| meta.get(RESULT_META)).and_then(Json::as_str) == Some(WRAPPED_META);
+    if marked && unkeyed(schema, WRAPPED_KEY).is_none() {
+        return Err(format!(
+            "its _meta marks the result {WRAPPED_META}, but its outputSchema is not the object {{{WRAPPED_KEY}: VALUE}}"
+        ));
+    }
+    Ok(marked)
+}
+
+fn wrapped_type(record: Type) -> Result<Type, String> {
+    let problem = format!("the wrapped outputSchema maps to {}, not a record of one {WRAPPED_KEY}", show_type(&record));
+    let Type::Record(RecordType { fields, .. }) = record else {
+        return Err(problem);
+    };
+    let mut fields = fields.into_iter();
+    match (fields.next(), fields.next()) {
+        (Some((name, inner)), None) if name == WRAPPED_KEY => Ok(inner),
+        _ => Err(problem),
+    }
+}
+
 struct Built {
     capability: Json,
     enums: Vec<Arc<EnumType>>,
@@ -147,7 +173,11 @@ fn build(server: &str, tool: &Json, name: &str, member: &str) -> Result<Built, S
         Some(schema) => {
             let mapped = map(schema, Side::Output, &format!("mcp-{server}.{words}Output"))
                 .map_err(|e| format!("outputSchema: {}", e.0))?;
-            (mapped.ty, ResultKind::Structured, mapped.enums)
+            if is_wrapped(tool, schema)? {
+                (wrapped_type(mapped.ty)?, ResultKind::Wrapped, mapped.enums)
+            } else {
+                (mapped.ty, ResultKind::Structured, mapped.enums)
+            }
         }
     };
     let (effect, idempotent) = effect_of(tool);

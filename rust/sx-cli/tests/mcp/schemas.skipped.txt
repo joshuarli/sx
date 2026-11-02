@@ -25,4 +25,5 @@ sx mcp import: skipped skip_undeclared_required: inputSchema: required property 
 sx mcp import: skipped skip_empty_enum_value: inputSchema: enum holds a value that is not a non-empty string
 sx mcp import: skipped 2fa: the name does not start with a letter, or has an empty word
 sx mcp import: skipped bad name!: the character ' ' has no place in an Sx name
-sx mcp import: imported 13 tools, skipped 27
+sx mcp import: skipped wrapped_bad: its _meta marks the result wrapped, but its outputSchema is not the object {result: VALUE}
+sx mcp import: imported 14 tools, skipped 28

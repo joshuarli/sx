@@ -1216,10 +1216,17 @@ tool: nothing is approximated, and the rest of the server's tools import.
 with one hint, is a `write` that is not idempotent. The hints are the server's claim and the importer cannot
 verify them: a server that mislabels a mutating tool as read-only lets a program call it in `par`.
 
+**Wrapped results.** A tool whose `_meta` holds `"sx/result": "wrapped"` and whose `outputSchema` is the
+object `sx mcp export` writes for it, one required property `result` and no other, imports with the type of
+`result` as its output and the `wrapped` result kind, and a call returns `structuredContent.result`. So
+`fs.list` served by `sx mcp serve` imports as `List<...>`, not `Record {result: List<...>}`. A tool with that
+`_meta` and any other `outputSchema` is skipped. Without the `_meta`, an `outputSchema` of one `result`
+property is an ordinary record.
+
 **Declarations.** The importer prints a declarations object with `enums` and `capabilities`. Each
 capability has `id`, `effect`, `idempotent` for an idempotent write, a one-line `description` (the first
 line of the tool's description, else its title), `input`, `output`, and
-`"mcp": {"server": NAME, "tool": ORIGINAL_NAME, "result": "text" or "structured"}`. It declares no scope
+`"mcp": {"server": NAME, "tool": ORIGINAL_NAME, "result": "text", "structured", or "wrapped"}`. It declares no scope
 and grants nothing: `--allow mcp-NAME.TOOL` or `--grants` does. Several imports merge by concatenating
 `enums` and `capabilities`; a repeated capability ID is a loader error. `--tools FILE` reads a saved
 `tools/list` result, an object with a `tools` list, and refuses one that still has a `nextCursor`; it
@@ -1345,9 +1352,8 @@ reads `structuredContent`.
 
 **Round trip.** `sx mcp import --name NAME -- sx mcp serve ...` reproduces the input and output types, the
 effect, and the idempotence of every tool whose types the import table can read: the capability
-`github.repo` comes back as `mcp-NAME.github-repo`. Four things do not come back. A wrapped output imports as
-`Record {result: T}`, and a `Unit` or zero-length tuple makes the importer skip the tool, because
-`type: null` alone has no Sx type. `Bytes` is skipped, because `contentEncoding` is not on the whitelist. An
+`github.repo` comes back as `mcp-NAME.github-repo`. Three things do not come back. A `Unit` or zero-length
+tuple makes the importer skip the tool, because `type: null` alone has no Sx type. `Bytes` is skipped, because `contentEncoding` is not on the whitelist. An
 open input record imports closed, because every imported input is. Enums are renamed from the tool and the
 property path, and the variants of an enum with payloads come back plain variants first.
 

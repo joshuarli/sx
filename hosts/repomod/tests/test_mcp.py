@@ -129,10 +129,10 @@ def test_importing_the_server_reads_back_every_capability_with_its_input_and_eff
         capability = by_id[f"mcp-repomod.{capability_id.replace('.', '-')}"]
         assert capability["effect"] == "read"
         assert capability["input"] == input_type
-    assert by_id["mcp-repomod.catalog-select"]["output"] == (
-        "Record {result: List<Record {id: String, owner: String}>}"
-    )
-    assert by_id["mcp-repomod.catalog-owner"]["output"] == "String"
+    declared_output = {row[0]: row[2] for row in CAPABILITIES}
+    for capability_id in ("catalog.select", "catalog.owner", "clock.now", "repo.todo-items", "policy.lint"):
+        imported_output = by_id[f"mcp-repomod.{capability_id.replace('.', '-')}"]["output"]
+        assert imported_output == declared_output[capability_id]
 
 
 def run_over_server(tmp_path: Path, program: str, allowed: list[str]) -> dict[str, Any]:
@@ -164,7 +164,7 @@ def run_over_server(tmp_path: Path, program: str, allowed: list[str]) -> dict[st
 
 
 def test_sx_mcp_code_runs_a_program_over_the_server(tmp_path: Path, fleet: Fleet) -> None:
-    program = "(count (get (call mcp-repomod.catalog-select {:repos [] :tags [\"fork\"]}) :result))"
+    program = "(count (call mcp-repomod.catalog-select {:repos [] :tags [\"fork\"]}))"
     report = run_over_server(tmp_path, program, ["mcp-repomod.catalog-select"])
     expected = in_process(fleet).call("catalog.select", {"repos": [], "tags": ["fork"]})
     assert report["result"] == len(expected) == 2
@@ -172,7 +172,7 @@ def test_sx_mcp_code_runs_a_program_over_the_server(tmp_path: Path, fleet: Fleet
 
 
 GIT_STATUS_TAGS = (
-    '(match (get (call mcp-repomod.git-status {:repo "REPO"}) :result)\n'
+    '(match (call mcp-repomod.git-status {:repo "REPO"})\n'
     '  Missing "Missing" (Invalid m) "Invalid" (OriginMismatch o) "OriginMismatch"\n'
     '  (Detached h) "Detached" (OnBranch b) "OnBranch")'
 )

@@ -173,6 +173,18 @@
         "tool": "get_user.profile",
         "result": "text"
       }
+    },
+    {
+      "id": "mcp-demo.wrapped-list",
+      "effect": "read",
+      "description": "A list result, wrapped the way sx mcp export writes it.",
+      "input": "Record {}",
+      "output": "List<Int>",
+      "mcp": {
+        "server": "demo",
+        "tool": "wrapped_list",
+        "result": "wrapped"
+      }
     }
   ]
 }
