@@ -1,0 +1,7 @@
+; task: dev-events-pages
+(loop {:max 20} [cursor none ids []]
+  (let [page (if cursor (call audit.page {:cursor cursor}) (call audit.page {}))
+        errs (keep (fn [e] (if (= (get e :kind) "error") (some (get e :id)) none)) (get page :events))
+        all (concat ids errs)
+        nxt (get page :next none)]
+    (if nxt (recur nxt all) all)))

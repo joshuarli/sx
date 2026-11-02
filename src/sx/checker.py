@@ -231,6 +231,7 @@ def check(
     declared_inputs = dict(inputs or {})
     scope: dict[str, Binding] = {name: ValueBinding(t) for name, t in declared_inputs.items()}
     body, result = checker.check(program, None, scope)
+    checker.check_presence_tests()
     checker.check_size(program)
     body = cast("ir.Node", checker.settle(body))
     final = checker.zonk(result)
@@ -254,6 +255,7 @@ class _Checker:
         self.budgets = budgets
         self.substitution: dict[int, Type] = {}
         self.shapes: dict[int, BracketShape] = {}
+        self.presence_tests: list[tuple[Type, Node, str]] = []
         self.counter = itertools.count()
         self.diagnostics: list[Diagnostic] = []
         self.effects: list[Effects] = []
@@ -989,7 +991,9 @@ class _Checker:
                     help=who,
                 )
                 return Test(condition, False, None, None)
-            if not isinstance(inner, Never) and not self.is_open(inner):
+            if not isinstance(inner, Never):
+                if self.is_open(inner):
+                    self.presence_tests.append((resolved.inner, condition_node, who))
                 name = condition_node.name if isinstance(condition_node, Symbol) else None
                 narrows = name is not None and isinstance(scope.get(name), ValueBinding)
                 return Test(condition, True, name if narrows else None, resolved.inner)
@@ -1006,6 +1010,19 @@ class _Checker:
                 detail=hint, help=who,
             )
         return Test(condition, False, None, None)
+
+    def check_presence_tests(self) -> None:
+        for inner, condition_node, who in self.presence_tests:
+            if self.resolve(inner) == BOOL:
+                self.error(
+                    "condition-not-bool", condition_node.span,
+                    f"{TEST_SUBJECT[who]} must be true or false, but this is an Option<Bool>.",
+                    detail=(
+                        "Presence and truth would disagree: (some false) is present but false.\n"
+                        f"Match on it instead: (match {show(condition_node)} (some v) ... none ...)."
+                    ),
+                    help=who,
+                )
 
     def narrowed(self, test: Test, scope: Mapping[str, Binding]) -> Mapping[str, Binding]:
         if test.name is None or test.inner is None:
@@ -1332,12 +1349,16 @@ class _Checker:
                 fix=f"(get {show(record_node)} :{key.name})", help="get",
             )
             return self.coerce(getter, field_type, expected, node.span)
-        default, _ = self.check(default_node, resolved_field.inner, scope)
-        present = ir.Variable(DEFAULT_BINDER, node.span)
-        choice = ir.Match(
-            getter, ((ir.MatchSome(ir.MatchAny(ir.BindName(DEFAULT_BINDER))), present), (ir.MatchNone(), default)),
-            node.span,
-        )
+        default, default_type = self.check(default_node, None, scope)
+        present: ir.Node = ir.Variable(DEFAULT_BINDER, node.span)
+        binder = ir.MatchSome(ir.MatchAny(ir.BindName(DEFAULT_BINDER)))
+        if isinstance(self.resolve(default_type), OptionType):
+            (present, default), t = self.join(
+                [(present, resolved_field.inner, node.span), (default, default_type, default_node.span)], expected,
+            )
+            return ir.Match(getter, ((binder, present), (ir.MatchNone(), default)), node.span), t
+        default, _ = self.coerce(default, default_type, resolved_field.inner, default_node.span)
+        choice = ir.Match(getter, ((binder, present), (ir.MatchNone(), default)), node.span)
         return self.coerce(choice, resolved_field.inner, expected, node.span)
 
     def form_call(self, node: Form, expected: Type | None, scope: Mapping[str, Binding]) -> tuple[ir.Node, Type]:

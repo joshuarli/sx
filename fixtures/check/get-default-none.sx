@@ -1,0 +1,4 @@
+; task: dev-wait-for-job
+(let [job (call jobs.start {:name "reindex"})
+      status (wait-until {:within 2m :every 5s} (fn [s] (or (= (get s :state) "done") (= (get s :state) "failed"))) (call jobs.status {:id (get job :id)}))]
+  {:state (get status :state) :detail (get status :detail none)})

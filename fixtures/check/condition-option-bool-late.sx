@@ -1,0 +1,3 @@
+; task: dev-events-pages
+(loop {:max 3} [flag none]
+  (if flag 1 (recur (some false))))

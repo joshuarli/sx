@@ -1,0 +1,7 @@
+error[condition-not-bool] 3:7-3:11
+    (if flag 1 (recur (some false))))
+        ^^^^
+  An if condition must be true or false, but this is an Option<Bool>.
+  Presence and truth would disagree: (some false) is present but false.
+  Match on it instead: (match flag (some v) ... none ...).
+  Help: sx help if

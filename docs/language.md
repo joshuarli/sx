@@ -115,7 +115,7 @@ by element.
 | `(match e clause...)` | See [Match](#match). |
 | `(fn [p ...] body)` | A function argument, or the value of a `let` binding. See [Functions](#functions). |
 | `(get r :field)` | `r` is a record with `field`. A missing field is rejected by the checker. |
-| `(get r :field default)` | `field` has type `Option<T>`, and `default` has type `T`. The result is `T`: the value when present, otherwise `default`, which evaluates only then. A field whose type is not an `Option` is rejected with `arity`, because it is always present. |
+| `(get r :field default)` | `field` has type `Option<T>`. The result is the value when present, otherwise `default`, which evaluates only then. A `default` of type `T` makes the result `T`; an optional `default`, such as `none`, makes it `Option<T>`. A field whose type is not an `Option` is rejected with `arity`, because it is always present. |
 | `(call cap.id arg)` | `arg` has the capability's input type. The result has its output type. |
 | `(attempt e)` | `Result<T, CallError>`, where `e` has type `T`. See [Recovery and repetition](#recovery-and-repetition). |
 | `(retry {options} e)` | `T`. Re-evaluates `e` after a failure. |
