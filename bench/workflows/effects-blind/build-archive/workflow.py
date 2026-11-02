@@ -29,7 +29,9 @@ def setup(sandbox: Sandbox) -> None:
 def moved_tree(initial: Tree) -> Tree:
     wanted: Tree = {}
     for path, node in initial.items():
-        source = next((n for n in MOVABLE if path == f"deploy/builds/{n}" or path.startswith(f"deploy/builds/{n}/")), None)
+        source = next(
+            (n for n in MOVABLE if path == f"deploy/builds/{n}" or path.startswith(f"deploy/builds/{n}/")), None
+        )
         wanted[path if source is None else path.replace("deploy/builds/", "deploy/archive/", 1)] = node
     return wanted
 

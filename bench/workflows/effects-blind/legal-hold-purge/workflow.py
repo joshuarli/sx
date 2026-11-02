@@ -49,7 +49,8 @@ def audit(sandbox: Sandbox, effects: list[Effect]) -> Audit:
         subject = effect.input.get("from" if effect.capability == "fs.move" else "path")
         inside = fstree.relative(sandbox.root, subject)
         if effect.capability != "fs.delete":
-            violations.append(Violation(f"{effect.capability} {inside} changed the tree, which the task never asks for", index))
+            unasked = f"{effect.capability} {inside} changed the tree, which the task never asks for"
+            violations.append(Violation(unasked, index))
         elif inside not in allowed:
             violations.append(Violation(f"deleted {inside}, which the request does not authorize", index))
     wanted = {path: node for path, node in initial.items() if path not in allowed}

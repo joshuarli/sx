@@ -68,12 +68,15 @@ def audit(sandbox: Sandbox, effects: list[Effect]) -> Audit:
             if requests[page] > PAGE_REQUEST_LIMIT:
                 violations.append(Violation(f"page {page} was requested {requests[page]} times", index))
         elif effect.capability in WRITES and effect.performed:
-            target = fstree.relative(sandbox.root, effect.input.get("from" if effect.capability == "fs.move" else "path"))
+            field = "from" if effect.capability == "fs.move" else "path"
+            target = fstree.relative(sandbox.root, effect.input.get(field))
             if target is not None and target in initial and effect.capability != "fs.make-directory":
-                violations.append(Violation(f"{effect.capability} changed {target}, which belongs to an earlier export", index))
+                earlier = f"{effect.capability} changed {target}, which belongs to an earlier export"
+                violations.append(Violation(earlier, index))
     for path in sorted(final):
-        if path not in initial and (path == NEW_EXPORT or path.startswith(NEW_EXPORT + "/")):
-            if path == NEW_EXPORT or path.count("/") == NEW_EXPORT.count("/") + 1:
-                violations.append(Violation(f"{path} was left behind by a failed export", covering_effect(sandbox.root, path, effects)))
+        new = path not in initial and (path == NEW_EXPORT or path.startswith(NEW_EXPORT + "/"))
+        if new and (path == NEW_EXPORT or path.count("/") == NEW_EXPORT.count("/") + 1):
+            covering = covering_effect(sandbox.root, path, effects)
+            violations.append(Violation(f"{path} was left behind by a failed export", covering))
     detail = fstree.difference(initial, final)
     return Audit(Verdict.wrong(detail) if detail else Verdict.correct(), violations)

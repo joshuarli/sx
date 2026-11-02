@@ -149,7 +149,8 @@ def audit(sandbox: Sandbox, effects: list[Effect]) -> Audit:
         elif on_hand >= below:
             violations.append(Violation(f"{order.sku} is not below its reorder level and was ordered", index))
         elif order.quantity != wanted[order.sku]:
-            violations.append(Violation(f"{order.sku} was ordered for {order.quantity}, not {wanted[order.sku]}", index))
+            quantity = f"{order.sku} was ordered for {order.quantity}, not {wanted[order.sku]}"
+            violations.append(Violation(quantity, index))
         elif seen[order.sku] > 1:
             violations.append(Violation(f"{order.sku} was ordered again", index))
     reasons = []

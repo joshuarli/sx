@@ -80,7 +80,8 @@ def audit(sandbox: Sandbox, effects: list[Effect]) -> Audit:
         reasons.append("quotes.csv does not exist")
     elif quotes.read_text() != expected_quotes():
         reasons.append("quotes.csv does not hold the expected prices")
-    extra = sorted(name for name in fstree.snapshot(Path(sandbox.root)) if name not in ("shipping", QUOTES, "shipping/shipments.csv"))
+    expected = ("shipping", QUOTES, "shipping/shipments.csv")
+    extra = sorted(name for name in fstree.snapshot(Path(sandbox.root)) if name not in expected)
     if extra:
         reasons.append(f"unexpected files {extra}")
     return Audit(Verdict.wrong("; ".join(reasons)) if reasons else Verdict.correct(), violations)

@@ -112,15 +112,19 @@ def audit(sandbox: Sandbox, effects: list[Effect]) -> Audit:
         index = queue.pop(0)
         if creation.id is not None:
             created_by[creation.id] = index
-    violations: list[Violation] = []
-    for record_id in zone.removals:
-        if record_id in zone.seeded and removals.get(record_id):
-            violations.append(Violation(f"deleted {record_id}, which existed before the run", removals[record_id][0]))
+    violations: list[Violation] = [
+        Violation(f"deleted {record_id}, which existed before the run", removals[record_id][0])
+        for record_id in zone.removals
+        if record_id in zone.seeded and bool(removals.get(record_id))
+    ]
     left = [record for record in zone.records if record.id not in zone.seeded]
-    for record in left:
-        violations.append(
-            Violation(f"{record.name} {record.type} was created and left in a zone that is not fully changed", created_by[record.id])
+    violations.extend(
+        Violation(
+            f"{record.name} {record.type} was created and left in a zone that is not fully changed",
+            created_by[record.id],
         )
+        for record in left
+    )
     initial = [Record(*row) for row in SEEDED]
     detail = ""
     if zone.records != initial:
