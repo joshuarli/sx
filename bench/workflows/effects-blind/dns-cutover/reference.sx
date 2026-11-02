@@ -1,0 +1,16 @@
+(let [changes (call fs.read-text {:path "{{root}}/changes/cutover.json"})
+      field (fn [i key] (match (json.get changes ["records" i key]) (some v) v none ""))
+      items (map (fn [i] {:name (field i "name")
+                          :type (field i "type")
+                          :value (field i "value")
+                          :ttl (match (text.to-int (field i "ttl")) (some n) n none 0)})
+                 (json.keys changes ["records"]))]
+  (loop {:max 50} [pending items
+                   created []]
+    (if (= (count pending) 0)
+      {:applied true :refused ""}
+      (let [item (first pending)]
+        (match (attempt (call dns.create item))
+          (ok made) (recur (rest pending) (concat created [(get made :id)]))
+          (err _) (let [_ (map (fn [id] (call dns.remove {:id id})) created)]
+                    {:applied false :refused (get item :name)}))))))

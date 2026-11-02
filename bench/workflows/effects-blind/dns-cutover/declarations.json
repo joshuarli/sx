@@ -1,0 +1,32 @@
+{
+  "packs": ["fs"],
+  "cores": ["text", "re", "json"],
+  "capabilities": [
+    {
+      "id": "dns.records",
+      "http": {"method": "GET", "url": "{{dns_origin}}/records", "query": []},
+      "input": "Record {}",
+      "output": "List<Record open {id: String, name: String, type: String, value: String, ttl: Int}>",
+      "effect": "read",
+      "description": "Lists every record of the zone."
+    },
+    {
+      "id": "dns.create",
+      "http": {"method": "POST", "url": "{{dns_origin}}/records", "query": []},
+      "input": "Record {name: String, type: String, value: String, ttl: Int}",
+      "output": "Record open {id: String}",
+      "effect": "write",
+      "idempotent": false,
+      "description": "Creates one record in the zone and returns its id. The service validates the record and can refuse it."
+    },
+    {
+      "id": "dns.remove",
+      "http": {"method": "DELETE", "url": "{{dns_origin}}/records/{id}", "query": []},
+      "input": "Record {id: String}",
+      "output": "Unit",
+      "effect": "write",
+      "idempotent": true,
+      "description": "Deletes one record of the zone by its id."
+    }
+  ]
+}

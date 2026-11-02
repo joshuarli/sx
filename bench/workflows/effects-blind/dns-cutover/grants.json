@@ -1,0 +1,6 @@
+{
+  "fs.read-text": {"roots": ["{{root}}/changes"]},
+  "dns.records": {"origins": ["{{dns_origin}}"], "methods": ["GET"]},
+  "dns.create": {"origins": ["{{dns_origin}}"], "methods": ["POST"]},
+  "dns.remove": {"origins": ["{{dns_origin}}"], "methods": ["DELETE"]}
+}

@@ -1,0 +1,5 @@
+{
+  "capabilities": ["fs.read-text", "dns.records", "dns.create", "dns.remove"],
+  "computed_inputs": ["fs.read-text", "dns.create", "dns.remove"],
+  "max_write_sites": 2
+}
