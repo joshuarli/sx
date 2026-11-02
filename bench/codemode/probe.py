@@ -311,7 +311,7 @@ def summarize(arm_trials: list[Trial], tasks: list[str]) -> dict[str, Any]:
     }
 
 
-def report(trials: list[Trial], expressiveness: tuple[int, int]) -> str:
+def report(trials: list[Trial], expressiveness: tuple[str, int, int]) -> str:
     lines: list[str] = []
     for model in sorted({t.model for t in trials}):
         mine = [t for t in trials if t.model == model]
@@ -362,8 +362,8 @@ def report(trials: list[Trial], expressiveness: tuple[int, int]) -> str:
             lines.append("")
         outcomes: Counter[str] = Counter(f"{condition(t)} {t.attempts[-1].status}" for t in mine)
         lines += ["Final status counts: " + ", ".join(f"{k} {v}" for k, v in sorted(outcomes.items())), ""]
-    missing, total = expressiveness
-    lines.append(f"Expressiveness gap: {missing} of {total} held-out tasks need a type Sx v0 lacks.")
+    split, missing, total = expressiveness
+    lines.append(f"Expressiveness gap: {missing} of {total} {split} tasks need a type Sx lacks.")
     return "\n".join(lines)
 
 
@@ -405,8 +405,8 @@ def main() -> None:
     args = parser.parse_args()
     args.out = args.out.resolve()
     all_tasks = [json.loads(p.read_text()) for p in (BENCH / "tasks").glob("*/task.json")]
-    held_out = [t for t in all_tasks if t["split"] == "held-out"]
-    gap = (sum(1 for t in held_out if not t["sx-expressible"]), len(held_out))
+    in_split = [t for t in all_tasks if t["split"] == args.split]
+    gap = (args.split, sum(1 for t in in_split if not t["sx-expressible"]), len(in_split))
     if args.report:
         print(report(load_trials(args.out), gap))
         return
