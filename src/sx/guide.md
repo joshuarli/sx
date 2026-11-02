@@ -1,29 +1,22 @@
 # Sx
 
 Sx is a small language for calling tools and combining their results. A program is one
-expression, and its value is the program's result. Sx looks like Clojure, but it is not Clojure:
-only the forms and functions below exist.
+expression, and its value is the result. Sx looks like Clojure, but only the forms and functions
+below exist.
 
 ## Values
 
-- `true`, `false`
-- Integers: `42`, `-7`. There are no fractions.
-- Strings: `"text"`, with escapes `\"`, `\\`, `\n`, `\r`, `\t`.
-- Lists: `[1 2 3]`
-- Records: `{:name "ada" :age 36}`. Field names are keywords. Commas are optional. Keywords
-  only name fields. Use strings, such as `"failing"`, for labels.
-- Tuples: `[1 "a"]`, a bracket literal whose elements have different types or that is later
-  taken apart as `[a b]`.
-- Optional values: `(some x)` or `none`. There is no `nil` or `null`. A tool field typed
-  `Option<T>` holds `(some x)` or `none`. Wherever an optional is expected, a plain value works
-  too, so `(if found? name none)` is fine. `(if x then else)` on an optional name `x` tests
-  whether it is present, and inside `then`, `x` is the plain value. `(get r :field default)`
-  reads an optional field, giving `default` for `none`. A record literal may leave out optional
-  fields; they are `none`.
-- Tool enums: write a variant as `Passing`. Where an enum is expected, the string `"Passing"`
-  works too, and an `if` or `match` may return a string in one branch and an enum in another.
+- `true`, `false`. Integers: `42`, `-7`. Strings: `"text"`, with escapes `\"`, `\\`, `\n`, `\r`, `\t`.
+- Floats: `1.5`, `2e3`. They never mix with integers: `(float n)` converts, `(round x)`,
+  `(floor x)`, and `(ceil x)` give an Int, and `(/ a b)` divides Floats. Bytes are opaque.
+- Lists: `[1 2 3]`. Tuples: `[1 "a"]`, a bracket literal with mixed types or taken apart as `[a b]`.
+- Records: `{:name "ada" :age 36}`. Keywords only name fields; use strings such as `"failing"`
+  for labels. Tool enum variants are written `Passing`.
+- Optional values: `(some x)` or `none`. There is no `nil` or `null`. A plain value works where an
+  optional is expected. `(if x then else)` on an optional name tests whether it is present, and
+  `x` is the plain value inside `then`. `(get r :field default)` reads an optional field.
 - Results: `(ok x)` or `(err e)`, produced by `attempt`.
-- Durations, only in `retry` and `wait-until` options: `250ms`, `5s`, `2m`, `1h`.
+- Durations, only in `retry`, `wait-until`, and `sleep`: `250ms`, `5s`, `2m`, `1h`.
 - Comments start with `;`.
 
 ## Forms
@@ -31,64 +24,59 @@ only the forms and functions below exist.
 ```
 (let [a expr1
       b expr2             ; later bindings see earlier ones
-      _ expr3             ; run for effect, discard the value
+      _ expr3             ; run for effect
       f (fn [x] ...)]     ; a local function, called as (f x)
-  body)                   ; exactly one body expression
-(if condition then else)  ; condition is true or false, or an optional name
-(cond test1 result1 test2 result2 :else other)   ; first true test wins; :else is required
-(get record :field)       ; read a record field; (get record :field default) for an optional
-(call tool.name {:field value})          ; call a tool with a record
-(fn [x] body)             ; only as an argument to map, filter, and the like
+  body)                   ; one body; form names such as attempt cannot be bound
+(if test then else)       ; test is true or false, or an optional name
+(cond t1 r1 t2 r2 :else r)
+(get record :field)
+(call tool.name {:field value})
+(fn [x] body)             ; as an argument or a let binding
 (match value
-  (some x) result         ; patterns: (some x) none (ok x) (err e)
-  none other              ;           Variant (Variant x) for tool enums
-  _ fallback)             ;           _ or a name matches anything
-(par expr1 expr2)         ; evaluate tool reads in parallel, returns a tuple
-(let [[a b] (par e1 e2)] body)           ; take a tuple apart
-(par-map {:limit 8} (fn [x] ...) xs)     ; map over a list in parallel, reads only
+  (some x) a              ; patterns: (some x) none (ok x) (err e) Variant (Variant x),
+  none b                  ;           literals such as 1 or "a",
+  _ c)                    ;           and _ or a name, which match anything
+(par e1 e2)               ; tool reads in parallel, as a tuple: (let [[a b] (par e1 e2)] ...)
+(par-map {:limit 8} (fn [x] ...) xs)     ; map in parallel, reads only
 (attempt expr)            ; (ok value), or (err {:kind K :message m}) if a tool call failed
-(retry {:delays [1s 2s 4s]} expr)        ; run again after a transient failure
+(retry {:delays [1s 2s 4s]} expr)
 (retry {:backoff [100ms 5s] :within 30s :on [Timeout]} expr)
 (wait-until {:within 2m :every 5s} (fn [v] done?) expr)
-(loop {:max 20} [x init y init2]         ; bounded loop
+(sleep 10s)               ; as a step: [_ (sleep 10s)]
+(loop {:max 20} [x init y init2]
   (if (done? x) result (recur next-x next-y)))
 ```
 
-- `retry` evaluates `expr` again after each delay while it fails with a retried kind. Without
-  `:on` it retries `Timeout`, `Unavailable`, and `RateLimited`. When the delays run out, the last
-  failure ends the program. Wrap the `retry` in `attempt` to handle that failure instead.
-- `wait-until` evaluates `expr`, and repeats after each interval until the function returns
-  `true` for its value, then returns that value. It fails with kind `Timeout` after `:within`.
-- `loop` binds like `let`. `(recur v1 v2 ...)`, as the last step of the body, runs the body again
-  with new values. Any other result ends the loop. `:max` caps the number of runs, and exceeding
-  it ends the program with an error.
+- `retry` runs `expr` again after each delay while it fails with a retried kind, by default
+  `Timeout`, `Unavailable`, and `RateLimited`. When the delays run out, the failure ends the
+  program unless an `attempt` around the `retry` catches it. Retry a write that is not
+  idempotent only on refusals such as `:on [RateLimited]`.
+- `wait-until` runs `expr` until the function returns `true` for its value, waiting each interval
+  in between, and returns that value. After `:within` it fails with kind `Timeout`.
+- `loop` binds like `let`. `(recur v1 v2 ...)` as the last step runs the body again with new
+  values; any other result ends the loop. More than `:max` runs ends the program with an error.
 - Error kinds: `Timeout`, `Unavailable`, `RateLimited`, `NotFound`, `PermissionDenied`,
-  `Invalid`, `Conflict`, `Failed`. Match on a kind with `(match (get e :kind) Timeout ... _ ...)`.
+  `Invalid`, `Conflict`, `Failed`: `(match (get e :kind) Timeout ... _ ...)`.
 
 ## Functions
 
-- Arithmetic: `(+ a b)`, `(- a b)`, `(* a b)`, `(quot a b)`, `(rem a b)`
-- Comparison: `(= a b)`, `(not= a b)`, `(< a b)`, `(<= a b)`, `(> a b)`, `(>= a b)`
-- Logic: `(not x)`, `(and a b)`, `(or a b)`
-- Arithmetic: `(- x)` negates.
-- `(str a b c ...)` joins strings.
+- `(+ a b)`, `(- a b)`, `(* a b)`, `(quot a b)`, `(rem a b)`, and `(- x)` negates.
+  `(= a b)`, `(not= a b)`, `(< a b)`, `(<= a b)`, `(> a b)`, `(>= a b)`. `(not x)`, `(and a b)`, `(or a b)`.
+- `(str a b ...)` joins strings, numbers, booleans, and enum values.
 - `(count xs)`, `(first xs)`, `(rest xs)`, `(nth xs i)`, `(take n xs)`, `(concat xs ys)`,
-  `(flatten xss)`, `(contains? xs x)`. `first` and `nth` stop the program on a list that is too
-  short, so check `(count xs)` first when it may be.
-- `(identity x)` returns `x`.
-- Maps, `Map<String, V>`, are JSON objects with string keys, and always list in key order: `(get m "k")`
-  is optional, `(get m "k" default)` is not, `(assoc m "k" v)`, `(dissoc m "k")`, `(keys m)`, `(vals m)`,
-  `(entries m)` (`[key value]` tuples), `(into-map pairs)` (a later pair wins), and `count` and
-  `contains?` (a key) take a map. `{}` starts an empty one: `(reduce (fn [m x] (assoc m ...)) {} xs)`.
-- `(map f xs)`, `(filter f xs)`, `(any? f xs)`, `(all? f xs)`, `(reduce f init xs)`
-- `(keep f xs)` applies `f`, which returns an optional, and keeps the `some` values unwrapped.
-- `(sort-by f xs)` sorts ascending by a key: an integer, a string, or a tuple of keys compared in
-  order. Sort by count descending, then name: `(sort-by (fn [r] [(- (get r :n)) (get r :name)]) rs)`.
-- `(distinct-by f xs)` keeps the first element for each key.
-- `(group-by f xs)` returns `[key items]` tuples in first-seen order. Take one apart with
-  `(fn [[key items]] ...)`.
-- A function argument `f` is a `(fn [x] ...)` or a function name such as `text.trim` or `+`.
-- Tool tasks may list more functions, such as `text.split`. Call them as `(text.split s ",")`.
+  `(flatten xss)`, `(contains? xs x)`, `(identity x)`. `first` and `nth` stop the program on a list
+  that is too short.
+- `(map f xs)`, `(filter f xs)`, `(any? f xs)`, `(all? f xs)`, `(reduce f init xs)`, and
+  `(keep f xs)`, which keeps the `some` results of `f`, unwrapped.
+- `(sort-by f xs)` sorts ascending by an Int, String, or tuple key. By `:n` descending, then name:
+  `(sort-by (fn [r] [(- (get r :n)) (get r :name)]) rs)`.
+- `(distinct-by f xs)` keeps the first element per key. `(group-by f xs)` returns `[key items]`
+  tuples in first-seen order.
+- Maps, `Map<String, V>`, list in key order. `(get m k)` is optional and `(get m k default)` is
+  not. `(assoc m k v)`, `(dissoc m k)`, `(keys m)`, `(vals m)`, `(entries m)` as `[key value]`
+  tuples, `(into-map pairs)`. `{}` is an empty map.
+- `f` is a `(fn [x] ...)` or a name such as `text.trim` or `+`. A task may list more functions,
+  such as `(text.split s ",")`.
 
 ## Examples
 

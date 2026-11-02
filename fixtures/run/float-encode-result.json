@@ -1,0 +1,54 @@
+{
+  "description": "A program's Float result encodes as a JSON number.",
+  "program": "(map (fn [r] (get r :celsius)) (call sensor.list {}))",
+  "declarations": "declarations.json",
+  "allow": [
+    "sensor.list"
+  ],
+  "responses": [
+    {
+      "capability": "sensor.list",
+      "input": {},
+      "results": [
+        {
+          "output": [
+            {
+              "name": "a",
+              "celsius": 1
+            },
+            {
+              "name": "b",
+              "celsius": -0.25
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": [
+      1.0,
+      -0.25
+    ]
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "sensor.list",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": [
+        {
+          "name": "a",
+          "celsius": 1
+        },
+        {
+          "name": "b",
+          "celsius": -0.25
+        }
+      ]
+    }
+  ]
+}

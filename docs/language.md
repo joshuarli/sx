@@ -22,11 +22,12 @@ program runs. There is no general recursion and no unbounded loop.
 | Whitespace | space, tab, newline, `,` | Commas are whitespace, as in Clojure. |
 | Boolean | `true`, `false` | |
 | Integer | `-?[0-9]+` | Signed 64-bit. A literal outside that range is rejected. |
-| Duration | `250ms`, `5s`, `2m`, `1h` | Only in `retry` and `wait-until` options. |
+| Float | `1.5`, `-0.25`, `2e3`, `1.5E-7` | Digits with a fraction, an exponent, or both. `1` is an Int. A literal beyond the finite 64-bit range, such as `1e999`, is rejected. |
+| Duration | `250ms`, `5s`, `2m`, `1h` | Only in `retry` and `wait-until` options and as the argument of `sleep`. |
 | String | `"..."` | UTF-8. Escapes: `\"`, `\\`, `\n`, `\r`, `\t`, `\u{HEX}`. |
 | Keyword | `:name` | Record field names only. Same characters as a symbol. |
 | Symbol | `name`, `repo-id`, `repoId`, `ahead_count`, `ok?`, `acc'` | A lowercase letter, then letters, digits, `-`, and `_`, then optionally `?` or primes. |
-| Operator | `+ - * = not= < <= > >=` | Prelude functions |
+| Operator | `+ - * / = not= < <= > >=` | Prelude functions |
 | Wildcard | `_` | Any pattern position: discards the value |
 | Variant | `OnBranch` | A capital letter, then letters and digits. Enum variants in patterns. |
 | Qualified symbol | `core.name`, `core.Type` | A core function, core type, or capability. Core IDs are one segment. |
@@ -40,18 +41,24 @@ program runs. There is no general recursion and no unbounded loop.
 | --- | --- |
 | `Bool` | `true`, `false` |
 | `Int` | Signed 64-bit integers |
+| `Float` | IEEE-754 binary64, finite values only. JSON cannot carry an infinity or NaN, so an operation that would produce one stops the program. |
 | `String` | UTF-8 strings |
-| `Unit` | One value, returned by capabilities with no result |
+| `Bytes` | An opaque byte string from a tool. It has no literal, and the prelude only measures and compares it. |
+| `Unit` | One value, returned by capabilities with no result and by `sleep` |
 | `List<T>` | Ordered, finite |
 | `Tuple<T1, ..., Tn>` | Produced by `par`, `group-by`, and bracket literals of mixed types or used as tuples |
 | `Option<T>` | `(some x)`, `none` |
 | `Result<T, E>` | `(ok x)`, `(err e)` |
 | `Record {k: T, ...}` | Structural, with exactly the declared fields |
+| `Record open {k: T, ...}` | Declared by a tool, never written in a program. It has the named fields, and decoding drops any other field a tool returns. |
 | `Map<String, V>` | Any number of string keys, each with a value of type `V`. Keys are always strings, because JSON object keys are strings, so `Map<Int, V>` and every other key type are rejected. |
 | Core enum | Nominal, declared by a core, for example `git.Checkout` |
 | Core nominal | Nominal wrapper over a base type, declared by a core, for example `git.RepoId` |
 
-There is no `Any`, no subtyping, and no user-declared type. Core functions construct core enum
+There is no `Any`, no subtyping, and no user-declared type. `Int` and `Float` never convert into
+each other: `(+ 1 1.5)`, `(< 1 1.5)`, and `(= 2 2.0)` are each a `type-mismatch` whose fix is
+`(float n)` on the `Int` side. `(float n)` turns an `Int` into a `Float`, and `(round x)`,
+`(floor x)`, and `(ceil x)` turn a `Float` into an `Int`. Core functions construct core enum
 and core nominal values. A program may also write a variant that carries no value by name, such
 as `Failing`, where the expected type is the enum, for example `(= state Failing)`. Each enum
 variant carries zero or one value. A variant that needs several values carries a record.
@@ -62,6 +69,14 @@ value of type `T` is accepted and becomes `(some value)`. So `(if empty? none na
 `Option<String>`. Branch results join field by field, so a branch returning
 `{:branch name}` and one returning `{:branch none}` join to `Record {branch: Option<String>}`.
 Promotion never applies when `T` is itself an `Option`.
+
+Branches that return records with different fields join to the union of the fields. A field in
+both joins as above. A field in only one record becomes `Option<T>`, or stays `Option<T>`, and the
+other branch's record has `none` for it. The fields keep the first branch's order, then the new
+fields in order of first appearance. So `{:number n :ok true}` and `{:number n :ok false :kind "x"}`
+join to `Record {number: Int, ok: Bool, kind: Option<String>}`, and `(get r :kind)` reads the
+result. This holds wherever branches join: `if`, `match`, `cond`, and inside lists and tuples.
+Records whose shared fields have types that do not join are still a `branch-mismatch`.
 
 A record literal checked against a known record type, such as a capability's input or a
 record field of that type, may omit any field whose type is `Option<T>`. The omitted field is `none`, so
@@ -104,6 +119,17 @@ an empty `Map<String, V>`, and a record use such as `(get {} :a)` or a result th
 constrains keeps it an empty record. A map value that is `Option<T>` cannot be encoded, because a
 `null` value and a missing key would collide. See [Values and JSON](#values-and-json).
 
+A declaration marks a record type open by writing `open` between `Record` and its fields:
+`Record open {id: String, name: String}`, as the output of a capability or as a named type. An open
+record is for a tool that returns many fields a program does not use. Decoding drops the fields the
+type does not name, at that record only, so a plain record inside an open one still rejects extra
+fields, and an open record inside a plain one drops only its own. The named fields are required and
+checked as for any record. The program sees the open record as an ordinary record with the named
+fields: `(get r :other)` is an `unknown-field` error, and a value read through an open type encodes
+with the named fields only. Only a declaration can be open. A record literal always has exactly the
+fields it writes, so `{:id "a" :name "b" :plan "pro"}` is rejected where an open record with `id` and
+`name` is expected, and `open` is not program syntax.
+
 Programs have no type annotations. The checker infers types bidirectionally from literals,
 bindings, prelude and core signatures, capability signatures, and the expected type of each
 argument position. A lambda parameter gets its type from the position the lambda fills. `none`,
@@ -112,9 +138,10 @@ checker rejects an expression whose type it cannot resolve where the operation n
 a field, comparing, or sorting. A type left unresolved in the program's result, such as the
 element type of an empty list, is harmless and allowed.
 
-Equality is structural on every type. Ordering with `<`, `<=`, `>`, and `>=` is defined on `Int`
-and on `String`, where strings compare lexicographically by Unicode code point. Sort keys, used by
-`sort-by`, may also be `Bool` (`false` first) and tuples or lists of sort keys, compared element
+Equality is structural on every type, and on `Float` it is IEEE equality, so `0.0` equals `-0.0` and
+`(= (+ 0.1 0.2) 0.3)` is `false`. Ordering with `<`, `<=`, `>`, and `>=` is defined on `Int`, on
+`Float`, and on `String`, where strings compare lexicographically by Unicode code point. Both
+operands have the same type. Sort keys, used by `sort-by`, may also be `Float`, `Bool` (`false` first) and tuples or lists of sort keys, compared element
 by element. A map is not a sort key.
 
 ## Special forms
@@ -134,6 +161,7 @@ by element. A map is not a sort key.
 | `(attempt e)` | `Result<T, CallError>`, where `e` has type `T`. See [Recovery and repetition](#recovery-and-repetition). |
 | `(retry {options} e)` | `T`. Re-evaluates `e` after a failure. |
 | `(wait-until {options} f e)` | `T`. Re-evaluates `e` until `f` returns `true` for its value. |
+| `(sleep d)` | `Unit`. `d` is a duration literal. Waits that long. See [sleep](#sleep). |
 | `(loop {:max n} [p1 e1 ...] body)` | The type of `body`'s non-`recur` results. `(recur ...)` repeats `body`. |
 | `(par e1 ... en)` | `Tuple<T1, ..., Tn>`. Every branch has only `read` effects. |
 | `(par-map {:limit n} f xs)` | `List<U>`. `n` is an integer literal. `f` has only `read` effects. |
@@ -141,6 +169,16 @@ by element. A map is not a sort key.
 A pattern `p` is a symbol, `_`, or a tuple pattern `[p1 ... pn]`. Patterns appear in `let`,
 `loop`, and `fn` parameters. `_` evaluates the value and discards it, so
 `(let [_ (map send items)] (count items))` runs every send.
+
+The names of the special forms are reserved: `let`, `if`, `cond`, `match`, `fn`, `get`, `call`,
+`attempt`, `retry`, `wait-until`, `sleep`, `loop`, `recur`, `par`, `par-map`, `some`, `ok`, and
+`err`, and `none`. Binding one of them in `let`, `loop`, `fn` parameters, or a `match` pattern, or
+naming a local function with one, is a `reserved-name` error at the binding, with a fix that
+suggests another name, such as `attempts` for `attempt`. Without the rule a form that follows the
+binding, such as `(attempt ...)` after `[attempt 1]`, would call the local instead of the form.
+Prelude and core function names are not reserved, so a local may be named `count`. Inside its
+scope the local hides the function: using it in head position, as in `(count xs)`, is a
+`type-mismatch` that says the local hides the function.
 
 ### Conditions
 
@@ -202,6 +240,17 @@ toward the type of the `match`. Any other clause that can never match is rejecte
 itself, so it has type `Option<T>` in a match on an optional. Only a final `_` after `none`
 narrows.
 
+An integer (including a negative one), string, or boolean literal is a pattern that matches when
+the scrutinee equals it. A `Float` literal is never a pattern, because computed floats are rarely
+equal: it is a `bad-pattern` that points to `=` and `<`. `(match n 1 "one" 2 "two" _ "many")`. The scrutinee's type must be the
+literal's type, `Int`, `String`, or `Bool`. Any other scrutinee, such as an `Option<Int>` or an
+enum, makes the literal a `bad-pattern`, and for a string that names a variant of the enum the fix
+is the variant name. `true` and `false` together cover `Bool`, so a `match` with both needs no `_`.
+No other set of literals covers its type, so a `match` on an `Int` or `String` needs a final `_` or
+name, or it is `non-exhaustive`. A literal repeated in a later clause is `unreachable-clause`. A
+literal is also allowed inside `(some ...)`, `(ok ...)`, `(err ...)`, and `(Variant ...)`, where it
+never covers the case, so `(some 1)` needs a `(some x)` or `_` clause after it.
+
 When the scrutinee is a bare name of type `Option<T>` and a `none` clause comes before a final `_`
 clause, the `_` clause sees that name as the inner value, of type `T`:
 
@@ -245,7 +294,19 @@ delay, not wall-clock time. The host enforces wall-clock time separately.
 
 `e` may contain several calls, and each attempt evaluates all of `e` again. A `write` capability
 inside `e` must be declared `idempotent`, because a retry may repeat it. The checker rejects
-`retry` around a non-idempotent write with `retry-write`.
+`retry` around a non-idempotent write with `retry-write`, with one exception: a non-idempotent
+write may be retried when `:on` is given and every kind in it is a refusal kind, `RateLimited`,
+`NotFound`, `PermissionDenied`, `Invalid`, or `Conflict`, because a refusal means the service did
+not perform the operation. `Timeout`, `Unavailable`, and `Failed` leave the outcome unknown, so a
+retry that includes any of them, including the default kinds, stays `retry-write`. The message
+names those kinds, and when refusal kinds are among those retried it shows the `:on` list that
+would be allowed, such as `:on [RateLimited]`.
+
+A repeat after a refusal is safe only if the write has not already taken effect in an earlier
+attempt. So the exception holds only when the write is the last call in `e` in source order and
+does not sit inside a `fn` or `loop` body within `e`. Otherwise a later call, or a later run of the
+same call, could be refused after the write took effect, and the retry would repeat it. That is
+also `retry-write`. Put the `retry` around the single write, inside the `fn` if there is one.
 
 ### wait-until
 
@@ -262,6 +323,21 @@ the total waiting time. When the next wait would exceed it, the form fails with 
 kind `Timeout`, which `attempt` can capture and `retry` can retry. A failed call inside `e` fails
 the form at once. Wrap `e` in `retry` to tolerate it. `e` must have only `read` effects. Intervals
 must be at least `1ms`.
+
+### sleep
+
+```
+(let [_ (sleep 10s)
+      job (call jobs.status {:id id})]
+  job)
+```
+
+`(sleep d)` waits for `d` and returns `Unit`. `d` must be a duration literal, like every other
+duration, so `sx explain` can show it. Bind the result to `_` to run it as a step. `sleep` issues
+the same [delay request](#delays) as a `retry` delay or a `wait-until` interval, adds its duration
+to the `delay` budget, and works inside `par` branches and `par-map` functions, where each fiber
+waits on its own. A `sleep` of `0ms` issues no request. To poll until a condition holds, use
+`wait-until`; `sleep` waits once.
 
 ### loop
 
@@ -293,7 +369,7 @@ arguments, rebinds the names to them in order, and evaluates `body` again. Any o
 
 ### Delays
 
-A delay is a request like a capability call. The machine suspends with a delay request carrying
+A delay is a request like a capability call, issued for a `retry` delay, a `wait-until` interval, or a `sleep`. The machine suspends with a delay request carrying
 its ID and duration, and the host resumes it after waiting. The machine never reads a clock.
 Fixture hosts resume at once, so tests run in no time and stay deterministic. The trace records
 each delay.
@@ -305,17 +381,21 @@ as in Clojure.
 
 | Function | Type |
 | --- | --- |
-| `+ - *` | `Int Int -> Int`. `(- x)` negates. |
+| `+ - *` | `Int Int -> Int` or `Float Float -> Float`, never one of each. `(- x)` negates. |
+| `/` | `Float Float -> Float`. On two `Int` arguments it is a `type-mismatch` whose fix is `quot`. |
 | `quot rem` | `Int Int -> Int`, truncating toward zero |
+| `float` | `Int -> Float`, the nearest `Float`. Integers beyond 2^53 may round. |
+| `round` | `Float -> Int`, the nearest integer, with halves going away from zero: `(round 2.5)` is `3` and `(round -2.5)` is `-3` |
+| `floor ceil` | `Float -> Int`, the largest integer not above, and the smallest not below |
 | `= not=` | `T T -> Bool` |
-| `< <= > >=` | `T T -> Bool` for `Int` or `String` |
+| `< <= > >=` | `T T -> Bool` for `Int`, `Float`, or `String` |
 | `not` | `Bool -> Bool` |
 | `and or` | `Bool Bool -> Bool`. Both arguments always evaluate. Use `if` to make a call conditional. |
-| `str` | `String ... -> String`, one or more strings joined in order |
-| `count` | `List<T> -> Int`, or `Map<String, V> -> Int` for the number of entries |
-| `first` | `List<T> -> T`. An empty list is an `out-of-range` error. |
+| `str` | `T ... -> String`, one or more arguments joined in order. Each is a `String`, an `Int` written in decimal, a `Float` written as JavaScript's `String(x)` writes a number, a `Bool` written `true` or `false`, or a value of an enum with no payloads written as its variant name. In a `sort-by` key every argument must be a `String`, because joining numbers into a string key sorts them as text. |
+| `count` | `List<T> -> Int`, `Map<String, V> -> Int` for the number of entries, or `Bytes -> Int` for the number of bytes |
+| `first` | `List<T> -> T`. An empty list is an `out-of-range` error. On a tuple it is the first element, with that element's type. |
 | `rest` | `List<T> -> List<T>`, every element after the first. Empty for an empty list. |
-| `nth` | `List<T> Int -> T`, counting from 0. A missing index is an `out-of-range` error. |
+| `nth` | `List<T> Int -> T`, counting from 0. A missing index is an `out-of-range` error. On a tuple the index must be an integer literal within the tuple, checked statically, and the result has that element's type. |
 | `take` | `Int List<T> -> List<T>`. A negative count is an arithmetic error. |
 | `concat` | `List<T> List<T> -> List<T>` |
 | `flatten` | `List<List<T>> -> List<T>` |
@@ -337,7 +417,14 @@ as in Clojure.
 | `group-by` | `(T -> K) List<T> -> List<Tuple<K, List<T>>>`, groups in first-occurrence order |
 
 Integer overflow, `quot` or `rem` by zero, and a negative `take` count end evaluation with an
-`arithmetic` error. Nothing wraps or saturates.
+`arithmetic` error. So does a `Float` operation whose result is infinite or not a number: `/` by
+zero (`0.0` divided by `0.0` included) and an overflowing `+`, `-`, `*`, or `/`. `round`, `floor`, and
+`ceil` of a value outside the `Int` range are `out-of-range` errors. Nothing wraps or saturates.
+
+`str` writes a `Float` as JavaScript's `String(x)` does: the shortest digits that read back to the
+same value, with no trailing `.0`, so `1.0` is `1`. It uses plain notation for magnitudes from
+`1e-6` up to below `1e21` and an exponent outside that range, as in `1e+21` and `1e-7`. Negative
+zero is `0`.
 
 Text operations other than `str`, `=`, and ordering live in the `text` core, for example
 `text.casefold` and `text.from-int`.
@@ -403,8 +490,8 @@ compare traces sorted by request ID.
 | `invalid-host-response` | See [Execution](#execution) | No |
 | `loop-limit` | A `loop` reached its `:max` and its body asked to `recur` again | No |
 | `budget-exhausted` | A budget ran out. The error names the budget. | No |
-| `arithmetic` | Overflow, division by zero, negative `take` count | No |
-| `out-of-range` | `first` of an empty list, or `nth` past the end | No |
+| `arithmetic` | Overflow, division by zero, a `Float` result that is infinite or not a number, negative `take` count | No |
+| `out-of-range` | `first` of an empty list, `nth` past the end, or `round`, `floor`, or `ceil` beyond the `Int` range | No |
 | `internal` | Interpreter bug | No |
 
 ### Call errors
@@ -425,6 +512,12 @@ never on the message. `CallErrorKind` is a closed kernel enum:
 
 The host maps each failure to exactly one kind. A failure that fits no other kind is `Failed`.
 
+`RateLimited`, `NotFound`, `PermissionDenied`, `Invalid`, and `Conflict` are the refusal kinds.
+A host reports a refusal kind only when the operation did not take effect. A host that cannot be
+sure, such as after a dropped connection or a response it could not read, reports `Timeout`,
+`Unavailable`, or `Failed`. The checker relies on this to allow `retry` of a write that is not
+idempotent on refusal kinds only. See [retry](#retry).
+
 When a branch of `par` or `par-map` fails, the form fails with the failure of the lowest-numbered
 failed branch, once every fiber has run as far as it can without new responses. Its other branches
 stop. The host still answers their outstanding requests, and the machine discards those answers.
@@ -441,6 +534,10 @@ lists the inputs a program uses.
 
 In v0 only the host declares inputs. A script file cannot declare its own.
 
+A host maps command-line options to inputs. In the repomod host, `discover --owner acme --owner beta`
+reaches `discover.sx` as `owners`, a `List<String>`, and `status --offline --dirty` reaches
+`status-offline.sx` as `only-dirty`, a `Bool`.
+
 ## Values and JSON
 
 Capability inputs and outputs, program results, and fixtures use one JSON encoding. Decoding
@@ -450,13 +547,16 @@ always knows the expected type, so every encoding below is unambiguous.
 | --- | --- |
 | `Bool` | `true` or `false` |
 | `Int` | An integer in the signed 64-bit range. A fraction, an exponent, or `true` is rejected. |
+| `Float` | A JSON number, with or without a fraction or exponent: `21` and `21.5` both decode. A number outside the finite 64-bit range is a mismatch. Encoding writes a finite number. |
 | `String` | A string |
+| `Bytes` | A string of standard base64 (RFC 4648 alphabet, `+` and `/`) with `=` padding, canonical: the padding bits are zero. The URL-safe alphabet, missing padding, whitespace, and any other character are mismatches. |
 | `Unit` | `null` |
 | `List<T>` | An array |
 | `Tuple<T1, ..., Tn>` | An array of exactly `n` elements |
 | `Option<T>` | `null` for `none`, the encoding of `x` for `(some x)` |
 | `Result<T, E>` | `{"ok": x}` or `{"err": e}` |
 | `Record {k: T, ...}` | An object with exactly the declared fields, named without the colon |
+| `Record open {k: T, ...}` | An object with at least the declared fields. Decoding drops the others. Encoding writes the declared fields only. |
 | `Map<String, V>` | An object with any keys, each value encoded as `V` |
 | Core enum, variant without a value | The variant name as a string, for example `"Missing"` |
 | Core enum, variant with a value | `{"tag": "OnBranch", "value": x}` |
@@ -469,18 +569,26 @@ input or output, a program input, or a program result whose type contains such a
 
 Decoding a capability response fails with `invalid-host-response` when a value does not match
 the expected type. A missing field, an extra field, and `null` for a non-`Option` type are all
-mismatches. Nothing is dropped, defaulted, or converted. The error gives the path to the bad
+mismatches, except that an open record accepts extra fields. Nothing is dropped, defaulted, or converted. The error gives the path to the bad
 value, the expected type, and what was found, for example
 `$.repos[3].name: expected String, found number`. A map value's path names its key as a JSON
 string, for example `$.totals["c-ada"]: expected Int, found a string`. A map decodes its entries in
 ascending key order, so the first error is the same every time.
+
+A `Bytes` mismatch names the path like any other, for example
+`$.avatar: expected Bytes (standard base64 with padding), found a string that is not valid base64`.
+Encoding writes `Bytes` as canonical base64, so a value read from one tool and sent to another is
+unchanged. `Bytes` compare with `=` and `not=` byte by byte. They are not a sort key, and `str` does not
+write them. Functions that build, slice, or convert `Bytes` belong in a later codec core.
 
 Encoding writes record fields in declaration order and map keys in ascending order. Comparisons of JSON values, in fixtures and
 in parity tests, ignore object key order.
 
 ## Diagnostics
 
-The checker reports every error it finds, up to 20, followed by a count of the rest. The reader
+The checker reports every error it finds, up to 20, followed by a count of the rest. A local
+function is checked at each call, so one mistake in its body can be found many times: diagnostics
+with the same code, span, and message are reported once, the first. The reader
 recovers at the next balanced form, so one unclosed bracket does not hide later errors. Nothing
 runs while any error remains.
 
@@ -536,8 +644,8 @@ The checker's codes are:
 
 | Group | Codes |
 | --- | --- |
-| Reading | `unclosed`, `unexpected-close`, `bad-literal`, `bad-symbol`, `int-range`, `bad-escape`, `record-key`, `record-missing-value`, `duplicate-field`, `empty-program`, `multiple-expressions` |
-| Names | `unknown-name`, `unknown-function`, `unknown-capability`, `unknown-field`, `missing-field`, `unknown-variant` |
+| Reading | `unclosed`, `unexpected-close`, `bad-literal`, `bad-symbol`, `int-range`, `float-range`, `bad-escape`, `record-key`, `record-missing-value`, `duplicate-field`, `empty-program`, `multiple-expressions` |
+| Names | `unknown-name`, `unknown-function`, `unknown-capability`, `unknown-field`, `missing-field`, `unknown-variant`, `reserved-name` |
 | Calls | `arity`, `type-mismatch`, `unresolved-type`, `not-a-record`, `no-encoding` |
 | Forms | `condition-not-bool`, `missing-else`, `branch-mismatch`, `fn-position`, `bad-pattern`, `bad-option`, `recur-position`, `recur-arity` |
 | Match | `non-exhaustive`, `unreachable-clause` |
@@ -568,6 +676,33 @@ core function or type, or a capability. An entry has:
 The registry generates core and capability entries from their declarations. Every example is a
 test, so a help entry cannot drift from the interpreter.
 
+### Cores and assurance
+
+A core registers through the Python API with `Registry.add_core`. `sx help CORE` prints a core's
+version, its assurance, and the signature of each function, and `sx cores` lists every registered
+core with the levels it has reached. `--format json` gives the same for a host. The plain `sx`
+command registers no cores, because cores are Python packages that a host registers. A host
+embeds the command with `sx.cli.main(argv, new_registry)`, where `new_registry` builds its
+registry, so `sx-repomod help text` and `sx-repomod cores` answer for the cores that host
+registers.
+
+A core reports the evidence that exists for it, level by level, and never a single "verified"
+flag. A level that has no evidence says `none`.
+
+| Level | Evidence |
+| --- | --- |
+| `unverified` | The interface was validated. Every registered core has this. |
+| `conformance-tested` | Named fixture and parity tests pass. |
+| `specified` | A Lean model of the core exists. |
+| `proved-properties` | Named theorems about that model check. |
+
+A core declares its evidence as `Evidence(level, references)`, where the references name the tests,
+the model file, or the theorems. The registry rejects a claim that names nothing, a second claim
+at one level, a claim of `unverified`, and `proved-properties` without `specified`. A test requires
+every named conformance test to exist. A theorem is about the Lean model only. It says nothing
+about the Python or Rust code, or about real Git and GitHub behavior, without separate
+conformance evidence.
+
 ## Budgets
 
 The host sets every budget. A program cannot read or raise one.
@@ -589,20 +724,17 @@ The host enforces wall-clock time outside the machine.
 
 ## Example
 
-This sketch shows the intended shape of `discover.sx`. The capability signatures are not fixed
-yet.
+`discover` from the repomod host is a complete program. It reads the catalog, asks GitHub about
+each owner in parallel, and compares the two lists by case-folded name. The host passes `owners`
+as an [input](#inputs), and `catalog.select`, `catalog.owner`, and `github.owner-repos` are
+capabilities. The full text is in `hosts/repomod/src/sx_repomod/programs/discover.sx`, next to
+`status-offline.sx`. Its core of comparing names looks like this:
 
 ```
-(let [catalog (call catalog.load {})
-      pages (par-map {:limit 8}
-              (fn [owner] (call github.owner-repos {:owner owner}))
-              (get catalog :owners))
-      found (sort-by text.casefold (distinct-by text.casefold (flatten pages)))
+(let [found (sort-by text.casefold (distinct-by text.casefold (flatten pages)))
       found-keys (map text.casefold found)
-      known-keys (map text.casefold (get catalog :repos))]
-  {:owners (get catalog :owners)
-   :uncatalogued (filter (fn [name] (not (contains? known-keys (text.casefold name)))) found)
+      known-keys (map text.casefold known)]
+  {:uncatalogued (filter (fn [name] (not (contains? known-keys (text.casefold name)))) found)
    :missing (sort-by text.casefold
-              (filter (fn [name] (not (contains? found-keys (text.casefold name))))
-                      (get catalog :repos)))})
+              (filter (fn [name] (not (contains? found-keys (text.casefold name)))) known))})
 ```

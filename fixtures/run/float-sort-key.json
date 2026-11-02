@@ -1,0 +1,15 @@
+{
+  "description": "A Float is a sort key.",
+  "program": "(sort-by (fn [x] x) [2.5 -1.0 1.5])",
+  "declarations": "declarations.json",
+  "allow": [],
+  "responses": [],
+  "expect": {
+    "completed": [
+      -1.0,
+      1.5,
+      2.5
+    ]
+  },
+  "trace": []
+}

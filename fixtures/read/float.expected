@@ -1,4 +1,0 @@
-error[bad-literal] 1:4-1:7
-  (* 1.5 2)
-     ^^^
-  Sx has no floating-point numbers. Use an Int.

@@ -1,0 +1,5 @@
+; task: dev-failing-ci
+(let [n 3 s "b"]
+  [(match n -1 "neg" 0 "zero" 1 "one" other (str other))
+   (match s "a" 1 "b" 2 _ 0)
+   (match (some 1) (some 1) "one" (some _) "other" none "none")])

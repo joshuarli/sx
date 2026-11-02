@@ -9,7 +9,7 @@ from pathlib import Path
 from statistics import mean
 from typing import Any
 
-from cores import task_registry
+from cores import SIGNATURES, task_registry
 from pilot import ask, extract, task_section
 from typescript import declarations
 
@@ -297,6 +297,7 @@ def summarize(arm_trials: list[Trial], tasks: list[str]) -> dict[str, Any]:
     final = {task: mean(t.final_correct for t in arm_trials if t.task == task) for task in tasks}
     solved = sum(t.final_correct for t in arm_trials)
     total = sum(tokens(t) for t in arm_trials)
+    output = sum(sum(a.tokens.get("output", 0) for a in t.attempts) for t in arm_trials)
     return {
         "first": first,
         "final": final,
@@ -308,10 +309,11 @@ def summarize(arm_trials: list[Trial], tasks: list[str]) -> dict[str, Any]:
         "reasoning": mean(sum(a.tokens.get("reasoning", 0) for a in t.attempts) for t in arm_trials),
         "attempts": mean(len(t.attempts) for t in arm_trials),
         "per_solved": total / solved if solved else float("inf"),
+        "output_per_solved": output / solved if solved else float("inf"),
     }
 
 
-def report(trials: list[Trial], expressiveness: tuple[int, int]) -> str:
+def report(trials: list[Trial], expressiveness: tuple[str, int, int]) -> str:
     lines: list[str] = []
     for model in sorted({t.model for t in trials}):
         mine = [t for t in trials if t.model == model]
@@ -322,15 +324,16 @@ def report(trials: list[Trial], expressiveness: tuple[int, int]) -> str:
         lines += [f"## {model}", "", f"Tasks with every condition: {len(tasks)}", ""]
         lines += [
             "| Condition | First attempt | Final | Attempts | First prompt | Input per trial | Output per trial "
-            "| Of which reasoning | Tokens per solved task |",
-            "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+            "| Of which reasoning | Tokens per solved task | Output per solved task |",
+            "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
         ]
         for name, st in stats.items():
             per_solved = f"{st['per_solved']:,.0f}" if st["solved"] else "none solved"
+            output_per_solved = f"{st['output_per_solved']:,.0f}" if st["solved"] else "none solved"
             lines.append(
                 f"| {name} | {mean(st['first'].values()):.1%} | {mean(st['final'].values()):.1%} "
                 f"| {st['attempts']:.2f} | {st['prompt']:,.0f} | {st['input']:,.0f} | {st['output']:,.0f} "
-                f"| {st['reasoning']:,.0f} | {per_solved} |"
+                f"| {st['reasoning']:,.0f} | {per_solved} | {output_per_solved} |"
             )
         lines.append("")
         if "js" in stats:
@@ -362,8 +365,8 @@ def report(trials: list[Trial], expressiveness: tuple[int, int]) -> str:
             lines.append("")
         outcomes: Counter[str] = Counter(f"{condition(t)} {t.attempts[-1].status}" for t in mine)
         lines += ["Final status counts: " + ", ".join(f"{k} {v}" for k, v in sorted(outcomes.items())), ""]
-    missing, total = expressiveness
-    lines.append(f"Expressiveness gap: {missing} of {total} held-out tasks need a type Sx v0 lacks.")
+    split, missing, total = expressiveness
+    lines.append(f"Expressiveness gap: {missing} of {total} {split} tasks need a type Sx lacks.")
     return "\n".join(lines)
 
 
@@ -389,7 +392,7 @@ def measure_guides(model: str, thinking: str, out: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Compare Sx and TypeScript on the probe tasks.")
-    parser.add_argument("--split", choices=["development", "held-out"], default="development")
+    parser.add_argument("--split", choices=["development", "held-out", "fresh"], default="development")
     parser.add_argument("--model", default="opencode-go/muse-spark-1.3-contributor")
     parser.add_argument("--thinking", default="medium")
     parser.add_argument("--samples", type=int, default=2)
@@ -405,19 +408,19 @@ def main() -> None:
     args = parser.parse_args()
     args.out = args.out.resolve()
     all_tasks = [json.loads(p.read_text()) for p in (BENCH / "tasks").glob("*/task.json")]
-    held_out = [t for t in all_tasks if t["split"] == "held-out"]
-    gap = (sum(1 for t in held_out if not t["sx-expressible"]), len(held_out))
+    in_split = [t for t in all_tasks if t["split"] == args.split]
+    gap = (args.split, sum(1 for t in in_split if not t["sx-expressible"]), len(in_split))
     if args.report:
         print(report(load_trials(args.out), gap))
         return
     if args.rejudge:
-        print(f"{rejudge(args.out, json.loads((BENCH / 'cores.json').read_text()))} attempts changed")
+        print(f"{rejudge(args.out, SIGNATURES)} attempts changed")
         print(report(load_trials(args.out), gap))
         return
     if args.measure_guides:
         print(measure_guides(args.model, args.thinking, args.out))
         return
-    cores = json.loads((BENCH / "cores.json").read_text())
+    cores = SIGNATURES
     if args.quick:
         args.split, args.samples, args.task = "development", 1, args.task or list(QUICK_TASKS)
     tasks = load_tasks(args.split, args.task)

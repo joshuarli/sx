@@ -1,0 +1,189 @@
+{
+  "id": "fresh-close-stale-issues",
+  "split": "fresh",
+  "kinds": [
+    "write",
+    "partial-failure",
+    "conditional-call"
+  ],
+  "domain": "repomod",
+  "sx-expressible": true,
+  "description": "Close every issue of `acme/docs` that has been idle for more than 90 days and has no reactions. For each such issue, in the order the issues are listed, first post the comment `Closing due to inactivity.` and then close it. If posting the comment fails, do not try to close that issue. Do not retry anything. Return a record with `closed` (ids of issues that were closed) and `skipped` (ids of qualifying issues that were not closed), each in listed order.",
+  "types": {
+    "Issue": "Record {id: Int, idle: Int, reactions: Int}"
+  },
+  "cores": [],
+  "capabilities": [
+    {
+      "id": "issues.list",
+      "effect": "read",
+      "input": "Record {repo: String}",
+      "output": "List<Issue>",
+      "description": "Lists open issues with days since last activity and reaction count."
+    },
+    {
+      "id": "issues.comment",
+      "effect": "write",
+      "idempotent": false,
+      "input": "Record {repo: String, id: Int, body: String}",
+      "output": "Unit",
+      "description": "Posts a comment on an issue. Each call posts another comment."
+    },
+    {
+      "id": "issues.close",
+      "effect": "write",
+      "idempotent": true,
+      "input": "Record {repo: String, id: Int}",
+      "output": "Unit",
+      "description": "Closes an issue; closing a closed issue changes nothing."
+    }
+  ],
+  "responses": [
+    {
+      "capability": "issues.list",
+      "input": {
+        "repo": "acme/docs"
+      },
+      "results": [
+        {
+          "output": [
+            {
+              "id": 1,
+              "idle": 120,
+              "reactions": 0
+            },
+            {
+              "id": 2,
+              "idle": 91,
+              "reactions": 3
+            },
+            {
+              "id": 3,
+              "idle": 90,
+              "reactions": 0
+            },
+            {
+              "id": 4,
+              "idle": 200,
+              "reactions": 0
+            },
+            {
+              "id": 5,
+              "idle": 100,
+              "reactions": 0
+            },
+            {
+              "id": 6,
+              "idle": 91,
+              "reactions": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "capability": "issues.comment",
+      "input": {
+        "repo": "acme/docs",
+        "id": 1,
+        "body": "Closing due to inactivity."
+      },
+      "results": [
+        {
+          "output": null
+        }
+      ]
+    },
+    {
+      "capability": "issues.close",
+      "input": {
+        "repo": "acme/docs",
+        "id": 1
+      },
+      "results": [
+        {
+          "output": null
+        }
+      ]
+    },
+    {
+      "capability": "issues.comment",
+      "input": {
+        "repo": "acme/docs",
+        "id": 4,
+        "body": "Closing due to inactivity."
+      },
+      "results": [
+        {
+          "error": {
+            "kind": "Failed",
+            "message": "comments disabled"
+          }
+        }
+      ]
+    },
+    {
+      "capability": "issues.comment",
+      "input": {
+        "repo": "acme/docs",
+        "id": 5,
+        "body": "Closing due to inactivity."
+      },
+      "results": [
+        {
+          "output": null
+        }
+      ]
+    },
+    {
+      "capability": "issues.close",
+      "input": {
+        "repo": "acme/docs",
+        "id": 5
+      },
+      "results": [
+        {
+          "error": {
+            "kind": "Conflict",
+            "message": "already being closed"
+          }
+        }
+      ]
+    },
+    {
+      "capability": "issues.comment",
+      "input": {
+        "repo": "acme/docs",
+        "id": 6,
+        "body": "Closing due to inactivity."
+      },
+      "results": [
+        {
+          "output": null
+        }
+      ]
+    },
+    {
+      "capability": "issues.close",
+      "input": {
+        "repo": "acme/docs",
+        "id": 6
+      },
+      "results": [
+        {
+          "output": null
+        }
+      ]
+    }
+  ],
+  "expected": {
+    "closed": [
+      1,
+      6
+    ],
+    "skipped": [
+      4,
+      5
+    ]
+  }
+}

@@ -1,0 +1,2 @@
+; declarations: fixtures/run/declarations.json
+(sort-by (fn [n] (call blob.get {:name n})) ["a"])

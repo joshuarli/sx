@@ -136,6 +136,8 @@ sx/
   src/sx/                 kernel: reader, checker, machine, registry, prelude
   cores/text/             text core (casefold, split, join)
   cores/semver/           unrelated sample core used to prove extensibility
+  cores/git/              checkout enum and local status decisions
+  cores/github/           CI and upstream states and check aggregation
   hosts/repomod/          sx-repomod: capabilities wrapping repomod, Sx programs, parity tests
   bench/codemode/         Phase 2 probe: task corpus, Sx and JS arms, scoring
   fixtures/               semantic fixtures shared by Python, Lean, and Rust
@@ -147,10 +149,9 @@ suite runs in an environment where repomod is not installed, which proves the bo
 
 ## Status
 
-Phase 0 and Phase 1 have passed their gates. Phase 2 failed its gate twice: on the first
-held-out run, and again after the one allowed revision. By this plan's rule that stops the
-project. The owner had already directed work to continue through Phase 4 and to stop for review
-before the Rust port, so work continued, and the owner decides at that review whether Sx goes on.
+Phase 0 and Phase 1 have passed their gates. Phase 2 failed twice on the first held-out set, the
+second time after its one allowed revision, and then passed on a fresh blind held-out set. The
+owner decides at the review before the Rust port whether that pass is enough to continue.
 
 **Phase 0.** The syntax pilot ran on the development set and drove one language revision.
 
@@ -271,6 +272,47 @@ gate. Its answers and failures are now development evidence. A fresh held-out se
 agent whose tasks are never read by the language designer, replaces it for any later gate, under
 the same freeze rule.
 
+**Changes after the gate.** With the first held-out set as development evidence:
+- A checker bug: branch joins picked one branch's type instead of a least upper bound, so records
+  needing different fields promoted failed. Every `held-room-booking` answer hit it.
+- `str` writes integers, booleans, and enum values. The machine's `str` had silently dropped
+  non-strings.
+- Records with different fields join, with one-sided fields optional; `retry` of a
+  non-idempotent write is allowed when every retried kind is a refusal and the write is the last
+  call; literal patterns; reserved form names; one report per duplicate diagnostic; `sleep`;
+  literal tuple indexes; an extra closer inside an open bracket is called extra.
+
+New Muse Spark answers after these changes, one sample: development 16 of 17 and the retired set
+22 of 24 at first attempt, all correct at final. The retired set informed the changes, so this is
+not a gate result. The fresh set's gate run used commit 8027f85.
+
+**Phase 2 fresh held-out result.** Muse Spark, standard guide, the 28 expressible tasks of the
+fresh set, two samples, written by an agent whose tasks the language designer never read:
+
+| Arm | First attempt | Final | Attempts | First prompt | Reasoning per trial | Tokens per solved task |
+| --- | --- | --- | --- | --- | --- | --- |
+| TypeScript | 96.4% | 96.4% | 1.00 | 456 | 2,228 | 3,176 |
+| Sx at 8027f85 | 94.6% | 98.2% | 1.04 | 2,382 | 2,561 | 5,420 |
+
+Sx minus TypeScript is -1.8 points at first attempt (95% interval -7.1 to +3.6) and +1.8 at final
+(0.0 to +5.4). The gate passes: first attempt is within 5 points, and final correctness is
+better. The final margin is one trial, so the pass rests on the first-attempt bound more than on
+a real lead. Sx still costs 1.7 times the tokens per solved task; its first prompt is 1,926 tokens longer
+than TypeScript's, mostly the guide. The expressiveness gap is 2 of 30. The fresh set's answers stay
+unread, so it can serve once more as a gate after a future revision.
+
+Of that cost, output tokens per solved task are 2,897 for Sx and 2,703 for TypeScript, 1.07
+times. The difference is almost all input, and the guide is a fixed prefix a host can cache.
+A shorter guide does not help: after the gate, the `minimal` level on the development and
+retired sets scored 37 of 41 at first attempt against 38 of 41 for `standard`, but cost more
+tokens per solved task (4,773 against 4,602 on development, 7,996 against 6,429 on the retired
+set), because Muse Spark reasons more when the guide says less. `standard` stays.
+
+**Data model before the Rust port.** `Map`, `Float`, `Bytes`, and open record declarations
+landed ahead of the roadmap's campaign 2, so the port implements one language instead of
+chasing it. `Float` came before `Decimal` because the only types both held-out sets lacked were
+`Float` and, in the first set, `Map` and `Bytes`.
+
 Out of the revision: `Map` and dynamic keys (`assoc`, `keys`), which also make up the
 expressiveness gap, belong to the type-set work in the roadmap.
 
@@ -282,6 +324,26 @@ Held-out exposure before the revision: the aggregate report, diagnostic codes wi
 and the judge's reason line for each final failure. No held-out task or model answer was read.
 The bracket-diagnostic change (item 8) matches the held-out `unclosed` repair rate as well as the
 development evidence.
+
+**Phase 3.** The `text`, `semver`, `git`, and `github` cores are workspace packages that register
+through the Python API with no kernel change, and each reports its evidence by level through `sx help
+CORE` and `sx cores`. `sx-repomod` runs `discover.sx` and `status-offline.sx` over read-only
+capabilities and prints through repomod's own text code. Gate evidence:
+
+- The parity tests (26 in `hosts/repomod/tests`) match the Python commands' parsed `--json`, text,
+  and exit status on a 16-repository fleet that covers every checkout variant and CI cache shape, on
+  11 option sets for `status` and 5 for `discover`, and on every error path. A read-only shadow run
+  against the live catalog matched too: `status --offline` on 34 repositories, `--failed` on 27, and
+  `discover`.
+- `uv run python -c "import importlib.util, sys; sys.exit(importlib.util.find_spec('repomod') is not
+  None)" && uv run pytest tests cores` passes without repomod installed.
+- repomod's suite, run from a copy, gives 595 passed and 1 skipped, and `../repomod` is unchanged.
+
+Three deviations from the phase text. `Invalid` carries its error text, because the report prints
+it. The host finds repomod on `PYTHONPATH` instead of declaring a path dependency, since a
+dependency makes uv build into `../repomod` and the worktree layout moves it. `status` has no
+`--checkout` or `--details`. The programs keep repomod's flat JSON row, so a missing checkout still
+reports zero changes there, but the cores and the program decide on the enum.
 
 **Phase 4.** The gate passes. By the campaign lead's scope decision, the Lean reference in `lean/`
 covers the semantic IR, where the semantics live, and the surface elaborator stays untrusted, the

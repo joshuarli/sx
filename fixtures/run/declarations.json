@@ -3,7 +3,11 @@
     "Item": "Record {id: String, size: Int}",
     "Row": "Record {name: String, note: Option<String>, hits: Option<Int>}",
     "Check": "Record {name: String, level: Level}",
-    "Order": "Record {customer: String, total: Int}"
+    "Order": "Record {customer: String, total: Int}",
+    "Reading": "Record {name: String, celsius: Float}",
+    "Account": "Record open {id: String, name: String}",
+    "Profile": "Record open {id: String, address: Record {city: String}}",
+    "Listing": "Record {owner: Record open {id: String}, count: Int}"
   },
   "enums": {"Level": {"Passing": null, "Failing": null, "Unknown": null}},
   "capabilities": [
@@ -18,6 +22,18 @@
     {"id": "orders.list", "effect": "read", "input": "Record {}", "output": "List<Order>", "description": "Lists orders."},
     {"id": "totals.get", "effect": "read", "input": "Record {}", "output": "Map<String, Int>", "description": "Reads counts keyed by name."},
     {"id": "totals.put", "effect": "write", "idempotent": true, "input": "Record {totals: Map<String, Int>}", "output": "Unit", "description": "Stores counts keyed by name."},
+    {"id": "sensor.get", "effect": "read", "input": "Record {}", "output": "Reading", "description": "Reads one sensor."},
+    {"id": "sensor.list", "effect": "read", "input": "Record {}", "output": "List<Reading>", "description": "Lists sensors."},
+    {"id": "sensor.put", "effect": "write", "idempotent": true, "input": "Reading", "output": "Unit", "description": "Stores a sensor reading."},
+    {"id": "blob.get", "effect": "read", "input": "Record {name: String}", "output": "Bytes", "description": "Reads one stored blob."},
+    {"id": "blob.put", "effect": "write", "idempotent": true, "input": "Record {name: String, data: Bytes}", "output": "Unit", "description": "Stores one blob."},
+    {"id": "blob.list", "effect": "read", "input": "Record {}", "output": "Map<String, Bytes>", "description": "Reads every blob by name."},
+    {"id": "accounts.get", "effect": "read", "input": "Record {}", "output": "Account", "description": "Reads one account."},
+    {"id": "accounts.list", "effect": "read", "input": "Record {}", "output": "List<Account>", "description": "Lists accounts."},
+    {"id": "accounts.put", "effect": "write", "idempotent": true, "input": "Account", "output": "Unit", "description": "Stores an account."},
+    {"id": "profile.get", "effect": "read", "input": "Record {}", "output": "Profile", "description": "Reads a profile."},
+    {"id": "listing.get", "effect": "read", "input": "Record {}", "output": "Listing", "description": "Reads a listing."},
+    {"id": "raw.get", "effect": "read", "input": "Record {}", "output": "Record open {}", "description": "Reads an object and keeps none of it."},
     {"id": "job.state", "effect": "read", "input": "Record {id: String}", "output": "String", "description": "Reads a job's state."}
   ]
 }

@@ -1,13 +1,19 @@
 from __future__ import annotations
 
+import base64
+import binascii
 import json
+import math
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
+from decimal import Decimal
 from typing import override
 
 from sx.types import (
     BOOL,
+    BYTES,
     CALL_ERROR,
+    FLOAT,
     INT,
     STRING,
     UNIT,
@@ -116,8 +122,8 @@ class VariantValue:
 
 
 type Value = (
-    bool | int | str | UnitValue | ListValue | TupleValue | RecordValue | MapValue | SomeValue | NoneValue | OkValue
-    | ErrValue | VariantValue
+    bool | int | float | str | bytes | UnitValue | ListValue | TupleValue | RecordValue | MapValue | SomeValue
+    | NoneValue | OkValue | ErrValue | VariantValue
 )
 
 
@@ -127,7 +133,7 @@ def call_error(kind: str, message: str) -> RecordValue:
 
 def size(value: Value) -> int:
     match value:
-        case str():
+        case str() | bytes():
             return 1 + len(value) // 32
         case ListValue(items=items) | TupleValue(items=items):
             return 1 + sum(size(item) for item in items)
@@ -197,10 +203,30 @@ def decode(value: object, t: Type, path: str = "$") -> Value:
             if not INT_MIN <= value <= INT_MAX:
                 raise DecodeError(path, "Int", "an integer outside the signed 64-bit range")
             return value
+        case _ if t == FLOAT:
+            if isinstance(value, bool) or not isinstance(value, int | float):
+                raise fail("Float")
+            try:
+                number = float(value)
+            except OverflowError:
+                number = math.inf
+            if not math.isfinite(number):
+                raise DecodeError(path, "Float", "a number outside the finite 64-bit Float range")
+            return number
         case _ if t == STRING:
             if not isinstance(value, str):
                 raise fail("String")
             return value
+        case _ if t == BYTES:
+            if not isinstance(value, str):
+                raise fail("Bytes (a base64 string)")
+            try:
+                raw = base64.b64decode(value, validate=True)
+            except (binascii.Error, ValueError):
+                raw = None
+            if raw is None or base64.b64encode(raw).decode("ascii") != value:
+                raise DecodeError(path, "Bytes (standard base64 with padding)", "a string that is not valid base64")
+            return raw
         case _ if t == UNIT:
             if value is not None:
                 raise fail("Unit (null)")
@@ -231,7 +257,7 @@ def decode(value: object, t: Type, path: str = "$") -> Value:
             return MapValue(
                 tuple((key, decode(obj[key], value_type, f"{path}[{json.dumps(key)}]")) for key in sorted(obj)),
             )
-        case RecordType(fields=fields):
+        case RecordType(fields=fields, open=open_record):
             obj = _json_object(value)
             if obj is None:
                 raise fail(show_type(t))
@@ -240,7 +266,7 @@ def decode(value: object, t: Type, path: str = "$") -> Value:
             if missing:
                 raise DecodeError(f"{path}.{missing[0]}", show_type(dict(fields)[missing[0]]), "no field")
             extra = sorted(set(obj) - set(names))
-            if extra:
+            if extra and not open_record:
                 raise DecodeError(
                     f"{path}.{extra[0]}", "no field, because the record type does not declare it", "a field",
                 )
@@ -267,8 +293,10 @@ def decode(value: object, t: Type, path: str = "$") -> Value:
 
 def encode(value: Value, t: Type) -> object:
     match value:
-        case bool() | int() | str():
+        case bool() | int() | float() | str():
             return value
+        case bytes():
+            return base64.b64encode(value).decode("ascii")
         case UnitValue() | NoneValue():
             return None
         case ListValue(items=items):
@@ -307,9 +335,13 @@ def show_value(value: Value) -> str:
             return "true" if value else "false"
         case int():
             return str(value)
+        case float():
+            return repr(value)
         case str():
             escaped = value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\t", "\\t")
             return f'"{escaped.replace(chr(13), chr(92) + "r")}"'
+        case bytes():
+            return f'<bytes "{base64.b64encode(value).decode("ascii")}">'
         case UnitValue():
             return "unit"
         case ListValue(items=items) | TupleValue(items=items):
@@ -329,3 +361,25 @@ def show_value(value: Value) -> str:
             return f"(err {show_value(inner)})"
         case VariantValue(variant=variant, payload=payload):
             return variant if payload is None else f"({variant} {show_value(payload)})"
+
+
+def float_text(value: float) -> str:
+    _, digits, exponent = Decimal(repr(abs(value))).as_tuple()
+    assert isinstance(exponent, int)
+    coefficient = "".join(map(str, digits)).rstrip("0") or "0"
+    if coefficient == "0":
+        return "0"
+    point = len(digits) + exponent
+    count = len(coefficient)
+    sign_text = "-" if value < 0 else ""
+    if count <= point <= 21:
+        body = coefficient + "0" * (point - count)
+    elif 0 < point <= 21:
+        body = coefficient[:point] + "." + coefficient[point:]
+    elif -6 < point <= 0:
+        body = "0." + "0" * -point + coefficient
+    else:
+        shown = point - 1
+        mantissa = coefficient[0] + ("." + coefficient[1:] if count > 1 else "")
+        body = f"{mantissa}e{'+' if shown >= 0 else '-'}{abs(shown)}"
+    return sign_text + body

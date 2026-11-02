@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 from collections.abc import Iterable, Mapping
 
 from sx import ir
@@ -33,7 +34,7 @@ from sx.values import (
     VariantValue,
 )
 
-type Json = bool | int | str | list[Json] | dict[str, Json] | None
+type Json = bool | int | float | str | list[Json] | dict[str, Json] | None
 
 
 class _Exporter:
@@ -56,8 +57,8 @@ class _Exporter:
                 return {"option": self.type(inner)}
             case ResultType(ok=ok, err=err):
                 return {"result": [self.type(ok), self.type(err)]}
-            case RecordType(fields=fields, name=name):
-                return {"record": [[field, self.type(ft)] for field, ft in fields], "name": name}
+            case RecordType(fields=fields, name=name, open=open_record):
+                return {"record": [[field, self.type(ft)] for field, ft in fields], "name": name, "open": open_record}
             case EnumType(name=name, variants=variants):
                 if name not in self.enums:
                     self.enums[name] = None
@@ -78,6 +79,10 @@ class _Exporter:
                 return {"bool": value}
             case int():
                 return {"int": value}
+            case float():
+                return {"float": value}
+            case bytes():
+                return {"bytes": base64.b64encode(value).decode("ascii")}
             case str():
                 return {"string": value}
             case UnitValue():
@@ -126,6 +131,8 @@ class _Exporter:
                 return {"err": self.pattern(inner)}
             case ir.MatchVariant(variant=variant, inner=inner):
                 return {"variant": variant, "inner": None if inner is None else self.pattern(inner)}
+            case ir.MatchLiteral(value=value):
+                return {"literal": self.value(value)}
             case ir.MatchAny(binder=binder):
                 return {"any": self.binder(binder)}
 
@@ -137,6 +144,10 @@ class _Exporter:
                 return {"to-some": self.conversion(inner)}
             case ir.EachField(fields=fields):
                 return {"each-field": [[name, self.conversion(c)] for name, c in fields]}
+            case ir.WidenRecord(fields=fields):
+                return {
+                    "widen-record": [[f.name, f.present, self.conversion(f.conversion)] for f in fields],
+                }
             case ir.EachItem(items=items):
                 return {"each-item": [self.conversion(c) for c in items]}
             case ir.EachElement(element=element):
@@ -224,6 +235,8 @@ class _Exporter:
                 fields = {"delays": plain(delays), "kinds": plain(sorted(kinds)), "body": self.node(body)}
             case ir.WaitUntil(intervals=intervals, predicate=predicate, body=body):
                 fields = {"intervals": plain(intervals), "predicate": self.node(predicate), "body": self.node(body)}
+            case ir.Sleep(milliseconds=milliseconds):
+                fields = {"milliseconds": milliseconds}
             case ir.Loop(maximum=maximum, binders=binders, initial=initial, body=body):
                 fields = {
                     "maximum": maximum,

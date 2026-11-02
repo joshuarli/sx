@@ -1,0 +1,80 @@
+{
+  "id": "fresh-silence-and-watch",
+  "split": "fresh",
+  "kinds": [
+    "polling",
+    "write",
+    "conditional-call"
+  ],
+  "domain": "other",
+  "sx-expressible": true,
+  "description": "Silence alert `disk-full-db3` for 30 minutes, then check its state immediately and every 15 seconds after that, making at most 5 checks in total, until the state is `resolved`. If it resolves, return `resolved`. If it is still not resolved after the fifth check, page the on-call engineer once about that alert and return `paged`.",
+  "types": {
+    "AlertState": "Record {state: String}"
+  },
+  "cores": [],
+  "capabilities": [
+    {
+      "id": "alerts.silence",
+      "effect": "write",
+      "idempotent": true,
+      "input": "Record {alert: String, minutes: Int}",
+      "output": "Unit",
+      "description": "Silences notifications for an alert; silencing again just sets the new duration."
+    },
+    {
+      "id": "alerts.state",
+      "effect": "read",
+      "input": "Record {alert: String}",
+      "output": "AlertState",
+      "description": "Reads an alert's state: firing or resolved."
+    },
+    {
+      "id": "alerts.page",
+      "effect": "write",
+      "idempotent": false,
+      "input": "Record {alert: String}",
+      "output": "Unit",
+      "description": "Pages the on-call engineer about an alert. Each call sends another page."
+    }
+  ],
+  "responses": [
+    {
+      "capability": "alerts.silence",
+      "input": {
+        "alert": "disk-full-db3",
+        "minutes": 30
+      },
+      "results": [
+        {
+          "output": null
+        }
+      ]
+    },
+    {
+      "capability": "alerts.state",
+      "input": {
+        "alert": "disk-full-db3"
+      },
+      "results": [
+        {
+          "output": {
+            "state": "firing"
+          }
+        }
+      ]
+    },
+    {
+      "capability": "alerts.page",
+      "input": {
+        "alert": "disk-full-db3"
+      },
+      "results": [
+        {
+          "output": null
+        }
+      ]
+    }
+  ],
+  "expected": "paged"
+}

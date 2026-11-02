@@ -1,0 +1,37 @@
+{
+  "description": "Characters outside the base64 alphabet are an invalid host response.",
+  "program": "(call blob.get {:name \"a\"})",
+  "declarations": "declarations.json",
+  "allow": [
+    "blob.get"
+  ],
+  "responses": [
+    {
+      "capability": "blob.get",
+      "input": {
+        "name": "a"
+      },
+      "results": [
+        {
+          "output": "not base64!"
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "failed": "invalid-host-response"
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "blob.get",
+      "input": {
+        "name": "a"
+      }
+    },
+    {
+      "response": "r:1",
+      "output": "not base64!"
+    }
+  ]
+}

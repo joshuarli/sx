@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from importlib.resources import files
 from typing import Any
 
-from sx.registry import Capability, Effect, Function, Registry, load_declarations
+from sx.registry import Assurance, Capability, Core, Effect, Function, Registry, load_declarations
 from sx.types import CALL_ERROR_KINDS, EnumType, RecordType, Type, show_definition, show_type
 
 
@@ -24,7 +24,8 @@ def entry(name: str, signature: str, description: str, example: str, result: str
 
 FORMS = (
     entry("let", "(let [name value ...] body)", "Binds names, each visible to later bindings and the body. "
-          "A fn value binds a local function, and _ runs a value for its effect.",
+          "A fn value binds a local function, and _ runs a value for its effect. A form name such as attempt "
+          "cannot be a binding name: write attempts.",
           "(let [a 1 b (+ a 1) double (fn [x] (* 2 x))] (double b))", "4"),
     entry("if", "(if condition then else)", "Chooses a branch. The condition is true or false, or an "
           "optional, which tests that a value is present. When the condition is an optional name, the "
@@ -35,8 +36,9 @@ FORMS = (
           '(cond (> 1 2) "big" (> 3 2) "medium" :else "small")', '"medium"'),
     entry("match", "(match value pattern result ...)", "Chooses the first clause whose pattern matches. "
           "Patterns: (some x) none (ok x) (err e) Variant (Variant x) _, or a name that binds the "
-          "whole value like _.",
-          "(match (some 3) (some n) (+ n 1) none 0)", "4"),
+          "whole value like _. An integer, string, or boolean literal matches an equal value; true and false "
+          "together cover Bool, and other literals need a final _.",
+          '[(match (some 3) (some n) (+ n 1) none 0) (match 2 1 "one" 2 "two" _ "many")]', '[4 "two"]'),
     entry("fn", "(fn [param ...] body)", "A function, as an argument to map, filter, and the like, "
           "or as the value of a let binding.", "(map (fn [x] (+ x 1)) [1 2])", "[2 3]"),
     entry("get", "(get record :field [default]) or (get map \"key\" [default])", "Reads a record field, or a map "
@@ -50,12 +52,18 @@ FORMS = (
           '(attempt (call metrics.uptime {:host "gone"}))', '(err {:kind NotFound :message "no such host"})'),
     entry("retry", "(retry {:delays [1s 2s]} expression)", "Evaluates the expression again after each delay "
           "while it fails with a transient kind: Timeout, Unavailable, or RateLimited. :on [Kind ...] chooses "
-          "the kinds, and {:backoff [100ms 5s] :within 30s} computes doubling delays.",
-          '(get (retry {:delays [1s 2s]} (call metrics.uptime {:host "flaky"})) :seconds)', "60"),
+          "the kinds, and {:backoff [100ms 5s] :within 30s} computes doubling delays. A write that is not "
+          "idempotent may be retried only when :on names refusal kinds alone: RateLimited, NotFound, "
+          "PermissionDenied, Invalid, Conflict.",
+          '(let [up (retry {:delays [1s 2s]} (call metrics.uptime {:host "flaky"})) '
+          '_ (retry {:delays [1s] :on [RateLimited]} (call chat.post {:text "hi"}))] (get up :seconds))', "60"),
     entry("wait-until", "(wait-until {:within 2m :every 5s} (fn [v] done?) expression)",
           "Evaluates the expression until the function returns true for its value, and returns that value. "
           "It fails with kind Timeout after :within.",
           '(wait-until {:within 1m :every 5s} (fn [s] (= s "done")) (call job.state {:id "j1"}))', '"done"'),
+    entry("sleep", "(sleep 10s)", "Waits the literal duration and returns Unit, as one delay request. Bind it to _ "
+          "to run it as a step. A duration of 0ms waits for nothing.",
+          '(let [_ (sleep 10s)] "rested")', '"rested"'),
     entry("loop", "(loop {:max 20} [name value ...] body)", "Binds like let and evaluates the body. "
           "(recur value ...) as its last step runs the body again with new values, at most :max times.",
           "(loop {:max 10} [n 0 total 0] (if (= n 4) total (recur (+ n 1) (+ total n))))", "6"),
@@ -76,25 +84,39 @@ FORMS = (
 )
 
 PRELUDE = (
-    entry("+", "(+ a b) -> Int", "Adds two integers. Overflow stops the program.", "(+ 2 3)", "5"),
-    entry("-", "(- a b) -> Int, (- x) -> Int", "Subtracts, or negates one integer.", "(- 10 4)", "6"),
-    entry("*", "(* a b) -> Int", "Multiplies two integers.", "(* 6 7)", "42"),
+    entry("+", "(+ a b) -> Int or Float", "Adds two Ints or two Floats, never one of each. Overflow stops the "
+          "program.", "(+ 2 3)", "5"),
+    entry("-", "(- a b) -> Int or Float, (- x)", "Subtracts, or negates one number. Two Ints or two Floats.",
+          "(- 10 4)", "6"),
+    entry("*", "(* a b) -> Int or Float", "Multiplies two Ints or two Floats.", "(* 6 7)", "42"),
+    entry("/", "(/ a b) -> Float", "Divides two Floats. Dividing by zero stops the program, because JSON has no "
+          "infinity. Int division is quot.", "(/ 1.0 4.0)", "0.25"),
     entry("quot", "(quot a b) -> Int", "Divides, truncating toward zero. Division by zero stops the program.",
           "(quot -7 2)", "-3"),
     entry("rem", "(rem a b) -> Int", "The remainder of quot.", "(rem -7 2)", "-1"),
+    entry("float", "(float n) -> Float", "The Float nearest an Int. Sx never converts between Int and Float on its "
+          "own, so mixing them in arithmetic, a comparison, or = is rejected.", "(+ (float 2) 0.5)", "2.5"),
+    entry("round", "(round x) -> Int", "The nearest Int, with halves going away from zero. Outside the Int range "
+          "stops the program.", "[(round 2.5) (round -2.5) (round 2.4)]", "[3 -3 2]"),
+    entry("floor", "(floor x) -> Int", "The largest Int not above x. Outside the Int range stops the program.",
+          "[(floor 2.7) (floor -2.1)]", "[2 -3]"),
+    entry("ceil", "(ceil x) -> Int", "The smallest Int not below x. Outside the Int range stops the program.",
+          "[(ceil 2.1) (ceil -2.7)]", "[3 -2]"),
     entry("=", "(= a b) -> Bool", "True when two values of one type are equal.", "(= [1 2] [1 2])", "true"),
     entry("not=", "(not= a b) -> Bool", "True when two values differ.", '(not= "a" "b")', "true"),
-    entry("<", "(< a b) -> Bool", "Compares integers, or strings by code point.", "(< 1 2)", "true"),
-    entry("<=", "(<= a b) -> Bool", "Compares integers or strings.", "(<= 2 2)", "true"),
-    entry(">", "(> a b) -> Bool", "Compares integers or strings.", '(> "b" "a")', "true"),
-    entry(">=", "(>= a b) -> Bool", "Compares integers or strings.", "(>= 1 2)", "false"),
+    entry("<", "(< a b) -> Bool", "Compares two Ints, two Floats, or two strings by code point.", "(< 1 2)", "true"),
+    entry("<=", "(<= a b) -> Bool", "Compares Ints, Floats, or strings.", "(<= 2 2)", "true"),
+    entry(">", "(> a b) -> Bool", "Compares Ints, Floats, or strings.", '(> "b" "a")', "true"),
+    entry(">=", "(>= a b) -> Bool", "Compares Ints, Floats, or strings.", "(>= 1.5 2.5)", "false"),
     entry("not", "(not b) -> Bool", "Negates a boolean.", "(not false)", "true"),
     entry("and", "(and a b) -> Bool", "True when both are true. Both arguments always evaluate.",
           "(and true false)", "false"),
     entry("or", "(or a b) -> Bool", "True when either is true. Both arguments always evaluate.",
           "(or true false)", "true"),
-    entry("str", "(str s ...) -> String", "Joins strings.", '(str "a" "b" "c")', '"abc"'),
-    entry("count", "(count xs) -> Int", "The number of elements, or of map entries.", "(count [1 2 3])", "3"),
+    entry("str", "(str x ...) -> String", "Joins strings, integers, floats, booleans, and enum values. A Float is "
+          'written as JavaScript writes it: 1.0 is 1.', '(str "a" 1 true 2.50)', '"a1true2.5"'),
+    entry("count", "(count xs) -> Int", "The number of elements, of map entries, or of bytes.", "(count [1 2 3])",
+          "3"),
     entry("first", "(first xs) -> T", "The first element. An empty list stops the program.", "(first [1 2 3])", "1"),
     entry("rest", "(rest xs) -> List<T>", "Every element after the first.", "(rest [1 2 3])", "[2 3]"),
     entry("nth", "(nth xs i) -> T", "The element at index i, from 0. A missing index stops the program.",
@@ -133,7 +155,7 @@ PRELUDE = (
           "(all? (fn [x] (> x 2)) [1 2 3])", "false"),
     entry("reduce", "(reduce f init xs) -> A", "Combines the elements into one value, left to right.",
           "(reduce + 0 [1 2 3])", "6"),
-    entry("sort-by", "(sort-by f xs) -> List<T>", "Sorts ascending by a key: an integer, a string, a boolean, "
+    entry("sort-by", "(sort-by f xs) -> List<T>", "Sorts ascending by a key: an integer, a float, a string, a boolean, "
           "or a tuple of keys compared in order. Negate an integer key to sort descending.",
           '(sort-by (fn [p] [(- (get p :n)) (get p :name)]) [{:name "b" :n 1} {:name "a" :n 2}])',
           '[{:name "a" :n 2} {:name "b" :n 1}]'),
@@ -152,9 +174,24 @@ TYPES = (
           + ", ".join(CALL_ERROR_KINDS) + ". Branch on the kind, never the message.",
           '(match (attempt (call metrics.uptime {:host "gone"})) (ok m) "up" (err e) (match (get e :kind) '
           'NotFound "missing" _ "other"))', '"missing"'),
+    entry("Float", "Float: 1.5, -0.25, 2e3", "A 64-bit IEEE float. A literal has a fraction or an exponent: 1 is an "
+          "Int. A JSON number decodes as a Float where a Float is expected. A result that is infinite or not a "
+          "number stops the program.", "(* 1.5 (float 2))", "3.0"),
+    entry("Bytes", "Bytes", "Opaque binary data from a tool. Only count and = take it; there is no literal. JSON "
+          "carries it as standard base64 with padding, and a string that is not that is an invalid host response.",
+          '[(count (call blob.read {:name "greeting"})) (= (call blob.read {:name "greeting"}) '
+          '(call blob.read {:name "again"}))]', "[5 true]"),
     entry("Map", "Map<String, V>: (into-map [[key value] ...])", "A JSON object with string keys and values of "
           "one type V, listed in key order. Keys are strings, never keywords: keywords only name record fields.",
           '(get (assoc {} "pen" 3) "pen" 0)', "3"),
+    entry("Record", "Record {k: T, ...}: {:k value ...}", "A group of named fields. Branches that return records "
+          "with different fields join to the union of the fields; a field only some branches write is optional, "
+          "and none in the others.",
+          "(map (fn [n] (if (> n 1) {:n n :big true} {:n n})) [1 2])", "[{:n 1 :big none} {:n 2 :big (some true)}]"),
+    entry("open", "Record open {k: T, ...}", "A record type a tool declares open: when a result is decoded into "
+          "it, the fields the type does not name are dropped, so a program sees only the named ones. A plain "
+          "Record rejects extra fields, and a record literal is always plain.",
+          '(call contacts.get {:id "c1"})', '{:name "ada"}'),
     entry("Tuple", "Tuple<A, B, ...>: [a b ...]", "A fixed-size group of values of different types, from par, "
           "group-by, and bracket literals of mixed types or that a tuple pattern takes apart.",
           '(let [[n s] [1 "a"]] s)', '"a"'),
@@ -163,7 +200,11 @@ TYPES = (
 ENTRIES: Mapping[str, Entry] = {e.name: e for e in (*FORMS, *PRELUDE, *TYPES)}
 
 EXAMPLE_DECLARATIONS: Mapping[str, Any] = {
-    "types": {"User": "Record {name: String, active: Bool}", "File": "Record {bytes: Int}"},
+    "types": {
+        "User": "Record {name: String, active: Bool}",
+        "File": "Record {bytes: Int}",
+        "Contact": "Record open {name: String}",
+    },
     "capabilities": [
         {"id": "people.list", "effect": "read", "input": "Record {team: String}", "output": "List<User>",
          "description": "Lists the people on a team."},
@@ -171,8 +212,14 @@ EXAMPLE_DECLARATIONS: Mapping[str, Any] = {
          "output": "Record {seconds: Int}", "description": "Reads a host's uptime."},
         {"id": "storage.files", "effect": "read", "input": "Record {page: Int}",
          "output": "Record {files: List<File>, last: Bool}", "description": "Reads one page of files."},
+        {"id": "blob.read", "effect": "read", "input": "Record {name: String}", "output": "Bytes",
+         "description": "Reads one stored blob."},
+        {"id": "contacts.get", "effect": "read", "input": "Record {id: String}", "output": "Contact",
+         "description": "Reads one contact."},
         {"id": "job.state", "effect": "read", "input": "Record {id: String}", "output": "String",
          "description": "Reads a job's state."},
+        {"id": "chat.post", "effect": "write", "idempotent": False, "input": "Record {text: String}",
+         "output": "Unit", "description": "Posts one chat message."},
     ],
 }
 
@@ -194,6 +241,12 @@ EXAMPLE_RESPONSES: tuple[Mapping[str, Any], ...] = (
         "files": [{"bytes": 10}, {"bytes": 20}], "last": False}}]},
     {"capability": "storage.files", "input": {"page": 2}, "results": [{"output": {
         "files": [{"bytes": 5}], "last": True}}]},
+    {"capability": "chat.post", "input": {"text": "hi"}, "results": [
+        {"error": {"kind": "RateLimited", "message": "slow down"}}, {"output": None}]},
+    {"capability": "blob.read", "input": {"name": "greeting"}, "results": [{"output": "aGVsbG8="}]},
+    {"capability": "blob.read", "input": {"name": "again"}, "results": [{"output": "aGVsbG8="}]},
+    {"capability": "contacts.get", "input": {"id": "c1"},
+     "results": [{"output": {"name": "ada", "email": "ada@example.com"}}]},
     {"capability": "job.state", "input": {"id": "j1"}, "results": [{"output": "running"}, {"output": "done"}]},
 )
 
@@ -211,11 +264,11 @@ MINIMAL_HEADER = """# Sx
 Sx calls tools and combines their results. A program is one expression; its value is the result.
 It looks like Clojure, but only the forms and functions below exist.
 
-Values: true false, integers (no fractions), "strings", [lists], {:field value} records (keywords
-only name fields), [1 "a"] tuples (mixed types), (some x) and none (no nil; a plain value works
-where an optional is expected), (ok x) and (err e). Durations such as 250ms 5s 2m 1h appear only in
-retry and wait-until options. Names may be kebab-case, camelCase, or snake_case. Comments start
-with ;.
+Values: true false, integers, floats (1.5, never mixed with integers), "strings", [lists],
+{:field value} records (keywords only name fields), [1 "a"] tuples (mixed types), (some x) and none (no nil;
+a plain value works where an optional is expected), (ok x) and (err e). Durations such as 250ms 5s 2m 1h
+appear only in retry and wait-until options and as the argument of sleep. Names may be kebab-case, camelCase, or
+snake_case. Comments start with ;.
 """
 
 
@@ -282,9 +335,42 @@ def named_types(types: Iterable[Type], registry: Registry) -> list[str]:
     return lines
 
 
+UNVERIFIED_MEANING = "the interface was validated when the core registered"
+
+
+def render_assurance(core: Core) -> list[str]:
+    lines: list[str] = ["Assurance:"]
+    for level, references in core.assurance.items():
+        if level is Assurance.UNVERIFIED:
+            lines.append(f"  {level.value}: {UNVERIFIED_MEANING}")
+            continue
+        lines.append(f"  {level.value}:")
+        lines += [f"    {reference}" for reference in references]
+    lines += [f"  {level.value}: none" for level in Assurance if level not in core.assurance]
+    return lines
+
+
+def render_core(core: Core) -> str:
+    lines = [f"{core.id} {core.version}  [core]", *render_assurance(core), "Functions:"]
+    for function in core.functions:
+        params = " ".join(show_type(p) for p in function.params)
+        lines.append(f"  ({function.name} {params}) -> {show_type(function.output)}")
+    return "\n".join(lines) + "\n"
+
+
+def render_cores(registry: Registry) -> str:
+    return "".join(
+        f"{core.id} {core.version}  {', '.join(level.value for level in core.assurance)}\n"
+        for core in registry.cores.values()
+    )
+
+
 def lookup(name: str, registry: Registry) -> str | None:
     if name in ENTRIES:
         return render_entry(ENTRIES[name])
+    core = registry.core(name)
+    if core is not None:
+        return render_core(core)
     function = registry.function(name)
     if function is not None:
         return render_function(function)
@@ -298,7 +384,7 @@ def lookup(name: str, registry: Registry) -> str | None:
 
 
 def names(registry: Registry) -> list[str]:
-    return [*ENTRIES, *registry.functions, *registry.capabilities, *registry.types]
+    return [*ENTRIES, *registry.cores, *registry.functions, *registry.capabilities, *registry.types]
 
 
 def tool_listing(registry: Registry, capability_ids: Iterable[str], core_ids: Iterable[str]) -> str:

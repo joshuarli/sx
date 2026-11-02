@@ -1,0 +1,9 @@
+error[type-mismatch] 2:22-2:23
+  (filter (fn [x] (> x 0)) [1.5 -2.5])
+                       ^
+  > takes two Ints or two Floats, but this is an Int and the other operand is a Float.
+  Expected: Float
+  Found: Int
+  Sx does not convert between number types. (float n) turns an Int into a Float.
+  Fix: (float 0)
+  Help: sx help float

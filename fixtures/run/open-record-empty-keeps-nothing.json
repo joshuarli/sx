@@ -1,0 +1,45 @@
+{
+  "description": "An open record with no fields decodes any object into the empty record.",
+  "program": "(call raw.get {})",
+  "declarations": "declarations.json",
+  "allow": [
+    "raw.get"
+  ],
+  "responses": [
+    {
+      "capability": "raw.get",
+      "input": {},
+      "results": [
+        {
+          "output": {
+            "anything": [
+              1,
+              2
+            ],
+            "else": null
+          }
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": {}
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "raw.get",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": {
+        "anything": [
+          1,
+          2
+        ],
+        "else": null
+      }
+    }
+  ]
+}

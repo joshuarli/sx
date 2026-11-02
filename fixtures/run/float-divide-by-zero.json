@@ -1,0 +1,11 @@
+{
+  "description": "Dividing by zero is an arithmetic failure, because JSON cannot carry an infinity.",
+  "program": "(/ 1.0 0.0)",
+  "declarations": "declarations.json",
+  "allow": [],
+  "responses": [],
+  "expect": {
+    "failed": "arithmetic"
+  },
+  "trace": []
+}

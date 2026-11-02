@@ -1,0 +1,11 @@
+{
+  "description": "0.0 divided by 0.0 is an arithmetic failure, because JSON cannot carry NaN.",
+  "program": "(/ 0.0 0.0)",
+  "declarations": "declarations.json",
+  "allow": [],
+  "responses": [],
+  "expect": {
+    "failed": "arithmetic"
+  },
+  "trace": []
+}

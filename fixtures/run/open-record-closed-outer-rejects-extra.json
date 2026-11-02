@@ -1,0 +1,45 @@
+{
+  "description": "The closed record around an open record still rejects its own extra fields.",
+  "program": "(call listing.get {})",
+  "declarations": "declarations.json",
+  "allow": [
+    "listing.get"
+  ],
+  "responses": [
+    {
+      "capability": "listing.get",
+      "input": {},
+      "results": [
+        {
+          "output": {
+            "owner": {
+              "id": "o1"
+            },
+            "count": 2,
+            "page": 1
+          }
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "failed": "invalid-host-response"
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "listing.get",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": {
+        "owner": {
+          "id": "o1"
+        },
+        "count": 2,
+        "page": 1
+      }
+    }
+  ]
+}

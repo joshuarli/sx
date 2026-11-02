@@ -1,0 +1,87 @@
+{
+  "id": "fresh-earliest-slot",
+  "split": "fresh",
+  "kinds": [
+    "parallel",
+    "ad-hoc-logic",
+    "arithmetic"
+  ],
+  "domain": "other",
+  "sx-expressible": true,
+  "description": "Find the earliest 30-minute slot on `2031-03-14` when `ana`, `ben`, and `cho` are all free. Times are minutes after midnight. Candidate slots start every 30 minutes from 540 (9:00) and must end by 1020 (17:00). A slot from `start` to `start + 30` is blocked by a busy interval from `from` to `to` when `start < to` and `from < start + 30`. Return the slot's start minute, or null if no slot is free.",
+  "types": {
+    "Busy": "Record {from: Int, to: Int}"
+  },
+  "cores": [],
+  "capabilities": [
+    {
+      "id": "calendar.busy",
+      "effect": "read",
+      "input": "Record {person: String, day: String}",
+      "output": "List<Busy>",
+      "description": "Lists a person's busy intervals on a day, in minutes after midnight."
+    }
+  ],
+  "responses": [
+    {
+      "capability": "calendar.busy",
+      "input": {
+        "person": "ana",
+        "day": "2031-03-14"
+      },
+      "results": [
+        {
+          "output": [
+            {
+              "from": 630,
+              "to": 690
+            },
+            {
+              "from": 540,
+              "to": 600
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "capability": "calendar.busy",
+      "input": {
+        "person": "ben",
+        "day": "2031-03-14"
+      },
+      "results": [
+        {
+          "output": [
+            {
+              "from": 600,
+              "to": 660
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "capability": "calendar.busy",
+      "input": {
+        "person": "cho",
+        "day": "2031-03-14"
+      },
+      "results": [
+        {
+          "output": [
+            {
+              "from": 720,
+              "to": 800
+            },
+            {
+              "from": 690,
+              "to": 750
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "expected": 810
+}

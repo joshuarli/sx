@@ -1,0 +1,6 @@
+error[bad-pattern] 2:12-2:15
+  (match 1.5 1.5 "exact" _ "other")
+             ^^^
+  1.5 cannot be a match pattern, because Floats are rarely equal.
+  Compare with (= x 1.5), (< x 1.5), or (>= x 1.5) in an if or cond.
+  Help: sx help match

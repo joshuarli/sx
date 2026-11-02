@@ -1,0 +1,5 @@
+error[type-mismatch] 3:13-3:14
+    (nth pair 2))
+              ^
+  This tuple has 2 elements, so its indexes are 0 to 1, not 2.
+  Help: sx help nth

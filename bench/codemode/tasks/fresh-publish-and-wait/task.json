@@ -1,0 +1,66 @@
+{
+  "id": "fresh-publish-and-wait",
+  "split": "fresh",
+  "kinds": [
+    "polling",
+    "write"
+  ],
+  "domain": "other",
+  "sx-expressible": true,
+  "description": "Publish version `3.2.0` of package `fastq`. Then check the upload's state immediately, and again after waiting 1, 2, 4, and then 8 seconds, making at most 5 checks in total and stopping as soon as the state is `live` or `rejected`. Return a record with `state` (the last state seen) and `checks` (the number of checks made).",
+  "types": {
+    "Upload": "Record {id: String}",
+    "UploadState": "Record {state: String}"
+  },
+  "cores": [],
+  "capabilities": [
+    {
+      "id": "registry.publish",
+      "effect": "write",
+      "idempotent": false,
+      "input": "Record {name: String, version: String}",
+      "output": "Upload",
+      "description": "Publishes a package version and returns an upload id."
+    },
+    {
+      "id": "registry.upload",
+      "effect": "read",
+      "input": "Record {id: String}",
+      "output": "UploadState",
+      "description": "Reads an upload's state: processing, live, or rejected."
+    }
+  ],
+  "responses": [
+    {
+      "capability": "registry.publish",
+      "input": {
+        "name": "fastq",
+        "version": "3.2.0"
+      },
+      "results": [
+        {
+          "output": {
+            "id": "up-5"
+          }
+        }
+      ]
+    },
+    {
+      "capability": "registry.upload",
+      "input": {
+        "id": "up-5"
+      },
+      "results": [
+        {
+          "output": {
+            "state": "processing"
+          }
+        }
+      ]
+    }
+  ],
+  "expected": {
+    "state": "processing",
+    "checks": 5
+  }
+}

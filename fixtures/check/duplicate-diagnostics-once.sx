@@ -1,0 +1,3 @@
+; task: dev-failing-ci
+(let [label (fn [r] (get r :nmae))]
+  [(label {:name "a"}) (label {:name "b"}) (label {:name "c"})])

@@ -1,0 +1,66 @@
+{
+  "description": "A value read through an open record encodes with only its named fields.",
+  "program": "(call accounts.put (call accounts.get {}))",
+  "declarations": "declarations.json",
+  "allow": [
+    "accounts.get",
+    "accounts.put"
+  ],
+  "responses": [
+    {
+      "capability": "accounts.get",
+      "input": {},
+      "results": [
+        {
+          "output": {
+            "id": "a1",
+            "name": "Ada",
+            "plan": "pro"
+          }
+        }
+      ]
+    },
+    {
+      "capability": "accounts.put",
+      "input": {
+        "id": "a1",
+        "name": "Ada"
+      },
+      "results": [
+        {
+          "output": null
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": null
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "accounts.get",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": {
+        "id": "a1",
+        "name": "Ada",
+        "plan": "pro"
+      }
+    },
+    {
+      "request": "r:2",
+      "capability": "accounts.put",
+      "input": {
+        "id": "a1",
+        "name": "Ada"
+      }
+    },
+    {
+      "response": "r:2",
+      "output": null
+    }
+  ]
+}

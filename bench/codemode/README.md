@@ -14,11 +14,11 @@ responses, and compares its result with `expected`.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `id` | string | Same as the directory name. Development tasks start with `dev-`, held-out tasks with `held-`. |
-| `split` | `"development"` or `"held-out"` | Which set the task belongs to |
+| `id` | string | Same as the directory name. Development tasks start with `dev-`, held-out tasks with `held-`, fresh tasks with `fresh-`. |
+| `split` | `"development"`, `"held-out"`, or `"fresh"` | Which set the task belongs to |
 | `kinds` | list of strings | What the task exercises, from [Kinds](#kinds) |
 | `domain` | `"repomod"` or `"other"` | Whether the task uses repository and CI tools |
-| `sx-expressible` | boolean | `false` when any declared type uses `Float` or `Bytes`, otherwise `true`. Sx has `Map<String, T>`, so a task whose types use only `Map` is `true`. |
+| `sx-expressible` | boolean | `true` when Sx can express the task. It must be `true` when no declared type uses `Map`, `Float`, or `Bytes`. A task that uses one of them is `true` once Sx covers the way it uses it. |
 | `description` | string | The task as a user would state it. See [Descriptions](#descriptions). |
 | `types` | object | Optional. Named record types, `"Name": "Record {...}"` |
 | `enums` | object | Optional. `"ns.Name": {"Variant": null, "Other": "Type"}`. `null` means the variant carries no value. |
@@ -38,14 +38,15 @@ Types are written in Sx type notation:
 | `List<T>` | array |
 | `Option<T>` | `null`, or the value. `T` must not be `Unit` or another `Option`. |
 | `Record {name: String, open-prs: Int}` | object with exactly these keys |
+| `Record open {name: String}` | object with at least these keys. Sx drops the others, and TypeScript sees the same type as for a plain record. |
 | a name from `types` | its record |
 | `ns.Name` from `enums` | a variant without a value is its name as a string, `"Passing"`. A variant with a value is `{"tag": "Failed", "value": ...}`. |
 | `Map<String, T>` | object with arbitrary string keys and values of type `T`. The key type is always `String`. |
-| `Float` | a number with a fraction. Sx v0 lacks it. |
-| `Bytes` | base64 string. Sx v0 lacks it. |
+| `Float` | a JSON number. Sx decodes an integer-valued number into a `Float` too. |
+| `Bytes` | standard base64 string with padding |
 
-Use the type that fits the data. Do not avoid `Float` or `Bytes` because Sx lacks them.
-Set `sx-expressible` to `false` instead.
+Use the type that fits the data. Do not avoid `Float` or `Bytes` because Sx handles them
+poorly. Set `sx-expressible` to `false` when Sx cannot express the task.
 
 Field names are lowercase words joined by `-`. Prefer one word.
 
@@ -86,8 +87,8 @@ The default export is an async function that receives one object, `api`, and ret
   field `open-prs` is read as `pr["open-prs"]`. A tool whose input is `Record {}` may be called
   with no argument.
 - A failed call throws an error with `.kind` and `.message`.
-- `api.text` and `api.semver` hold the core functions listed in `cores.json`, when the task lists
-  those cores.
+- `api.text` and `api.semver` hold the core functions of the `sx-text` and `sx-semver` packages, implemented in
+  `cores.mjs`, when the task lists those cores. `cores.py` builds the Python side from the packages.
 - `await api.sleep(ms)` waits. Time is virtual, so sleeping costs nothing.
 
 Write the solution a careful engineer would write. Do not golf it.

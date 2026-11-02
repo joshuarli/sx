@@ -12,6 +12,8 @@ class Primitive:
 
 BOOL = Primitive("Bool")
 INT = Primitive("Int")
+FLOAT = Primitive("Float")
+BYTES = Primitive("Bytes")
 STRING = Primitive("String")
 UNIT = Primitive("Unit")
 
@@ -46,6 +48,7 @@ class ResultType:
 class RecordType:
     fields: tuple[tuple[str, Type], ...]
     name: str | None = field(default=None, compare=False)
+    open: bool = False
 
     def field(self, name: str) -> Type | None:
         for field_name, field_type in self.fields:
@@ -100,6 +103,7 @@ CALL_ERROR_KINDS = (
     "Timeout", "Unavailable", "RateLimited", "NotFound", "PermissionDenied", "Invalid", "Conflict", "Failed",
 )
 TRANSIENT_KINDS = frozenset({"Timeout", "Unavailable", "RateLimited"})
+REFUSAL_KINDS = ("RateLimited", "NotFound", "PermissionDenied", "Invalid", "Conflict")
 CALL_ERROR_KIND = EnumType("CallErrorKind", tuple((kind, None) for kind in CALL_ERROR_KINDS))
 CALL_ERROR = RecordType((("kind", CALL_ERROR_KIND), ("message", STRING)))
 
@@ -134,7 +138,8 @@ def show_type(t: Type) -> str:
 
 def show_definition(t: Type) -> str:
     if isinstance(t, RecordType):
-        return "Record {" + ", ".join(f"{name}: {show_type(ft)}" for name, ft in t.fields) + "}"
+        marker = "open " if t.open else ""
+        return "Record " + marker + "{" + ", ".join(f"{name}: {show_type(ft)}" for name, ft in t.fields) + "}"
     return show_type(t)
 
 
@@ -142,10 +147,6 @@ class TypeSyntaxError(ValueError):
     pass
 
 
-UNSUPPORTED = {
-    "Float": "Sx v0 has no Float type",
-    "Bytes": "Sx v0 has no Bytes type",
-}
 _TOKEN = re.compile(r"\s*(?:([A-Za-z][A-Za-z0-9_.-]*)|(.))")
 
 
@@ -190,13 +191,15 @@ class _TypeParser:
 
     def type(self) -> Type:
         name = self.take()
-        if name in UNSUPPORTED:
-            raise TypeSyntaxError(f"{UNSUPPORTED[name]}: {self.text!r}")
         match name:
             case "Bool":
                 return BOOL
             case "Int":
                 return INT
+            case "Float":
+                return FLOAT
+            case "Bytes":
+                return BYTES
             case "String":
                 return STRING
             case "Unit":
@@ -226,6 +229,9 @@ class _TypeParser:
         raise TypeSyntaxError(f"unknown type {name!r} in {self.text!r}")
 
     def record(self) -> RecordType:
+        open_record = self.peek() == "open"
+        if open_record:
+            self.take("open")
         self.take("{")
         fields: list[tuple[str, Type]] = []
         while self.peek() != "}":
@@ -237,7 +243,7 @@ class _TypeParser:
             if self.peek() == ",":
                 self.take(",")
         self.take("}")
-        return RecordType(tuple(fields))
+        return RecordType(tuple(fields), open=open_record)
 
 
 def encodable_problem(t: Type) -> str | None:

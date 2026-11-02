@@ -1,0 +1,12 @@
+{
+  "description": "/ divides Floats, and Int division is quot.",
+  "program": "(/ 7 2)",
+  "declarations": "declarations.json",
+  "allow": [],
+  "expect": {
+    "rejected": [
+      "type-mismatch"
+    ]
+  },
+  "responses": []
+}

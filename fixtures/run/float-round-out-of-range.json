@@ -1,0 +1,11 @@
+{
+  "description": "round beyond the Int range is an out-of-range failure.",
+  "program": "(round 9223372036854775808.0)",
+  "declarations": "declarations.json",
+  "allow": [],
+  "responses": [],
+  "expect": {
+    "failed": "out-of-range"
+  },
+  "trace": []
+}

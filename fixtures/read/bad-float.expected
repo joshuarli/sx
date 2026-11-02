@@ -1,0 +1,11 @@
+error[bad-literal] 1:4-1:6
+  (* 1. 2.e3)
+     ^^
+  1. is not a number. A Float has digits after the point, as in 1.0.
+  Fix: 1.0
+
+error[bad-literal] 1:7-1:11
+  (* 1. 2.e3)
+        ^^^^
+  2.e3 is not a number. A Float has digits after the point, as in 1.0.
+  Fix: 2.0e3

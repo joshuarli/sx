@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import dataclass, field
 
@@ -8,6 +9,7 @@ from sx.syntax import (
     DURATION_UNITS,
     BoolLiteral,
     DurationLiteral,
+    FloatLiteral,
     Form,
     IntLiteral,
     Keyword,
@@ -36,14 +38,15 @@ _UNIT_SPELLINGS = {
     "min": "m", "mins": "m", "minute": "m", "minutes": "m", "hr": "h", "hrs": "h", "hour": "h", "hours": "h",
 }
 _UNIT_SIZES = dict(DURATION_UNITS)
-_FLOAT = re.compile(r"-?[0-9]+(\.[0-9]*)?([eE][-+]?[0-9]+)?")
+_FLOAT = re.compile(r"-?[0-9]+(\.[0-9]+([eE][-+]?[0-9]+)?|[eE][-+]?[0-9]+)")
+_UNFINISHED_FLOAT = re.compile(r"-?[0-9]+\.([eE][-+]?[0-9]+)?")
 _NAME = r"[a-z][A-Za-z0-9_-]*(\?|'+)?"
 _VARIANT = r"[A-Z][A-Za-z0-9]*"
 _PLAIN = re.compile(_NAME)
 _QUALIFIED = re.compile(rf"[a-z][a-z0-9]*(-[a-z0-9]+)*\.({_NAME}|{_VARIANT})")
 _VARIANT_NAME = re.compile(_VARIANT)
 _KEYWORD = re.compile(r":[A-Za-z_][A-Za-z0-9_-]*\??")
-_OPERATORS = frozenset({"+", "-", "*", "=", "not=", "<", "<=", ">", ">=", "_"})
+_OPERATORS = frozenset({"+", "-", "*", "/", "=", "not=", "<", "<=", ">", ">=", "_"})
 _NIL_SPELLINGS = frozenset({"nil", "null", "undefined", "None"})
 _JS_OPERATORS = {
     "&&": "and",
@@ -54,7 +57,6 @@ _JS_OPERATORS = {
     "==": "=",
     "===": "=",
     "%": "rem",
-    "/": "quot",
 }
 
 
@@ -244,7 +246,16 @@ class _Reader:
         if not self.stack:
             self.extra_close(char, span)
             return
-        frame = self.stack.pop()
+        frame = self.stack[-1]
+        if char != frame.closer and self.stays_open(frame, span):
+            self.error(
+                "unexpected-close", span,
+                f"This {char} is one too many: the {frame.opener} at {_at(frame.span)} is still open, "
+                f"because the next line is indented inside it.",
+                fix="remove it",
+            )
+            return
+        self.stack.pop()
         whole = Span(frame.span.start, span.end)
         resume = False
         if char != frame.closer:
@@ -260,6 +271,16 @@ class _Reader:
             self.emit(node)
         if resume:
             self.close_with(char, span)
+
+    def stays_open(self, frame: _Frame, closer: Span) -> bool:
+        rest = self.lines[closer.start.line - 1][closer.end.column - 1 :]
+        if rest.strip(" \t)]}") and not rest.strip(" \t)]}").startswith(";"):
+            return False
+        column = frame.span.start.column - 1
+        for text in self.lines[closer.start.line :]:
+            if not _is_blank(text):
+                return _indent(text) > column
+        return False
 
     def extra_close(self, char: str, span: Span) -> None:
         message = f"This {char} closes nothing, because every bracket before it is already closed."
@@ -488,7 +509,16 @@ class _Reader:
             self.bad_duration(near.group(1), near.group(2), span)
             return None
         if _FLOAT.fullmatch(text):
-            self.error("bad-literal", span, "Sx has no floating-point numbers. Use an Int.")
+            number = float(text)
+            if not math.isfinite(number):
+                self.error("float-range", span, f"{text} does not fit in a finite 64-bit Float.")
+                return None
+            return FloatLiteral(number, span)
+        if _UNFINISHED_FLOAT.fullmatch(text):
+            self.error(
+                "bad-literal", span, f"{text} is not a number. A Float has digits after the point, as in 1.0.",
+                fix=text.replace(".", ".0", 1),
+            )
             return None
         if text[0].isdigit() or (text[0] == "-" and text[1:2].isdigit()):
             self.error("bad-literal", span, f"{text} is not a number. An Int is written in decimal digits.")

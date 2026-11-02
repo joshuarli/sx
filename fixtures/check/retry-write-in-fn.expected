@@ -1,0 +1,6 @@
+error[retry-write] 3:17-3:55
+    (map (fn [to] (call mail.send {:to to :subject "x"})) ["a@example.com" "b@example.com"]))
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  retry may repeat mail.send, which is a write that is not idempotent, because it can run more than once inside this retry.
+  Put the retry inside the fn, around the single write.
+  Help: sx help retry

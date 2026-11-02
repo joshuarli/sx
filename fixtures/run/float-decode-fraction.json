@@ -1,0 +1,39 @@
+{
+  "description": "A JSON number with a fraction decodes into a Float field.",
+  "program": "(get (call sensor.get {}) :celsius)",
+  "declarations": "declarations.json",
+  "allow": [
+    "sensor.get"
+  ],
+  "responses": [
+    {
+      "capability": "sensor.get",
+      "input": {},
+      "results": [
+        {
+          "output": {
+            "name": "a",
+            "celsius": 21.5
+          }
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": 21.5
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "sensor.get",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": {
+        "name": "a",
+        "celsius": 21.5
+      }
+    }
+  ]
+}

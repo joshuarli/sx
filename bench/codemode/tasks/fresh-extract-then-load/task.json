@@ -1,0 +1,109 @@
+{
+  "id": "fresh-extract-then-load",
+  "split": "fresh",
+  "kinds": [
+    "polling",
+    "write",
+    "conditional-call"
+  ],
+  "domain": "other",
+  "sx-expressible": true,
+  "description": "Run the nightly refresh for dataset `orders` in two stages. Start the `extract` stage and check its run immediately and every 20 seconds after that, making at most 6 checks, until its state is `succeeded` or `failed`. Only if extract succeeded, start the `load` stage for the same dataset and watch it the same way. Return a record with `extract` and `load`, each the last state seen for that stage, with `load` as `skipped` when extract did not succeed. A stage still unfinished after its sixth check ends as `timeout`.",
+  "types": {
+    "Run": "Record {id: String}",
+    "RunState": "Record {state: String}"
+  },
+  "cores": [],
+  "capabilities": [
+    {
+      "id": "etl.start",
+      "effect": "write",
+      "idempotent": false,
+      "input": "Record {stage: String, dataset: String}",
+      "output": "Run",
+      "description": "Starts a stage of the refresh for a dataset and returns its run id."
+    },
+    {
+      "id": "etl.state",
+      "effect": "read",
+      "input": "Record {id: String}",
+      "output": "RunState",
+      "description": "Reads a run's state: running, succeeded, or failed."
+    }
+  ],
+  "responses": [
+    {
+      "capability": "etl.start",
+      "input": {
+        "stage": "extract",
+        "dataset": "orders"
+      },
+      "results": [
+        {
+          "output": {
+            "id": "run-e"
+          }
+        }
+      ]
+    },
+    {
+      "capability": "etl.state",
+      "input": {
+        "id": "run-e"
+      },
+      "results": [
+        {
+          "output": {
+            "state": "running"
+          }
+        },
+        {
+          "output": {
+            "state": "running"
+          }
+        },
+        {
+          "output": {
+            "state": "succeeded"
+          }
+        }
+      ]
+    },
+    {
+      "capability": "etl.start",
+      "input": {
+        "stage": "load",
+        "dataset": "orders"
+      },
+      "results": [
+        {
+          "output": {
+            "id": "run-l"
+          }
+        }
+      ]
+    },
+    {
+      "capability": "etl.state",
+      "input": {
+        "id": "run-l"
+      },
+      "results": [
+        {
+          "output": {
+            "state": "running"
+          }
+        },
+        {
+          "output": {
+            "state": "failed"
+          }
+        }
+      ]
+    }
+  ],
+  "expected": {
+    "extract": "succeeded",
+    "load": "failed"
+  }
+}

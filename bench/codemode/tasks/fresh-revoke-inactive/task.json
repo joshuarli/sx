@@ -1,0 +1,131 @@
+{
+  "id": "fresh-revoke-inactive",
+  "split": "fresh",
+  "kinds": [
+    "write",
+    "partial-failure",
+    "filter-group"
+  ],
+  "domain": "other",
+  "sx-expressible": true,
+  "description": "Revoke access for the members of group `finance` who have been idle for more than 60 days and whose role is not `admin`, in the order the members are listed. A revoke that fails with Conflict means access was already gone and counts as revoked. Any other failure counts as failed. Do not retry. Return a record with `revoked` (user ids) and `failed` (records with `user` and `kind`, the name of the error kind), each in listed order.",
+  "types": {
+    "Member": "Record {user: String, role: String, idle: Int}"
+  },
+  "cores": [],
+  "capabilities": [
+    {
+      "id": "iam.members",
+      "effect": "read",
+      "input": "Record {group: String}",
+      "output": "List<Member>",
+      "description": "Lists a group's members with their role and days since last login."
+    },
+    {
+      "id": "iam.revoke",
+      "effect": "write",
+      "idempotent": true,
+      "input": "Record {group: String, user: String}",
+      "output": "Unit",
+      "description": "Removes a user from a group; removing a user not in it fails with Conflict."
+    }
+  ],
+  "responses": [
+    {
+      "capability": "iam.members",
+      "input": {
+        "group": "finance"
+      },
+      "results": [
+        {
+          "output": [
+            {
+              "user": "u1",
+              "role": "member",
+              "idle": 90
+            },
+            {
+              "user": "u2",
+              "role": "admin",
+              "idle": 200
+            },
+            {
+              "user": "u3",
+              "role": "member",
+              "idle": 60
+            },
+            {
+              "user": "u4",
+              "role": "member",
+              "idle": 61
+            },
+            {
+              "user": "u5",
+              "role": "viewer",
+              "idle": 400
+            },
+            {
+              "user": "u6",
+              "role": "member",
+              "idle": 5
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "capability": "iam.revoke",
+      "input": {
+        "group": "finance",
+        "user": "u1"
+      },
+      "results": [
+        {
+          "output": null
+        }
+      ]
+    },
+    {
+      "capability": "iam.revoke",
+      "input": {
+        "group": "finance",
+        "user": "u4"
+      },
+      "results": [
+        {
+          "error": {
+            "kind": "Conflict",
+            "message": "not a member"
+          }
+        }
+      ]
+    },
+    {
+      "capability": "iam.revoke",
+      "input": {
+        "group": "finance",
+        "user": "u5"
+      },
+      "results": [
+        {
+          "error": {
+            "kind": "PermissionDenied",
+            "message": "protected account"
+          }
+        }
+      ]
+    }
+  ],
+  "expected": {
+    "revoked": [
+      "u1",
+      "u4"
+    ],
+    "failed": [
+      {
+        "user": "u5",
+        "kind": "PermissionDenied"
+      }
+    ]
+  }
+}

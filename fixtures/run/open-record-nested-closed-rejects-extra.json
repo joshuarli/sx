@@ -1,0 +1,47 @@
+{
+  "description": "A closed record inside an open record still rejects extra fields.",
+  "program": "(call profile.get {})",
+  "declarations": "declarations.json",
+  "allow": [
+    "profile.get"
+  ],
+  "responses": [
+    {
+      "capability": "profile.get",
+      "input": {},
+      "results": [
+        {
+          "output": {
+            "id": "p1",
+            "address": {
+              "city": "Oslo",
+              "zip": "0150"
+            },
+            "tz": "CET"
+          }
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "failed": "invalid-host-response"
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "profile.get",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": {
+        "id": "p1",
+        "address": {
+          "city": "Oslo",
+          "zip": "0150"
+        },
+        "tz": "CET"
+      }
+    }
+  ]
+}

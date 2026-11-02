@@ -1,0 +1,29 @@
+{
+  "description": "sleep counts toward the delay budget.",
+  "program": "(let [_ (sleep 1s) _ (sleep 1s)] 1)",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state"
+  ],
+  "budgets": {
+    "delay_ms": 1500
+  },
+  "responses": [],
+  "expect": {
+    "failed": "budget-exhausted"
+  },
+  "trace": [
+    {
+      "delay": "r:1",
+      "milliseconds": 1000
+    },
+    {
+      "response": "r:1",
+      "output": null
+    }
+  ]
+}

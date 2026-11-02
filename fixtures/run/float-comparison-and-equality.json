@@ -1,0 +1,17 @@
+{
+  "description": "Floats compare and test equal as pairs, and 0.0 equals -0.0.",
+  "program": "[(< 1.5 2.5) (>= 1.5 1.5) (not= 1.0 2.0) (= 0.0 -0.0) (> -1.0 -2.0)]",
+  "declarations": "declarations.json",
+  "allow": [],
+  "responses": [],
+  "expect": {
+    "completed": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "trace": []
+}

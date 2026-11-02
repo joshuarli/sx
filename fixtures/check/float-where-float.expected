@@ -1,0 +1,9 @@
+error[type-mismatch] 2:8-2:9
+  (round 3)
+         ^
+  This is an Int, but a Float is needed here.
+  Expected: Float
+  Found: Int
+  Sx does not convert between number types. (float n) turns an Int into a Float.
+  Fix: (float 3)
+  Help: sx help float

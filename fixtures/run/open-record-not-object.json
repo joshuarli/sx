@@ -1,0 +1,39 @@
+{
+  "description": "An open record decodes only from an object.",
+  "program": "(call accounts.get {})",
+  "declarations": "declarations.json",
+  "allow": [
+    "accounts.get"
+  ],
+  "responses": [
+    {
+      "capability": "accounts.get",
+      "input": {},
+      "results": [
+        {
+          "output": [
+            "a1",
+            "Ada"
+          ]
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "failed": "invalid-host-response"
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "accounts.get",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": [
+        "a1",
+        "Ada"
+      ]
+    }
+  ]
+}

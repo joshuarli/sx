@@ -1,0 +1,50 @@
+{
+  "description": "An open record inside a closed record drops only its own extra fields.",
+  "program": "(call listing.get {})",
+  "declarations": "declarations.json",
+  "allow": [
+    "listing.get"
+  ],
+  "responses": [
+    {
+      "capability": "listing.get",
+      "input": {},
+      "results": [
+        {
+          "output": {
+            "owner": {
+              "id": "o1",
+              "email": "o@x"
+            },
+            "count": 2
+          }
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": {
+      "owner": {
+        "id": "o1"
+      },
+      "count": 2
+    }
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "listing.get",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": {
+        "owner": {
+          "id": "o1",
+          "email": "o@x"
+        },
+        "count": 2
+      }
+    }
+  ]
+}

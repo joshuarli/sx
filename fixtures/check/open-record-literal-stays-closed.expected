@@ -1,0 +1,5 @@
+error[unknown-field] 2:42-2:47
+  (call accounts.put {:id "a1" :name "Ada" :plan "pro"})
+                                           ^^^^^
+  The input to accounts.put has no field :plan.
+  Fields: :id, :name

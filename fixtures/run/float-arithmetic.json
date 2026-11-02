@@ -1,0 +1,19 @@
+{
+  "description": "Float arithmetic follows IEEE-754 binary64, and 0.1 plus 0.2 is not 0.3.",
+  "program": "[(+ 1.5 2.25) (- 0.5 1.0) (* 2.0 -0.25) (/ 1.0 4.0) (- 1.5) (= (+ 0.1 0.2) 0.3) (+ 0.1 0.2)]",
+  "declarations": "declarations.json",
+  "allow": [],
+  "responses": [],
+  "expect": {
+    "completed": [
+      3.75,
+      -0.5,
+      -0.5,
+      0.25,
+      -1.5,
+      false,
+      0.30000000000000004
+    ]
+  },
+  "trace": []
+}

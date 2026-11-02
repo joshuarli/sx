@@ -1,0 +1,2 @@
+; declarations: fixtures/run/declarations.json
+(call accounts.put {:id "a1" :name "Ada" :plan "pro"})

@@ -1,0 +1,39 @@
+import importlib.util
+import os
+import sys
+from pathlib import Path
+
+import pytest
+
+sys.dont_write_bytecode = True
+os.environ["PYTHONDONTWRITEBYTECODE"] = "1"
+
+
+def locate_repomod() -> Path:
+    configured = os.environ.get("SX_REPOMOD")
+    if configured is not None:
+        return Path(configured).resolve()
+    for parent in Path(__file__).resolve().parents:
+        candidate = parent / "repomod"
+        if (candidate / "src" / "repomod" / "cli.py").is_file():
+            return candidate
+    raise RuntimeError("repomod is not next to this repository; set SX_REPOMOD to its checkout")
+
+
+REPOMOD = locate_repomod()
+sys.path[:0] = [str(REPOMOD / "src"), str(REPOMOD / "tests")]
+
+spec = importlib.util.spec_from_file_location("repomod_conftest", REPOMOD / "tests" / "conftest.py")
+assert spec is not None
+assert spec.loader is not None
+repomod_conftest = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(repomod_conftest)
+
+git_environment = repomod_conftest.git_environment
+
+
+@pytest.fixture(autouse=True)
+def isolated_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    cache = tmp_path / "cache"
+    monkeypatch.setenv("XDG_CACHE_HOME", str(cache))
+    return cache

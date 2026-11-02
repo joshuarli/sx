@@ -1,0 +1,124 @@
+{
+  "id": "fresh-top-bug-reports",
+  "split": "fresh",
+  "kinds": [
+    "pagination",
+    "filter-group",
+    "schema-detail"
+  ],
+  "domain": "repomod",
+  "sx-expressible": true,
+  "description": "Find the three most-discussed unassigned bugs in `acme/api`. Read every page of the bug search results, starting with no cursor and then following each page's `next` cursor (at most 10 pages). Consider only issues with no assignee, rank them by `comments` highest first, break ties by `id` lowest first, and return the ids of the top three.",
+  "types": {
+    "Issue": "Record {id: Int, assignee: Option<String>, comments: Int}",
+    "IssuePage": "Record {items: List<Issue>, next: Option<String>}"
+  },
+  "cores": [],
+  "capabilities": [
+    {
+      "id": "issues.search",
+      "effect": "read",
+      "input": "Record {repo: String, label: String, cursor: Option<String>}",
+      "output": "IssuePage",
+      "description": "Reads one page of open issues with a label; `next` is absent on the last page."
+    }
+  ],
+  "responses": [
+    {
+      "capability": "issues.search",
+      "input": {
+        "repo": "acme/api",
+        "label": "bug",
+        "cursor": null
+      },
+      "results": [
+        {
+          "output": {
+            "items": [
+              {
+                "id": 11,
+                "assignee": null,
+                "comments": 4
+              },
+              {
+                "id": 12,
+                "assignee": "kim",
+                "comments": 30
+              },
+              {
+                "id": 13,
+                "assignee": null,
+                "comments": 9
+              }
+            ],
+            "next": "p2"
+          }
+        }
+      ]
+    },
+    {
+      "capability": "issues.search",
+      "input": {
+        "repo": "acme/api",
+        "label": "bug",
+        "cursor": "p2"
+      },
+      "results": [
+        {
+          "output": {
+            "items": [
+              {
+                "id": 14,
+                "assignee": null,
+                "comments": 9
+              },
+              {
+                "id": 15,
+                "assignee": null,
+                "comments": 1
+              },
+              {
+                "id": 16,
+                "assignee": null,
+                "comments": 4
+              }
+            ],
+            "next": "p3"
+          }
+        }
+      ]
+    },
+    {
+      "capability": "issues.search",
+      "input": {
+        "repo": "acme/api",
+        "label": "bug",
+        "cursor": "p3"
+      },
+      "results": [
+        {
+          "output": {
+            "items": [
+              {
+                "id": 17,
+                "assignee": null,
+                "comments": 0
+              },
+              {
+                "id": 18,
+                "assignee": "lee",
+                "comments": 50
+              }
+            ],
+            "next": null
+          }
+        }
+      ]
+    }
+  ],
+  "expected": [
+    13,
+    14,
+    11
+  ]
+}

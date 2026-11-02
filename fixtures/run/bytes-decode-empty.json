@@ -1,0 +1,37 @@
+{
+  "description": "The empty string is zero bytes.",
+  "program": "(count (call blob.get {:name \"a\"}))",
+  "declarations": "declarations.json",
+  "allow": [
+    "blob.get"
+  ],
+  "responses": [
+    {
+      "capability": "blob.get",
+      "input": {
+        "name": "a"
+      },
+      "results": [
+        {
+          "output": ""
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": 0
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "blob.get",
+      "input": {
+        "name": "a"
+      }
+    },
+    {
+      "response": "r:1",
+      "output": ""
+    }
+  ]
+}

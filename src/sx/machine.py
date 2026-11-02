@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -28,7 +29,9 @@ from sx.values import (
     call_error,
     decode,
     encode,
+    float_text,
     make_map,
+    show_value,
     size,
 )
 
@@ -525,6 +528,11 @@ class Machine:
             case ir.WaitUntil(body=body):
                 fiber.stack.append(WaitFrame(node, env))
                 fiber.node, fiber.env = body, env
+            case ir.Sleep(milliseconds=milliseconds, span=span):
+                if milliseconds == 0:
+                    fiber.returning = UNIT_VALUE
+                else:
+                    self.request_delay(fiber, milliseconds, span)
             case ir.Par(branches=branches, span=span):
                 frame = JoinFrame(span, len(branches), as_tuple=True)
                 fiber.stack.append(frame)
@@ -825,6 +833,8 @@ def match_value(pattern: ir.MatchPattern, value: Value, env: Env | None) -> tupl
             return (bind(env, binder, value),)
         case ir.MatchNone():
             return (env,) if isinstance(value, NoneValue) else None
+        case ir.MatchLiteral(value=literal):
+            return (env,) if same(value, literal) else None
         case ir.MatchSome(inner=inner):
             return match_value(inner, value.value, env) if isinstance(value, SomeValue) else None
         case ir.MatchOk(inner=inner):
@@ -855,6 +865,9 @@ def convert(value: Value, conversion: ir.Conversion) -> Value:
                 field_conversion = conversions.get(name)
                 converted.append((name, item if field_conversion is None else convert(item, field_conversion)))
             return RecordValue(tuple(converted))
+        case ir.WidenRecord(fields=widened):
+            assert isinstance(value, RecordValue)
+            return RecordValue(tuple((field.name, widen_field(value, field)) for field in widened))
         case ir.EachElement(element=element):
             assert isinstance(value, ListValue)
             return ListValue(tuple(convert(item, element) for item in value.items))
@@ -862,6 +875,13 @@ def convert(value: Value, conversion: ir.Conversion) -> Value:
             assert isinstance(value, TupleValue)
             parts = zip(value.items, items, strict=True)
             return TupleValue(tuple(item if c is None else convert(item, c) for item, c in parts))
+
+
+def widen_field(record: RecordValue, field: ir.WidenedField) -> Value:
+    if not field.present:
+        return NONE_VALUE
+    item = record.get(field.name)
+    return item if field.conversion is None else convert(item, field.conversion)
 
 
 def compare_keys(a: Value, b: Value) -> int:
@@ -873,11 +893,11 @@ def compare_keys(a: Value, b: Value) -> int:
         return (len(a.items) > len(b.items)) - (len(a.items) < len(b.items))
     if isinstance(a, bool) and isinstance(b, bool):
         return int(a) - int(b)
-    if isinstance(a, int) and isinstance(b, int):
+    if isinstance(a, int | float) and isinstance(b, int | float):
         return (a > b) - (a < b)
     if isinstance(a, str) and isinstance(b, str):
         return (a > b) - (a < b)
-    raise _TerminalError(Failure(FailureKind.INTERNAL, "A sort key is not an Int, String, Bool, or tuple."))
+    raise _TerminalError(Failure(FailureKind.INTERNAL, "A sort key is not an Int, Float, String, Bool, or tuple."))
 
 
 def finish_each(frame: EachFrame) -> Value:
@@ -922,6 +942,49 @@ def checked_int(value: int, span: Span) -> int:
     return value
 
 
+def checked_float(value: float, span: Span) -> float:
+    if not math.isfinite(value):
+        message = "Float overflow: the result is not a finite number, and JSON cannot carry one."
+        raise _TerminalError(Failure(FailureKind.ARITHMETIC, message, span=span))
+    return value
+
+
+def float_arg(value: Value) -> float:
+    assert isinstance(value, float)
+    return value
+
+
+def int_from_float(op: str, value: int, original: float, span: Span) -> int:
+    if not INT_MIN <= value <= INT_MAX:
+        message = f"{op} of {float_text(original)} does not fit in a signed 64-bit Int."
+        raise _TerminalError(Failure(FailureKind.OUT_OF_RANGE, message, span=span))
+    return value
+
+
+def round_half_away(value: float) -> int:
+    magnitude = abs(value)
+    whole = math.floor(magnitude)
+    rounded = whole + 1 if magnitude - whole >= 0.5 else whole
+    return rounded if value >= 0 else -rounded
+
+
+def float_arithmetic(op: str, args: list[Value], span: Span) -> Value:
+    a = float_arg(args[0])
+    if op == "-" and len(args) == 1:
+        return -a
+    b = float_arg(args[1])
+    match op:
+        case "+":
+            return checked_float(a + b, span)
+        case "-":
+            return checked_float(a - b, span)
+        case "*":
+            return checked_float(a * b, span)
+    if b == 0.0:
+        raise _TerminalError(Failure(FailureKind.ARITHMETIC, "/ by zero.", span=span))
+    return checked_float(a / b, span)
+
+
 def int_arg(value: Value) -> int:
     assert isinstance(value, int)
     assert not isinstance(value, bool)
@@ -947,7 +1010,22 @@ def same(a: Value, b: Value) -> bool:
     return type(a) is type(b) and a == b
 
 
+def text_of(value: Value, span: Span) -> str:
+    match value:
+        case bool():
+            return "true" if value else "false"
+        case int() | str():
+            return str(value)
+        case float():
+            return float_text(value)
+        case VariantValue(variant=variant, payload=None):
+            return variant
+    raise _TerminalError(Failure(FailureKind.INTERNAL, f"str cannot write {show_value(value)}.", span))
+
+
 def pure_prelude(op: str, args: list[Value], span: Span, machine: Machine) -> Value:
+    if op in {"+", "-", "*", "/"} and isinstance(args[0], float):
+        return float_arithmetic(op, args, span)
     match op:
         case "+":
             return checked_int(int_arg(args[0]) + int_arg(args[1]), span)
@@ -963,6 +1041,17 @@ def pure_prelude(op: str, args: list[Value], span: Span, machine: Machine) -> Va
                 raise _TerminalError(Failure(FailureKind.ARITHMETIC, f"{op} by zero.", span=span))
             quotient = abs(a) // abs(b) * (1 if (a >= 0) == (b >= 0) else -1)
             return checked_int(quotient if op == "quot" else a - b * quotient, span)
+        case "float":
+            return float(int_arg(args[0]))
+        case "round":
+            original = float_arg(args[0])
+            return int_from_float(op, round_half_away(original), original, span)
+        case "floor":
+            original = float_arg(args[0])
+            return int_from_float(op, math.floor(original), original, span)
+        case "ceil":
+            original = float_arg(args[0])
+            return int_from_float(op, math.ceil(original), original, span)
         case "=":
             return same(args[0], args[1])
         case "not=":
@@ -982,12 +1071,14 @@ def pure_prelude(op: str, args: list[Value], span: Span, machine: Machine) -> Va
         case "or":
             return args[0] is True or args[1] is True
         case "str":
-            joined = "".join(a for a in args if isinstance(a, str))
+            joined = "".join(text_of(a, span) for a in args)
             machine.check_size(joined, span)
             return joined
         case "count":
             if isinstance(args[0], MapValue):
                 return len(args[0].entries)
+            if isinstance(args[0], bytes):
+                return len(args[0])
             return len(list_arg(args[0]))
         case "first":
             items = list_arg(args[0])
@@ -996,6 +1087,11 @@ def pure_prelude(op: str, args: list[Value], span: Span, machine: Machine) -> Va
             return items[0]
         case "rest":
             return ListValue(list_arg(args[0])[1:])
+        case "tuple-item":
+            whole, index = args[0], int_arg(args[1])
+            if not isinstance(whole, TupleValue):
+                raise _TerminalError(Failure(FailureKind.INTERNAL, "tuple-item of a non-tuple.", span=span))
+            return whole.items[index]
         case "nth":
             items, index = list_arg(args[0]), int_arg(args[1])
             if not 0 <= index < len(items):

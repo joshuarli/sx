@@ -1,0 +1,111 @@
+{
+  "id": "fresh-failed-runs-by-branch",
+  "split": "fresh",
+  "kinds": [
+    "pagination",
+    "filter-group"
+  ],
+  "domain": "repomod",
+  "sx-expressible": true,
+  "description": "Count the failed pipeline runs per branch across all pages of the run history. Pages are numbered from 1; keep reading until a page reports `last` as true. The history has at most 15 pages. Return a map from branch name to the number of runs whose `status` is `failed`, leaving out branches with no failed runs.",
+  "types": {
+    "Run": "Record {id: String, branch: String, status: String}",
+    "RunPage": "Record {runs: List<Run>, last: Bool}"
+  },
+  "cores": [],
+  "capabilities": [
+    {
+      "id": "runs.page",
+      "effect": "read",
+      "input": "Record {page: Int}",
+      "output": "RunPage",
+      "description": "Reads one numbered page of pipeline runs, newest first."
+    }
+  ],
+  "responses": [
+    {
+      "capability": "runs.page",
+      "input": {
+        "page": 1
+      },
+      "results": [
+        {
+          "output": {
+            "runs": [
+              {
+                "id": "r1",
+                "branch": "main",
+                "status": "failed"
+              },
+              {
+                "id": "r2",
+                "branch": "main",
+                "status": "passed"
+              },
+              {
+                "id": "r3",
+                "branch": "dev",
+                "status": "failed"
+              }
+            ],
+            "last": false
+          }
+        }
+      ]
+    },
+    {
+      "capability": "runs.page",
+      "input": {
+        "page": 2
+      },
+      "results": [
+        {
+          "output": {
+            "runs": [
+              {
+                "id": "r4",
+                "branch": "main",
+                "status": "failed"
+              },
+              {
+                "id": "r5",
+                "branch": "fix",
+                "status": "passed"
+              }
+            ],
+            "last": false
+          }
+        }
+      ]
+    },
+    {
+      "capability": "runs.page",
+      "input": {
+        "page": 3
+      },
+      "results": [
+        {
+          "output": {
+            "runs": [
+              {
+                "id": "r6",
+                "branch": "dev",
+                "status": "failed"
+              },
+              {
+                "id": "r7",
+                "branch": "dev",
+                "status": "failed"
+              }
+            ],
+            "last": true
+          }
+        }
+      ]
+    }
+  ],
+  "expected": {
+    "main": 2,
+    "dev": 3
+  }
+}

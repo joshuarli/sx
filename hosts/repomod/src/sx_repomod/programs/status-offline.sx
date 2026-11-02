@@ -1,0 +1,111 @@
+(let [selected (call catalog.select {:repos repos :tags tags})
+      ids (map (fn [r] (get r :id)) selected)
+      now (call clock.now {})
+      findings (call policy.lint {:repos ids})
+      rows
+      (par-map {:limit 8}
+        (fn [id]
+          (let [checkout (call git.status {:repo id})
+                view (match (git.head checkout)
+                       (some h) h
+                       none {:staged 0 :unstaged 0 :untracked 0 :ahead none :behind none :upstream none})
+                ci (match (call github.cached-ci {:repo id :refresh refresh :now now})
+                     (Cached r) {:state (get r :state) :sha (get r :sha)
+                                 :default-branch (get r :default-branch) :cached true
+                                 :age (some (get r :age-seconds)) :error none :workflows (get r :workflows)}
+                     (NotCached reason) {:state (github.parse-ci-state "unknown") :sha none
+                                         :default-branch none :cached false
+                                         :age none :error (some reason) :workflows none})
+                default-branch (get ci :default-branch)
+                unpushed-since (if (> (get view :ahead 0) 0)
+                                 (call git.oldest-unpushed {:repo id})
+                                 none)
+                branch-since (match (git.branch checkout)
+                               (some b) (if (= default-branch (some b))
+                                          none
+                                          (call git.branch-since {:repo id :branch b}))
+                               none none)
+                branch-days (git.age-days now branch-since)
+                unpushed-days (git.age-days now unpushed-since)
+                state-name (github.ci-state-name (get ci :state))
+                ci-label (if (get ci :cached)
+                           (str state-name " cached "
+                                (match (get ci :age) (some a) (str (text.from-int a) "s") none "?")
+                                " sha "
+                                (text.join "" (take 12 (text.chars (get ci :sha "unknown")))))
+                           state-name)
+                workflows (match (get ci :workflows)
+                            (some ws) (some (map (fn [w] {:name (get w :name)
+                                                          :state (github.ci-state-name (get w :state))
+                                                          :url (get w :url)})
+                                                 ws))
+                            none none)
+                workflow-failed (match (get ci :workflows)
+                                  (some ws) (any? (fn [w] (= (get w :state) Failed)) ws)
+                                  none false)
+                mine (filter (fn [f] (= (get f :repository) id)) findings)
+                lint-errors (count (filter (fn [f] (and (not= (get f :kind) "operational")
+                                                        (= (get f :severity) "error")))
+                                           mine))
+                lint-warnings (count (filter (fn [f] (and (not= (get f :kind) "operational")
+                                                          (= (get f :severity) "warning")))
+                                             mine))
+                lint-operational (count (filter (fn [f] (= (get f :kind) "operational")) mine))
+                up (call github.cached-upstream {:repo id :now now})
+                upstream (match up
+                           (some u) (some {:parent (get u :parent)
+                                           :parent_branch (get u :parent-branch)
+                                           :parent_sha (get u :parent-sha)
+                                           :behind_by (get u :behind-by)
+                                           :ahead_by (get u :ahead-by)
+                                           :state (github.upstream-state-name (get u :state))
+                                           :cached true
+                                           :age_seconds (get u :age-seconds)
+                                           :error none})
+                           none none)
+                behind-upstream (match up (some u) (> (get u :behind-by) 0) none false)
+                dirty (> (+ (+ (get view :staged) (get view :unstaged)) (get view :untracked)) 0)
+                todo-items (if (git.head checkout) (call repo.todo-items {:repo id}) 0)
+                row {:repository id
+                     :local (git.local-label checkout default-branch branch-days unpushed-days)
+                     :stale_local_work (git.stale-work? branch-days unpushed-days)
+                     :branch_checked_out_at branch-since
+                     :oldest_unpushed_commit_at unpushed-since
+                     :branch (git.branch checkout)
+                     :default_branch default-branch
+                     :default_sha none
+                     :staged (get view :staged)
+                     :unstaged (get view :unstaged)
+                     :untracked (get view :untracked)
+                     :ahead (get view :ahead)
+                     :behind (get view :behind)
+                     :tracking_ref (get view :upstream)
+                     :tracking_counts_are_last_fetched true
+                     :origin_valid (match checkout (OnBranch _) true (Detached _) true _ false)
+                     :local_error (git.error checkout)
+                     :dirty dirty
+                     :ci ci-label
+                     :ci_state state-name
+                     :ci_sha (get ci :sha)
+                     :ci_cached (get ci :cached)
+                     :ci_age_seconds (get ci :age)
+                     :ci_error (get ci :error)
+                     :workflows workflows
+                     :lint (count mine)
+                     :lint_errors lint-errors
+                     :lint_warnings lint-warnings
+                     :lint_operational lint-operational
+                     :todo_items todo-items
+                     :open_prs none
+                     :prs_error none
+                     :upstream upstream
+                     :lint_findings mine}
+                shown (and (or (not only-dirty) dirty)
+                           (or (not only-failed)
+                               (or (= (get ci :state) Failed)
+                                   (or workflow-failed
+                                       (or (not= lint-errors 0)
+                                           (or (not= lint-operational 0) behind-upstream))))))]
+            (if shown (some row) none)))
+        ids)]
+  (keep identity rows))

@@ -1,0 +1,7 @@
+error[type-mismatch] 2:33-2:39
+  (call blob.put {:name "a" :data "aGk="})
+                                  ^^^^^^
+  This is a String, but Bytes is needed here.
+  Expected: Bytes
+  Found: String
+  Bytes come from tools. No Sx function builds them from a string or a list.

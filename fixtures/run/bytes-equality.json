@@ -1,0 +1,85 @@
+{
+  "description": "Two Bytes are equal when every byte is.",
+  "program": "(let [a (call blob.get {:name \"a\"}) b (call blob.get {:name \"b\"}) c (call blob.get {:name \"c\"})] [(= a b) (= a c) (not= a c)])",
+  "declarations": "declarations.json",
+  "allow": [
+    "blob.get"
+  ],
+  "responses": [
+    {
+      "capability": "blob.get",
+      "input": {
+        "name": "a"
+      },
+      "results": [
+        {
+          "output": "aGk="
+        }
+      ]
+    },
+    {
+      "capability": "blob.get",
+      "input": {
+        "name": "b"
+      },
+      "results": [
+        {
+          "output": "aGk="
+        }
+      ]
+    },
+    {
+      "capability": "blob.get",
+      "input": {
+        "name": "c"
+      },
+      "results": [
+        {
+          "output": "aGo="
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": [
+      true,
+      false,
+      true
+    ]
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "blob.get",
+      "input": {
+        "name": "a"
+      }
+    },
+    {
+      "response": "r:1",
+      "output": "aGk="
+    },
+    {
+      "request": "r:2",
+      "capability": "blob.get",
+      "input": {
+        "name": "b"
+      }
+    },
+    {
+      "response": "r:2",
+      "output": "aGk="
+    },
+    {
+      "request": "r:3",
+      "capability": "blob.get",
+      "input": {
+        "name": "c"
+      }
+    },
+    {
+      "response": "r:3",
+      "output": "aGo="
+    }
+  ]
+}

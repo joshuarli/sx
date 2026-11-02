@@ -1,0 +1,39 @@
+{
+  "description": "A string where a Float is expected is an invalid host response.",
+  "program": "(call sensor.get {})",
+  "declarations": "declarations.json",
+  "allow": [
+    "sensor.get"
+  ],
+  "responses": [
+    {
+      "capability": "sensor.get",
+      "input": {},
+      "results": [
+        {
+          "output": {
+            "name": "a",
+            "celsius": "warm"
+          }
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "failed": "invalid-host-response"
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "sensor.get",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": {
+        "name": "a",
+        "celsius": "warm"
+      }
+    }
+  ]
+}

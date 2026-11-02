@@ -6,7 +6,7 @@ import * as cores from "./cores.mjs";
 import { execute } from "./host.mjs";
 
 const TASKS = join(import.meta.dirname, "tasks");
-const SPLITS = new Set(["development", "held-out"]);
+const SPLITS = new Set(["development", "held-out", "fresh"]);
 const EFFECTS = new Set(["read", "write"]);
 const KINDS = new Set(["Timeout", "Unavailable", "RateLimited", "NotFound", "PermissionDenied", "Invalid", "Conflict", "Failed"]);
 const TASK_KINDS = new Set([
@@ -17,22 +17,18 @@ const TASK_KINDS = new Set([
 function validate(task, dir) {
   const problems = [];
   if (task.id !== dir) problems.push(`id ${task.id} does not match directory ${dir}`);
-  if (!SPLITS.has(task.split)) problems.push(`split must be development or held-out`);
+  if (!SPLITS.has(task.split)) problems.push(`split must be development, held-out, or fresh`);
   if (typeof task["sx-expressible"] !== "boolean") problems.push(`sx-expressible must be a boolean`);
   if (typeof task.description !== "string" || !task.description) problems.push(`description is missing`);
   if (!["repomod", "other"].includes(task.domain)) problems.push(`domain must be repomod or other`);
-  const prefix = task.split === "development" ? "dev-" : "held-";
+  const prefix = { development: "dev-", "held-out": "held-", fresh: "fresh-" }[task.split];
   if (!dir.startsWith(prefix)) problems.push(`a ${task.split} task's id starts with ${prefix}`);
   for (const kind of task.kinds ?? []) {
     if (!TASK_KINDS.has(kind)) problems.push(`unknown kind ${kind}`);
   }
   const typeText = JSON.stringify([task.types ?? {}, task.enums ?? {}, task.capabilities ?? []]);
-  const needsMissingType = /\b(Float|Bytes)\b/.test(typeText);
-  const usesMap = /\bMap\b/.test(typeText);
-  if (needsMissingType && task["sx-expressible"]) {
-    problems.push(`sx-expressible must be false: Float or Bytes appears`);
-  }
-  if (!needsMissingType && !usesMap && !task["sx-expressible"]) {
+  const usesNewType = /\b(Map|Float|Bytes)\b/.test(typeText);
+  if (!usesNewType && !task["sx-expressible"]) {
     problems.push(`sx-expressible must be true: Map, Float, and Bytes do not appear`);
   }
   if (!("expected" in task)) problems.push(`expected is missing`);
@@ -86,7 +82,7 @@ async function check(dir) {
 
 const dirs = readdirSync(TASKS).filter((d) => existsSync(join(TASKS, d, "task.json"))).sort();
 let failed = 0;
-const counts = { development: 0, "held-out": 0 };
+const counts = { development: 0, "held-out": 0, fresh: 0 };
 for (const dir of dirs) {
   const problems = await check(dir);
   const split = JSON.parse(readFileSync(join(TASKS, dir, "task.json"), "utf8")).split;
@@ -99,5 +95,5 @@ for (const dir of dirs) {
     console.log(`ok   ${dir}`);
   }
 }
-console.log(`${dirs.length} tasks: ${counts.development} development, ${counts["held-out"]} held-out, ${failed} failing`);
+console.log(`${dirs.length} tasks: ${counts.development} development, ${counts["held-out"]} held-out, ${counts.fresh} fresh, ${failed} failing`);
 process.exit(failed ? 1 : 0);

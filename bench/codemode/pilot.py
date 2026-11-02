@@ -8,7 +8,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from cores import task_registry
+from cores import SIGNATURES, task_registry
 
 from sx.checker import check
 from sx.diagnostics import render
@@ -24,7 +24,7 @@ FORMS = frozenset({
 PRELUDE = frozenset({
     "+", "-", "*", "quot", "rem", "=", "not=", "<", "<=", ">", ">=", "not", "and", "or", "str", "count", "take",
     "concat", "flatten", "contains?", "map", "filter", "any?", "all?", "reduce", "sort-by", "distinct-by", "group-by",
-    "some", "ok", "err", "first", "rest", "nth", "keep",
+    "some", "ok", "err", "first", "rest", "nth", "keep", "/", "float", "round", "floor", "ceil",
 })
 
 BENCH = Path(__file__).parent
@@ -242,7 +242,7 @@ def main() -> None:
     args.out = args.out.resolve()
     workdir = args.out.parent
     workdir.mkdir(parents=True, exist_ok=True)
-    cores = json.loads((BENCH / "cores.json").read_text())
+    cores = SIGNATURES
     tasks = []
     for path in sorted((BENCH / "tasks").glob("*/task.json")):
         task = json.loads(path.read_text())

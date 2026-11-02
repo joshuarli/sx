@@ -1,7 +1,7 @@
 error[type-mismatch] 2:10-2:37
   (sort-by (fn [sku] (assoc {} sku 1)) (keys (call warehouse.levels {:warehouse "north"})))
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  sort-by needs a key that is an Int, String, Bool, or a tuple of them.
+  sort-by needs a key that is an Int, Float, String, Bool, or a tuple of them.
   Expected: a sort key
   Found: Map<String, Int>
   Help: sx help sort-by

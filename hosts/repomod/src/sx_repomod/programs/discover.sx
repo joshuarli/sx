@@ -1,0 +1,16 @@
+(let [catalogued (call catalog.select {:repos [] :tags []})
+      requested (if (= (count owners) 0)
+                  (map (fn [r] (get r :owner)) catalogued)
+                  (par-map {:limit 8} (fn [owner] (call catalog.owner {:owner owner})) owners))
+      names (sort-by text.casefold (distinct-by text.casefold requested))
+      pages (par-map {:limit 8}
+              (fn [owner] (call github.owner-repos {:owner owner :owners names}))
+              names)
+      found (sort-by text.casefold (distinct-by text.casefold (flatten pages)))
+      found-keys (map text.casefold found)
+      known (map (fn [r] (get r :id)) catalogued)
+      known-keys (map text.casefold known)]
+  {:owners names
+   :uncatalogued (filter (fn [name] (not (contains? known-keys (text.casefold name)))) found)
+   :missing (sort-by text.casefold
+              (filter (fn [name] (not (contains? found-keys (text.casefold name)))) known))})

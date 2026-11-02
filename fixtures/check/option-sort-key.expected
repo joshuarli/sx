@@ -1,7 +1,7 @@
 error[type-mismatch] 15:12-15:22
     (sort-by (fn [x] x)
              ^^^^^^^^^^
-  sort-by needs a key that is an Int, String, Bool, or a tuple of them.
+  sort-by needs a key that is an Int, Float, String, Bool, or a tuple of them.
   Expected: a sort key
   Found: Option<String>
   To drop none values and unwrap the rest, use (keep (fn [x] x) results).

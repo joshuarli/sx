@@ -70,6 +70,8 @@ class Converter:
             case "Tuple":
                 return "[" + ", ".join(self.arguments()) + "]"
             case "Record":
+                if self.peek() == "open":
+                    self.take("open")
                 self.take("{")
                 fields = []
                 while self.peek() != "}":

@@ -1,0 +1,14 @@
+{
+  "description": "A record literal is always closed, even where the expected type is open.",
+  "program": "(call accounts.put {:id \"a1\" :name \"Ada\" :plan \"pro\"})",
+  "declarations": "declarations.json",
+  "allow": [
+    "accounts.put"
+  ],
+  "expect": {
+    "rejected": [
+      "unknown-field"
+    ]
+  },
+  "responses": []
+}

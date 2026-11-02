@@ -1,0 +1,14 @@
+{
+  "description": "The largest Float below 2^63 rounds to an Int.",
+  "program": "[(round 9223372036854774784.0) (floor -9223372036854775808.0)]",
+  "declarations": "declarations.json",
+  "allow": [],
+  "responses": [],
+  "expect": {
+    "completed": [
+      9223372036854774784,
+      -9223372036854775808
+    ]
+  },
+  "trace": []
+}

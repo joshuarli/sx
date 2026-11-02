@@ -1,0 +1,4 @@
+error[float-range] 1:4-1:9
+  (* 1e999 2)
+     ^^^^^
+  1e999 does not fit in a finite 64-bit Float.

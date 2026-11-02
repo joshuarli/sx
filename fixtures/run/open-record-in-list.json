@@ -1,0 +1,56 @@
+{
+  "description": "Each element of a list of open records drops its own extra fields.",
+  "program": "(map (fn [a] (get a :name)) (call accounts.list {}))",
+  "declarations": "declarations.json",
+  "allow": [
+    "accounts.list"
+  ],
+  "responses": [
+    {
+      "capability": "accounts.list",
+      "input": {},
+      "results": [
+        {
+          "output": [
+            {
+              "id": "a1",
+              "name": "Ada",
+              "x": 1
+            },
+            {
+              "id": "a2",
+              "name": "Bo"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": [
+      "Ada",
+      "Bo"
+    ]
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "accounts.list",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": [
+        {
+          "id": "a1",
+          "name": "Ada",
+          "x": 1
+        },
+        {
+          "id": "a2",
+          "name": "Bo"
+        }
+      ]
+    }
+  ]
+}

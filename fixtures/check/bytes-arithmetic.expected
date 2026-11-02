@@ -1,0 +1,6 @@
+error[type-mismatch] 2:4-2:31
+  (+ (call blob.get {:name "a"}) 1)
+     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  This is Bytes, but an Int is needed here.
+  Expected: Int
+  Found: Bytes

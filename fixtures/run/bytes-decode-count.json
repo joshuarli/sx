@@ -1,0 +1,37 @@
+{
+  "description": "A base64 string decodes into Bytes, and count is the byte length.",
+  "program": "(count (call blob.get {:name \"a\"}))",
+  "declarations": "declarations.json",
+  "allow": [
+    "blob.get"
+  ],
+  "responses": [
+    {
+      "capability": "blob.get",
+      "input": {
+        "name": "a"
+      },
+      "results": [
+        {
+          "output": "aGVsbG8="
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": 5
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "blob.get",
+      "input": {
+        "name": "a"
+      }
+    },
+    {
+      "response": "r:1",
+      "output": "aGVsbG8="
+    }
+  ]
+}
