@@ -249,7 +249,7 @@ export class Environment {
       if (done(value)) return value;
       let interval = options.everyMs ?? 0;
       if (options.backoffMs !== undefined) interval = Math.min(options.backoffMs[0] * 2 ** round, options.backoffMs[1]);
-      if (waited + interval > options.withinMs) throw new CallError("Timeout", "wait-until: the condition did not hold within the time allowed");
+      if (waited + interval > options.withinMs) throw new CallError("Timeout", `wait-until gave up after ${options.withinMs} ms.`);
       waited += interval;
       this.delays.push(interval);
     }

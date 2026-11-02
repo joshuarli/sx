@@ -8,6 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from tsdiff.build import SCRATCH, generated_case, mutant_case
+from tsdiff.compare import SxUnsupportedLanguageError
 from tsdiff.corpus import build_corpus
 from tsdiff.run import case_directories, run_all, summarize
 
@@ -34,7 +35,12 @@ def command_corpus(args: argparse.Namespace) -> int:
 
 def command_run(args: argparse.Namespace) -> int:
     directories = case_directories(Path(p) for p in args.cases)
-    report = run_all(directories, shim_only=args.shim_only, binary=Path(args.sx) if args.sx else None, jobs=args.jobs)
+    try:
+        binary = Path(args.sx) if args.sx else None
+        report = run_all(directories, shim_only=args.shim_only, binary=binary, jobs=args.jobs)
+    except SxUnsupportedLanguageError as error:
+        print(f"tsdiff: {error}", file=sys.stderr)
+        return 2
     for line in summarize(report):
         print(line)
     return 0 if report.clean() else 1
