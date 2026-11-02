@@ -91,12 +91,126 @@ impl Json {
 }
 
 pub fn parse(text: &str) -> Result<Json, JsonError> {
+    let (substituted, beyond) = substitute_beyond_f64(text)?;
     let config = DeserializerConfig::builder().context(Context::with(DuplicateKeys::Last)).build();
-    let value: DeserValue = config.from_str(text).map_err(|e| JsonError(e.to_string()))?;
-    from_deser(&value, 0)
+    let value: DeserValue = config.from_str(&substituted).map_err(|e| JsonError(e.to_string()))?;
+    from_deser(&value, &beyond, 0)
 }
 
-fn from_deser(value: &DeserValue, depth: usize) -> Result<Json, JsonError> {
+const SUBSTITUTE_ESCAPE: &str = "\\u0000";
+
+fn is_json_number(token: &str) -> bool {
+    let bytes = token.as_bytes();
+    let mut at = usize::from(bytes.first() == Some(&b'-'));
+    let digits = |from: usize| bytes[from..].iter().take_while(|b| b.is_ascii_digit()).count();
+    match bytes.get(at) {
+        Some(b'0') => at += 1,
+        Some(b'1'..=b'9') => at += digits(at),
+        _ => return false,
+    }
+    if bytes.get(at) == Some(&b'.') {
+        let count = digits(at + 1);
+        if count == 0 {
+            return false;
+        }
+        at += 1 + count;
+    }
+    if matches!(bytes.get(at), Some(b'e' | b'E')) {
+        at += 1;
+        if matches!(bytes.get(at), Some(b'+' | b'-')) {
+            at += 1;
+        }
+        let count = digits(at);
+        if count == 0 {
+            return false;
+        }
+        at += count;
+    }
+    at == bytes.len()
+}
+
+fn beyond_f64(token: &str) -> Option<Json> {
+    match token {
+        "NaN" => return Some(Json::Float(f64::NAN)),
+        "Infinity" => return Some(Json::Float(f64::INFINITY)),
+        "-Infinity" => return Some(Json::Float(f64::NEG_INFINITY)),
+        _ => {}
+    }
+    if !is_json_number(token) || token.parse::<f64>().is_ok_and(f64::is_finite) {
+        return None;
+    }
+    if token.contains(['.', 'e', 'E']) {
+        let negative = token.starts_with('-');
+        return Some(Json::Float(if negative { f64::NEG_INFINITY } else { f64::INFINITY }));
+    }
+    Some(Json::BigInt(token.to_string()))
+}
+
+fn substitute_beyond_f64(text: &str) -> Result<(std::borrow::Cow<'_, str>, Vec<Json>), JsonError> {
+    let bytes = text.as_bytes();
+    let mut replacements: Vec<(usize, usize, Json)> = Vec::new();
+    let mut escapes_nul = false;
+    let mut at = 0;
+    while at < bytes.len() {
+        let b = bytes[at];
+        if b == b'"' {
+            at += 1;
+            while at < bytes.len() && bytes[at] != b'"' {
+                if bytes[at] == b'\\' {
+                    if text[at..].starts_with(SUBSTITUTE_ESCAPE) {
+                        escapes_nul = true;
+                    }
+                    at += 1;
+                }
+                at += 1;
+            }
+            at += 1;
+            continue;
+        }
+        let starts_word = matches!(b, b'N' | b'I') || (b == b'-' && bytes.get(at + 1) == Some(&b'I'));
+        if b == b'-' || b.is_ascii_digit() || starts_word {
+            let start = at;
+            at += 1;
+            while at < bytes.len() && (bytes[at].is_ascii_alphanumeric() || matches!(bytes[at], b'+' | b'-' | b'.')) {
+                at += 1;
+            }
+            if let Some(json) = beyond_f64(&text[start..at]) {
+                replacements.push((start, at, json));
+            }
+            continue;
+        }
+        at += 1;
+    }
+    if replacements.is_empty() {
+        return Ok((std::borrow::Cow::Borrowed(text), Vec::new()));
+    }
+    if escapes_nul {
+        return Err(JsonError(
+            "JSON that holds both \\u0000 and numbers beyond the 64-bit Float range is not supported".to_string(),
+        ));
+    }
+    let mut out = String::with_capacity(text.len() + replacements.len() * 12);
+    let mut last = 0;
+    let mut values = Vec::with_capacity(replacements.len());
+    for (index, (start, end, json)) in replacements.into_iter().enumerate() {
+        out.push_str(&text[last..start]);
+        out.push('"');
+        out.push_str(SUBSTITUTE_ESCAPE);
+        out.push_str(&index.to_string());
+        out.push('"');
+        last = end;
+        values.push(json);
+    }
+    out.push_str(&text[last..]);
+    Ok((std::borrow::Cow::Owned(out), values))
+}
+
+fn substituted(text: &str, beyond: &[Json]) -> Option<Json> {
+    let index = text.strip_prefix('\u{0}')?.parse::<usize>().ok()?;
+    beyond.get(index).cloned()
+}
+
+fn from_deser(value: &DeserValue, beyond: &[Json], depth: usize) -> Result<Json, JsonError> {
     if depth > MAX_DEPTH {
         return Err(JsonError(format!("JSON nests deeper than {MAX_DEPTH} levels")));
     }
@@ -107,7 +221,7 @@ fn from_deser(value: &DeserValue, depth: usize) -> Result<Json, JsonError> {
         Kind::I64(n) => Json::Int(*n),
         Kind::F64(f) => Json::Float(*f),
         Kind::F32(f) => Json::Float(f64::from(*f)),
-        Kind::Str(s) | Kind::Lexical(s) => Json::String(s.clone()),
+        Kind::Str(s) | Kind::Lexical(s) => substituted(s, beyond).unwrap_or_else(|| Json::String(s.clone())),
         Kind::Ext(ext) => {
             if let Some(n) = ext.downcast_ref::<u128>() {
                 integer_text(&n.to_string())
@@ -124,7 +238,7 @@ fn from_deser(value: &DeserValue, depth: usize) -> Result<Json, JsonError> {
             }
         }
         Kind::Seq(seq) => {
-            Json::Array(seq.into_iter().map(|item| from_deser(item, depth + 1)).collect::<Result<_, _>>()?)
+            Json::Array(seq.into_iter().map(|item| from_deser(item, beyond, depth + 1)).collect::<Result<_, _>>()?)
         }
         Kind::Map(map) => {
             let mut entries = Vec::with_capacity(map.len());
@@ -132,7 +246,7 @@ fn from_deser(value: &DeserValue, depth: usize) -> Result<Json, JsonError> {
                 let Some(key) = key.as_str() else {
                     return Err(JsonError("JSON object key is not a string".to_string()));
                 };
-                entries.push((key.to_string(), from_deser(item, depth + 1)?));
+                entries.push((key.to_string(), from_deser(item, beyond, depth + 1)?));
             }
             Json::Object(entries)
         }
@@ -430,6 +544,21 @@ mod tests {
         assert!(matches!(entries[1].1, Json::Float(f) if f == 1.0));
         assert!(matches!(entries[2].1, Json::Float(f) if f == 100000.0));
         assert!(matches!(&entries[3].1, Json::BigInt(t) if t == "18446744073709551616"));
+    }
+
+    #[test]
+    fn parse_accepts_what_python_accepts_beyond_f64() {
+        let digits = format!("1{}", "0".repeat(400));
+        let parsed = parse(&format!("[1e999, -1e999, {digits}, NaN, Infinity, -Infinity, \"1e999\"]")).unwrap();
+        let items = parsed.as_array().unwrap();
+        assert!(matches!(items[0], Json::Float(f) if f == f64::INFINITY));
+        assert!(matches!(items[1], Json::Float(f) if f == f64::NEG_INFINITY));
+        assert!(matches!(&items[2], Json::BigInt(t) if *t == digits));
+        assert!(matches!(items[3], Json::Float(f) if f.is_nan()));
+        assert!(matches!(items[5], Json::Float(f) if f == f64::NEG_INFINITY));
+        assert_eq!(items[6].as_str(), Some("1e999"));
+        assert!(parse("[01e999]").is_err());
+        assert_eq!(dumps(&Json::Array(items[..2].to_vec()), Layout::Spaced).unwrap(), "[Infinity, -Infinity]");
     }
 
     #[test]
