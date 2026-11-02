@@ -22,6 +22,7 @@ workspace = true
 sx-kernel = { path = "../sx-kernel" }
 sx-cores = { path = "../sx-cores" }
 sx-packs = { path = "../sx-packs" }
+sx-ts = { path = "../sx-ts" }
 
 [dev-dependencies]
 rustls = { version = "0.23", default-features = false, features = ["std", "tls12"] }

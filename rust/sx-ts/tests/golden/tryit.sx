@@ -1,0 +1,13 @@
+(let [t (match
+          (attempt (let [t (call fs.read-text {:path "a"})] t))
+          (ok v'1)
+          v'1
+          (err _)
+          (let [t ""] t))
+      _ (match
+          (attempt (let [_ (call fs.write-text {:path "b" :text t})] unit))
+          (ok _)
+          unit
+          (err e)
+          (let [_ (log "failed" (get e :message))] (fail (str "write failed: " (get e :message)))))]
+  t)

@@ -5,7 +5,7 @@ use sx_cores::kernel::{Cores, core as builtin_core};
 use sx_kernel::authority::{Authority, GrantError, Grants};
 use sx_kernel::budgets::Budgets;
 use sx_kernel::checker::{closest, input_disagreement};
-use sx_kernel::closers::{CloserEdit, compile_source_inferring, edits_json, edits_note};
+use sx_kernel::closers::{CloserEdit, Compiled, compile_source_inferring, edits_json, edits_note};
 use sx_kernel::diagnostics::{Diagnostic, render};
 use sx_kernel::explain::{ExplainedTool, RUNTIME_INPUT, explain_tools};
 use sx_kernel::export::export_program;
@@ -22,7 +22,7 @@ use sx_kernel::syntax::Span;
 use sx_kernel::types::{Type, show_type};
 use sx_kernel::values::{Value, decode, show_value};
 
-use crate::argparse::{CoresArgs, Format, HelpArgs, Invocation, ProgramArgs, ProgramKind};
+use crate::argparse::{CoresArgs, Emit, Format, HelpArgs, Invocation, Language, ProgramArgs, ProgramKind};
 use crate::mcp::Host;
 use crate::pyfile::{path_text, read_text};
 use crate::{EXIT_FAILED, EXIT_OK, EXIT_REJECTED, EXIT_USAGE, Exit, pyjson};
@@ -261,11 +261,24 @@ fn command_program(args: &ProgramArgs, base: Registry, output: &mut Output, mcp:
         ProgramKind::Explain => Authority::Unrestricted,
         _ => Authority::Granted(&grants),
     };
-    let compiled = compile_source_inferring(&source, &registry, authority, &inputs, Budgets::default());
+    if args.language == Language::TypeScript && matches!(args.kind, ProgramKind::Check { emit: Some(Emit::Sx) }) {
+        return emit_lowered(&source, &registry, args.format, output);
+    }
+    if args.language == Language::Sx && matches!(args.kind, ProgramKind::Check { emit: Some(Emit::Sx) }) {
+        return Err(Stop::usage("--emit sx prints the lowering of a TypeScript program; pass --language ts"));
+    }
+    let compiled = match args.language {
+        Language::Sx => compile_source_inferring(&source, &registry, authority, &inputs, Budgets::default()),
+        Language::TypeScript => Compiled {
+            check: sx_ts::compile_source(&source, &registry, authority, &inputs, Budgets::default()),
+            source: source.clone(),
+            edits: Vec::new(),
+        },
+    };
     let source = compiled.source;
     let checked = compiled.check;
     output.inferred = compiled.edits;
-    let emits_ir = matches!(args.kind, ProgramKind::Check { emit_ir: true });
+    let emits_ir = matches!(args.kind, ProgramKind::Check { emit: Some(Emit::Ir) });
     if !output.inferred.is_empty() && (args.format == Format::Text || emits_ir) {
         output.stderr.push_str(&format!("{}\n", edits_note(&output.inferred)));
     }
@@ -284,12 +297,13 @@ fn command_program(args: &ProgramArgs, base: Registry, output: &mut Output, mcp:
         return Err(Stop::usage(difference));
     }
     match &args.kind {
-        ProgramKind::Check { emit_ir: true } => {
+        ProgramKind::Check { emit: Some(Emit::Ir) } => {
             let shown = dumps(&export_program(&program), Layout::Spaced).map_err(|e| Stop::Internal(e.to_string()))?;
             output.line(&shown);
             Ok(EXIT_OK)
         }
-        ProgramKind::Check { emit_ir: false } => {
+        ProgramKind::Check { emit: Some(Emit::Sx) } => Err(Stop::Internal("--emit sx is handled before checking".to_string())),
+        ProgramKind::Check { emit: None } => {
             let result = show_type(&program.result);
             let payload = Json::object([("ok", Json::Bool(true)), ("result", Json::string(result.as_str()))]);
             output.emit(args.format, payload, &format!("ok: {result}"))?;
@@ -311,6 +325,23 @@ fn command_program(args: &ProgramArgs, base: Registry, output: &mut Output, mcp:
                     command_run(args.format, &program, &grants, &responses, &values, output)
                 }
             }
+        }
+    }
+}
+
+fn emit_lowered(source: &str, registry: &Registry, format: Format, output: &mut Output) -> Result<i32, Stop> {
+    match sx_ts::lower_source(source, registry) {
+        Ok(program) => {
+            output.stdout.push_str(&sx_ts::pretty::pretty(&program));
+            Ok(EXIT_OK)
+        }
+        Err(diagnostics) => {
+            let payload = Json::object([
+                ("ok", Json::Bool(false)),
+                ("diagnostics", Json::Array(diagnostics.iter().map(diagnostic_json).collect())),
+            ]);
+            output.emit(format, payload, render(source, &diagnostics).trim_end_matches('\n'))?;
+            Ok(EXIT_REJECTED)
         }
     }
 }

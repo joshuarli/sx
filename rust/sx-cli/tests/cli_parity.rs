@@ -62,7 +62,8 @@ options:
   --emit {ir}           Print the checked semantic IR as JSON
 "#,
         r#"usage: sx check [-h] [--declarations DECLARATIONS] [--allow ID]
-                [--grants GRANTS] [--format {text,json}] [--emit {ir}]
+                [--grants GRANTS] [--format {text,json}]
+                [--language {sx,ts}] [--emit {ir,sx}]
                 file
 
 positional arguments:
@@ -75,7 +76,9 @@ options:
   --allow ID            Authorize one tool that declares no scope
   --grants GRANTS       JSON object granting tools, with their scopes
   --format {text,json}
-  --emit {ir}           Print the checked semantic IR as JSON
+  --language {sx,ts}    Program language; a .ts file implies ts
+  --emit {ir,sx}        Print the checked semantic IR as JSON, or the
+                        lowered Sx of a ts program
 "#,
     ),
     (
@@ -95,6 +98,7 @@ options:
 "#,
         r#"usage: sx explain [-h] [--declarations DECLARATIONS] [--allow ID]
                   [--grants GRANTS] [--format {text,json}]
+                  [--language {sx,ts}]
                   file
 
 positional arguments:
@@ -107,6 +111,7 @@ options:
   --allow ID            Authorize one tool that declares no scope
   --grants GRANTS       JSON object granting tools, with their scopes
   --format {text,json}
+  --language {sx,ts}    Program language; a .ts file implies ts
 "#,
     ),
     (
@@ -130,7 +135,8 @@ options:
 "#,
         r#"usage: sx run [-h] [--declarations DECLARATIONS] [--allow ID]
               [--grants GRANTS] [--format {text,json}]
-              [--responses RESPONSES] [--input NAME=JSON]
+              [--language {sx,ts}] [--responses RESPONSES]
+              [--input NAME=JSON]
               file
 
 positional arguments:
@@ -143,6 +149,7 @@ options:
   --allow ID            Authorize one tool that declares no scope
   --grants GRANTS       JSON object granting tools, with their scopes
   --format {text,json}
+  --language {sx,ts}    Program language; a .ts file implies ts
   --responses RESPONSES
                         JSON list of recorded tool responses; without it,
                         --grants runs pack tools for real

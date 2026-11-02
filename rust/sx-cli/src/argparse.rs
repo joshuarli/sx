@@ -22,9 +22,21 @@ pub struct CoresArgs {
     pub format: Format,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Emit {
+    Ir,
+    Sx,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Language {
+    Sx,
+    TypeScript,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ProgramKind {
-    Check { emit_ir: bool },
+    Check { emit: Option<Emit> },
     Explain,
     Run { responses: Option<String>, inputs: Vec<String> },
 }
@@ -37,6 +49,7 @@ pub struct ProgramArgs {
     pub allow: Vec<String>,
     pub grants: Option<String>,
     pub format: Format,
+    pub language: Language,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -58,6 +71,7 @@ enum Slot {
     Grants,
     Format,
     Emit,
+    Language,
     Responses,
     Input,
     Level,
@@ -71,13 +85,15 @@ struct Flag {
 
 const FORMATS: &[&str] = &["text", "json"];
 const LEVELS: &[&str] = &["minimal", "standard", "full"];
-const EMITS: &[&str] = &["ir"];
+const EMITS: &[&str] = &["ir", "sx"];
+const LANGUAGES: &[&str] = &["sx", "ts"];
 
 const DECLARATIONS: Flag = Flag { name: "--declarations", slot: Slot::Declarations, choices: None };
 const ALLOW: Flag = Flag { name: "--allow", slot: Slot::Allow, choices: None };
 const GRANTS: Flag = Flag { name: "--grants", slot: Slot::Grants, choices: None };
 const FORMAT: Flag = Flag { name: "--format", slot: Slot::Format, choices: Some(FORMATS) };
 const EMIT: Flag = Flag { name: "--emit", slot: Slot::Emit, choices: Some(EMITS) };
+const LANGUAGE: Flag = Flag { name: "--language", slot: Slot::Language, choices: Some(LANGUAGES) };
 const RESPONSES: Flag = Flag { name: "--responses", slot: Slot::Responses, choices: None };
 const INPUT: Flag = Flag { name: "--input", slot: Slot::Input, choices: None };
 const LEVEL: Flag = Flag { name: "--level", slot: Slot::Level, choices: Some(LEVELS) };
@@ -118,21 +134,21 @@ const SUBCOMMANDS: [Subcommand; 5] = [
     Subcommand {
         name: Name::Check,
         word: "check",
-        flags: &[DECLARATIONS, ALLOW, GRANTS, FORMAT, EMIT],
+        flags: &[DECLARATIONS, ALLOW, GRANTS, FORMAT, LANGUAGE, EMIT],
         positional: Positional::Required("file"),
         help: CHECK_HELP,
     },
     Subcommand {
         name: Name::Explain,
         word: "explain",
-        flags: &[DECLARATIONS, ALLOW, GRANTS, FORMAT],
+        flags: &[DECLARATIONS, ALLOW, GRANTS, FORMAT, LANGUAGE],
         positional: Positional::Required("file"),
         help: EXPLAIN_HELP,
     },
     Subcommand {
         name: Name::Run,
         word: "run",
-        flags: &[DECLARATIONS, ALLOW, GRANTS, FORMAT, RESPONSES, INPUT],
+        flags: &[DECLARATIONS, ALLOW, GRANTS, FORMAT, LANGUAGE, RESPONSES, INPUT],
         positional: Positional::Required("file"),
         help: RUN_HELP,
     },
@@ -371,16 +387,26 @@ fn build(command: &Subcommand, collected: Collected) -> Invocation {
         Name::Cores => Invocation::Cores(CoresArgs { format: format_of(&collected) }),
         Name::Check | Name::Explain | Name::Run => {
             let kind = match command.name {
-                Name::Check => ProgramKind::Check { emit_ir: last(&collected, Slot::Emit).is_some() },
+                Name::Check => ProgramKind::Check {
+                    emit: last(&collected, Slot::Emit).map(|choice| if choice == "sx" { Emit::Sx } else { Emit::Ir }),
+                },
                 Name::Explain => ProgramKind::Explain,
                 _ => ProgramKind::Run {
                     responses: last(&collected, Slot::Responses),
                     inputs: all(&collected, Slot::Input),
                 },
             };
+            let file = collected.positional.clone().unwrap_or_default();
+            let language = match last(&collected, Slot::Language).as_deref() {
+                Some("ts") => Language::TypeScript,
+                Some(_) => Language::Sx,
+                None if file.ends_with(".ts") => Language::TypeScript,
+                None => Language::Sx,
+            };
             Invocation::Program(ProgramArgs {
                 kind,
-                file: collected.positional.clone().unwrap_or_default(),
+                language,
+                file,
                 declarations: last(&collected, Slot::Declarations),
                 allow: all(&collected, Slot::Allow),
                 grants: last(&collected, Slot::Grants),

@@ -5,7 +5,7 @@ use sx_kernel::json::{Json, Layout, dumps, parse};
 use sx_kernel::registry::Registry;
 use sx_packs::mcp::{self, Connection, Limits};
 
-use crate::argparse::{Format, ProgramArgs, ProgramKind};
+use crate::argparse::{Format, Language, ProgramArgs, ProgramKind};
 use crate::pyfile::{path_text, read_text};
 use crate::{EXIT_FAILED, EXIT_OK, EXIT_USAGE, Exit};
 
@@ -260,6 +260,7 @@ fn run_program(args: &[String], new_registry: &dyn Fn() -> Registry) -> Exit {
         allow: options.all("--allow"),
         grants: options.last("--grants").map(str::to_string),
         format,
+        language: Language::Sx,
     };
     let host = Host { command, name: options.last("--name").map(str::to_string), limits };
     crate::commands::execute_on_mcp(&program, new_registry(), &host)

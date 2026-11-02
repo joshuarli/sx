@@ -1,0 +1,4 @@
+(let [text (call fs.read-text {:path "a.txt"})
+      files (call fs.list {:path "."})
+      big (map (fn [f] (get f :name)) (filter (fn [f] (> (get f :size) 100)) files))]
+  {:text text :big big :n (js.length big) :label (str "n=" (js.length big))})

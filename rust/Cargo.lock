@@ -1240,6 +1240,7 @@ dependencies = [
  "sx-cores",
  "sx-kernel",
  "sx-packs",
+ "sx-ts",
 ]
 
 [[package]]
@@ -1268,6 +1269,13 @@ dependencies = [
  "h12tiny",
  "libc",
  "rusqlite",
+ "sx-kernel",
+]
+
+[[package]]
+name = "sx-ts"
+version = "0.1.0"
+dependencies = [
  "sx-kernel",
 ]
 
