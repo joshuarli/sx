@@ -149,11 +149,21 @@ suite runs in an environment where repomod is not installed, which proves the bo
 
 ## Status
 
-Phases 0, 1, 3, and 4 have passed their gates. Phase 2 failed twice on the first held-out set,
+Phases 0, 1, 3, 4, and 5 have passed their gates. Phase 2 failed twice on the first held-out set,
 the second time after its one allowed revision, and then passed on a fresh blind held-out set.
 At the review before the Rust port, the owner accepted the fresh-set pass and every
 recommendation below, and added Phase 5 to the campaign's scope. The repomod changes Phase 3
 proposes stay proposals, because this project may not modify repomod.
+
+**The Python prototype is frozen.** `src/sx` and the Python cores are frozen as of commit
+`15b6ed6`, the parent of the commit that records this, because Rust passed its gates. The prototype
+remains an executable specification for every unmarked fixture, and the Rust gates keep comparing
+Rust with live Python on all of them. A bug fix to frozen behavior lands in Rust, Lean, and Python
+together while Python can still run the case. New features land in Rust and Lean only, with fixtures
+marked `"python": false` (run) or `; python: no` (check and read), which Python's tests skip and the
+Rust and Lean gates judge against the fixture's own expectations. The differential fuzzer compares
+Rust with Lean and keeps Python as a third participant for the features Python has. `sx-repomod` runs
+all its commands on the Rust binary. Phase 6 onward is Rust and Lean only.
 
 **Phase 0.** The syntax pilot ran on the development set and drove one language revision.
 
@@ -400,6 +410,25 @@ self-containing bracket type that recursed, a late-resolved record sort key, a l
 without parameters that asserted, lone surrogates in host strings, and a loop with no exit,
 now the `loop-no-result` diagnostic). The final 30,000-program run found none.
 
+**Phase 5.** The gate passes: Rust agrees with Python on every fixture and every saved model program,
+with Lean on every accepted fixture, and the repomod parity tests pass on the Rust kernel. Gate evidence:
+
+- Reader: 41 of 41 `fixtures/read` outputs are byte-identical.
+- Checker: 121 of 121 `fixtures/check` outputs are byte-identical, diagnostics included. On the 127
+  accepted `fixtures/run` cases the exported IR is identical to Python's, and on all 127 accepted and 18
+  rejected cases the outcome, the exact trace, and the rejection codes agree with the fixture and
+  with Python.
+- Command line: about 1,990 cases of `sx check`, `explain`, `run`, `help`, and `cores` give the same
+  stdout, stderr, and exit status as `uv run sx`, over every run and check fixture, the `fixtures/cli`
+  matrix, every help entry, and the argument and file error paths.
+- Differential testing: 976 saved model attempts from the probe check and run to the same verdict
+  as Python with 0 disagreements, and a generated corpus of 2,000 programs checks identically in Rust
+  and Python.
+- Host boundary: `sx serve` gives the same outcome and trace on all 145 `fixtures/run` cases, and
+  `sx-repomod` runs its 26 parity tests on the Rust kernel.
+- Measurements: the next paragraph. The counts above are the gate's. The fixtures marked for Python at the
+  freeze are not in them.
+
 **Phase 5 host boundary and measurements.** `sx serve` speaks the JSON [host protocol](docs/language.md#host-protocol), 127 accepted and 18 rejected `fixtures/run` cases give the same outcome and exact trace through it, and `sx-repomod` runs its 26 parity tests on the Rust kernel. Release build, CPU time per operation (median of 9 interleaved samples, minimum to maximum in parentheses, none discarded by `perf-gate-ready`, which exited 0 although other lanes were compiling), Python kernel against Rust: parsing 33.9 (32.6-35.4) against 1.16 (1.13-1.23) microseconds per fixture program, and 2,039 against 63 for `status-offline.sx`; checking 46.4 (45.6-49.8) against 41.9 (39.5-50.1) per fixture program, and 1,715 against 468 for the status program; running with a fixture host 28.1 against 2.1 per fixture program, and 12.6 against 0.90 milliseconds for the status program on 70 recorded responses; 25.5 against 1.38 milliseconds for 59,000 machine steps of pure computation; one suspension and resume 21.3 (20.9-25.6) against 1.48 (1.45-1.58), and 13.6 against 1.29 per request in a 16-wide `par-map`. Half of Rust's cost to check a small program is the 22 microseconds the checker spends starting its 64 MiB stack thread, so small programs gain little from Rust there. Host dispatch: a Python host answering over the protocol costs 24.5 (24.1-26.3) microseconds of CPU per call in the client and the kernel together, 1.15 times the Python kernel with an in-process Python host, so the protocol is no faster than Python for trivial answers. Real capability calls take milliseconds, so the measurements do not call for PyO3. Reproduce with `uv run python bench/kernel/measure.py`, which builds the release binaries and takes about ten minutes. `uv run pytest bench/kernel/record_status.py` records the status program's responses from repomod's test fleet.
 
 Decided at the Phase 0 checkpoint:
@@ -410,6 +439,10 @@ Decided at the Phase 0 checkpoint:
 
 Open:
 
+- The Rust-led fuzzer found one disagreement with Python in 4,000 programs (seed 7, index 3829): in a
+  `type-mismatch` message for `(keep (fn [_] (match 0 0 (let [w5 [[]]] w5) 0 [0])) 0)`, Python writes
+  `Found: List<List<?>>` where Rust writes `Found: List<Int>`. Which message is right is undecided. The fix
+  lands in Rust and Python together, with a fixture.
 - Watch items from one answer each: omitting an `Option` field from a record literal, a bare
   symbol as a catch-all `match` pattern, and branches returning records with different fields.
 - The six held-out tasks that declare `Map`, `Float`, or `Bytes` cannot load into the registry.

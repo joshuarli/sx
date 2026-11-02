@@ -1,10 +1,9 @@
 # Core conformance vectors
 
 Each `CORE.json` file holds input and output pairs for every function of one core: `text`,
-`semver`, `git`, and `github`. The Python cores produce them, and the Rust crate
+`semver`, `git`, and `github`. The Python cores produced them and are now frozen, and the Rust crate
 [`rust/sx-cores`](../../rust/sx-cores) must reproduce every one. The vectors are the shared
-definition of what each core function does until Python is frozen and the Lean model covers the
-cores.
+definition of what each core function does until the Lean model covers the cores.
 
 | Field | Meaning |
 | --- | --- |

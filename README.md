@@ -21,11 +21,27 @@ This is a uv workspace.
 
 | Path | Contents |
 | --- | --- |
-| `src/sx` | The kernel: reader, checker, machine, registry, help. |
+| `src/sx` | The frozen Python kernel: reader, checker, machine, registry, help. |
+| `rust` | The Rust kernel, cores, and `sx` binary. New work lands here. |
+| `lean` | The Lean reference semantics. New work lands here. |
 | `cores/text`, `cores/semver` | Pure cores that register through the Python API. |
 | `cores/git`, `cores/github` | Decision cores: a checkout as `Missing | Invalid | OriginMismatch | Detached | OnBranch`, and CI aggregation. |
 | `hosts/repomod` | `sx-repomod`: capabilities that wrap repomod, and the `discover` and `status --offline` programs, run on the Rust binary. |
 | `bench/codemode` | The model probe. |
+
+## The Python prototype is frozen
+
+`src/sx` and the Python cores are frozen as of commit `15b6ed6`, the parent of the commit that records
+this. The Rust port passed its gates, so Rust and Lean are now ahead.
+
+- `src/sx` stays as an executable specification. It must keep passing every unmarked fixture in
+  `fixtures/`, and the Rust gates still compare Rust with live Python on all of them.
+- A bug in frozen behavior is fixed in Rust, Lean, and Python together, while Python can still run the
+  case. Its fixture then pins the fix in all three.
+- A new feature lands in Rust and Lean only. Its fixtures are marked so Python is not asked to run them:
+  `"python": false` in a `fixtures/run` case, and `; python: no` in a `fixtures/check` or
+  `fixtures/read` program. See the fixture READMEs for the exact rules. The fuzzer shows a program only
+  to the participants that support its features.
 
 The kernel and the cores never import repomod. Only `hosts/repomod` does, and it finds repomod on
 `PYTHONPATH`, not through a dependency, so that no tool builds or writes into `../repomod`.
