@@ -163,8 +163,9 @@ passed. On eight workflows written blind, Sx and TypeScript were both correct on
 attempts. Sx still spends 1.8 times TypeScript's output tokens and 5 times its prompt tokens, and 3 of
 its 24 answers ran only because the reader inferred closers from indentation. The third campaign,
 Phases 13 and 14, cut Sx's cost 12% on the development set, but on a second blind set Sx still cost
-2.4 times TypeScript per solved task, so its cost gate failed; the handoff at the end of Phase 14 says
-where to resume.
+2.4 times TypeScript per solved task, so its cost gate failed. The owner then chose the fourth
+campaign, Phases 15 to 17, Sx as code mode for any MCP client and a benchmark where effects matter,
+which is planned and not started.
 
 **The Python prototype is frozen.** `src/sx` and the Python cores are frozen as of commit
 `15b6ed6`, the parent of the commit that records this, because Rust passed its gates. The prototype
@@ -653,8 +654,9 @@ and `par-map` refuse writes) and writing JSON.
 **Handoff.** Everything is committed on master; nothing from Phases 13 and 14 is pushed. The raw trials
 are under `.work/workflows/` (disposable; the tables above are the record). To resume the lost trial:
 `SX_BIN=<binary built at 35994e4> uv run python bench/workflows/runner.py trials --set blind2
---workflow export-jobs --arm sx --guide tailored --samples 1 --out .work/workflows/blind2`. The next
-campaign, as proposed to the owner and not yet chosen:
+--workflow export-jobs --arm sx --guide tailored --samples 1 --out .work/workflows/blind2`. The owner
+chose items 1 and 2 as the fourth campaign, planned under Phases 15 to 17, with item 3 folded in where
+its tasks need it, and accepted item 4:
 
 1. **Sx as code mode for any MCP client:** one MCP tool that takes an Sx program, describes itself with
    `sx guide`, checks and explains the program's exact calls, and only then runs it against the host's
