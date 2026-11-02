@@ -1,6 +1,0 @@
-error[reserved-name] 2:17-2:24
-  (loop {:max 3} [attempt 1]
-                  ^^^^^^^
-  attempt is the name of a form, so it cannot name a value.
-  Fix: attempts
-  Help: sx help attempt

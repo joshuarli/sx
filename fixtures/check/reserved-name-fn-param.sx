@@ -1,2 +1,0 @@
-; task: dev-failing-ci
-(map (fn [match] (+ match 1)) [1 2])

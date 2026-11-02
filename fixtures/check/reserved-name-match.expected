@@ -1,6 +1,0 @@
-error[reserved-name] 2:23-2:28
-  (match (some 1) (some retry) retry none 0)
-                        ^^^^^
-  retry is the name of a form, so it cannot name a value.
-  Fix: retries
-  Help: sx help retry

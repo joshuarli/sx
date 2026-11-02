@@ -1,3 +1,4 @@
-; task: dev-failing-ci
+; declarations: fixtures/run/declarations.json
+; python: no
 (let [ok true none 1 result (some 2)]
   [ok none result])

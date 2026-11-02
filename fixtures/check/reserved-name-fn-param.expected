@@ -1,6 +1,0 @@
-error[reserved-name] 2:11-2:16
-  (map (fn [match] (+ match 1)) [1 2])
-            ^^^^^
-  match is the name of a form, so it cannot name a value.
-  Fix: matched
-  Help: sx help match

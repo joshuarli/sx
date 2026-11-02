@@ -1,0 +1,52 @@
+{
+  "description": "A form name binds an ordinary value in let, loop, fn parameters, def, and match patterns, while (attempt ...), (call ...), (loop ...), (recur ...), and (err ...) in head position and in patterns still mean the forms.",
+  "python": false,
+  "program": "(def retry 3) (defn describe [err] (str \"failed \" err)) (let [attempt 1 ok (> retry attempt) [some call] [2 3] out (attempt (call store.get {:id \"a\"}))] (loop {:max 5} [loop 0 recur []] (match out (ok item) (if (< loop 2) (recur (+ loop 1) (concat recur [(get item :size)])) [ok some call recur]) (err err) (if (= (describe (get err :message)) \"\") [false 0 0 []] [false 1 0 []]))))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get"
+  ],
+  "responses": [
+    {
+      "capability": "store.get",
+      "input": {
+        "id": "a"
+      },
+      "results": [
+        {
+          "output": {
+            "id": "a",
+            "size": 7
+          }
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": [
+      true,
+      2,
+      3,
+      [
+        7,
+        7
+      ]
+    ]
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "store.get",
+      "input": {
+        "id": "a"
+      }
+    },
+    {
+      "response": "r:1",
+      "output": {
+        "id": "a",
+        "size": 7
+      }
+    }
+  ]
+}

@@ -1541,7 +1541,7 @@ impl<'r> Checker<'r> {
         if name == "recur" {
             return self.form_recur(span, items, scope);
         }
-        if matches!(name, "when" | "do") && scope.get(name).is_none() {
+        if matches!(name, "when" | "do") && !matches!(scope.get(name), Some(Binding::Function(_))) {
             return if name == "when" {
                 self.outside_tail(|c| c.form_when(span, items, expected, scope))
             } else {
@@ -1733,7 +1733,7 @@ impl<'r> Checker<'r> {
                     self.report(Diagnostic::new("bad-pattern", pattern.span, "A local function needs a name."));
                     continue;
                 };
-                self.reserved(name, pattern.span);
+                self.reserved_function(name, pattern.span);
                 self.check_fn_shape(value);
                 let binding = FunctionBinding { form: value, scope: inner.clone(), name: name.to_string() };
                 inner = inner.with(name, Binding::Function(Rc::new(binding)));
@@ -1796,16 +1796,19 @@ impl<'r> Checker<'r> {
         true
     }
 
-    fn reserved(&mut self, name: &str, span: Span) -> bool {
+    fn reserved_function(&mut self, name: &str, span: Span) {
         if !is_reserved(name) {
-            return false;
+            return;
         }
-        self.report(
-            Diagnostic::new("reserved-name", span, format!("{name} is the name of a form, so it cannot name a value."))
-                .fix(suggested_name(name))
-                .help(name),
-        );
-        true
+        let diagnostic = if name == "none" {
+            Diagnostic::new("reserved-name", span, "none is the absent value, so it cannot name a function.")
+        } else {
+            Diagnostic::new("reserved-name", span, format!("{name} is the name of a form, so it cannot name a function."))
+                .detail(format!(
+                    "({name} ...) always means the form, so a function with this name could never be called. A value may be named {name}; a function may not."
+                ))
+        };
+        self.report(diagnostic.fix(suggested_name(name)).help(name));
     }
 
     fn bind<'a>(
@@ -1835,7 +1838,13 @@ impl<'r> Checker<'r> {
                     );
                     return (Binder::Discard, scope.value(name, Type::Never));
                 }
-                if self.reserved(name, pattern.span) && name == "none" {
+                if name == "none" {
+                    self.report(
+                        Diagnostic::new("reserved-name", pattern.span, "none is the absent value, so it cannot name a value.")
+                            .detail("In a pattern, none matches an absent value, and as an expression it is that value.")
+                            .fix(suggested_name(name))
+                            .help(name),
+                    );
                     return (Binder::Discard, scope.clone());
                 }
                 (Binder::Name(name.clone()), scope.value(name, t.clone()))
@@ -2345,7 +2354,6 @@ impl<'r> Checker<'r> {
                 return (variant, scope.clone(), keys(name), true);
             }
             NodeKind::Symbol(name) if is_plain_name(name) => {
-                self.reserved(name, span);
                 return (MatchPattern::Any(Binder::Name(name.clone())), scope.value(name, t.clone()), BTreeSet::new(), true);
             }
             NodeKind::Symbol(name) => {

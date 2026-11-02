@@ -1,0 +1,7 @@
+; declarations: fixtures/run/declarations.json
+; allow: store.get
+; python: no
+(let [attempt 1 err 2 ok 3 some 4]
+  (match (attempt (call store.get {:id "a"}))
+    (ok item) [attempt ok some (get item :size)]
+    (err e) [err 0 0 (if (= (get e :message) "") 1 0)]))

@@ -1,13 +1,7 @@
-error[reserved-name] 2:7-2:9
-  (let [ok true none 1 result (some 2)]
-        ^^
-  ok is the name of a form, so it cannot name a value.
-  Fix: ok?
-  Help: sx help ok
-
-error[reserved-name] 2:15-2:19
+error[reserved-name] 3:15-3:19
   (let [ok true none 1 result (some 2)]
                 ^^^^
-  none is the name of a form, so it cannot name a value.
+  none is the absent value, so it cannot name a value.
+  In a pattern, none matches an absent value, and as an expression it is that value.
   Fix: missing
   Help: sx help none

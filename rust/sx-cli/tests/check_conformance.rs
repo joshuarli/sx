@@ -582,6 +582,54 @@ fn is_capitalized_binding(rendered: &str) -> bool {
     })
 }
 
+const FORM_NAME_AS_VALUE: &str = " is the name of a form, so it cannot name a value.";
+
+fn blocks(rendered: &str) -> Vec<&str> {
+    rendered.split("\n\n").map(str::trim_end).filter(|block| !block.is_empty()).collect()
+}
+
+fn message_line(block: &str) -> &str {
+    block.lines().nth(3).unwrap_or("")
+}
+
+fn is_form_name_as_value(block: &str) -> bool {
+    block.starts_with("error[reserved-name]") && message_line(block).ends_with(FORM_NAME_AS_VALUE) && !message_line(block).starts_with("  none ")
+}
+
+fn as_python_reserved_name(block: &str) -> String {
+    if !block.starts_with("error[reserved-name]") {
+        return block.to_string();
+    }
+    let lines: Vec<&str> = block.lines().collect();
+    let message = lines[3];
+    let reserved = if let Some(name) = message.strip_suffix(" so it cannot name a function.").and_then(|m| m.strip_suffix(" is the name of a form,")) {
+        format!("{name}{FORM_NAME_AS_VALUE}")
+    } else if message.starts_with("  none is the absent value, so it cannot name a") {
+        format!("  none{FORM_NAME_AS_VALUE}")
+    } else {
+        return block.to_string();
+    };
+    let mut kept: Vec<String> = lines[..3].iter().map(|line| (*line).to_string()).collect();
+    kept.push(reserved);
+    kept.extend(lines[5..].iter().map(|line| (*line).to_string()));
+    kept.join("\n")
+}
+
+fn is_form_name_widening(rust: &Checked, python_rendered: &str) -> bool {
+    let theirs = blocks(python_rendered);
+    let ours: Vec<String> = match rust {
+        Checked::Accepted { .. } => Vec::new(),
+        Checked::Rejected { rendered, .. } => blocks(rendered).into_iter().map(as_python_reserved_name).collect(),
+        Checked::Crashed(_) => return false,
+    };
+    let kept: Vec<&str> = theirs
+        .iter()
+        .copied()
+        .filter(|block| !is_form_name_as_value(block) || ours.iter().any(|ours| ours == block))
+        .collect();
+    ours.iter().map(String::as_str).eq(kept.iter().copied())
+}
+
 fn compare(label: &str, cases: &[Case]) -> (Tally, Vec<String>) {
     let python = python_checks(label, cases);
     let mut failures = Vec::new();
@@ -601,6 +649,9 @@ fn compare(label: &str, cases: &[Case]) -> (Tally, Vec<String>) {
                 tally.widened += 1;
             }
             (_, Checked::Rejected { rendered, .. }) if &rust != python && is_capitalized_binding(rendered) => {
+                tally.widened += 1;
+            }
+            (_, Checked::Rejected { rendered, .. }) if &rust != python && is_form_name_widening(&rust, rendered) => {
                 tally.widened += 1;
             }
             _ if &rust != python => {

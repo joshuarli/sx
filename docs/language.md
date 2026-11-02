@@ -24,10 +24,10 @@ A definition is a form before the final expression:
 `(fn [params] body)` does in a `let` binding. The program means the same as one `let` that binds the
 definitions in order around the final expression, so a later form sees the names of the earlier ones, a
 `defn` body sees only the names before it and not its own name, and a later definition of the same name
-shadows the earlier one. `name` follows the rules of a `let` binding: a form name is a `reserved-name`
-error, `_` runs `expr` for its effect and binds nothing, and a tuple pattern takes a value apart. A `defn` takes
-one body expression and no docstring. `sx explain` and `--emit ir` see only the `let`. Definitions before a `script` form move into its body, so
-they see its inputs.
+shadows the earlier one. `name` follows the rules of a `let` binding: `_` runs `expr` for its effect and binds
+nothing, a tuple pattern takes a value apart, and a form name is a `reserved-name` error for a `defn` but may name
+a `def` value. A `defn` takes one body expression and no docstring. `sx explain` and `--emit ir` see only the `let`.
+Definitions before a `script` form move into its body, so they see its inputs.
 
 A definition is allowed only at the top level, before the final expression. Anywhere else, `def` and
 `defn` are the `defn` habit, with a fix that points to `let`. A form before the final expression that is not
@@ -293,17 +293,25 @@ scope has a variant of that name, the binding is a `reserved-name` error that na
 suggests the lowercase name, because the name would otherwise mean the variant. A capitalized name
 in a `match` pattern is still a variant pattern.
 
-The names of the special forms are reserved: `let`, `if`, `cond`, `match`, `fn`, `get`, `call`,
-`attempt`, `retry`, `wait-until`, `sleep`, `loop`, `recur`, `par`, `par-map`, `some`, `ok`, and
-`err`, and `none`. Binding one of them in `let`, `loop`, `fn` parameters, or a `match` pattern, or
-naming a local function with one, is a `reserved-name` error at the binding, with a fix that
-suggests another name, such as `attempts` for `attempt`. Without the rule a form that follows the
-binding, such as `(attempt ...)` after `[attempt 1]`, would call the local instead of the form.
+A form name is a name for a value. The special forms are `let`, `if`, `cond`, `match`, `fn`, `get`, `call`,
+`attempt`, `retry`, `wait-until`, `sleep`, `loop`, `recur`, `par`, `par-map`, `some`, `ok`, and `err`, and `when`
+and `do`. Any of them may name a value in `let`, `loop`, `fn` and `defn` parameters, `def`, and a `match` pattern:
+`(let [attempt 1] ...)`, `(fn [err] ...)`, `(loop {:max 5} [attempt 1] ...)`, `(match r (ok ok) ok (err err) err)`.
+Each position has exactly one meaning. In head position a form name is the form, so `(attempt ...)` is the form
+whatever is bound to `attempt`. In a pattern, `(some x)`, `(ok x)`, and `(err e)` are the constructors. In value
+position the name is the binding, and a name that is not bound is `unknown-name`. This is the rule for `when` and
+`do` too, with one exception that keeps programs that already check working: a local function named `when` or `do`
+hides the form, so `(when ...)` calls the function, as a local function named `count` hides `count`.
+
+Two things stay a `reserved-name` error, each with its reason. `none` cannot name a value, because `none` is the
+absent value as an expression and matches an absent value in a pattern, so a binding would give it a second
+meaning. A form name cannot name a function, because `(attempt ...)` always means the form and a function with that
+name could never be called; the fix suggests another name, such as `attempts` for `attempt`. A `defn` or a `let`
+binding of an `fn` is a function.
+
 Prelude and core function names are not reserved, so a local may be named `count`. Inside its
 scope the local hides the function: using it in head position, as in `(count xs)`, is a
 `type-mismatch` that says the local hides the function.
-`when` and `do` are not reserved either: a local named `when` hides the form, and `(when ...)` is then a
-`type-mismatch` that says the name is not a function.
 
 ### Conditions
 

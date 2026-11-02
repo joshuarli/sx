@@ -1,4 +1,5 @@
 ; declarations: fixtures/run/declarations.json
 ; python: no
-(let [when 3]
-  (when true 1))
+(let [when 3
+      do 4]
+  (do (when true when) do))

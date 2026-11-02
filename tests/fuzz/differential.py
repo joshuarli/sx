@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import random
+import re
 import subprocess
 import traceback
 from collections import Counter
@@ -14,7 +15,7 @@ from typing import Any, cast, override
 from sx import ir
 from sx.checker import DEFAULT_BUDGETS, Budgets, CheckResult
 from sx.cli import EXIT_OK
-from sx.diagnostics import render
+from sx.diagnostics import Diagnostic, render
 from sx.export import export_program
 from sx.host import FixtureHost
 from sx.machine import (
@@ -239,6 +240,34 @@ def refuses_what_rust_accepts(source: str, checked: CheckResult) -> bool:
     )
 
 
+FORM_NAME_AS_VALUE = " is the name of a form, so it cannot name a value."
+
+
+def names_a_form_as_a_value(diagnostic: Diagnostic) -> bool:
+    return (
+        diagnostic.code == "reserved-name"
+        and diagnostic.message.endswith(FORM_NAME_AS_VALUE)
+        and not diagnostic.message.startswith("none ")
+    )
+
+
+def python_wording(rendered: str) -> str:
+    rendered = re.sub(
+        r"( is the name of a form, so it cannot name a) function\.\n  \([a-z-]+ \.\.\.\) always means[^\n]*\n",
+        r"\1 value.\n",
+        rendered,
+    )
+    rendered = re.sub(
+        r"  none is the absent value, so it cannot name a value\.\n  In a pattern[^\n]*\n",
+        "  none is the name of a form, so it cannot name a value.\n",
+        rendered,
+    )
+    return rendered.replace(
+        "  none is the absent value, so it cannot name a function.",
+        "  none is the name of a form, so it cannot name a value.",
+    )
+
+
 def check_against_python(
     case: Case, known: Registry, budgets: Budgets, rejected: dict[str, Any] | None
 ) -> tuple[CheckResult | None, Finding | None]:
@@ -248,19 +277,30 @@ def check_against_python(
         return None, Finding("python-crash-check", traceback.format_exc())
     if refuses_what_rust_accepts(case.source, checked):
         return checked, None
+    rejected_names = {
+        (d["span"]["start"]["line"], d["span"]["start"]["column"])
+        for d in (rejected or {"diagnostics": []})["diagnostics"]
+        if d["code"] == "reserved-name"
+    }
+    kept = [
+        d
+        for d in checked.diagnostics
+        if not names_a_form_as_a_value(d) or (d.span.start.line, d.span.start.column) in rejected_names
+    ]
+    python_accepts = checked.program is not None or not kept
     if rejected is None:
-        if checked.program is None:
-            codes = [d.code for d in checked.diagnostics]
+        if not python_accepts:
+            codes = [d.code for d in kept]
             return checked, Finding("python-rejects", f"python {codes}\nrust accepted")
         return checked, None
     ours = [d["code"] for d in rejected["diagnostics"]]
-    if checked.program is not None:
+    if python_accepts:
         return checked, Finding("python-accepts", f"python accepted\nrust {ours}")
-    theirs = [d.code for d in checked.diagnostics]
+    theirs = [d.code for d in kept]
     if theirs != ours:
         return checked, Finding("python-codes", f"python {theirs}\nrust {ours}")
-    if render(case.source, checked.diagnostics) != rejected["rendered"]:
-        theirs_text = render(case.source, checked.diagnostics)
+    if render(case.source, kept) != python_wording(rejected["rendered"]):
+        theirs_text = render(case.source, kept)
         return checked, Finding("python-rendering", f"python {theirs_text}\nrust {rejected['rendered']}")
     return checked, None
 

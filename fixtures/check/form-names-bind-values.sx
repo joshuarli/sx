@@ -1,0 +1,15 @@
+; declarations: fixtures/run/declarations.json
+; allow: store.get
+; python: no
+(def retry 3)
+(defn describe [err] (str "failed " err))
+(let [attempt 1
+      ok (> retry attempt)
+      [some call] [2 3]
+      out (attempt (call store.get {:id "a"}))]
+  (loop {:max 5} [loop 0 recur []]
+    (match out
+      (ok item)
+        (if (< loop 2) (recur (+ loop 1) (concat recur [(get item :size)])) [ok some call recur])
+      (err err)
+        (if (= (describe (get err :message)) "") [false 0 0 []] [false 1 0 []]))))

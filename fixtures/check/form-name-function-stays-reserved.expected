@@ -1,0 +1,15 @@
+error[reserved-name] 3:7-3:14
+  (defn attempt [x] x)
+        ^^^^^^^
+  attempt is the name of a form, so it cannot name a function.
+  (attempt ...) always means the form, so a function with this name could never be called. A value may be named attempt; a function may not.
+  Fix: attempts
+  Help: sx help attempt
+
+error[reserved-name] 4:7-4:11
+  (let [loop (fn [x] (+ x 1))]
+        ^^^^
+  loop is the name of a form, so it cannot name a function.
+  (loop ...) always means the form, so a function with this name could never be called. A value may be named loop; a function may not.
+  Fix: loops
+  Help: sx help loop

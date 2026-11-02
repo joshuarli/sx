@@ -1,0 +1,5 @@
+; declarations: fixtures/run/declarations.json
+; python: no
+(defn when [x] (+ x 1))
+(defn do [x y] (+ x y))
+(do (when 1) 2)
