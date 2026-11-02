@@ -1,0 +1,14 @@
+{
+  "description": "Each item gets its own attempt, so one malformed text does not stop the others.",
+  "python": false,
+  "program": "(map (fn [doc] (match (attempt (json.get doc [\"v\"])) (ok found) (match found (some v) v none \"-\") (err _) \"bad\")) [\"{\\\"v\\\": 1}\" \"nope\" \"{}\"])",
+  "declarations": "declarations/json.json",
+  "allow": [],
+  "expect": {
+    "completed": [
+      "1",
+      "bad",
+      "-"
+    ]
+  }
+}

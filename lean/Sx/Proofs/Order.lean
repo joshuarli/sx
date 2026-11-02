@@ -4,11 +4,34 @@ namespace Sx
 
 theorem core_application_no_request (ctx : Ctx) (g : Glob) (f : Fiber) (stack : List Frame) (name : String)
     (args : List Expr) (env : Env) (done : List Res) :
-    OkP (fun (r : Fiber × List Fiber × Glob) => (∃ v, r.1.ctrl = .ret (.val v)) ∧ r.2.1 = [] ∧ r.2.2 = g)
+    OkP (fun (r : Fiber × List Fiber × Glob) =>
+      ((∃ v, r.1.ctrl = .ret (.val v)) ∨ ∃ raised, r.1.ctrl = .raise raised) ∧ r.2.1 = [] ∧ r.2.2 = g)
       (finishSeq ctx g f stack (.core name args) env done) := by
   unfold finishSeq; dsimp only
   okp_auto
-  all_goals first | trivial | exact ⟨⟨_, rfl⟩, rfl, rfl⟩
+  all_goals first | trivial | exact ⟨.inl ⟨_, rfl⟩, rfl, rfl⟩ | exact ⟨.inr ⟨_, rfl⟩, rfl, rfl⟩
+
+theorem core_refusal_is_raised (ctx : Ctx) (g : Glob) (f : Fiber) (stack : List Frame) (name : String)
+    (args : List Expr) (env : Env) (done : List Res) (impl : List Val → Except Failure Val) (vs : List Val)
+    (message : String) (hcore : ctx.cores name = some impl) (hplain : plainAll done = .ok vs)
+    (hrefused : impl vs = .error ⟨.invalidInput, message⟩) :
+    finishSeq ctx g f stack (.core name args) env done =
+      .ok ({ f with stack, ctrl := .raise ⟨callError "Invalid" s!"{name}: {message}", .coreRefusal⟩ }, [], g) := by
+  unfold finishSeq
+  simp [hcore, hplain, hrefused, bind, Except.bind]
+
+theorem core_failure_other_than_refusal_stops (ctx : Ctx) (g : Glob) (f : Fiber) (stack : List Frame) (name : String)
+    (args : List Expr) (env : Env) (done : List Res) (impl : List Val → Except Failure Val) (vs : List Val)
+    (failure : Failure) (hcore : ctx.cores name = some impl) (hplain : plainAll done = .ok vs)
+    (hfailed : impl vs = .error failure) (hother : failure.kind ≠ .invalidInput) :
+    finishSeq ctx g f stack (.core name args) env done = .error failure := by
+  unfold finishSeq
+  obtain ⟨kind, message⟩ := failure
+  cases kind <;> simp_all [bind, Except.bind]
+
+theorem attempt_catches_raised (ctx : Ctx) (g : Glob) (f : Fiber) (raised : Raised) (rest : List Frame) :
+    unwind ctx g f raised (.attempt :: rest) =
+      .ok ({ f with stack := rest, ctrl := .ret (.val (.err raised.err)) }, [], g) := rfl
 
 theorem pure_program_no_request {ctx : Ctx} {m : Machine} (hpure : callsOf ctx.prog.body = []) (h : Reachable ctx m) :
     ∀ id cap input, Event.request id cap input ∉ m.trace := by

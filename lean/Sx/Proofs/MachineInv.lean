@@ -171,9 +171,9 @@ theorem requestDelay_ok {C : List String} {ctx : Ctx} {g : Glob} {f : Fiber} {ms
   refine OkP.bind (countDelay_counters hg) fun g' hg' => ?_
   exact ⟨⟨trivial, hs⟩, by simp, hg'⟩
 
-theorem unwind_ok {C : List String} {ctx : Ctx} {g : Glob} {f : Fiber} {err : Val}
+theorem unwind_ok {C : List String} {ctx : Ctx} {g : Glob} {f : Fiber} {raised : Raised}
     (hg : CountersOk ctx.budgets g.counters) :
-    ∀ (frames : List Frame), StackOk C frames → OkP (StepOk C ctx.budgets) (unwind ctx g f err frames)
+    ∀ (frames : List Frame), StackOk C frames → OkP (StepOk C ctx.budgets) (unwind ctx g f raised frames)
   | [], _ => ⟨⟨trivial, by simp [StackOk]⟩, by simp, hg⟩
   | .attempt :: rest, hs => ⟨⟨trivial, hs.tail⟩, by simp, hg⟩
   | .retry delays kinds body env n :: rest, hs => by

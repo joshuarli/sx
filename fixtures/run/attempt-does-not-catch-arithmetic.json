@@ -1,0 +1,10 @@
+{
+  "description": "attempt does not catch an arithmetic failure.",
+  "python": false,
+  "program": "(let [zero (count [])] (attempt (quot 1 zero)))",
+  "declarations": "declarations/json.json",
+  "allow": [],
+  "expect": {
+    "failed": "arithmetic"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "description": "attempt wraps a core call that succeeds in ok.",
+  "python": false,
+  "program": "(attempt (json.get \"{\\\"a\\\": 1}\" [\"a\"]))",
+  "declarations": "declarations/json.json",
+  "allow": [],
+  "expect": {
+    "completed": {
+      "ok": "1"
+    }
+  }
+}

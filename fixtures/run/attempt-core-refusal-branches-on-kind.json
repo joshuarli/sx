@@ -1,0 +1,10 @@
+{
+  "description": "A program branches on the Invalid kind of a refused core call.",
+  "python": false,
+  "program": "(match (attempt (json.kind \"[1,\" [])) (ok k) \"fine\" (err e) (match (get e :kind) Invalid \"malformed\" _ \"other\"))",
+  "declarations": "declarations/json.json",
+  "allow": [],
+  "expect": {
+    "completed": "malformed"
+  }
+}

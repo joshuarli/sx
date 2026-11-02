@@ -1,0 +1,10 @@
+{
+  "description": "attempt does not catch a core's arithmetic failure, such as a decimal division by zero.",
+  "python": false,
+  "program": "(attempt (decimal.div (decimal.from-int 1) (decimal.from-int 0) 2 HalfEven))",
+  "declarations": "declarations/decimal.json",
+  "allow": [],
+  "expect": {
+    "failed": "arithmetic"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "description": "A refusal in one par-map branch fails the form like any branch failure, and an attempt around the form catches it.",
+  "python": false,
+  "program": "(attempt (par-map {:limit 2} (fn [doc] (json.get doc [\"v\"])) [\"{\\\"v\\\": 1}\" \"{\" \"{\\\"v\\\": \\\"x\\\"}\"]))",
+  "declarations": "declarations/json.json",
+  "allow": [],
+  "expect": {
+    "completed": {
+      "err": {
+        "kind": "Invalid",
+        "message": "json.get: line 1 column 2: expected a string key, found the end of the text"
+      }
+    }
+  }
+}

@@ -524,7 +524,7 @@ pub fn yaml_core() -> Core {
             option(STRING),
             "Reads the scalar at a path of mapping keys and sequence indexes, or none when the path is absent. A \
              null or empty value reads as an empty string. A path that names a mapping or sequence, and text \
-             outside the supported YAML subset, stop the program.",
+             outside the supported YAML subset, are refusals.",
             (&format!("(yaml.get {document} [\"app\" \"replicas\"])"), "(some \"3\")"),
         ),
         function(
@@ -534,7 +534,7 @@ pub fn yaml_core() -> Core {
             "Replaces the scalar at a path and keeps every other byte, comments and indentation included. The \
              value is written in the old scalar's quoting style, and quoted when plain text would change its \
              meaning. An absent path, a path that names a mapping or sequence, and text outside the supported \
-             YAML subset stop the program.",
+             YAML subset are refusals.",
             (&format!("(yaml.set {document} [\"app\" \"replicas\"] \"5\")"), "\"app:\\n  replicas: 5 # scale\\n  tags:\\n  - a\\n  - b\\n\""),
         ),
         function(
@@ -542,7 +542,7 @@ pub fn yaml_core() -> Core {
             vec![STRING, list(STRING)],
             list(STRING),
             "Lists the keys of the mapping at a path in document order, or the indexes of a sequence as strings. \
-             An absent or null path has none. A scalar, and text outside the supported YAML subset, stop the program.",
+             An absent or null path has none. A scalar, and text outside the supported YAML subset, are refusals.",
             (&format!("(yaml.keys {document} [\"app\"])"), "[\"replicas\" \"tags\"]"),
         ),
     ];

@@ -40,7 +40,7 @@ def Machine.fiber? (m : Machine) (id : Nat) : Option Fiber :=
 def Machine.setFiber (m : Machine) (f : Fiber) : Machine :=
   { m with fibers := m.fibers.map fun g => if g.id == f.id then f else g }
 
-def recordChild (index : Nat) (outcome : Sum Val Val) : List Frame → List Frame
+def recordChild (index : Nat) (outcome : Sum Val Raised) : List Frame → List Frame
   | .join j :: rest =>
     match outcome with
     | .inl v => .join { j with results := j.results ++ [(index, v)] } :: rest
@@ -106,7 +106,7 @@ def Machine.cancel (m : Machine) (id : Nat) : Nat → Machine
         | _ => acc) []
       children.foldl (fun m c => m.cancel c fuel) m
 
-def minFailure : List (Nat × Val) → Option (Nat × Val)
+def minFailure {α : Type} : List (Nat × α) → Option (Nat × α)
   | [] => none
   | p :: ps =>
     match minFailure ps with
@@ -125,10 +125,10 @@ def Machine.settleOne (m : Machine) (id : Nat) : Except Failure Machine := do
     match f.ctrl, f.stack, f.cancelled with
     | .join, .join j :: rest, false =>
       match minFailure j.failures with
-      | some (_, err) =>
+      | some (_, raised) =>
         let m := j.children.foldl (fun m c => m.cancel c (m.fibers.length + 1)) m
         match m.fiber? id with
-        | some f => pure (m.setFiber { f with stack := rest, ctrl := .raise err })
+        | some f => pure (m.setFiber { f with stack := rest, ctrl := .raise raised })
         | none => pure m
       | none => do
         let (j, children, g) ← match j.clo with
@@ -184,8 +184,11 @@ def Machine.loop (m : Machine) (fuel : Nat) : Nat → Machine × Outcome
     | .ok m' =>
       match m'.fiber? 0 with
       | some { ctrl := .done v, .. } => (m', m'.complete v)
-      | some { ctrl := .failed err, .. } =>
-        (m', .failed ⟨.callFailed, s!"A tool call failed with {kindOf err}: {failureMessage err}"⟩)
+      | some { ctrl := .failed raised, .. } =>
+        match raised.cause with
+        | .call =>
+          (m', .failed ⟨.callFailed, s!"A tool call failed with {kindOf raised.err}: {failureMessage raised.err}"⟩)
+        | .coreRefusal => (m', .failed ⟨.invalidInput, failureMessage raised.err⟩)
       | _ =>
         if m'.fibers.any (·.runnable) then m'.loop fuel n
         else
@@ -210,7 +213,7 @@ def Machine.deliver (m : Machine) (o : Outstanding) (resp : Response) : Except F
       | .wait (.delay ..) _, .output .null => pure (m.setFiber { f with ctrl := .ret (.val .unit) })
       | .wait (.delay ..) _, _ => invalid s!"Delay request {o.id} must be answered with null."
       | .wait (.call _ _ _ _ _) _, .refusal kind message =>
-        if callErrorKinds.contains kind then pure (m.setFiber { f with ctrl := .raise (callError kind message) })
+        if callErrorKinds.contains kind then pure (m.setFiber { f with ctrl := .raise ⟨callError kind message, .call⟩ })
         else invalid s!"{o.id}: {kind} is not a call error kind."
       | .wait (.call _ _ cap _ out) _, .output j =>
         match decode m.ctx.prog.decodeEnums out j "$" with

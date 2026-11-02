@@ -26,7 +26,7 @@ theorem setFiber_ok {ctx : Ctx} {m : Machine} {f : Fiber} (hm : MInv ctx m)
   · exact hf
   · exact hm.fibers y hy
 
-theorem recordChild_ok {C : List String} {i : Nat} {o : Sum Val Val} {s : List Frame} (h : StackOk C s) :
+theorem recordChild_ok {C : List String} {i : Nat} {o : Sum Val Raised} {s : List Frame} (h : StackOk C s) :
     StackOk C (recordChild i o s) := by
   unfold recordChild
   split
@@ -263,7 +263,7 @@ theorem loop_ok {ctx : Ctx} (fuel : Nat) : ∀ (n : Nat) (m : Machine), MInv ctx
       rw [hm'] at hps
       split
       · exact hps
-      · exact hps
+      · split <;> exact hps
       · split
         · exact loop_ok fuel n m' hps
         · have := issue_ok hps

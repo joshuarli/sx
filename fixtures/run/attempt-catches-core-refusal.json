@@ -1,0 +1,15 @@
+{
+  "description": "attempt turns a core's refusal into an err value of kind Invalid, with the function's name in the message.",
+  "python": false,
+  "program": "(attempt (json.get \"{\\\"a\\\": [1,]}\" [\"a\"]))",
+  "declarations": "declarations/json.json",
+  "allow": [],
+  "expect": {
+    "completed": {
+      "err": {
+        "kind": "Invalid",
+        "message": "json.get: line 1 column 9: a trailing comma is not allowed"
+      }
+    }
+  }
+}

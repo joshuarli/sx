@@ -306,8 +306,17 @@ literals, so the checker knows the largest number of repetitions before the prog
 ### attempt
 
 `(attempt e)` evaluates `e`. If a capability call inside `e` fails and nothing inside `e` handled
-it, the result is `(err e)` with that `CallError`. Otherwise the result is `(ok value)`. Errors
-other than `call-failed` pass through, as listed in [Failures](#failures).
+it, the result is `(err e)` with that `CallError`. A core function that refuses its input is caught the
+same way: `(attempt (yaml.get text path))` on text outside the supported subset gives
+`(err {:kind Invalid :message "yaml.get: line 3: ..."})`, with the function's name starting the message,
+where the program would otherwise stop with `invalid-input`. Otherwise the result is `(ok value)`.
+Errors other than `call-failed` and `invalid-input` pass through, as listed in [Failures](#failures).
+
+```
+(match (attempt (json.get text ["version"]))
+  (ok found) (match found (some v) v none "unversioned")
+  (err e) "unreadable")
+```
 
 ### retry
 
@@ -1220,9 +1229,23 @@ compare traces sorted by request ID.
 | `loop-limit` | A `loop` reached its `:max` and its body asked to `recur` again | No |
 | `budget-exhausted` | A budget ran out. The error names the budget. | No |
 | `arithmetic` | Overflow, division by zero, a `Float` result that is infinite or not a number, negative `take` count, or a core function whose arithmetic fails, such as a `decimal` result beyond 38 digits | No |
-| `invalid-input` | A core function refused an input outside its domain; the message says why, as in `yaml.get` on a flow collection or `text.split` with an empty separator | No |
+| `invalid-input` | A core function refused an input outside its domain; the message says why, as in `yaml.get` on a flow collection, `json.get` on text that is not JSON, or `text.split` with an empty separator | Yes, as a `CallError` of kind `Invalid` |
 | `out-of-range` | `first` of an empty list, `nth` past the end, or `round`, `floor`, or `ceil` beyond the `Int` range | No |
 | `internal` | Interpreter bug | No |
+
+**What `attempt` catches.** A call error, and a core's refusal. A refusal is raised as the call error
+`{:kind Invalid :message "FUNCTION: REASON"}` at the call, so it unwinds like a failed tool call: an enclosing
+`attempt` returns it as `err`, `retry` with `:on [Invalid]` repeats the body, and a refusal in a `par` or
+`par-map` branch fails the form like any branch failure (the lowest-numbered failed branch wins). A refusal that
+nothing catches still ends the program as `invalid-input`, and its message is unchanged. The failure kind does
+not become `call-failed`, because no tool call failed.
+
+`arithmetic`, `out-of-range`, `loop-limit`, `budget-exhausted`, `invalid-host-response`, and `internal` stay
+uncatchable. A core refuses text because the program could not know the text was bad without parsing it, so the
+program may need to recover from the refusal. `arithmetic` and `out-of-range` failures name a condition a
+program can test first: `(= n 0)` before `quot`, `(count xs)` before `first`, and `decimal.parse` before a
+`decimal` calculation. Catching them would let `attempt` turn a deterministic bug into a silent `err`. The other kinds report a broken host,
+a spent budget, or an interpreter bug, and no program text can repair them.
 
 ### Call errors
 
@@ -1615,7 +1638,8 @@ either limit fail the program with `arithmetic`. A result is judged in canonical
 `99999999999999999999999999999999999999` plus `1` does not. A core reports such a failure
 as `CoreError::Arithmetic`, which the machine turns into `arithmetic` with the function's name. A
 core that refuses an input outside its domain returns `CoreError::InvalidInput`, which becomes
-`invalid-input`; any other `CoreError::Failed` is `internal`.
+`invalid-input` and which `attempt` catches; `arithmetic` is not caught, and any other `CoreError::Failed` is
+`internal`.
 
 `fixtures/cores/decimal.json` holds the conformance vectors, generated from Python's `decimal` module
 by `rust/sx-cores/scripts/decimal_vectors.py`. A test regenerates them and fails when the committed
@@ -1669,10 +1693,10 @@ a duplicate key in one mapping, a line indented deeper than the structure above 
 fit the structure, `a: b: c`, text after a closing quote, an undefined escape, and a plain scalar that starts
 with `@`, a backtick, `,`, `]`, or `}`.
 
-**How a failure reaches the program.** A refusal is `CoreError::InvalidInput`, so the machine stops the
-program with the `invalid-input` failure kind and the message `yaml.get: line 3: flow collections are
-outside the supported YAML subset, so the text is left alone`. `attempt` does not catch it, like every
-`invalid-input` failure.
+**How a failure reaches the program.** A refusal is `CoreError::InvalidInput`, so the machine raises it as
+the call error `{:kind Invalid :message "yaml.get: line 3: flow collections are outside the supported YAML
+subset, so the text is left alone"}`. `attempt` catches it, so a program can recover from one malformed file.
+Nothing that catches it ends the program with the `invalid-input` failure kind and the same message.
 
 **Quoting.** `yaml.set` writes the new value in the style of the scalar it replaces: a double-quoted
 scalar stays double-quoted, a single-quoted one stays single-quoted (double-quoted instead when the value
@@ -1813,9 +1837,10 @@ A duplicate key is refused, where `JSON.parse` keeps the last one. A reader that
 reads a different document from the one the next tool sees, and a manifest with two `"version"` keys is a
 mistake worth stopping on.
 
-**How a failure reaches the program.** A refusal is `CoreError::InvalidInput`, so the failure kind is
-`invalid-input` and the message is, for example, `json.get: line 2 column 17: a trailing comma is not
-allowed`. The parser is the core's own, not the kernel's: the kernel's reads numbers into a `Float` and so
+**How a failure reaches the program.** A refusal is `CoreError::InvalidInput`, so `attempt` catches it as the
+call error `{:kind Invalid :message "json.get: line 2 column 17: a trailing comma is not allowed"}`. Uncaught,
+it ends the program with the failure kind `invalid-input` and the same message. A program that reads a file it
+cannot trust wraps the call: `(attempt (json.get text ["name"]))`. The parser is the core's own, not the kernel's: the kernel's reads numbers into a `Float` and so
 loses the text a program needs, and it accepts `NaN` and `Infinity`.
 
 `rust/sx-cores/tests/json_golden/` holds the golden reads and refusals, with the exact messages. The Lean

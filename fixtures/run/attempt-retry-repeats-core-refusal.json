@@ -1,0 +1,25 @@
+{
+  "description": "retry :on Invalid repeats a refused core call after its delay, and an attempt catches the last refusal.",
+  "python": false,
+  "program": "(attempt (retry {:delays [1s] :on [Invalid]} (json.get \"{\" [])))",
+  "declarations": "declarations/json.json",
+  "allow": [],
+  "expect": {
+    "completed": {
+      "err": {
+        "kind": "Invalid",
+        "message": "json.get: line 1 column 2: expected a string key, found the end of the text"
+      }
+    }
+  },
+  "trace": [
+    {
+      "delay": "r:1",
+      "milliseconds": 1000
+    },
+    {
+      "response": "r:1",
+      "output": null
+    }
+  ]
+}

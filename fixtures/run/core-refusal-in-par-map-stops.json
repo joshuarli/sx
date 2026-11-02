@@ -1,0 +1,10 @@
+{
+  "description": "A refusal in a par-map branch that no attempt encloses stops the program as invalid-input.",
+  "python": false,
+  "program": "(par-map {:limit 2} (fn [doc] (json.get doc [\"v\"])) [\"{\\\"v\\\": 1}\" \"{\" \"{\\\"v\\\": \\\"x\\\"}\"])",
+  "declarations": "declarations/json.json",
+  "allow": [],
+  "expect": {
+    "failed": "invalid-input"
+  }
+}

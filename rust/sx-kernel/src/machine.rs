@@ -171,10 +171,17 @@ fn plain(returned: Returned<'_>) -> Step<Value> {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Cause {
+    Call,
+    CoreRefusal,
+}
+
 #[derive(Clone)]
 struct Raised {
     error: RecordValue,
     span: Span,
+    cause: Cause,
 }
 
 #[derive(Clone, Copy)]
@@ -212,7 +219,7 @@ struct JoinFrame<'p> {
     limit: usize,
     started: usize,
     results: BTreeMap<usize, Value>,
-    failures: BTreeMap<usize, RecordValue>,
+    failures: BTreeMap<usize, Raised>,
     children: Vec<FiberId>,
 }
 
@@ -434,7 +441,7 @@ impl<'p> Machine<'p> {
                             let message = format!("{request_id}: {} is not a call error kind.", repr_str(&kind));
                             return Err(invalid(message, &request_id));
                         };
-                        fiber.raising = Some(Raised { error: call_error_value(kind, &message), span });
+                        fiber.raising = Some(Raised { error: call_error_value(kind, &message), span, cause: Cause::Call });
                         Ok(())
                     }
                     Response::Output(output) => {
@@ -502,8 +509,13 @@ impl<'p> Machine<'p> {
                 Some(Value::String(text)) => text.to_string(),
                 _ => return Err(internal("A failure carries no message.", None)),
             };
-            let text = format!("A tool call failed with {kind}: {message}");
-            return Err(Failure::new(FailureKind::CallFailed, text, Some(failure.span)));
+            return Err(match failure.cause {
+                Cause::Call => {
+                    let text = format!("A tool call failed with {kind}: {message}");
+                    Failure::new(FailureKind::CallFailed, text, Some(failure.span))
+                }
+                Cause::CoreRefusal => Failure::new(FailureKind::InvalidInput, message, Some(failure.span)),
+            });
         }
         let Some(result) = root.result.clone() else {
             return Err(internal("The program finished without a result.", None));
@@ -571,7 +583,7 @@ impl<'p> Machine<'p> {
                     self.cancel(child);
                 }
                 self.close_join(id);
-                self.fibers[id].raising = Some(Raised { error: first, span });
+                self.fibers[id].raising = Some(Raised { error: first.error, span, cause: first.cause });
                 continue;
             }
             if join.closure.is_some() {
@@ -665,12 +677,11 @@ impl<'p> Machine<'p> {
     }
 
     fn fail_fiber(&mut self, id: FiberId, raised: Raised) {
-        let error = raised.error.clone();
         let fiber = &mut self.fibers[id];
         fiber.done = true;
-        fiber.failure = Some(raised);
+        fiber.failure = Some(raised.clone());
         if let Some((join, index)) = self.parent_join(id) {
-            join.failures.insert(index, error);
+            join.failures.insert(index, raised);
         }
     }
 
@@ -931,7 +942,7 @@ impl<'p> Machine<'p> {
             let total: i64 = node.intervals.iter().sum();
             let message = format!("wait-until gave up after {total} ms.");
             self.fibers[id].raising =
-                Some(Raised { error: call_error_value(CallErrorKind::Timeout, &message), span: wait.span });
+                Some(Raised { error: call_error_value(CallErrorKind::Timeout, &message), span: wait.span, cause: Cause::Call });
             return Ok(());
         }
         let delay = node.intervals[wait.round];
@@ -1043,7 +1054,9 @@ impl<'p> Machine<'p> {
                     }
                     Err(CoreError::Failed(message)) => return Err(internal(format!("{function}: {message}"), Some(span))),
                     Err(CoreError::InvalidInput(message)) => {
-                        return Err(Failure::new(FailureKind::InvalidInput, format!("{function}: {message}"), Some(span)));
+                        let error = call_error_value(CallErrorKind::Invalid, &format!("{function}: {message}"));
+                        self.fibers[id].raising = Some(Raised { error, span, cause: Cause::CoreRefusal });
+                        return Ok(());
                     }
                     Err(CoreError::Arithmetic(message)) => {
                         return Err(Failure::new(FailureKind::Arithmetic, format!("{function}: {message}"), Some(span)));

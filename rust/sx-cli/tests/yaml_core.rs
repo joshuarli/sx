@@ -116,3 +116,22 @@ fn the_core_is_documented_by_help() {
     let keys = run_sx(&["help", "yaml.keys", "--declarations", text(&declarations)]);
     assert!(keys.stdout.contains("yaml.keys"), "{keys:?}");
 }
+
+#[test]
+fn a_program_recovers_from_a_refused_manifest_with_attempt_and_leaves_the_file_alone() {
+    let s = Sandbox::new("recover");
+    fs::write(s.root.join("manifest.yaml"), "services:\n  web: {image: nginx}\n").expect("flow manifest");
+    let path = s.manifest();
+    let source = format!(
+        "(let [text (call fs.read-text {{:path \"{path}\"}})] \
+           (match (attempt (yaml.set text [\"services\" \"web\" \"image\"] \"x\")) \
+             (ok edited) \"edited\" \
+             (err e) (match (get e :kind) Invalid (get e :message) _ \"other kind\")))"
+    );
+    let ran = s.sx("run", &source);
+    assert_eq!(ran.code, 0, "{ran:?}");
+    let outcome = parse(&ran.stdout).expect("json");
+    let message = outcome.get("result").and_then(Json::as_str).expect("the Invalid message");
+    assert!(message.starts_with("yaml.set: line 2: flow collections are outside the supported YAML subset"), "{message}");
+    assert_eq!(fs::read_to_string(&path).expect("manifest"), "services:\n  web: {image: nginx}\n");
+}

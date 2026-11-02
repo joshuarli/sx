@@ -16,6 +16,16 @@ inductive Res where
   | recur (vs : List Val)
   deriving Inhabited
 
+inductive Cause where
+  | call
+  | coreRefusal
+  deriving Repr, BEq, DecidableEq, Inhabited
+
+structure Raised where
+  err : Val
+  cause : Cause
+  deriving Inhabited
+
 structure Join where
   asTuple : Bool
   count : Nat
@@ -24,7 +34,7 @@ structure Join where
   limit : Nat
   started : Nat
   results : List (Nat × Val)
-  failures : List (Nat × Val)
+  failures : List (Nat × Raised)
   children : List Nat
   deriving Inhabited
 
@@ -64,11 +74,11 @@ def Req.id (r : Req) : String := s!"{pathText r.path}:{r.seq}"
 inductive Ctrl where
   | eval (e : Expr) (env : Env)
   | ret (r : Res)
-  | raise (err : Val)
+  | raise (r : Raised)
   | wait (req : Req) (issued : Bool)
   | join
   | done (v : Val)
-  | failed (err : Val)
+  | failed (r : Raised)
   deriving Inhabited
 
 structure Fiber where
@@ -205,18 +215,18 @@ def requestDelay (ctx : Ctx) (g : Glob) (f : Fiber) (ms : Nat) (stack : List Fra
   let (g, n) := nextSeq g f.path
   pure ({ f with stack, ctrl := .wait (.delay f.path n ms) false }, [], g)
 
-def unwind (ctx : Ctx) (g : Glob) (f : Fiber) (err : Val) :
+def unwind (ctx : Ctx) (g : Glob) (f : Fiber) (raised : Raised) :
     List Frame → Except Failure (Fiber × List Fiber × Glob)
-  | [] => pure ({ f with stack := [], ctrl := .failed err }, [], g)
-  | .attempt :: rest => pure ({ f with stack := rest, ctrl := .ret (.val (.err err)) }, [], g)
+  | [] => pure ({ f with stack := [], ctrl := .failed raised }, [], g)
+  | .attempt :: rest => pure ({ f with stack := rest, ctrl := .ret (.val (.err raised.err)) }, [], g)
   | .retry delays kinds body env n :: rest =>
-    if kinds.contains (kindOf err) then
+    if kinds.contains (kindOf raised.err) then
       match delays[n]? with
       | some ms => requestDelay ctx g f ms (.then_ body env :: .retry delays kinds body env (n + 1) :: rest)
-      | none => unwind ctx g f err rest
-    else unwind ctx g f err rest
+      | none => unwind ctx g f raised rest
+    else unwind ctx g f raised rest
   | .join _ :: _ => internal "A failure reached a join frame."
-  | _ :: rest => unwind ctx g f err rest
+  | _ :: rest => unwind ctx g f raised rest
 
 def startChildren (ctx : Ctx) (g : Glob) (f : Fiber) (j : Join) (c : Clo) :
     Nat → Except Failure (Join × List Fiber × Glob)
@@ -266,9 +276,14 @@ def finishSeq (ctx : Ctx) (g : Glob) (f : Fiber) (stack : List Frame) (origin : 
     match ctx.cores name with
     | some impl => do
       let vs ← plainAll done
-      let v ← impl vs
-      checkSize ctx.budgets.valueSize v
-      ret v
+      match impl vs with
+      | .ok v => do
+        checkSize ctx.budgets.valueSize v
+        ret v
+      | .error ⟨.invalidInput, message⟩ =>
+        let refusal : Raised := ⟨callError "Invalid" s!"{name}: {message}", .coreRefusal⟩
+        pure ({ f with stack, ctrl := .raise refusal }, [], g)
+      | .error failure => .error failure
     | none => internal s!"{name} has a signature but no implementation."
   | .call cap _ => do
     let g ← countCall ctx g
@@ -434,7 +449,7 @@ def resumeFrame (ctx : Ctx) (g : Glob) (f : Fiber) (fr : Frame) (stack : List Fr
       match intervals[round]? with
       | none =>
         let timeout := callError "Timeout" s!"wait-until gave up after {intervals.sum} ms."
-        pure ({ f with stack, ctrl := .raise timeout }, [], g)
+        pure ({ f with stack, ctrl := .raise ⟨timeout, .call⟩ }, [], g)
       | some ms => requestDelay ctx g f ms (.then_ body env :: .wait intervals pred body env (round + 1) :: stack)
   | _, .each op c items index acc results => do
     let v ← plain r
@@ -454,7 +469,7 @@ def resumeFrame (ctx : Ctx) (g : Glob) (f : Fiber) (fr : Frame) (stack : List Fr
 def stepFiber (ctx : Ctx) (g : Glob) (f : Fiber) : Except Failure (Fiber × List Fiber × Glob) := do
   let g ← tick ctx g
   match f.ctrl with
-  | .raise err => unwind ctx g f err f.stack
+  | .raise raised => unwind ctx g f raised f.stack
   | .eval e env => evalNode ctx g f e env
   | .ret r =>
     match f.stack with

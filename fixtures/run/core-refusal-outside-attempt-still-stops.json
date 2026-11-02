@@ -1,0 +1,10 @@
+{
+  "description": "A refusal that no attempt encloses still stops the program as invalid-input, even after an earlier one was caught.",
+  "python": false,
+  "program": "(let [first (attempt (json.get \"{\" [\"a\"])) second (json.get \"{\" [\"a\"])] [first second])",
+  "declarations": "declarations/json.json",
+  "allow": [],
+  "expect": {
+    "failed": "invalid-input"
+  }
+}
