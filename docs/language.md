@@ -441,6 +441,10 @@ lists the inputs a program uses.
 
 In v0 only the host declares inputs. A script file cannot declare its own.
 
+A host maps command-line options to inputs. In the repomod host, `discover --owner acme --owner beta`
+reaches `discover.sx` as `owners`, a `List<String>`, and `status --offline --dirty` reaches
+`status-offline.sx` as `only-dirty`, a `Bool`.
+
 ## Values and JSON
 
 Capability inputs and outputs, program results, and fixtures use one JSON encoding. Decoding
@@ -616,20 +620,17 @@ The host enforces wall-clock time outside the machine.
 
 ## Example
 
-This sketch shows the intended shape of `discover.sx`. The capability signatures are not fixed
-yet.
+`discover` from the repomod host is a complete program. It reads the catalog, asks GitHub about
+each owner in parallel, and compares the two lists by case-folded name. The host passes `owners`
+as an [input](#inputs), and `catalog.select`, `catalog.owner`, and `github.owner-repos` are
+capabilities. The full text is in `hosts/repomod/src/sx_repomod/programs/discover.sx`, next to
+`status-offline.sx`. Its core of comparing names looks like this:
 
 ```
-(let [catalog (call catalog.load {})
-      pages (par-map {:limit 8}
-              (fn [owner] (call github.owner-repos {:owner owner}))
-              (get catalog :owners))
-      found (sort-by text.casefold (distinct-by text.casefold (flatten pages)))
+(let [found (sort-by text.casefold (distinct-by text.casefold (flatten pages)))
       found-keys (map text.casefold found)
-      known-keys (map text.casefold (get catalog :repos))]
-  {:owners (get catalog :owners)
-   :uncatalogued (filter (fn [name] (not (contains? known-keys (text.casefold name)))) found)
+      known-keys (map text.casefold known)]
+  {:uncatalogued (filter (fn [name] (not (contains? known-keys (text.casefold name)))) found)
    :missing (sort-by text.casefold
-              (filter (fn [name] (not (contains? found-keys (text.casefold name))))
-                      (get catalog :repos)))})
+              (filter (fn [name] (not (contains? found-keys (text.casefold name)))) known))})
 ```

@@ -136,6 +136,8 @@ sx/
   src/sx/                 kernel: reader, checker, machine, registry, prelude
   cores/text/             text core (casefold, split, join)
   cores/semver/           unrelated sample core used to prove extensibility
+  cores/git/              checkout enum and local status decisions
+  cores/github/           CI and upstream states and check aggregation
   hosts/repomod/          sx-repomod: capabilities wrapping repomod, Sx programs, parity tests
   bench/codemode/         Phase 2 probe: task corpus, Sx and JS arms, scoring
   fixtures/               semantic fixtures shared by Python, Lean, and Rust

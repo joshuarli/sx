@@ -21,10 +21,41 @@ CHECK = RecordType(
     ),
     name="github.Check",
 )
+WORKFLOW = RecordType(
+    (("name", STRING), ("state", CI_STATE), ("url", OptionType(STRING))),
+    name="github.Workflow",
+)
+CI_REPORT = RecordType(
+    (
+        ("sha", OptionType(STRING)),
+        ("default-branch", OptionType(STRING)),
+        ("state", CI_STATE),
+        ("age-seconds", INT),
+        ("workflows", OptionType(ListType(WORKFLOW))),
+    ),
+    name="github.CiReport",
+)
+CI_CACHE = EnumType("github.CiCache", (("NotCached", STRING), ("Cached", CI_REPORT)))
+UPSTREAM = RecordType(
+    (
+        ("parent", STRING),
+        ("parent-branch", OptionType(STRING)),
+        ("parent-sha", OptionType(STRING)),
+        ("behind-by", INT),
+        ("ahead-by", INT),
+        ("state", UPSTREAM_STATE),
+        ("age-seconds", INT),
+    ),
+    name="github.Upstream",
+)
 TYPES: dict[str, Type] = {
     "github.CiState": CI_STATE,
     "github.UpstreamState": UPSTREAM_STATE,
     "github.Check": CHECK,
+    "github.Workflow": WORKFLOW,
+    "github.CiReport": CI_REPORT,
+    "github.CiCache": CI_CACHE,
+    "github.Upstream": UPSTREAM,
 }
 
 FAILURE_STATES = frozenset({"failure", "failed", "error", "timed_out", "action_required", "startup_failure"})
@@ -127,17 +158,17 @@ def variant_name(value: Value) -> str:
     return value.variant
 
 
+CI_LABELS = {name: "none" if name == "NoChecks" else name.lower() for name in CI_STATES}
+CI_VARIANTS = {label: name for name, label in CI_LABELS.items()}
+
+
 def ci_state_name(value: Value) -> Value:
-    name = variant_name(value)
-    return "none" if name == "NoChecks" else name.lower()
+    return CI_LABELS[variant_name(value)]
 
 
 def parse_ci_state(label: Value) -> Value:
     assert isinstance(label, str)
-    for name in CI_STATES:
-        if ci_state_name(VariantValue("github.CiState", name)) == label:
-            return VariantValue("github.CiState", name)
-    return VariantValue("github.CiState", "Unknown")
+    return VariantValue("github.CiState", CI_VARIANTS.get(label, "Unknown"))
 
 
 CORE = Core(
@@ -177,6 +208,8 @@ CORE = Core(
             (
                 "cores/github/tests/test_github_core.py::test_aggregation_cases_from_repomod",
                 "cores/github/tests/test_github_core.py::test_every_example_produces_its_documented_result",
+                "hosts/repomod/tests/test_github_parity.py::test_ci_state_matches_repomod_for_generated_check_sets",
+                "hosts/repomod/tests/test_status_parity.py::test_status_offline_json_matches_python_on_every_fixture",
             ),
         ),
     ),

@@ -12,13 +12,14 @@ requires = ["uv_build>=0.9"]
 build-backend = "uv_build"
 
 [tool.uv.workspace]
-members = ["cores/*"]
+members = ["cores/*", "hosts/*"]
 
 [tool.uv.sources]
 sx-text = { workspace = true }
 sx-semver = { workspace = true }
 sx-git = { workspace = true }
 sx-github = { workspace = true }
+sx-repomod = { workspace = true }
 
 [dependency-groups]
 dev = [
@@ -29,6 +30,7 @@ dev = [
     "sx-semver",
     "sx-git",
     "sx-github",
+    "sx-repomod",
 ]
 
 [tool.pytest.ini_options]
@@ -36,14 +38,15 @@ testpaths = ["tests", "cores"]
 pythonpath = ["bench/codemode"]
 
 [tool.ty.environment]
-root = ["src", "tests", "bench", "bench/codemode", "cores/text/src", "cores/semver/src", "cores/git/src", "cores/github/src"]
+root = ["src", "tests", "bench", "bench/codemode", "cores/text/src", "cores/semver/src", "cores/git/src", "cores/github/src", "hosts/repomod/src", "hosts/repomod/tests"]
 python-version = "3.15"
 python-platform = "darwin"
 
 [tool.ty.src]
-include = ["src", "tests", "bench", "cores"]
+include = ["src", "tests", "bench", "cores", "hosts"]
 
 [tool.ty.analysis]
+allowed-unresolved-imports = ["repomod.**", "git_helpers", "fix_helpers"]
 strict-equality-semantics = true
 strict-generic-narrowing = true
 respect-type-ignore-comments = false

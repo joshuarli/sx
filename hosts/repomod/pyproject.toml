@@ -1,0 +1,18 @@
+[project]
+name = "sx-repomod"
+version = "0.1.0"
+requires-python = ">=3.15"
+dependencies = ["sx", "sx-text", "sx-git", "sx-github"]
+
+[project.scripts]
+sx-repomod = "sx_repomod.cli:main"
+
+[tool.uv.sources]
+sx = { workspace = true }
+sx-text = { workspace = true }
+sx-git = { workspace = true }
+sx-github = { workspace = true }
+
+[build-system]
+requires = ["uv_build>=0.9"]
+build-backend = "uv_build"
