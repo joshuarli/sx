@@ -147,23 +147,44 @@ suite runs in an environment where repomod is not installed, which proves the bo
 
 ## Status
 
-Phase 0 has passed its gate, and the owner approved the checkpoint and Phase 1. The owner
-accepted the held-out tasks without changes, so no reviewer outside the agent that wrote them has
-read them. They stay unseen by any model until Phase 2. The syntax pilot ran two rounds of 60 answers each from
-`opencode-go/iceman-contributor-free` on the development set. Judged by hand against the spec,
-about 42% of the first round's answers would check and produce the expected value. After the
-language revision in commit `78dc4fd`, about 82% of the second round's would. No checker existed
-yet, so these are estimates.
+Phase 0 and Phase 1 have passed their gates. Phase 2 is next.
 
-Decided at the checkpoint:
+**Phase 0.** The syntax pilot ran on the development set and drove one language revision.
+
+**Phase 1.** The Python checker, machine, CLI, and help are built. The checker lowers source into a
+typed semantic IR, and the machine executes only that IR, so surface syntax stays separate from
+semantics. Two decisions differ from the phase text:
+
+- The `sx help` guide stays hand-written, because the pilot tuned its wording. Tests require it to
+  name every form and prelude function, and require each of its examples to produce the result it
+  shows.
+- The semantic fixtures live in `fixtures/run` as data, for the Lean evaluator and the Rust port to
+  replay in Phases 4 and 5.
+
+With the checker and machine in place, the pilot scores answers exactly instead of by hand. On the
+15 development tasks:
+
+| Run | Correct result | Type-checks |
+| --- | --- | --- |
+| Iceman, round 1, against the revised spec | 44 of 60 | 45 of 60 |
+| Iceman, round 2 | 50 of 60 | 50 of 60 |
+| Muse Spark at medium thinking, through pi | 28 of 30 | 30 of 30 |
+
+Both Muse misses came from an ambiguous task description, since corrected. These are development
+results and say nothing about the held-out set.
+
+Decided at the Phase 0 checkpoint:
 
 - Keywords used as values, such as `{:kind :unknown}`, appeared in both rounds despite the guide.
   They stay errors with a habit diagnostic. Phase 2 records whether that diagnostic repairs them
   in one attempt, and a poor repair rate reopens the question.
 
 Open:
+
 - Watch items from one answer each: omitting an `Option` field from a record literal, a bare
   symbol as a catch-all `match` pattern, and branches returning records with different fields.
+- The six held-out tasks that declare `Map`, `Float`, or `Bytes` cannot load into the registry.
+  The Phase 2 harness must still show their tools to the model, as raw declaration text.
 
 ## Phases
 
