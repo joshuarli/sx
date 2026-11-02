@@ -350,9 +350,12 @@ covers the semantic IR, where the semantics live, and the surface elaborator sta
 way a proof assistant's kernel checks elaborator output. `sx check FILE --emit ir` exports the
 checked IR with the types the elaborator inferred. The Lean side defines the IR, values, the JSON
 boundary, an inductive typing relation `HasType` with an executable checker, a fiber machine written
-from `docs/language.md`, and `sx-ref`, which replays a fixture. On all 67 accepted fixtures in
+from `docs/language.md`, and `sx-ref`, which replays a fixture. On all 123 accepted fixtures in
 `fixtures/run`, `sx-ref` reproduces the outcome and the exact trace, and the Lean checker accepts
-the exported program. The 5 rejected fixtures test the elaborator and are not compared.
+the exported program. The 13 rejected fixtures test the elaborator and are not compared. The
+reference covers master's Float, Bytes, open records, literal patterns, widened records, `sleep`,
+and `tuple-item`. Records keep their fields in name order in Lean types and values, so field order
+does not matter, as in Python.
 `lean/axioms.sh` builds every theorem below and requires each to use only `propext`,
 `Classical.choice`, and `Quot.sound`:
 
@@ -363,7 +366,7 @@ the exported program. The 5 rejected fixtures test the elaborator and are not co
    functions, if, exhaustive match, records, lists, tuples, options, results, variants,
    conversions, the whole prelude through its signature table, and core calls whose
    implementations respect their signatures. The evaluator is not the machine. They share values,
-   binding, matching, conversions, and the prelude, and `agree.py` checks the evaluator on the 13
+   binding, matching, conversions, and the prelude, and `agree.py` checks the evaluator on the 27
    call-free fixtures.
 2. `effect_soundness`: in every machine state reachable by running and resuming with any host
    responses, every request in the trace names a capability in the program's effect set.
@@ -375,13 +378,14 @@ the exported program. The 5 rejected fixtures test the elaborator and are not co
    whatever order the branches finish in.
 
 Not covered: the elaborator, `loop` and `recur` in theorem 1, real core implementations, and
-the `git` and `github` decision functions. The Lean typing relation compares record fields in
-order, while Python unifies them in any order; no fixture depends on the difference. Lean's JSON
-parser reads `1.0` as `1`. The machine counts steps its own way, and no fixture exercises the steps
-budget. The reference also found two Python deviations from the specification, outside the
-fixture corpus. A second `par` or `par-map` on the same fiber path reuses request IDs (`r.0:1`
-twice). A `wait-until` predicate named by a local function sees the bindings at the call site, not
-at its definition. Reproduce with `uv run python lean/agree.py` and `lean/axioms.sh`.
+the `git` and `github` decision functions. Lean's JSON parser reads `1.0` as `1`, so an Int field
+accepts `1.0` where Python rejects it. The Lean checker's rule for retrying a non-idempotent write
+on refusal kinds omits Python's nesting-depth condition. The machine counts steps its own way, and
+no fixture exercises the steps budget. The reference found two Python deviations from the
+specification, now fixed with fixtures: a second `par` or `par-map` on the same fiber path reused
+request IDs, and a `wait-until` predicate named by a local function saw the bindings at the call
+site instead of its definition. Reproduce with `uv run python lean/agree.py` and
+`lean/axioms.sh`.
 
 Decided at the Phase 0 checkpoint:
 
