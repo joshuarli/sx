@@ -12,5 +12,5 @@ A value you change keeps the way it was written: a double-quoted value stays dou
 
 Return a JSON object with two fields:
 
-- `updated`: for each file written, in ascending order of file name, `{"file": NAME, "version": NEW_VERSION}`
-- `skipped`: the names of the skipped files, in ascending order
+- `updated`: for each file written, in ascending order of file name, `{"file": FILE, "version": NEW_VERSION}`, with `FILE` the complete file name, such as `api.yaml`
+- `skipped`: the complete file names of the skipped files, in ascending order

@@ -187,6 +187,8 @@ belongs to `fs`.
 Each comparison records successful outcomes, model attempts, tokens, wall time, and the code a
 host had to write.
 
+The first comparison is recorded in plan.md under Phase 9c.
+
 ## Campaign 3: capability ecosystem
 
 **MCP import comes first.** Code Mode hosts already expose their tools over MCP. The importer
