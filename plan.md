@@ -584,8 +584,8 @@ binary. Muse Spark, medium thinking, 3 samples, both arms once, TypeScript with 
 
 Sx caught up on correctness by the gate's rule: within 10 points at first attempt and 5 at final, here
 level. It did not catch up on cost. Output tokens were 1.8 times TypeScript's on every one of the eight
-workflows (1.6 to 2.1), against 1.15 to 1.24 times on the development set, so a quarter of the
-development gain was tuning that did not transfer, and total tokens per trial are 2.4 times
+workflows (1.6 to 2.1), against 1.15 to 1.24 times on the development set, so the development set
+overstated how far the model's own cost had fallen, and total tokens per trial are 2.4 times
 TypeScript's, as in Phase 9c, because the guide adds 5,500 prompt tokens that buy the correctness. Three
 of the 24 Sx answers had unbalanced brackets and ran correct only through closer inference; without it
 Sx would have been 21 of 24 at first attempt, 12.5 points behind, outside the gate. No answer in either
@@ -604,6 +604,19 @@ Decided at the Phase 0 checkpoint:
 - Keywords used as values, such as `{:kind :unknown}`, appeared in both rounds despite the guide.
   They stay errors with a habit diagnostic. Phase 2 records whether that diagnostic repairs them
   in one attempt, and a poor repair rate reopens the question.
+
+Open after the second campaign:
+
+- **The model's own cost.** On blind workflows Sx answers are as correct as TypeScript's but take 1.8
+  times the output tokens and nearly twice the model time, and the prompt is 5 times larger. The
+  output is mostly reasoning, so the next lever is whatever lets a model plan in Sx as fluently as in
+  TypeScript, measured on new blind workflows.
+- **Writing JSON, managing files, and dates.** The blind author designed around a JSON writer, `fs`
+  operations to create directories and move or delete files, and date arithmetic.
+- **Parallel read-only commands.** Still open from the first campaign.
+- **A timing-dependent test.** `calls_run_concurrently_and_each_answer_carries_its_own_id` in
+  `rust/sx-cli/tests/mcp_serve.rs` asserts that the shortest of eight sleeps answers first, which failed
+  once under the full parallel test run.
 
 Open after the first campaign, taken up by Phases 10 to 12:
 
