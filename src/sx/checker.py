@@ -305,6 +305,7 @@ def check(
     scope: dict[str, Binding] = {name: ValueBinding(t) for name, t in declared_inputs.items()}
     body, result = checker.check(program, None, scope)
     checker.check_presence_tests()
+    checker.check_late_sort_keys()
     checker.check_size(program)
     body = cast("ir.Node", checker.settle(body))
     final = checker.zonk(result)
@@ -333,6 +334,7 @@ class _Checker:
         self.substitution: dict[int, Type] = {}
         self.shapes: dict[int, BracketShape | BraceShape] = {}
         self.presence_tests: list[tuple[Type, Node, str]] = []
+        self.late_sort_keys: list[tuple[Type, Span]] = []
         self.counter = itertools.count()
         self.diagnostics: list[Diagnostic] = []
         self.effects: list[Effects] = []
@@ -1257,6 +1259,16 @@ class _Checker:
                 detail=hint, help=who,
             )
         return Test(condition, False, None, None)
+
+    def check_late_sort_keys(self) -> None:
+        for key, span in self.late_sort_keys:
+            if not self.is_sort_key(key):
+                self.error(
+                    "type-mismatch", span,
+                    "sort-by needs a key that is an Int, Float, String, Bool, or a tuple of them.",
+                    detail=f"Expected: a sort key\nFound: {show_type(self.zonk(key))}",
+                    help="sort-by",
+                )
 
     def check_presence_tests(self) -> None:
         for inner, condition_node, who in self.presence_tests:
@@ -2521,6 +2533,8 @@ class _Checker:
                     function, key = self.function_argument(function_node, [element], None, op, scope)
                 finally:
                     self.sort_key_owner = None
+                if self.is_open(key):
+                    self.late_sort_keys.append((key, function_node.span))
                 if not self.is_sort_key(key):
                     hint = None
                     if (
