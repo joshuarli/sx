@@ -784,6 +784,85 @@ Both arms run once at the same model settings. **Gate:** the result is recorded.
 Sx at most 1.6 times TypeScript's dollar cost per solved task, from 2.1, with first-attempt correctness
 within 10 points.
 
+### The fourth campaign: code mode and effects
+
+Planned, not started. The owner chose it after Phase 14 and accepted every recommendation in the
+handoff. Two questions no campaign has answered: does Sx work as the code mode of a real agent, and
+does its static authority prevent harmful effects that TypeScript code mode lets happen? Cost is not a
+goal here; it is reported.
+
+What Sx can claim and TypeScript cannot, which this campaign must measure rather than assume:
+
+- A program that does not check performs no effect. TypeScript's `tsc` catches type errors before a
+  run too, so the difference is the errors only Sx catches: a call the host did not grant or that a
+  literal input puts out of scope, a retried write that is not idempotent, a write inside `par`, a
+  misused enum or optional.
+- Before anything runs, `sx explain` lists every tool a program can call, with each literal input and
+  its scope verdict, so a host can approve or refuse the program as a whole. A TypeScript host learns
+  the calls only as they happen. The same performers enforce the grants at run time in both arms, so
+  run-time refusal is not an Sx advantage.
+
+#### Phase 15: Sx as code mode for any MCP client
+
+- **`sx mcp code`**, a stdio MCP server that offers two tools: `check`, which checks a program and
+  returns its diagnostics or its `explain` report, with no effect, and `run`, which checks, explains,
+  applies the host's approval policy, and runs, returning the result, the calls made with their
+  outcomes, and any `inferred_closers`. Both tools describe themselves with the output of `sx guide`
+  for the server's declarations and grants. The tools behind them are the native packs and any MCP
+  servers the host names, imported with `sx mcp import` and called as `sx mcp run` calls them, so code
+  mode wraps a host's existing MCP servers.
+- **An approval policy**, a JSON file the host writes, judged against the `explain` report before
+  anything runs: the capabilities a program may call, which of them may be called with an input the
+  checker cannot see (a verdict of `checked per request`), and a limit on write calls in the program
+  text. A refused program returns the reason and performs nothing. MCP elicitation, which would let a
+  person approve the exact calls, waits until a client that supports it is in hand; the policy file
+  is the approver until then.
+- **The pack gaps an effects benchmark needs:** `fs.make-directory`, `fs.move`, and `fs.delete` under
+  the `fs` scope rules (destructive operations get the os-boundaries treatment the write path got:
+  no symlink traversal, whole-component containment, and an error table), and a way to write JSON
+  text from a value. Dates, bounded concurrent writes, and parallel read-only commands wait until a
+  task needs them.
+- **Gate:** an MCP client test drives `check` and `run` over stdio against native and proxied tools,
+  including refusals by the policy that leave the sandbox untouched; the new `fs` operations pass
+  scope and error-table tests like the existing ones; all existing gates pass.
+
+#### Phase 16: The effects benchmark
+
+Workflows in `bench/workflows` format where a wrong effect costs something, each with a
+`policy.json` for the approver and a check that audits every effect, not only the result:
+
+- non-idempotent writes against a service that fails transiently, where a careless retry charges
+  twice;
+- destructive file operations on targets that come from data, some of which the task's policy forbids;
+- multi-step changes where a failure part way must leave nothing half done;
+- limits on how many writes or calls a run may make;
+- data that asks for an action the host did not grant.
+
+The runner keeps each attempt's effects before it resets the sandbox, because in real use a failed
+attempt's effects stay. Per arm and workflow it reports correctness, effects that violate the policy,
+trials with any violation, effects performed by attempts before the first correct one, the share of
+violating programs stopped before their first effect (by Sx's checker and approver, or by `tsc`), and
+cost. The Sx arm runs through `sx mcp code`; the TypeScript arm runs the Bun harness against `sx mcp
+serve` with the same grants.
+
+As before: six development workflows the campaign lead may read, then eight blind ones written under
+Phase 12's rules by a subagent that sees neither the guide nor any result, frozen before any model
+runs, and measured once. Muse Spark at medium thinking is the model, and a stronger model available
+through `pi` joins if one is, chosen when the phase starts.
+
+**Gate:** the blind result is recorded. Sx wins if, at first-attempt correctness within 10 points of
+TypeScript, its trials perform fewer policy-violating effects and it stops a larger share of violating
+programs before their first effect.
+
+#### Phase 17: Real sessions
+
+Claude Code connects to `sx mcp code` over the owner's real tools: repomod's read-only capabilities
+and a scratch directory tree with `fs` writes. A fixed list of everyday requests runs through it, and
+the transcripts record each program written, checked, refused, and run, the repairs, and where a
+model left code mode for another tool. Connecting the client is an owner step, since it changes the
+owner's Claude Code configuration. **Gate:** the transcripts and their counts are recorded, with what
+they say Sx should change.
+
 #### The repomod track
 
 Runs beside the phases. repomod gains a public API for what `sx-repomod` imports today through
