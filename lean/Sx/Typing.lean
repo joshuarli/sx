@@ -166,9 +166,10 @@ def convItemsTy (E : Enums) : List (Option Conv) → List Ty → Option (List Ty
   | _, _ => none
 end
 
-def orderable : Ty → Bool
-  | .int | .str | .var _ | .never => true
-  | _ => false
+def orderablePair : Ty → Ty → Bool
+  | .int, .int | .str, .str => true
+  | .var _, _ | _, .var _ | .never, _ | _, .never => true
+  | _, _ => false
 
 mutual
 def sortKey : Ty → Bool
@@ -196,10 +197,10 @@ def opTy : Op → List Ty → Option Ty
   | .rem, [.int, .int] => some .int
   | .eq, [_, _] => some .bool
   | .neq, [_, _] => some .bool
-  | .lt, [a, b] => if a == b && orderable a then some .bool else none
-  | .le, [a, b] => if a == b && orderable a then some .bool else none
-  | .gt, [a, b] => if a == b && orderable a then some .bool else none
-  | .ge, [a, b] => if a == b && orderable a then some .bool else none
+  | .lt, [a, b] => if orderablePair a b then some .bool else none
+  | .le, [a, b] => if orderablePair a b then some .bool else none
+  | .gt, [a, b] => if orderablePair a b then some .bool else none
+  | .ge, [a, b] => if orderablePair a b then some .bool else none
   | .not, [.bool] => some .bool
   | .and, [.bool, .bool] => some .bool
   | .or, [.bool, .bool] => some .bool

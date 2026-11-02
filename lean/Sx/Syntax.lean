@@ -15,7 +15,36 @@ inductive Ty where
   | nominal (name : String) (base : Ty)
   | var (n : Nat)
   | never
-  deriving Repr, BEq, Inhabited
+  deriving Repr, Inhabited
+
+mutual
+def Ty.beq : Ty → Ty → Bool
+  | .bool, .bool => true
+  | .int, .int => true
+  | .str, .str => true
+  | .unit, .unit => true
+  | .list a, .list b => a.beq b
+  | .map a, .map b => a.beq b
+  | .tuple as, .tuple bs => Ty.beqList as bs
+  | .option a, .option b => a.beq b
+  | .result a a', .result b b' => a.beq b && a'.beq b'
+  | .record as, .record bs => Ty.beqFields as bs
+  | .enum n, .enum m => n == m
+  | .nominal n a, .nominal m b => n == m && a.beq b
+  | .var n, .var m => n == m
+  | .never, .never => true
+  | _, _ => false
+def Ty.beqList : List Ty → List Ty → Bool
+  | [], [] => true
+  | a :: as, b :: bs => a.beq b && Ty.beqList as bs
+  | _, _ => false
+def Ty.beqFields : List (String × Ty) → List (String × Ty) → Bool
+  | [], [] => true
+  | (n, a) :: as, (m, b) :: bs => n == m && a.beq b && Ty.beqFields as bs
+  | _, _ => false
+end
+
+instance : BEq Ty := ⟨Ty.beq⟩
 
 inductive Val where
   | bool (b : Bool)

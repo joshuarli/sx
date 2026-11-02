@@ -8,3 +8,4 @@ import Sx.Typing
 import Sx.Effects
 import Sx.Check
 import Sx.Eval
+import Sx.Proofs.Safety
