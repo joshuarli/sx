@@ -145,6 +145,23 @@ sx/
 `hosts/repomod` depends on `../repomod` by path. The kernel and the cores do not. The kernel test
 suite runs in an environment where repomod is not installed, which proves the boundary.
 
+## Status
+
+Phase 0 has passed its gate and waits for the owner's checkpoint review: the held-out tasks, and
+the open decisions below. The syntax pilot ran two rounds of 60 answers each from
+`opencode-go/iceman-contributor-free` on the development set. Judged by hand against the spec,
+about 42% of the first round's answers would check and produce the expected value. After the
+language revision in commit `78dc4fd`, about 82% of the second round's would. No checker existed
+yet, so these are estimates.
+
+Open decisions:
+
+- Keywords used as values, such as `{:kind :unknown}`, appeared in both rounds despite the guide.
+  They stay errors with a habit diagnostic until Phase 2 shows whether that diagnostic repairs
+  them in one attempt.
+- Watch items from one answer each: omitting an `Option` field from a record literal, a bare
+  symbol as a catch-all `match` pattern, and branches returning records with different fields.
+
 ## Phases
 
 Each phase ends at a gate. Do not start a phase until the previous gate passes.
@@ -255,8 +272,12 @@ Build the harness in `bench/codemode` that runs the Phase 0 corpus in two arms.
   different model family. It runs the full corpus. Muse Spark runs as much of the corpus as the
   OpenCode Go weekly limit allows, and Iceman is the fallback when that limit is reached. Both
   runs in a pair use the same model. Report results per model.
-- Define an opencode agent for the probe with every tool disabled, so the model answers with a
-  program instead of running commands. Both arms use the same agent.
+- Call the model so that it is offered no tools. Denying permissions in an opencode agent does
+  not remove its built-in tools. In the pilot, the model tried to call opencode's skill tool in 12
+  and then 28 of 60 runs, sometimes leaking tool-call tokens into its answer. One looping run
+  used 145,997 input tokens. Token counts from such runs are meaningless. Use the provider's API
+  directly, or an opencode mode that offers no tools, and treat any tool attempt as a harness
+  failure to fix, not a data point.
 - Read token counts from the `step_finish` events in opencode's JSON output. Run opencode with
   `OPENCODE_CONFIG_DIR` pointing at an empty directory and with `OPENCODE_DISABLE_CLAUDE_CODE`
   and `OPENCODE_DISABLE_CLAUDE_CODE_SKILLS` set. Otherwise every prompt carries the user's
