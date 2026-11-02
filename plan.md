@@ -150,11 +150,15 @@ suite runs in an environment where repomod is not installed, which proves the bo
 
 ## Status
 
-Phases 0, 1, 3, 4, and 5 have passed their gates. Phase 2 failed twice on the first held-out set,
-the second time after its one allowed revision, and then passed on a fresh blind held-out set.
-At the review before the Rust port, the owner accepted the fresh-set pass and every
-recommendation below, and added Phase 5 to the campaign's scope. The repomod changes Phase 3
-proposes stay proposals, because this project may not modify repomod.
+Every phase, 0 through 9, has passed its gate. Phase 2 failed twice on the first held-out set, the
+second time after its one allowed revision, and then passed on a fresh blind held-out set. At the
+review before the Rust port, the owner accepted that pass and every recommendation below, and
+extended the campaign through Phase 9. The Rust port is the implementation now, the Python
+prototype is frozen as an executable specification, and the Lean reference checks every accepted
+fixture. The six-workflow comparison in Phase 9c is the campaign's main finding: on real workflows,
+TypeScript on Bun beat Sx on first-attempt correctness and on tokens, and Sx led only where a core
+did the work. The repomod changes Phase 3 proposes stay proposals, because this project may not
+modify repomod.
 
 **The Python prototype is frozen.** `src/sx` and the Python cores are frozen as of commit
 `15b6ed6`, the parent of the commit that records this, because Rust passed its gates. The prototype
@@ -484,12 +488,20 @@ Decided at the Phase 0 checkpoint:
   They stay errors with a habit diagnostic. Phase 2 records whether that diagnostic repairs them
   in one attempt, and a poor repair rate reopens the question.
 
-Open:
+Open, for the next campaign:
 
-- Watch items from one answer each: omitting an `Option` field from a record literal, a bare
-  symbol as a catch-all `match` pattern, and branches returning records with different fields.
-- The six held-out tasks that declare `Map`, `Float`, or `Bytes` cannot load into the registry.
-  The Phase 2 harness must still show their tools to the model, as raw declaration text.
+- **Close the workflow gap.** Sx trailed TypeScript 10 of 18 against 18 of 18 at first attempt on
+  the six workflows, at 2.5 times the tokens. The guide teaches the kernel but not the packs, so a
+  model meets `fs`, `http`, `process`, `sqlite`, and MCP tools only through the listing. Measure
+  a pack section of the guide on new workflows written blind, as Phase 2's fresh set was.
+- **Parallel read-only commands.** `process.run` is a write, so `par-map` cannot run the 400
+  `git` reads of `git-ci-audit` in parallel. Typed declared commands, like typed endpoints and
+  sqlite statements, would let a host declare `git status` a read.
+- **Catching a core refusal.** `attempt` catches call errors only, so a program cannot recover
+  from a `yaml` refusal; the workflow had to exclude the refusable file by name. Either `attempt`
+  catches `invalid-input` or refusing cores gain a checking function.
+- **Proposed repomod changes**, which this project may not make: make five private helpers
+  public and extract `render_discover` (Phase 3).
 
 ## Phases
 
