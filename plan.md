@@ -148,7 +148,9 @@ suite runs in an environment where repomod is not installed, which proves the bo
 ## Status
 
 Phase 0 and Phase 1 have passed their gates. Phase 2 failed its gate on the first held-out run,
-on both models. The owner chose to spend the one allowed revision, described below.
+on both models. The owner chose to spend the one allowed revision, described below, and then
+dropped Iceman from the probe, so the rerun gates on Muse Spark alone. That change came after the
+first failure, and Iceman's result in the table below would fail any version of the gate.
 
 **Phase 0.** The syntax pilot ran on the development set and drove one language revision.
 
@@ -374,10 +376,9 @@ Build the harness in `bench/codemode` that runs the Phase 0 corpus in two arms.
   tool attempt as a harness failure to fix, not a data point.
 - Run `opencode-go/muse-spark-1.3-contributor` with `--thinking medium`. The probe uses a weak
   model on purpose: a language a weak model writes correctly is easy enough for a strong one.
-- Also run `opencode-go/iceman-contributor-free`, which is free, weaker still, and from a
-  different model family. It runs the full corpus. Muse Spark runs as much of the corpus as the
-  OpenCode Go weekly limit allows, and Iceman is the fallback when that limit is reached. Both
-  runs in a pair use the same model. Report results per model.
+- Muse Spark is the only probe model. The first held-out run also used
+  `opencode-go/iceman-contributor-free`, a weaker free model. The owner dropped it after that
+  run, because Muse Spark is the model in daily use.
 - Read token counts, reasoning tokens, and stop reasons from the assistant `message_end` events
   in pi's JSON output.
 - Run each task several times per arm. Pair the runs. Allow a fixed number of repair attempts,
@@ -409,7 +410,7 @@ Score each task as the mean over its samples, and compare the arms task by task,
 samples of one task do not count as independent evidence. Report a bootstrap confidence interval
 over tasks with every result. With about 30 held-out tasks, one task is about 3 percentage points.
 
-**Gate:** On the held-out tasks Sx can express, for each model over the pairs it completed, Sx
+**Gate:** On the held-out tasks Sx can express, for Muse Spark over the pairs it completed, Sx
 first-attempt correctness is no more than 5 percentage points below JavaScript. Sx must also be
 better on either final correctness or total tokens per solved task. The gate measures whether
 models can write the language, so tasks that need a type Sx v0 lacks stay out of it. The report
