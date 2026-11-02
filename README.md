@@ -131,29 +131,41 @@ lean/axioms.sh
 ## Differential fuzzing
 
 `tests/fuzz` generates random Sx programs from a typed grammar over the declarations in
-`fixtures/run/declarations.json` plus a few more in `tests/fuzz/declarations.json`, and keeps the ones
-the Python checker accepts. It scripts random host responses, including every call-error kind and
-malformed outputs, and runs each program on Python's machine and on Lean's `sx-ref` with the same
-responses. Python's exit status, outcome, and trace must equal Lean's, and the Lean checker must accept
-the exported IR. A Python exception, a disagreement, or a Lean rejection is a finding. A tenth of the
-programs are mutated into mostly invalid source, to prove that no input crashes the reader or checker.
+`fixtures/run/declarations.json` plus a few more in `tests/fuzz/declarations.json`. It scripts random
+host responses, including every call-error kind and malformed outputs, and compares three participants
+on each program:
+
+| Participant | Driven through | Compared on |
+| --- | --- | --- |
+| Rust | the `sx` binary: `sx serve` runs and answers the program, and `sx check --emit ir` exports its IR | the reference side: whether the program checks, the IR, the outcome, and the trace |
+| Lean | `sx-ref` on the exported IR and the recorded responses | the Lean checker accepts the IR; outcome and trace equal Rust's |
+| Python | the frozen `src/sx` in process | check codes and rendered diagnostics, the IR, and outcome and trace on a replay of the same responses |
+
+The generator knows which participants support each feature it emits (`tests/fuzz/participants.py`), so a
+program that uses a Rust and Lean feature is not shown to Python. Every feature the generator emits today
+is a frozen-kernel feature, so Python sees every program. A Rust crash, a malformed reply, a
+disagreement between participants, or a Lean rejection is a finding. A tenth of the programs are mutated
+into mostly invalid source, to prove that no input crashes the reader or checker.
 
 Runs are seeded: `--seed S --count N --start K` always produces the same programs, whatever `--jobs` is.
 Findings land in `.work/tmp/fuzz/findings/SEED-INDEX/`. The run prints how many accepted programs contain
-and execute each IR class. `CoreCall` stays at zero because Lean has no cores, and the checker settles
-`MakeBracket` and `MakeEmptyBrace` away and never builds `MakeVariant`. The run needs the Lean build
-and `lake` on `PATH`.
+and execute each IR class, counted on Python's machine. `CoreCall` stays at zero because Lean has no
+cores, and the checker settles `MakeBracket` and `MakeEmptyBrace` away and never builds `MakeVariant`.
+The run needs the Lean build with `lake` on `PATH`, and a Rust `sx`: it uses `SX_KERNEL`, else
+`rust/target/release/sx`, else `rust/target/debug/sx`. Rebuild the binary after changing Rust, because the
+fuzzer does not.
 
 ```sh
+cargo build --release --manifest-path rust/Cargo.toml -p sx-cli
 (cd lean && lake build)
 uv run python -m tests.fuzz --fast
-uv run python -m tests.fuzz --seed 7 --count 5000 --jobs 6
+uv run python -m tests.fuzz --seed 7 --count 3000 --jobs 6
 uv run python -m tests.fuzz --seed 7 --show 123
 uv run python -m tests.fuzz --seed 7 --minimize 123
 ```
 
-`--fast` is the quick slice: 300 programs with a fixed seed, a few seconds, exit status 0 when nothing
-disagrees. `--triage N` also minimizes up to N findings per kind.
+`--fast` is the quick slice: 300 programs with a fixed seed, about four seconds with a built binary, exit
+status 0 when nothing disagrees. `--triage N` also minimizes up to N findings per kind.
 
 ## Run the syntax pilot
 

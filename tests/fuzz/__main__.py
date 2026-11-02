@@ -3,15 +3,19 @@ from __future__ import annotations
 import argparse
 import sys
 from collections import Counter
+from collections.abc import Generator
 from concurrent.futures import ProcessPoolExecutor
+from contextlib import contextmanager
 from pathlib import Path
 
-from .differential import ROOT, Totals, ir_classes, make_case, registry, run_case, run_chunk, save_finding
+from .differential import ROOT, Totals, ir_classes, make_case, registry, run_case, run_chunk, save_finding, scratch
 from .minimize import minimize, triage_one
+from .rust import Rust
 
 
 def report(totals: Totals) -> None:
     print(f"cases {totals.cases}  mutated {totals.mutated}  requests answered {totals.requests}")
+    print("programs per participant", dict(sorted(totals.participants.items())))
     print("status", dict(totals.status))
     print("outcomes", dict(totals.outcomes.most_common()))
     print("rejection codes", dict(totals.rejected_codes.most_common()))
@@ -22,6 +26,15 @@ def report(totals: Totals) -> None:
     ops = sorted(totals.ops_static)
     print("prelude operators present:", len(ops), "executed:", len(totals.ops_run))
     print("  never executed:", sorted(set(totals.ops_static) - set(totals.ops_run)))
+
+
+@contextmanager
+def closing_rust() -> Generator[Rust]:
+    rust = Rust(scratch())
+    try:
+        yield rust
+    finally:
+        rust.reset()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -43,7 +56,8 @@ def main(argv: list[str] | None = None) -> int:
         known = registry()
         case = make_case(args.seed, args.show, known, args.mutate_rate)
         print(case.source)
-        result = run_case(case, known)
+        with closing_rust() as rust:
+            result = run_case(case, known, rust)
         print(result.status, result.outcome, result.finding)
         if result.finding is not None:
             save_finding(case, result, args.keep)
@@ -51,8 +65,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.minimize is not None:
         known = registry()
         case = make_case(args.seed, args.minimize, known, args.mutate_rate)
-        small = minimize(case, known)
-        result = run_case(small, known)
+        with closing_rust() as rust:
+            small = minimize(case, known, rust)
+            result = run_case(small, known, rust)
         print(small.source)
         print(result.status, result.outcome, result.finding)
         save_finding(small, result, args.keep / "minimized")

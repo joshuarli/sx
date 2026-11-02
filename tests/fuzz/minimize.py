@@ -6,7 +6,8 @@ from dataclasses import dataclass, replace
 
 from sx.registry import Registry
 
-from .differential import ROOT, Case, Finding, make_case, registry, run_case, save_finding
+from .differential import ROOT, Case, Finding, make_case, registry, run_case, save_finding, scratch
+from .rust import Rust
 
 TOKEN = re.compile(r'"(?:[^"\\]|\\.)*"|[()\[\]{}]|[^\s()\[\]{}"]+')
 CLOSERS = {"(": ")", "[": "]", "{": "}"}
@@ -96,13 +97,13 @@ def category(finding: Finding) -> str:
     return finding.kind
 
 
-def minimize(case: Case, known: Registry, log: Callable[[str], None] = lambda _: None) -> Case:
-    first = run_case(case, known)
+def minimize(case: Case, known: Registry, rust: Rust, log: Callable[[str], None] = lambda _: None) -> Case:
+    first = run_case(case, known, rust)
     assert first.finding is not None
     wanted = category(first.finding)
 
     def still_fails(source: str) -> bool:
-        result = run_case(replace(case, source=source), known)
+        result = run_case(replace(case, source=source), known, rust)
         return result.finding is not None and category(result.finding) == wanted
 
     parsed = parse(case.source)
@@ -135,8 +136,12 @@ def minimize(case: Case, known: Registry, log: Callable[[str], None] = lambda _:
 def triage_one(seed: str, index: int, mutate_rate: float) -> str:
     known = registry()
     case = make_case(seed, index, known, mutate_rate)
-    small = minimize(case, known)
-    result = run_case(small, known)
+    rust = Rust(scratch())
+    try:
+        small = minimize(case, known, rust)
+        result = run_case(small, known, rust)
+    finally:
+        rust.reset()
     save_finding(small, result, ROOT / ".work" / "tmp" / "fuzz" / "minimized")
     if result.finding is None:
         return f"{small.source}\n{result.status}"

@@ -20,6 +20,8 @@ from sx.types import (
     Type,
 )
 
+from .participants import FROZEN_KERNEL
+
 
 @dataclass(frozen=True, slots=True)
 class Ty:
@@ -179,6 +181,7 @@ class Gen:
     def __init__(self, rng: random.Random, registry: Registry, concurrency: int = 16) -> None:
         self.rng = rng
         self.concurrency = concurrency
+        self.features: set[str] = {FROZEN_KERNEL}
         self.counter = 0
         self.finals = 0
         self.enums: dict[str, tuple[tuple[str, Ty | None], ...]] = {}

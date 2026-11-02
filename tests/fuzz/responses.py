@@ -3,10 +3,10 @@ from __future__ import annotations
 import base64
 import json
 import random
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-from sx.machine import CallRequest, DelayRequest, Output, Refusal, Response
 from sx.registry import Effect, Registry
 from sx.types import (
     EnumType,
@@ -149,29 +149,26 @@ class ScriptHost:
             return {"output": corrupt(capability.output, good, rng)}
         return {"output": good}
 
-    def answer(self, request: CallRequest | DelayRequest) -> Response:
-        if isinstance(request, DelayRequest):
-            return Output(None)
-        entry = next(
-            (e for e in self.entries if e.capability == request.capability and e.input == request.input), None
-        )
+    def answer(self, request: Mapping[str, Any]) -> dict[str, Any]:
+        if request["kind"] == "delay":
+            return {"output": None}
+        capability_id, request_input = request["capability"], request["input"]
+        entry = next((e for e in self.entries if e.capability == capability_id and e.input == request_input), None)
         if entry is None:
-            entry = Entry(request.capability, request.input)
+            entry = Entry(capability_id, request_input)
             self.entries.append(entry)
-        capability = self.registry.capability(request.capability)
+        capability = self.registry.capability(capability_id)
         assert capability is not None
-        key = json.dumps(request.input, sort_keys=True)
-        rng = random.Random(f"{self.seed}:extend:{request.capability}:{key}:{entry.served}")
+        key = json.dumps(request_input, sort_keys=True)
+        rng = random.Random(f"{self.seed}:extend:{capability_id}:{key}:{entry.served}")
         if entry.served >= len(entry.results) and not entry.frozen:
             if capability.effect is Effect.WRITE or not entry.results or rng.random() < self.plan.extend_rate:
-                entry.results.append(self.result(request.capability, request.input, entry.served))
+                entry.results.append(self.result(capability_id, request_input, entry.served))
             else:
                 entry.frozen = True
         result = entry.results[min(entry.served, len(entry.results) - 1)]
         entry.served += 1
-        if "error" in result:
-            return Refusal(result["error"]["kind"], result["error"]["message"])
-        return Output(result["output"])
+        return result
 
     def fixture_responses(self) -> list[dict[str, Any]]:
         return [{"capability": e.capability, "input": e.input, "results": e.results} for e in self.entries]

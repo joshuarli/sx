@@ -12,15 +12,20 @@ from pathlib import Path
 from typing import Any, cast, override
 
 from sx import ir
-from sx.checker import DEFAULT_BUDGETS, Budgets
+from sx.checker import DEFAULT_BUDGETS, Budgets, CheckResult
+from sx.cli import EXIT_OK
+from sx.diagnostics import render
 from sx.export import export_program
+from sx.host import FixtureHost
 from sx.machine import (
     Closure,
     Completed,
     Failed,
     Fiber,
     Machine,
+    Outcome,
     Output,
+    Refusal,
     Response,
     Suspended,
 )
@@ -31,11 +36,11 @@ from sx.values import Value
 
 from .generate import Gen
 from .mutate import mutate
+from .participants import Participant, participants
 from .responses import Plan, ScriptHost
+from .rust import DECLARATION_FILES, ROOT, KernelGoneError, Rust
 
-ROOT = Path(__file__).resolve().parent.parent.parent
 BINARY = ROOT / "lean" / ".lake" / "build" / "bin" / "sx-ref"
-DECLARATIONS = (ROOT / "fixtures" / "run" / "declarations.json", Path(__file__).resolve().parent / "declarations.json")
 BUDGET_RANGES: dict[str, tuple[int, int]] = {
     "steps": (20, 600),
     "calls": (1, 6),
@@ -50,7 +55,7 @@ FUZZ_STEPS = 100_000
 
 def registry() -> Registry:
     loaded = Registry()
-    for path in DECLARATIONS:
+    for path in DECLARATION_FILES:
         load_declarations(loaded, json.loads(path.read_text()))
     return loaded
 
@@ -64,6 +69,7 @@ class Case:
     budgets: Mapping[str, int]
     steps_mode: bool
     mutated: bool
+    features: frozenset[str]
 
 
 def make_case(seed: str, index: int, known: Registry, mutate_rate: float) -> Case:
@@ -77,7 +83,8 @@ def make_case(seed: str, index: int, known: Registry, mutate_rate: float) -> Cas
             low, high = BUDGET_RANGES[name]
             budgets[name] = rng.randint(low, high)
     budgets.setdefault("steps", FUZZ_STEPS)
-    source = Gen(rng, known, budgets.get("concurrency", DEFAULT_BUDGETS.concurrency)).program()
+    generator = Gen(rng, known, budgets.get("concurrency", DEFAULT_BUDGETS.concurrency))
+    source = generator.program()
     capabilities = sorted(known.capabilities)
     allow = tuple(capabilities)
     if rng.random() < 0.05:
@@ -85,7 +92,7 @@ def make_case(seed: str, index: int, known: Registry, mutate_rate: float) -> Cas
     mutated = rng.random() < mutate_rate
     if mutated:
         source = mutate(source, rng)
-    return Case(seed, index, source, allow, budgets, rng.random() < 0.35, mutated)
+    return Case(seed, index, source, allow, budgets, rng.random() < 0.35, mutated, frozenset(generator.features))
 
 
 @dataclass(slots=True)
@@ -115,6 +122,7 @@ class Result:
     requests: int = 0
     ir: str = ""
     fixture: str = ""
+    participants: frozenset[Participant] = frozenset()
 
 
 class CountingMachine(Machine):
@@ -167,12 +175,6 @@ def operators(node: object) -> set[str]:
     return found
 
 
-def response_json(response: Response) -> dict[str, Any]:
-    if isinstance(response, Output):
-        return {"output": response.value}
-    return {"error": {"kind": response.kind, "message": response.message}}
-
-
 def same(a: object, b: object) -> bool:
     if isinstance(a, bool) or isinstance(b, bool):
         return isinstance(a, bool) and isinstance(b, bool) and a == b
@@ -192,77 +194,166 @@ def lean(args: Sequence[str | Path]) -> subprocess.CompletedProcess[str]:
     return subprocess.run([BINARY, *args], capture_output=True, text=True, check=False, timeout=LEAN_TIMEOUT)
 
 
-def anomalies(answers: list[tuple[str, Response]], rng: random.Random) -> list[tuple[str, Response]]:
+def anomalies(answers: list[tuple[str, dict[str, Any]]], rng: random.Random) -> list[tuple[str, dict[str, Any]]]:
     roll = rng.randrange(4)
     if roll == 0 and answers:
         return answers[:-1]
     if roll == 1 and answers:
         return [*answers, answers[0]]
     if roll == 2:
-        return [*answers, ("r.9:9", Output(None))]
+        return [*answers, ("r.9:9", {"output": None})]
     if answers:
-        return [*answers[:-1], (answers[-1][0], Output("zz"))]
+        return [*answers[:-1], (answers[-1][0], {"output": "zz"})]
     return answers
 
 
-def run_case(case: Case, known: Registry, work: Path | None = None) -> Result:
-    budgets = Budgets(**case.budgets)
+def python_response(entry: Mapping[str, Any]) -> Response:
+    if "output" in entry:
+        return Output(entry["output"])
+    return Refusal(entry["error"]["kind"], entry["error"]["message"])
+
+
+def clip(text: str, limit: int = 300) -> str:
+    return text if len(text) <= limit else text[:limit]
+
+
+def finding_result(result: Result, kind: str, detail: str) -> Result:
+    result.status, result.finding = "finding", Finding(kind, detail)
+    return result
+
+
+def check_against_python(
+    case: Case, known: Registry, budgets: Budgets, rejected: dict[str, Any] | None
+) -> tuple[CheckResult | None, Finding | None]:
     try:
         checked = compile_source(case.source, known, allowed=frozenset(case.allow), budgets=budgets)
     except Exception:
-        return Result("finding", finding=Finding("python-crash-check", traceback.format_exc()))
-    if checked.program is None:
-        return Result("rejected", codes=[d.code for d in checked.diagnostics])
-    program = checked.program
-    result = Result("agreed", nodes_static=classes(program.body), ops_static=operators(program.body))
+        return None, Finding("python-crash-check", traceback.format_exc())
+    if rejected is None:
+        if checked.program is None:
+            codes = [d.code for d in checked.diagnostics]
+            return checked, Finding("python-rejects", f"python {codes}\nrust accepted")
+        return checked, None
+    ours = [d["code"] for d in rejected["diagnostics"]]
+    if checked.program is not None:
+        return checked, Finding("python-accepts", f"python accepted\nrust {ours}")
+    theirs = [d.code for d in checked.diagnostics]
+    if theirs != ours:
+        return checked, Finding("python-codes", f"python {theirs}\nrust {ours}")
+    if render(case.source, checked.diagnostics) != rejected["rendered"]:
+        theirs_text = render(case.source, checked.diagnostics)
+        return checked, Finding("python-rendering", f"python {theirs_text}\nrust {rejected['rendered']}")
+    return checked, None
+
+
+def replay_in_python(
+    program: ir.Program,
+    budgets: Budgets,
+    known: Registry,
+    steps: list[dict[str, Any]] | None,
+    responses: list[dict[str, Any]],
+) -> tuple[CountingMachine, Outcome]:
+    machine = CountingMachine(program, budgets)
+    outcome = machine.start()
+    if steps is None:
+        host = FixtureHost.from_responses(known, responses)
+        while isinstance(outcome, Suspended):
+            outcome = machine.resume([(request.id, host.answer(request)) for request in outcome.requests])
+        return machine, outcome
+    for number, step in enumerate(steps):
+        if not isinstance(outcome, Suspended):
+            raise ReplayMismatchError(f"python finished before step {number}")
+        asked = [request.id for request in outcome.requests]
+        if asked != step["requests"]:
+            raise ReplayMismatchError(f"step {number}: python asked for {asked}, rust for {step['requests']}")
+        outcome = machine.resume([(request_id, python_response(entry)) for request_id, entry in step["respond"]])
+    return machine, outcome
+
+
+class ReplayMismatchError(Exception):
+    pass
+
+
+def outcome_of(reply: Mapping[str, Any]) -> tuple[dict[str, object], str]:
+    if reply["type"] == "completed":
+        return {"completed": reply["value"]}, "completed"
+    kind = reply["failure"]["kind"]
+    return {"failed": kind}, str(kind)
+
+
+def exchange(
+    rust: Rust, answers: list[tuple[str, dict[str, Any]]], sent: list[tuple[str, dict[str, Any]]]
+) -> dict[str, Any]:
+    responses = [{"id": request_id, **entry} for request_id, entry in sent]
+    if len(sent) < len(answers):
+        return rust.answer_some_then_cancel(responses)
+    return rust.respond(responses)
+
+
+def run_case(case: Case, known: Registry, rust: Rust) -> Result:
     try:
-        exported = json.dumps(export_program(program, {}))
-    except Exception:
-        result.status, result.finding = "finding", Finding("python-crash-export", traceback.format_exc())
-        return result
-    result.ir = exported
-    path = work or ROOT / ".work" / "tmp" / "fuzz" / f"run-{os.getpid()}"
-    path.mkdir(parents=True, exist_ok=True)
-    ir_path, fixture_path = path / "program.ir.json", path / "fixture.json"
-    ir_path.write_text(exported)
+        result = judge(case, known, rust)
+    except KernelGoneError as gone:
+        result = Result("finding", finding=Finding("rust-crash", str(gone)))
+    finally:
+        rust.settle()
+    result.participants = participants(case.features)
+    return result
+
+
+def judge(case: Case, known: Registry, rust: Rust) -> Result:
+    who = participants(case.features)
+    budgets = Budgets(**case.budgets)
+    reply = rust.start(case.source, case.allow, case.budgets)
+    if reply["type"] == "error":
+        return Result("finding", finding=Finding("rust-error", f"{reply['code']}: {reply['message']}"))
+    rejected = reply if reply["type"] == "rejected" else None
+    checked: CheckResult | None = None
+    if Participant.PYTHON in who:
+        checked, disagreement = check_against_python(case, known, budgets, rejected)
+        if disagreement is not None:
+            return Result("finding", finding=disagreement)
+    if rejected is not None:
+        return Result("rejected", codes=[d["code"] for d in rejected["diagnostics"]])
+    result = Result("agreed")
+    program = checked.program if checked is not None else None
+    if program is not None:
+        result.nodes_static, result.ops_static = classes(program.body), operators(program.body)
+    path = rust.work
+    source_path, ir_path, fixture_path = path / "program.sx", path / "program.ir.json", path / "fixture.json"
+    source_path.write_text(case.source)
+    emitted = rust.emit_ir(source_path, case.allow)
+    if emitted.returncode != EXIT_OK:
+        return finding_result(result, "rust-check", f"exit {emitted.returncode}\n{emitted.stdout}{emitted.stderr}")
+    result.ir = emitted.stdout
+    ir_path.write_text(emitted.stdout)
+    if program is not None:
+        try:
+            exported = json.dumps(export_program(program, {}))
+        except Exception:
+            return finding_result(result, "python-crash-export", traceback.format_exc())
+        if json.dumps(json.loads(emitted.stdout)) != exported:
+            return finding_result(result, "python-ir", f"python {clip(exported)}\nrust {clip(emitted.stdout)}")
     checked_by_lean = lean(["check", ir_path])
     if checked_by_lean.returncode != 0:
-        result.status = "finding"
-        result.finding = Finding("lean-rejects", checked_by_lean.stderr.strip())
-        return result
+        return finding_result(result, "lean-rejects", checked_by_lean.stderr.strip())
 
     host = ScriptHost(known, f"{case.seed}:{case.index}", Plan())
     rng = random.Random(f"{case.seed}:{case.index}:anomaly")
     steps: list[dict[str, Any]] = []
-    try:
-        machine = CountingMachine(program, budgets)
-        outcome = machine.start()
-        while isinstance(outcome, Suspended):
-            answers = [(request.id, host.answer(request)) for request in outcome.requests]
-            sent = answers
-            if case.steps_mode and rng.random() < 0.04:
-                sent = anomalies(answers, rng)
-            steps.append(
-                {
-                    "requests": [request.id for request in outcome.requests],
-                    "respond": [[request_id, response_json(response)] for request_id, response in sent],
-                }
-            )
-            result.requests += len(answers)
-            outcome = machine.resume(sent)
-    except Exception:
-        result.status, result.finding = "finding", Finding("python-crash-run", traceback.format_exc())
-        return result
-    result.nodes_run, result.ops_run = machine.nodes_run, machine.ops_run
-    if isinstance(outcome, Completed):
-        expected: dict[str, object] = {"completed": outcome.json}
-        result.outcome = "completed"
-    else:
-        assert isinstance(outcome, Failed)
-        expected = {"failed": outcome.failure.kind.value}
-        result.outcome = outcome.failure.kind.value
-        if outcome.failure.kind.value == "internal":
-            result.status, result.finding = "finding", Finding("python-internal", outcome.failure.message)
+    while reply["type"] == "requests":
+        answers = [(request["id"], host.answer(request)) for request in reply["requests"]]
+        sent = anomalies(answers, rng) if case.steps_mode and rng.random() < 0.04 else answers
+        asked = [request["id"] for request in reply["requests"]]
+        steps.append({"requests": asked, "respond": [list(item) for item in sent]})
+        result.requests += len(answers)
+        reply = exchange(rust, answers, sent)
+    if reply["type"] not in ("completed", "failed"):
+        return finding_result(result, "rust-reply", json.dumps(reply)[:400])
+    expected, result.outcome = outcome_of(reply)
+    trace: list[Any] = reply["trace"]
+    if reply["type"] == "failed" and result.outcome == "internal":
+        return finding_result(result, "rust-internal", str(reply["failure"]["message"]))
     fixture: dict[str, Any] = {"budgets": dict(case.budgets)}
     if case.steps_mode:
         fixture["steps"] = steps
@@ -270,27 +361,63 @@ def run_case(case: Case, known: Registry, work: Path | None = None) -> Result:
         fixture["responses"] = host.fixture_responses()
     result.fixture = json.dumps(fixture)
     fixture_path.write_text(result.fixture)
+    if program is not None:
+        problem = python_problem(program, budgets, known, fixture, expected, trace, result)
+        if problem is not None:
+            return finding_result(result, *problem)
     try:
         ran = lean([ir_path, fixture_path])
     except subprocess.TimeoutExpired:
-        result.status, result.finding = "finding", Finding("lean-timeout", "")
-        return result
+        return finding_result(result, "lean-timeout", "")
     if ran.returncode != 0:
-        result.status = "finding"
-        result.finding = Finding("lean-error", ran.stderr.strip())
-        return result
+        return finding_result(result, "lean-error", ran.stderr.strip())
     produced = json.loads(ran.stdout)
     if not same(produced["outcome"], expected):
-        detail = f"python {json.dumps(expected)[:300]}\nlean {json.dumps(produced['outcome'])[:300]}"
-        result.status, result.finding = "finding", Finding("outcome", detail)
-    elif not same(produced["trace"], machine.trace):
-        index = next(
-            (i for i, (a, b) in enumerate(zip(produced["trace"], machine.trace, strict=False)) if not same(a, b)),
-            min(len(produced["trace"]), len(machine.trace)),
+        return finding_result(
+            result, "outcome", f"rust {json.dumps(expected)[:300]}\nlean {json.dumps(produced['outcome'])[:300]}"
         )
-        detail = f"event {index}: python {machine.trace[index:index + 1]}\nlean {produced['trace'][index:index + 1]}"
-        result.status, result.finding = "finding", Finding("trace", detail)
+    if not same(produced["trace"], trace):
+        index = next(
+            (i for i, (a, b) in enumerate(zip(produced["trace"], trace, strict=False)) if not same(a, b)),
+            min(len(produced["trace"]), len(trace)),
+        )
+        detail = f"event {index}: rust {trace[index:index + 1]}\nlean {produced['trace'][index:index + 1]}"
+        return finding_result(result, "trace", detail)
     return result
+
+
+def python_problem(
+    program: ir.Program,
+    budgets: Budgets,
+    known: Registry,
+    fixture: dict[str, Any],
+    expected: dict[str, object],
+    trace: list[Any],
+    result: Result,
+) -> tuple[str, str] | None:
+    try:
+        machine, outcome = replay_in_python(program, budgets, known, fixture.get("steps"), fixture.get("responses", []))
+    except ReplayMismatchError as mismatch:
+        return "python-replay", str(mismatch)
+    except Exception:
+        return "python-crash-run", traceback.format_exc()
+    result.nodes_run, result.ops_run = machine.nodes_run, machine.ops_run
+    if isinstance(outcome, Completed):
+        theirs: dict[str, object] = {"completed": outcome.json}
+    elif isinstance(outcome, Failed):
+        theirs = {"failed": outcome.failure.kind.value}
+    else:
+        assert isinstance(outcome, Suspended)
+        return "python-outcome", f"python suspended\nrust {json.dumps(expected)[:300]}"
+    if not same(theirs, expected):
+        return "python-outcome", f"python {json.dumps(theirs)[:300]}\nrust {json.dumps(expected)[:300]}"
+    if not same(machine.trace, trace):
+        index = next(
+            (i for i, (a, b) in enumerate(zip(machine.trace, trace, strict=False)) if not same(a, b)),
+            min(len(machine.trace), len(trace)),
+        )
+        return "python-trace", f"event {index}: python {machine.trace[index:index + 1]}\nrust {trace[index:index + 1]}"
+    return None
 
 
 @dataclass(slots=True)
@@ -305,6 +432,7 @@ class Totals:
     ops_static: Counter[str] = field(default_factory=Counter)
     ops_run: Counter[str] = field(default_factory=Counter)
     requests: int = 0
+    participants: Counter[str] = field(default_factory=Counter)
     findings: list[tuple[int, Finding]] = field(default_factory=list)
 
     def add(self, case: Case, result: Result) -> None:
@@ -319,6 +447,7 @@ class Totals:
         self.ops_static.update(result.ops_static)
         self.ops_run.update(result.ops_run)
         self.requests += result.requests
+        self.participants.update(p.value for p in result.participants)
         if result.finding is not None:
             self.findings.append((case.index, result.finding))
 
@@ -333,6 +462,7 @@ class Totals:
         self.ops_static.update(other.ops_static)
         self.ops_run.update(other.ops_run)
         self.requests += other.requests
+        self.participants.update(other.participants)
         self.findings.extend(other.findings)
 
 
@@ -348,7 +478,7 @@ def save_finding(case: Case, result: Result, directory: Path) -> Path:
         json.dumps(
             {
                 "seed": case.seed, "index": case.index, "allow": list(case.allow), "budgets": dict(case.budgets),
-                "steps_mode": case.steps_mode, "mutated": case.mutated,
+                "steps_mode": case.steps_mode, "mutated": case.mutated, "features": sorted(case.features),
             },
             indent=1,
         )
@@ -360,13 +490,21 @@ def save_finding(case: Case, result: Result, directory: Path) -> Path:
     return target
 
 
+def scratch() -> Path:
+    return ROOT / ".work" / "tmp" / "fuzz" / f"run-{os.getpid()}"
+
+
 def run_chunk(seed: str, indexes: Sequence[int], mutate_rate: float, keep: Path) -> Totals:
     known = registry()
     totals = Totals()
-    for index in indexes:
-        case = make_case(seed, index, known, mutate_rate)
-        result = run_case(case, known)
-        totals.add(case, result)
-        if result.finding is not None:
-            save_finding(case, result, keep)
+    rust = Rust(scratch())
+    try:
+        for index in indexes:
+            case = make_case(seed, index, known, mutate_rate)
+            result = run_case(case, known, rust)
+            totals.add(case, result)
+            if result.finding is not None:
+                save_finding(case, result, keep)
+    finally:
+        rust.reset()
     return totals
