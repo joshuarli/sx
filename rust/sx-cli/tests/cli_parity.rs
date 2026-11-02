@@ -153,6 +153,7 @@ options:
         "(ok value), or (err {:kind K :message m}) if a tool call failed.",
         "(ok value), or (err {:kind K :message m}) if a tool call failed or a core refused its input.",
     ),
+    ("sx help: nothing is named ho. Did you mean *?", "sx help: nothing is named ho. Did you mean do?"),
 ];
 
 fn usage_of(help: &str) -> &str {

@@ -104,12 +104,36 @@ pub static PRELUDE: [Entry; 44] = [
     entry("group-by", "(group-by f xs) -> List<Tuple<K, List<T>>>", "Groups elements by key, as [key items] tuples in first-seen order.", "(group-by (fn [x] (rem x 2)) [1 2 3])", "[[1 [1 3]] [0 [2]]]"),
 ];
 
-pub static EXTENSIONS: [Entry; 1] = [entry(
+pub static EXTENSIONS: [Entry; 5] = [entry(
     "script",
     "(script {:inputs {:name \"Type\" ...}} body)",
     "The outermost form of a program that declares its own typed inputs, so it needs no host to declare them. Each type is a string in the declaration type language, such as \"List<String>\" or \"Option<Int>\", and the body reads each input by name. A header declares no authority. An Option input may be left out when running and is then none. Run this example with: sx run report.sx --input 'owners=[\"acme\",\"beta\",\"cyan\"]' --input limit=2",
     "(script {:inputs {:owners \"List<String>\" :limit \"Int\"}} (take limit owners))",
     "[\"acme\" \"beta\"]",
+), entry(
+    "def",
+    "(def name value)",
+    "A top-level definition, before the program's final expression. It binds the value for every later form, like one binding of an outer let, and (def _ value) runs a step for its effect. A definition is allowed only at the top level.",
+    "(def base 10) (def scaled (* base 3)) (+ scaled 1)",
+    "31",
+), entry(
+    "defn",
+    "(defn name [param ...] body)",
+    "A top-level function definition, before the program's final expression. Later forms call it like a let-bound fn. It cannot call itself, and it takes no docstring.",
+    "(defn double [x] (* 2 x)) (map double [1 2 3])",
+    "[2 4 6]",
+), entry(
+    "when",
+    "(when condition expression)",
+    "(some value) of the expression when the condition holds, and none otherwise, without evaluating it. The condition follows the rules of if. Use it for a step that runs only sometimes, such as (def _ (when failed (call ...))).",
+    "[(when (> 3 1) \"big\") (when (> 1 3) \"big\")]",
+    "[(some \"big\") none]",
+), entry(
+    "do",
+    "(do expression ... last)",
+    "Evaluates each expression in order for its effect and returns the value of the last, like (let [_ e1 _ e2] last).",
+    "(do (+ 1 1) (* 2 3))",
+    "6",
 )];
 
 pub fn types() -> Vec<Entry> {
