@@ -28,11 +28,15 @@ def output_tokens(trial: Trial) -> int:
     return sum(a.tokens.get("output", 0) for a in trial.attempts)
 
 
+def prompt_tokens(trial: Trial) -> int:
+    return sum(a.tokens.get("input", 0) for a in trial.attempts)
+
+
 def table(out: Path, trials: list[Trial]) -> list[str]:
     lines = [
-        "| Workflow | Arm | Trials | First attempt | Final | Attempts | Tokens per trial | Output per solved task "
-        "| Model seconds | Run seconds |",
-        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+        "| Workflow | Arm | Trials | First attempt | Final | Attempts | Tokens per trial | Prompt per trial "
+        "| Output per trial | Output per solved task | Model seconds | Run seconds |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
     for workflow in sorted({t.task for t in trials}):
         for arm in ("sx", "js"):
@@ -47,7 +51,8 @@ def table(out: Path, trials: list[Trial]) -> list[str]:
             lines.append(
                 f"| {workflow} | {arm} | {len(mine)} | {sum(t.first_correct for t in mine)}/{len(mine)} "
                 f"| {solved}/{len(mine)} | {mean(len(t.attempts) for t in mine):.1f} "
-                f"| {mean(tokens(t) for t in mine):,.0f} | {per_solved} | {model:.0f} | {run:.1f} |"
+                f"| {mean(tokens(t) for t in mine):,.0f} | {mean(prompt_tokens(t) for t in mine):,.0f} "
+                f"| {mean(output_tokens(t) for t in mine):,.0f} | {per_solved} | {model:.0f} | {run:.1f} |"
             )
     return lines
 
