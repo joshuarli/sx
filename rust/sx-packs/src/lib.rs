@@ -2,6 +2,7 @@
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 
 pub mod fs;
+pub mod http;
 
 use std::fmt;
 
@@ -30,7 +31,7 @@ impl fmt::Display for Failure {
 pub type Performer = fn(&Value, &Value) -> Result<Value, Failure>;
 
 pub fn packs() -> Vec<Pack> {
-    vec![fs::pack()]
+    vec![fs::pack(), http::pack()]
 }
 
 pub fn pack(id: &str) -> Option<Pack> {
@@ -38,5 +39,21 @@ pub fn pack(id: &str) -> Option<Pack> {
 }
 
 pub fn performer(capability: &str) -> Option<Performer> {
-    fs::performer(capability)
+    fs::performer(capability).or_else(|| http::performer(capability))
+}
+
+pub fn implemented(endpoints: &http::Endpoints, capability: &str) -> bool {
+    endpoints.get(capability).is_some() || performer(capability).is_some()
+}
+
+pub fn perform(
+    endpoints: &http::Endpoints,
+    capability: &str,
+    scope: &Value,
+    input: &Value,
+) -> Option<Result<Value, Failure>> {
+    match endpoints.get(capability) {
+        Some(endpoint) => Some(endpoint.perform(scope, input)),
+        None => performer(capability).map(|perform| perform(scope, input)),
+    }
 }

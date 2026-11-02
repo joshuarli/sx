@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::fmt;
+use std::sync::Arc;
 
 use crate::json::{Json, python_repr};
 use crate::registry::Registry;
@@ -12,13 +13,36 @@ pub enum Verdict {
     Denied(String),
 }
 
-pub type PrepareScope = fn(&Value) -> Result<Value, String>;
-pub type CheckScope = fn(&Value, &Value) -> Verdict;
+type PrepareScope = dyn Fn(&Value) -> Result<Value, String> + Send + Sync;
+type CheckScope = dyn Fn(&Value, &Value) -> Verdict + Send + Sync;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone)]
 pub struct ScopeCheck {
-    pub prepare: PrepareScope,
-    pub check: CheckScope,
+    prepare: Arc<PrepareScope>,
+    check: Arc<CheckScope>,
+}
+
+impl ScopeCheck {
+    pub fn new(
+        prepare: impl Fn(&Value) -> Result<Value, String> + Send + Sync + 'static,
+        check: impl Fn(&Value, &Value) -> Verdict + Send + Sync + 'static,
+    ) -> ScopeCheck {
+        ScopeCheck { prepare: Arc::new(prepare), check: Arc::new(check) }
+    }
+
+    pub fn prepare(&self, scope: &Value) -> Result<Value, String> {
+        (self.prepare)(scope)
+    }
+
+    pub fn check(&self, scope: &Value, input: &Value) -> Verdict {
+        (self.check)(scope, input)
+    }
+}
+
+impl fmt::Debug for ScopeCheck {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("ScopeCheck")
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -107,8 +131,8 @@ impl Grants {
                 let invalid = |message: String| GrantError::InvalidScope { capability: id.to_string(), message };
                 let decoded = decode(given, scope_type, "$").map_err(|e| invalid(e.to_string()))?;
                 let check = registry.scope_check(id);
-                let scope = match check {
-                    Some(check) => (check.prepare)(&decoded).map_err(invalid)?,
+                let scope = match &check {
+                    Some(check) => check.prepare(&decoded).map_err(invalid)?,
                     None => decoded,
                 };
                 Grant::Scoped { scope, check }
@@ -135,7 +159,7 @@ impl Grants {
             None => Screen::NotGranted,
             Some(Grant::Unscoped) => Screen::Unscoped,
             Some(Grant::Scoped { check: None, .. }) => Screen::Unchecked,
-            Some(Grant::Scoped { scope, check: Some(check) }) => Screen::Verdict((check.check)(scope, input)),
+            Some(Grant::Scoped { scope, check: Some(check) }) => Screen::Verdict(check.check(scope, input)),
         }
     }
 }

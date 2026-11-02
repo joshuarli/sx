@@ -88,8 +88,13 @@ fn path_input() -> Type {
     record(None, vec![("path", STRING)])
 }
 
-const READ_CHECK: ScopeCheck = ScopeCheck { prepare, check: check_read };
-const WRITE_CHECK: ScopeCheck = ScopeCheck { prepare, check: check_write };
+fn read_check() -> ScopeCheck {
+    ScopeCheck::new(prepare, check_read)
+}
+
+fn write_check() -> ScopeCheck {
+    ScopeCheck::new(prepare, check_write)
+}
 
 fn capability(id: &str, effect: Effect, input: Type, output: Type, description: &str, check: ScopeCheck) -> PackCapability {
     PackCapability {
@@ -108,15 +113,15 @@ fn capability(id: &str, effect: Effect, input: Type, output: Type, description: 
 
 pub fn pack() -> Pack {
     let capabilities = vec![
-        capability(READ_TEXT, Effect::Read, path_input(), STRING, "Reads a whole file as UTF-8 text.", READ_CHECK),
-        capability(READ_BYTES, Effect::Read, path_input(), BYTES, "Reads a whole file as bytes.", READ_CHECK),
+        capability(READ_TEXT, Effect::Read, path_input(), STRING, "Reads a whole file as UTF-8 text.", read_check()),
+        capability(READ_BYTES, Effect::Read, path_input(), BYTES, "Reads a whole file as bytes.", read_check()),
         capability(
             LIST,
             Effect::Read,
             path_input(),
             Type::List(Box::new(entry_type())),
             "Lists a directory's entries, sorted by name.",
-            READ_CHECK,
+            read_check(),
         ),
         capability(
             STAT,
@@ -124,7 +129,7 @@ pub fn pack() -> Pack {
             path_input(),
             Type::Option(Box::new(stat_type())),
             "Reports a path's kind and size, or none when nothing is there.",
-            READ_CHECK,
+            read_check(),
         ),
         capability(
             WRITE_TEXT,
@@ -132,7 +137,7 @@ pub fn pack() -> Pack {
             record(None, vec![("path", STRING), ("text", STRING)]),
             UNIT,
             "Replaces a file's contents with UTF-8 text, atomically.",
-            WRITE_CHECK,
+            write_check(),
         ),
     ];
     Pack {

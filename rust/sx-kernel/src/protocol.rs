@@ -11,7 +11,7 @@ use crate::diagnostics::{Diagnostic, render};
 use crate::ir::Program;
 use crate::json::{Json, Layout, dumps, parse, repr_str};
 use crate::machine::{CoreImplementations, Failure, Machine, Outcome, Request, Response};
-use crate::registry::{Core, Pack, Registry, load_declarations};
+use crate::registry::{Core, EndpointBinder, Pack, Registry, load_declarations, load_declarations_with};
 use crate::syntax::Span;
 use crate::types::{Type, show_type};
 use crate::values::{Value, decode};
@@ -23,6 +23,10 @@ pub trait CoreLibrary {
     fn core(&self, id: &str) -> Option<Core>;
     fn pack(&self, id: &str) -> Option<Pack>;
     fn implementations(&self) -> &dyn CoreImplementations;
+
+    fn endpoints(&self) -> Option<Box<dyn EndpointBinder>> {
+        None
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -343,7 +347,11 @@ pub fn declare(declarations: &Json, library: &dyn CoreLibrary) -> Result<Declare
         }
         Some(_) => return Err(invalid_declarations("declarations: packs must be a list of ids")),
     }
-    load_declarations(&mut registry, declarations).map_err(|e| invalid_declarations(e.to_string()))?;
+    let loaded = match library.endpoints() {
+        Some(mut binder) => load_declarations_with(&mut registry, declarations, binder.as_mut()),
+        None => load_declarations(&mut registry, declarations),
+    };
+    loaded.map_err(|e| invalid_declarations(e.to_string()))?;
     let mut inputs = BTreeMap::new();
     match declarations.get("inputs") {
         None => {}

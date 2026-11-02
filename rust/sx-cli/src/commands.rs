@@ -13,7 +13,8 @@ use sx_kernel::host::{FixtureHost, run};
 use sx_kernel::ir::Program;
 use sx_kernel::json::{Json, Layout, dumps, python_repr, repr_str};
 use sx_kernel::machine::{Machine, Outcome};
-use sx_kernel::registry::{Registry, load_declarations};
+use sx_kernel::registry::{Registry, load_declarations_with};
+use sx_packs::http::{EndpointLoader, Endpoints};
 use sx_kernel::syntax::Span;
 use sx_kernel::types::{Type, show_type};
 use sx_kernel::values::{Value, decode, show_value};
@@ -108,9 +109,9 @@ fn listed_ids(declarations: &Json, shown: &str, key: &str, what: &str) -> Result
         .collect()
 }
 
-fn load_registry(path: Option<&str>, mut registry: Registry) -> Result<(Registry, Json), Stop> {
+fn load_registry(path: Option<&str>, mut registry: Registry) -> Result<(Registry, Json, Endpoints), Stop> {
     let Some(path) = path else {
-        return Ok((registry, Json::Object(Vec::new())));
+        return Ok((registry, Json::Object(Vec::new()), Endpoints::default()));
     };
     let shown = path_text(path);
     let declarations = read_json(path, "declarations")?;
@@ -135,9 +136,10 @@ fn load_registry(path: Option<&str>, mut registry: Registry) -> Result<(Registry
         })?;
         registry.add_pack(pack).map_err(|e| Stop::usage(format!("invalid declarations {shown}: {e}")))?;
     }
-    load_declarations(&mut registry, &declarations)
+    let mut loader = EndpointLoader::new();
+    load_declarations_with(&mut registry, &declarations, &mut loader)
         .map_err(|e| Stop::usage(format!("invalid declarations {shown}: {e}")))?;
-    Ok((registry, declarations))
+    Ok((registry, declarations, loader.finish()))
 }
 
 fn command_cores(args: &CoresArgs, registry: &Registry, output: &mut Output) -> Result<i32, Stop> {
@@ -167,7 +169,7 @@ fn command_cores(args: &CoresArgs, registry: &Registry, output: &mut Output) -> 
 }
 
 fn command_help(args: &HelpArgs, base: Registry, output: &mut Output) -> Result<i32, Stop> {
-    let (registry, _) = load_registry(args.declarations.as_deref(), base)?;
+    let (registry, _, _) = load_registry(args.declarations.as_deref(), base)?;
     let Some(name) = &args.name else {
         output.stdout.push_str(&guide(args.level));
         return Ok(EXIT_OK);
@@ -226,7 +228,7 @@ fn diagnostic_json(diagnostic: &Diagnostic) -> Json {
 }
 
 fn command_program(args: &ProgramArgs, base: Registry, output: &mut Output) -> Result<i32, Stop> {
-    let (registry, declarations) = load_registry(args.declarations.as_deref(), base)?;
+    let (registry, declarations, endpoints) = load_registry(args.declarations.as_deref(), base)?;
     let shown = path_text(&args.file);
     let source = read_text(Path::new(&args.file)).map_err(|e| Stop::usage(format!("cannot read {shown}: {e}")))?;
     let mut allowed: Vec<&String> = args.allow.iter().collect();
@@ -265,7 +267,7 @@ fn command_program(args: &ProgramArgs, base: Registry, output: &mut Output) -> R
         ProgramKind::Run { responses, inputs: pairs } => {
             let values = input_values(pairs, &inputs)?;
             match (responses.as_deref(), &args.grants) {
-                (None, Some(_)) => command_run_native(args.format, &program, &grants, &values, output),
+                (None, Some(_)) => command_run_native(args.format, &program, &grants, &endpoints, &values, output),
                 (responses, _) => {
                     let responses = load_responses(responses)?;
                     command_run(args.format, &program, &grants, &responses, &values, output)
@@ -367,17 +369,18 @@ fn command_run_native(
     format: Format,
     program: &Program,
     grants: &Grants,
+    endpoints: &Endpoints,
     values: &[(String, Value)],
     output: &mut Output,
 ) -> Result<i32, Stop> {
-    let missing = crate::native::unimplemented(program);
+    let missing = crate::native::unimplemented(program, endpoints);
     if !missing.is_empty() {
         return Err(Stop::usage(format!(
             "no pack implements {}, so the program cannot run without --responses",
             missing.join(", ")
         )));
     }
-    let (outcome, machine) = crate::native::run(program, grants, values, Budgets::default());
+    let (outcome, machine) = crate::native::run(program, grants, endpoints, values, Budgets::default());
     report_run(format, outcome, &machine, output)
 }
 
