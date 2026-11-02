@@ -1,0 +1,105 @@
+{
+  "id": "fresh-usage-bill",
+  "split": "fresh",
+  "kinds": [
+    "arithmetic",
+    "schema-detail"
+  ],
+  "domain": "other",
+  "sx-expressible": false,
+  "description": "Compute the monthly bill for account `acme`. Multiply each usage line's `quantity` by the `rate` of the plan named by the line's `plan` (the rate is in dollars per unit) to get the line's cost. Return a record with `lines` (records with `plan` and `cost`, one per usage line in the order given) and `total` (the sum of the costs).",
+  "types": {
+    "Line": "Record {plan: String, quantity: Int}",
+    "Rate": "Record {plan: String, rate: Float}"
+  },
+  "cores": [],
+  "capabilities": [
+    {
+      "id": "usage.lines",
+      "effect": "read",
+      "input": "Record {account: String}",
+      "output": "List<Line>",
+      "description": "Lists an account's metered usage lines for the month."
+    },
+    {
+      "id": "plans.rates",
+      "effect": "read",
+      "input": "Record {}",
+      "output": "List<Rate>",
+      "description": "Lists the per-unit rate in dollars of every plan."
+    }
+  ],
+  "responses": [
+    {
+      "capability": "usage.lines",
+      "input": {
+        "account": "acme"
+      },
+      "results": [
+        {
+          "output": [
+            {
+              "plan": "basic",
+              "quantity": 40
+            },
+            {
+              "plan": "pro",
+              "quantity": 3
+            },
+            {
+              "plan": "edge",
+              "quantity": 7
+            },
+            {
+              "plan": "basic",
+              "quantity": 8
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "capability": "plans.rates",
+      "input": {},
+      "results": [
+        {
+          "output": [
+            {
+              "plan": "pro",
+              "rate": 1.5
+            },
+            {
+              "plan": "basic",
+              "rate": 0.25
+            },
+            {
+              "plan": "edge",
+              "rate": 0.5
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "expected": {
+    "lines": [
+      {
+        "plan": "basic",
+        "cost": 10
+      },
+      {
+        "plan": "pro",
+        "cost": 4.5
+      },
+      {
+        "plan": "edge",
+        "cost": 3.5
+      },
+      {
+        "plan": "basic",
+        "cost": 2
+      }
+    ],
+    "total": 20
+  }
+}

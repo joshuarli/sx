@@ -1,0 +1,95 @@
+{
+  "id": "fresh-expiring-lots",
+  "split": "fresh",
+  "kinds": [
+    "filter-group",
+    "schema-detail"
+  ],
+  "domain": "other",
+  "sx-expressible": true,
+  "description": "Group the lots that expire soon by warehouse. A lot expires soon when its `days-left` is 14 or fewer (a negative value means already expired) and its `quantity` is above 0. Return a map from warehouse to the lot ids in it, ordered by `days-left` lowest first and then by lot id. Leave out warehouses with no such lots.",
+  "types": {
+    "Lot": "Record {lot: String, warehouse: String, days-left: Int, quantity: Int}"
+  },
+  "cores": [],
+  "capabilities": [
+    {
+      "id": "batches.list",
+      "effect": "read",
+      "input": "Record {}",
+      "output": "List<Lot>",
+      "description": "Lists every stocked lot with its warehouse, days until expiry, and units on hand."
+    }
+  ],
+  "responses": [
+    {
+      "capability": "batches.list",
+      "input": {},
+      "results": [
+        {
+          "output": [
+            {
+              "lot": "L7",
+              "warehouse": "east",
+              "days-left": 3,
+              "quantity": 10
+            },
+            {
+              "lot": "L2",
+              "warehouse": "east",
+              "days-left": 3,
+              "quantity": 4
+            },
+            {
+              "lot": "L9",
+              "warehouse": "west",
+              "days-left": 14,
+              "quantity": 1
+            },
+            {
+              "lot": "L1",
+              "warehouse": "west",
+              "days-left": 15,
+              "quantity": 9
+            },
+            {
+              "lot": "L5",
+              "warehouse": "east",
+              "days-left": -2,
+              "quantity": 0
+            },
+            {
+              "lot": "L4",
+              "warehouse": "east",
+              "days-left": -2,
+              "quantity": 5
+            },
+            {
+              "lot": "L8",
+              "warehouse": "north",
+              "days-left": 40,
+              "quantity": 7
+            },
+            {
+              "lot": "L3",
+              "warehouse": "west",
+              "days-left": 0,
+              "quantity": 2
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "expected": {
+    "east": [
+      "L4",
+      "L2",
+      "L7"
+    ],
+    "west": [
+      "L3",
+      "L9"
+    ]
+  }
+}

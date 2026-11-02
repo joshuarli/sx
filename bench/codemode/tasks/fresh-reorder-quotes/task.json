@@ -1,0 +1,142 @@
+{
+  "id": "fresh-reorder-quotes",
+  "split": "fresh",
+  "kinds": [
+    "conditional-call",
+    "arithmetic",
+    "filter-group"
+  ],
+  "domain": "other",
+  "sx-expressible": true,
+  "description": "Plan a restock. For every SKU whose available quantity (`on-hand` minus `reserved`) is below its `reorder-point`, order `reorder-qty` units and get a quote for that quantity. Return a list of records with `sku`, `quantity` (the units ordered), and `cost` (the quote's `unit-price`, in cents, times the quantity), sorted by `sku`. Ask for quotes only for SKUs that need a restock.",
+  "types": {
+    "Level": "Record {sku: String, on-hand: Int, reserved: Int, reorder-point: Int, reorder-qty: Int}",
+    "Quote": "Record {sku: String, unit-price: Int}"
+  },
+  "cores": [],
+  "capabilities": [
+    {
+      "id": "stock.levels",
+      "effect": "read",
+      "input": "Record {}",
+      "output": "List<Level>",
+      "description": "Lists every SKU with its on-hand and reserved units and its reorder rule."
+    },
+    {
+      "id": "suppliers.quote",
+      "effect": "read",
+      "input": "Record {sku: String, quantity: Int}",
+      "output": "Quote",
+      "description": "Quotes the price in cents per unit for buying a quantity of a SKU."
+    }
+  ],
+  "responses": [
+    {
+      "capability": "stock.levels",
+      "input": {},
+      "results": [
+        {
+          "output": [
+            {
+              "sku": "washer",
+              "on-hand": 12,
+              "reserved": 5,
+              "reorder-point": 10,
+              "reorder-qty": 200
+            },
+            {
+              "sku": "bolt",
+              "on-hand": 50,
+              "reserved": 10,
+              "reorder-point": 50,
+              "reorder-qty": 100
+            },
+            {
+              "sku": "nut",
+              "on-hand": 30,
+              "reserved": 0,
+              "reorder-point": 20,
+              "reorder-qty": 80
+            },
+            {
+              "sku": "anchor",
+              "on-hand": 20,
+              "reserved": 20,
+              "reorder-point": 1,
+              "reorder-qty": 25
+            },
+            {
+              "sku": "clip",
+              "on-hand": 5,
+              "reserved": 0,
+              "reorder-point": 5,
+              "reorder-qty": 60
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "capability": "suppliers.quote",
+      "input": {
+        "sku": "bolt",
+        "quantity": 100
+      },
+      "results": [
+        {
+          "output": {
+            "sku": "bolt",
+            "unit-price": 12
+          }
+        }
+      ]
+    },
+    {
+      "capability": "suppliers.quote",
+      "input": {
+        "sku": "washer",
+        "quantity": 200
+      },
+      "results": [
+        {
+          "output": {
+            "sku": "washer",
+            "unit-price": 3
+          }
+        }
+      ]
+    },
+    {
+      "capability": "suppliers.quote",
+      "input": {
+        "sku": "anchor",
+        "quantity": 25
+      },
+      "results": [
+        {
+          "output": {
+            "sku": "anchor",
+            "unit-price": 140
+          }
+        }
+      ]
+    }
+  ],
+  "expected": [
+    {
+      "sku": "anchor",
+      "quantity": 25,
+      "cost": 3500
+    },
+    {
+      "sku": "bolt",
+      "quantity": 100,
+      "cost": 1200
+    },
+    {
+      "sku": "washer",
+      "quantity": 200,
+      "cost": 600
+    }
+  ]
+}
