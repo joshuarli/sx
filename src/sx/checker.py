@@ -492,6 +492,8 @@ class _Checker:
                 self.substitution[variable.id] = other
                 return True
             if other_shape is None:
+                if self.occurs(other, variable):
+                    return False
                 self.substitution[other.id] = variable
                 return True
             if isinstance(shape, BraceShape) or isinstance(other_shape, BraceShape):
