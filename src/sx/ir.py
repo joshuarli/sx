@@ -80,6 +80,7 @@ class WidenedField:
     name: str
     present: bool
     conversion: Conversion | None
+    type: Type
 
 
 @dataclass(frozen=True, slots=True)

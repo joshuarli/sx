@@ -546,12 +546,12 @@ class _Checker:
             for name, ft in e.fields:
                 source = a.field(name)
                 if source is None:
-                    widened.append(ir.WidenedField(name, False, None))
+                    widened.append(ir.WidenedField(name, False, None, ft))
                     continue
                 ok, conversion = self.convert(source, ft, joining)
                 if not ok:
                     break
-                widened.append(ir.WidenedField(name, True, conversion))
+                widened.append(ir.WidenedField(name, True, conversion, ft))
             else:
                 return True, ir.WidenRecord(tuple(widened))
         elif isinstance(a, ListType) and isinstance(e, ListType):

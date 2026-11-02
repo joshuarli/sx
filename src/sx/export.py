@@ -146,7 +146,9 @@ class _Exporter:
                 return {"each-field": [[name, self.conversion(c)] for name, c in fields]}
             case ir.WidenRecord(fields=fields):
                 return {
-                    "widen-record": [[f.name, f.present, self.conversion(f.conversion)] for f in fields],
+                    "widen-record": [
+                        [f.name, f.present, self.conversion(f.conversion), self.type(f.type)] for f in fields
+                    ],
                 }
             case ir.EachItem(items=items):
                 return {"each-item": [self.conversion(c) for c in items]}

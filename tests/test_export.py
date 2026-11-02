@@ -11,7 +11,7 @@ from sx.export import _Exporter, export_program
 from sx.program import compile_source
 from sx.registry import Capability, Effect, Function, Registry
 from sx.syntax import Position, Span
-from sx.types import INT, STRING, ListType, ResultType
+from sx.types import INT, STRING, ListType, OptionType, ResultType
 
 SPAN = Span(Position(1, 1), Position(1, 2))
 ONE = ir.Literal(1, INT, SPAN)
@@ -32,7 +32,9 @@ SAMPLES: dict[type, typing.Any] = {
     ir.MatchAny: ir.MatchAny(ir.BindName("v")),
     ir.ToSome: ir.ToSome(None),
     ir.EachField: ir.EachField((("a", ir.VariantName()),)),
-    ir.WidenRecord: ir.WidenRecord((ir.WidenedField("a", True, None), ir.WidenedField("b", False, None))),
+    ir.WidenRecord: ir.WidenRecord(
+        (ir.WidenedField("a", True, None, INT), ir.WidenedField("b", False, None, OptionType(INT))),
+    ),
     ir.EachItem: ir.EachItem((None, ir.ToSome(None))),
     ir.EachElement: ir.EachElement(ir.ToSome(None)),
     ir.VariantName: ir.VariantName(),
