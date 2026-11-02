@@ -22,8 +22,7 @@ LANGUAGE: dict[str, str] = {"sx": "sx", "js": "ts"}
 
 
 TAILORED = "tailored"
-SLIM = "slim"
-DIRECT = "direct"
+VARIANTS = ("slim", "direct", "nochecklist")
 WRITE_DIRECTLY = (
     "The host checks the whole program before it runs anything and reports each mistake with its fix, so "
     "write the program directly instead of deliberating over syntax: a rejected program costs only another try."
@@ -49,12 +48,27 @@ def slimmed(guide: str) -> str:
     return "\n\n".join(kept)
 
 
+def tailored_variants(level: str) -> set[str] | None:
+    head, *parts = level.split("+")
+    if head not in (TAILORED, *VARIANTS) or any(part not in VARIANTS for part in parts):
+        return None
+    chosen: set[str] = {*parts}
+    if head != TAILORED:
+        chosen.add(head)
+    return chosen
+
+
 def sx_prompt(workflow: Workflow, sandbox: Sandbox, level: str) -> str:
     task = workflow.render(workflow.task, sandbox).strip()
-    if level in (TAILORED, SLIM, DIRECT):
-        tailored = arms.sx_guide(workflow, sandbox, notes=False).rstrip()
-        shown = slimmed(tailored) if level == SLIM else tailored
-        direct = [WRITE_DIRECTLY, ""] if level == DIRECT else []
+    variants = tailored_variants(level)
+    if variants is not None:
+        shown = arms.sx_guide(workflow, sandbox, notes=False).rstrip()
+        if "slim" in variants:
+            shown = slimmed(shown)
+        if "nochecklist" in variants:
+            kept = [part.rstrip() for part in sections(shown) if not part.startswith("## Before you answer")]
+            shown = "\n\n".join(kept)
+        direct = [WRITE_DIRECTLY, ""] if "direct" in variants else []
         return "\n".join([shown, "", "## Your task", "", task, "", *direct, REPLY_SX]) + "\n"
     return "\n".join([
         guide(level), "", "## Your task", "", task, "", arms.sx_listing(workflow, sandbox),
