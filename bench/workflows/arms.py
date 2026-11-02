@@ -22,7 +22,7 @@ BUN_TIMEOUT = 240
 CALL_TIMEOUT_MS = 60_000
 NO_CORES: Json = {"types": {}, "functions": []}
 VIRTUAL_WAIT = "Time is virtual, so waiting costs nothing."
-REAL_WAIT = "Waits for real."
+REAL_WAIT = "The wait takes real time."
 MCP_PREFIX = "mcp-"
 
 
