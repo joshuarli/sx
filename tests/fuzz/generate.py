@@ -20,7 +20,7 @@ from sx.types import (
     Type,
 )
 
-from .participants import FROZEN_KERNEL
+from .participants import FROZEN_KERNEL, JSON_CORE
 
 
 @dataclass(frozen=True, slots=True)
@@ -154,6 +154,22 @@ FLOAT_EDGES = (
 REFUSAL = ("RateLimited", "NotFound", "PermissionDenied", "Invalid", "Conflict")
 ALL_KINDS = (*REFUSAL, "Timeout", "Unavailable", "Failed")
 DURATIONS = ("1ms", "250ms", "1s", "2s", "5s", "30s", "2m", "1h")
+
+
+JSON_TEXTS = (
+    '{"a": 1, "b": "x", "c": [true, null]}',
+    '{"a": {"b": "x"}, "c": []}',
+    "[1, 2.50, \"s\"]",
+    '"text"',
+    "null",
+    "{",
+    "[1,]",
+    '{"a": }',
+    '{"a": 1, "a": 2}',
+    "nope",
+    "",
+)
+JSON_PATHS = ([], ["a"], ["a", "b"], ["c", "0"], ["0"], ["1"], ["zz"])
 
 
 def quote(text: str) -> str:
@@ -562,6 +578,12 @@ class Gen:
         args = " ".join(self.expr(p, ctx.down()) for p in fn.params)
         return f"({fn.name} {args})"
 
+    def json_call(self, function: str) -> str:
+        self.features.add(JSON_CORE)
+        text = quote(self.pick(JSON_TEXTS))
+        path = "[" + " ".join(quote(part) for part in self.pick(JSON_PATHS)) + "]"
+        return f"({function} {text} {path})"
+
     def specific(self, ty: Ty, ctx: Ctx, known: bool, loose: int) -> list[tuple[float, Callable[[], str]]]:
         e = self.expr
         o: list[tuple[float, Callable[[], str]]] = []
@@ -607,6 +629,8 @@ class Gen:
                 (1.5, lambda: f"(get {e(mp(inner), ctx)} {e(STRING, ctx)})"),
                 (1.0, lambda: f"(first {e(lst(ty), ctx)})"),
             ]
+            if inner == STRING:
+                o.append((6.0, lambda: self.json_call("json.get")))
         elif h == "Result":
             ok, err = ty.args
             if err == CALL_ERROR:
@@ -696,6 +720,7 @@ class Gen:
         ]
         if t == STRING:
             o.append((1.0, lambda: f"(keys {e(mp(self.map_value(1)), ctx)})"))
+            o.append((5.0, lambda: self.json_call("json.keys")))
         if t.head == "Tuple" and len(t.args) == 2 and t.args[0] == STRING:
             o.append((1.0, lambda: f"(entries {e(mp(t.args[1]), ctx)})"))
             if t.args[1].head == "List":

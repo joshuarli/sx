@@ -37,7 +37,7 @@ def locate() -> Path:
 
 
 def merged_declarations() -> dict[str, Any]:
-    merged: dict[str, Any] = {"enums": {}, "types": {}, "capabilities": []}
+    merged: dict[str, Any] = {"cores": ["json"], "enums": {}, "types": {}, "capabilities": []}
     for path in DECLARATION_FILES:
         declared = json.loads(path.read_text())
         merged["enums"].update(declared.get("enums", {}))

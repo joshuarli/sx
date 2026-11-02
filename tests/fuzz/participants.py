@@ -11,9 +11,11 @@ class Participant(StrEnum):
 
 
 FROZEN_KERNEL = "frozen-kernel"
+JSON_CORE = "json-core"
 
 SUPPORTED_BY: dict[str, frozenset[Participant]] = {
     FROZEN_KERNEL: frozenset(Participant),
+    JSON_CORE: frozenset({Participant.RUST, Participant.LEAN}),
 }
 
 
