@@ -2394,16 +2394,21 @@ impl<'r> Checker<'r> {
             return self.coerce(getter, &field_type, expected, span);
         };
         let Type::Option(inner) = self.resolve(&field_type) else {
-            self.report(
-                Diagnostic::new(
-                    "arity",
-                    default_node.span,
-                    format!("The field :{key_name} is always present, so get takes no default for it."),
-                )
-                .detail(format!("The field has type {}, not an Option.", show_type(&self.zonk(&field_type))))
-                .fix(format!("(get {} :{key_name})", show(record_node)))
-                .help("get"),
-            );
+            let ((default, default_type), effects) = self.collecting(|c| c.check(default_node, None, scope));
+            if !effects.calls.is_empty() {
+                self.report(
+                    Diagnostic::new(
+                        "arity",
+                        default_node.span,
+                        format!("The field :{key_name} is always present, so get takes no default that calls a tool."),
+                    )
+                    .detail("The default would never run. Leave the call out, or use a plain value as the default.")
+                    .fix(format!("(get {} :{key_name})", show(record_node)))
+                    .help("get"),
+                );
+            } else {
+                self.coerce(default, &default_type, Some(&field_type), default_node.span);
+            }
             return self.coerce(getter, &field_type, expected, span);
         };
         self.or_default(getter, &inner, default_node, expected, scope, span)

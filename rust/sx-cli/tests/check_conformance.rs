@@ -548,9 +548,13 @@ struct Tally {
     compared: usize,
     accepted: usize,
     rejected: usize,
-    sequences: usize,
+    widened: usize,
     python_crashes: Vec<String>,
     codes: BTreeSet<String>,
+}
+
+fn is_frozen_refusal(codes: &[String], rendered: &str) -> bool {
+    codes == ["multiple-expressions"] || rendered.contains("is always present, so get takes no default for it")
 }
 
 fn compare(label: &str, cases: &[Case]) -> (Tally, Vec<String>) {
@@ -566,7 +570,7 @@ fn compare(label: &str, cases: &[Case]) -> (Tally, Vec<String>) {
             (Checked::Rejected { .. }, Checked::Crashed(crash)) if PYTHON_CRASHES.contains(&crash.as_str()) => {
                 tally.python_crashes.push(format!("{}: Python {crash}: {}", case.name, case.source));
             }
-            (_, Checked::Rejected { codes, .. }) if codes == &["multiple-expressions"] => tally.sequences += 1,
+            (_, Checked::Rejected { codes, rendered }) if is_frozen_refusal(codes, rendered) => tally.widened += 1,
             _ if &rust != python => {
                 failures.push(format!("{}:\n{}\n--- rust\n{rust:?}\n--- python\n{python:?}", case.name, case.source));
             }
@@ -843,13 +847,12 @@ fn differential_corpus_checks_identically_in_rust_and_python() {
     cases.extend(generated_cases());
     let (tally, failures) = compare("differential", &cases);
     eprintln!(
-        "{} differential programs compared: {} accepted, {} rejected with {} distinct codes, {} top-level sequences \
-         that only Rust reads, {} where Python crashes",
+        "{} differential programs compared: {} accepted, {} rejected with {} distinct codes, {} programs that only Rust accepts as written, {} where Python crashes",
         tally.compared,
         tally.accepted,
         tally.rejected,
         tally.codes.len(),
-        tally.sequences,
+        tally.widened,
         tally.python_crashes.len()
     );
     for crash in &tally.python_crashes {

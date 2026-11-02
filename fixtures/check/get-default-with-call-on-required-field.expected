@@ -1,0 +1,7 @@
+error[arity] 4:19-4:47
+    (get item :size (count (call store.list {}))))
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  The field :size is always present, so get takes no default that calls a tool.
+  The default would never run. Leave the call out, or use a plain value as the default.
+  Fix: (get item :size)
+  Help: sx help get

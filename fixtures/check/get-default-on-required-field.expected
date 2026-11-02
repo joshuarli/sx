@@ -1,7 +1,0 @@
-error[arity] 3:21-3:23
-    (get page :events []))
-                      ^^
-  The field :events is always present, so get takes no default for it.
-  The field has type List<Event>, not an Option.
-  Fix: (get page :events)
-  Help: sx help get

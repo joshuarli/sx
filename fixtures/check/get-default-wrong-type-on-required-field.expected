@@ -1,0 +1,6 @@
+error[type-mismatch] 4:19-4:25
+    (get item :size "none"))
+                    ^^^^^^
+  This is a String, but an Int is needed here.
+  Expected: Int
+  Found: String

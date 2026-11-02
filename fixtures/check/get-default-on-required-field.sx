@@ -1,3 +1,4 @@
-; task: dev-events-pages
-(let [page (call audit.page {:cursor none})]
-  (get page :events []))
+; declarations: fixtures/run/declarations.json
+; python: no
+(let [item (call store.get {:id "a"})]
+  [(get item :size 0) (get item :id "")])

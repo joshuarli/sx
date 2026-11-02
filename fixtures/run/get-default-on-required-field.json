@@ -1,0 +1,23 @@
+{
+  "description": "A default for a field that is always present reads the field and never evaluates the default.",
+  "python": false,
+  "program": "(let [item (call store.get {:id \"a\"})] [(get item :size 0) (get item :id \"\") (get item :size (+ 1 2))])",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get"
+  ],
+  "responses": [
+    {
+      "capability": "store.get",
+      "input": {"id": "a"},
+      "results": [{"output": {"id": "a", "size": 7}}]
+    }
+  ],
+  "expect": {
+    "completed": [7, "a", 7]
+  },
+  "trace": [
+    {"request": "r:1", "capability": "store.get", "input": {"id": "a"}},
+    {"response": "r:1", "output": {"id": "a", "size": 7}}
+  ]
+}

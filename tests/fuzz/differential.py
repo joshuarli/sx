@@ -226,7 +226,8 @@ def refuses_what_rust_accepts(source: str, checked: CheckResult) -> bool:
     if checked.program is not None:
         return False
     codes = [d.code for d in checked.diagnostics]
-    return codes == ["multiple-expressions"]
+    always_present = any("is always present, so get takes no default for it" in d.message for d in checked.diagnostics)
+    return codes == ["multiple-expressions"] or always_present
 
 
 def check_against_python(
