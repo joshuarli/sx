@@ -17,6 +17,9 @@ pub const READ_BYTES: &str = "fs.read-bytes";
 pub const LIST: &str = "fs.list";
 pub const STAT: &str = "fs.stat";
 pub const WRITE_TEXT: &str = "fs.write-text";
+pub const MAKE_DIRECTORY: &str = "fs.make-directory";
+pub const MOVE: &str = "fs.move";
+pub const DELETE: &str = "fs.delete";
 
 const KIND: &str = "fs.Kind";
 
@@ -96,6 +99,10 @@ fn write_check() -> ScopeCheck {
     ScopeCheck::new(prepare, check_write)
 }
 
+fn destructive_check(check: fn(&Value, &Value) -> Verdict) -> ScopeCheck {
+    ScopeCheck::new(prepare, check)
+}
+
 fn capability(id: &str, effect: Effect, input: Type, output: Type, description: &str, check: ScopeCheck) -> PackCapability {
     PackCapability {
         capability: Capability {
@@ -104,7 +111,7 @@ fn capability(id: &str, effect: Effect, input: Type, output: Type, description: 
             input,
             output,
             description: description.to_string(),
-            idempotent: effect == Effect::Write,
+            idempotent: effect == Effect::Write && id != MOVE,
             scope: Some(scope_type()),
         },
         check: Some(check),
@@ -139,6 +146,30 @@ pub fn pack() -> Pack {
             "Replaces a file's contents with UTF-8 text, atomically.",
             write_check(),
         ),
+        capability(
+            MAKE_DIRECTORY,
+            Effect::Write,
+            path_input(),
+            UNIT,
+            "Creates a directory and any missing parents, or succeeds when the directory exists.",
+            destructive_check(check_entry),
+        ),
+        capability(
+            MOVE,
+            Effect::Write,
+            record(None, vec![("from", STRING), ("to", STRING)]),
+            UNIT,
+            "Renames a file, symlink, or directory, failing with Conflict when the destination exists.",
+            destructive_check(check_move),
+        ),
+        capability(
+            DELETE,
+            Effect::Write,
+            path_input(),
+            UNIT,
+            "Deletes a file, a symlink, or an empty directory, never recursively.",
+            destructive_check(check_entry),
+        ),
     ];
     Pack {
         id: "fs".to_string(),
@@ -158,6 +189,9 @@ pub fn performer(capability: &str) -> Option<Performer> {
         LIST => Some(list),
         STAT => Some(stat),
         WRITE_TEXT => Some(write_text),
+        MAKE_DIRECTORY => Some(make_directory),
+        MOVE => Some(move_entry),
+        DELETE => Some(delete),
         _ => None,
     }
 }
@@ -300,7 +334,7 @@ pub fn resolve_read(roots: &Roots, path: &str) -> Result<PathBuf, String> {
     Ok(resolved)
 }
 
-pub fn resolve_write(roots: &Roots, path: &str) -> Result<PathBuf, String> {
+fn locate_entry(roots: &Roots, path: &str) -> Result<PathBuf, String> {
     let segments = segments(path)?;
     let Some((name, parent)) = segments.split_last() else {
         return Err(format!("{} names no file to write", shown(path)));
@@ -316,15 +350,28 @@ pub fn resolve_write(roots: &Roots, path: &str) -> Result<PathBuf, String> {
             directory.display()
         ));
     }
-    let target = directory.join(name);
+    Ok(directory.join(name))
+}
+
+fn refuse_symlink(path: &str, target: PathBuf, refusal: &str) -> Result<PathBuf, String> {
     match fs::symlink_metadata(&target) {
-        Ok(metadata) if metadata.file_type().is_symlink() => {
-            Err(format!("{} is a symlink, and fs.write-text never writes through one", shown(path)))
-        }
+        Ok(metadata) if metadata.file_type().is_symlink() => Err(format!("{} is a symlink, and {refusal}", shown(path))),
         Ok(_) => Ok(target),
         Err(error) if matches!(error.kind(), ErrorKind::NotFound | ErrorKind::NotADirectory) => Ok(target),
         Err(error) => Err(format!("{} cannot be resolved: {error}", shown(path))),
     }
+}
+
+pub fn resolve_write(roots: &Roots, path: &str) -> Result<PathBuf, String> {
+    refuse_symlink(path, locate_entry(roots, path)?, "fs.write-text never writes through one")
+}
+
+pub fn resolve_entry(roots: &Roots, path: &str) -> Result<PathBuf, String> {
+    locate_entry(roots, path)
+}
+
+pub fn resolve_destination(roots: &Roots, path: &str) -> Result<PathBuf, String> {
+    refuse_symlink(path, locate_entry(roots, path)?, "fs.move never replaces one")
 }
 
 fn verdict(scope: &Value, input: &Value, resolve: fn(&Roots, &str) -> Result<PathBuf, String>) -> Verdict {
@@ -346,8 +393,26 @@ fn check_write(scope: &Value, input: &Value) -> Verdict {
     verdict(scope, input, resolve_write)
 }
 
+fn check_entry(scope: &Value, input: &Value) -> Verdict {
+    verdict(scope, input, resolve_entry)
+}
+
+fn check_move(scope: &Value, input: &Value) -> Verdict {
+    let checked = Roots::of(scope).and_then(|roots| {
+        let from = text_field(input, "from").ok_or("the input has no from")?;
+        let to = text_field(input, "to").ok_or("the input has no to")?;
+        resolve_entry(&roots, from)?;
+        resolve_destination(&roots, to)
+    });
+    match checked {
+        Ok(_) => Verdict::Allowed,
+        Err(reason) => Verdict::Denied(reason),
+    }
+}
+
 pub fn error_kind(error: &io::Error) -> CallErrorKind {
     match error.kind() {
+        ErrorKind::AlreadyExists => CallErrorKind::Conflict,
         ErrorKind::NotFound => CallErrorKind::NotFound,
         ErrorKind::PermissionDenied => CallErrorKind::PermissionDenied,
         ErrorKind::IsADirectory
@@ -519,5 +584,101 @@ fn write_text(scope: &Value, input: &Value) -> Result<Value, Failure> {
     let (path, target) = located(WRITE_TEXT, scope, input, resolve_write)?;
     let text = text_field(input, "text").ok_or_else(|| malformed(WRITE_TEXT))?;
     replace(&target, text, &path)?;
+    Ok(Value::Unit)
+}
+
+fn make_directory(scope: &Value, input: &Value) -> Result<Value, Failure> {
+    let (path, target) = located(MAKE_DIRECTORY, scope, input, resolve_entry)?;
+    let mut missing = Vec::new();
+    let mut ancestor = target.as_path();
+    loop {
+        match fs::symlink_metadata(ancestor) {
+            Ok(_) => break,
+            Err(error) if error.kind() == ErrorKind::NotFound => {
+                missing.push(ancestor);
+                ancestor = ancestor.parent().ok_or_else(|| Failure::new(CallErrorKind::Invalid, format!("{} names no directory", shown(&path))))?;
+            }
+            Err(error) => return Err(os_failure(&path, &error)),
+        }
+    }
+    if missing.is_empty() {
+        return real_directory(&path, &target).map(|()| Value::Unit);
+    }
+    for directory in missing.into_iter().rev() {
+        match fs::create_dir(directory) {
+            Ok(()) => {}
+            Err(error) if error.kind() == ErrorKind::AlreadyExists => real_directory(&path, directory)?,
+            Err(error) => return Err(os_failure(&path, &error)),
+        }
+    }
+    Ok(Value::Unit)
+}
+
+fn real_directory(path: &str, directory: &Path) -> Result<(), Failure> {
+    let metadata = fs::symlink_metadata(directory).map_err(|e| os_failure(path, &e))?;
+    if metadata.is_dir() {
+        Ok(())
+    } else {
+        Err(Failure::new(
+            CallErrorKind::Invalid,
+            format!("{} exists and is not a directory", shown(&directory.display().to_string())),
+        ))
+    }
+}
+
+#[cfg(target_os = "macos")]
+#[allow(unsafe_code)]
+fn rename_without_replacing(from: &std::ffi::CStr, to: &std::ffi::CStr) -> io::Result<()> {
+    // SAFETY: both arguments are NUL-terminated strings that outlive the call, and renamex_np
+    // reads them without keeping them.
+    let status = unsafe { libc::renamex_np(from.as_ptr(), to.as_ptr(), libc::RENAME_EXCL) };
+    if status == 0 { Ok(()) } else { Err(io::Error::last_os_error()) }
+}
+
+#[cfg(target_os = "linux")]
+#[allow(unsafe_code)]
+fn rename_without_replacing(from: &std::ffi::CStr, to: &std::ffi::CStr) -> io::Result<()> {
+    // SAFETY: both arguments are NUL-terminated strings that outlive the call, and renameat2
+    // reads them without keeping them. AT_FDCWD makes the paths absolute-or-cwd relative.
+    let status = unsafe {
+        libc::syscall(libc::SYS_renameat2, libc::AT_FDCWD, from.as_ptr(), libc::AT_FDCWD, to.as_ptr(), libc::RENAME_NOREPLACE)
+    };
+    if status == 0 { Ok(()) } else { Err(io::Error::last_os_error()) }
+}
+
+fn c_path(path: &Path, shown_path: &str) -> Result<std::ffi::CString, Failure> {
+    std::ffi::CString::new(path.as_os_str().as_encoded_bytes())
+        .map_err(|_| Failure::new(CallErrorKind::Invalid, format!("{} contains a NUL character", shown(shown_path))))
+}
+
+fn move_entry(scope: &Value, input: &Value) -> Result<Value, Failure> {
+    let roots = Roots::of(scope).map_err(|reason| Failure::new(CallErrorKind::PermissionDenied, reason))?;
+    let from = text_field(input, "from").ok_or_else(|| malformed(MOVE))?;
+    let to = text_field(input, "to").ok_or_else(|| malformed(MOVE))?;
+    let denied = |reason: String| Failure::new(CallErrorKind::PermissionDenied, reason);
+    let source = resolve_entry(&roots, from).map_err(denied)?;
+    let destination = resolve_destination(&roots, to).map_err(denied)?;
+    if source == destination {
+        return Err(match fs::symlink_metadata(&source) {
+            Ok(_) => Failure::new(CallErrorKind::Conflict, format!("{} to {}: the destination exists", shown(from), shown(to))),
+            Err(error) => os_failure(from, &error),
+        });
+    }
+    rename_without_replacing(&c_path(&source, from)?, &c_path(&destination, to)?)
+        .map_err(|error| Failure::new(error_kind(&error), format!("{} to {}: {error}", shown(from), shown(to))))?;
+    Ok(Value::Unit)
+}
+
+fn delete(scope: &Value, input: &Value) -> Result<Value, Failure> {
+    let (path, target) = located(DELETE, scope, input, resolve_entry)?;
+    let metadata = fs::symlink_metadata(&target).map_err(|e| os_failure(&path, &e))?;
+    let removed = if metadata.is_dir() {
+        fs::remove_dir(&target)
+    } else if metadata.is_file() || metadata.file_type().is_symlink() {
+        fs::remove_file(&target)
+    } else {
+        return Err(Failure::new(CallErrorKind::Invalid, format!("{} is not a file, symlink, or directory", shown(&path))));
+    };
+    removed.map_err(|e| os_failure(&path, &e))?;
     Ok(Value::Unit)
 }

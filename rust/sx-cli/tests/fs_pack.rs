@@ -31,7 +31,16 @@ impl Sandbox {
         fs::write(outside.join("secret.txt"), "secret").expect("secret");
         fs::write(base.join("declarations.json"), r#"{"packs": ["fs"]}"#).expect("declarations");
         let scope = Json::object([("roots", Json::Array(vec![Json::string(text(&root))]))]);
-        let ids = ["fs.read-text", "fs.read-bytes", "fs.list", "fs.stat", "fs.write-text"];
+        let ids = [
+            "fs.read-text",
+            "fs.read-bytes",
+            "fs.list",
+            "fs.stat",
+            "fs.write-text",
+            "fs.make-directory",
+            "fs.move",
+            "fs.delete",
+        ];
         let grants = Json::Object(ids.iter().map(|id| ((*id).to_string(), scope.clone())).collect());
         fs::write(base.join("grants.json"), dumps(&grants, Layout::Spaced).expect("grants")).expect("grants file");
         Sandbox { base, root, outside }
@@ -312,4 +321,243 @@ fn a_fixture_run_with_grants_refuses_out_of_scope_requests_before_the_fixtures()
     let outcome = parse(&ran.stdout).expect("json");
     let result = outcome.get("result").expect("result");
     assert_eq!(error_kind(result).0, "PermissionDenied", "{}", ran.stdout);
+}
+
+fn tree(root: &Path) -> Vec<String> {
+    fn walk(directory: &Path, root: &Path, out: &mut Vec<String>) {
+        let mut entries: Vec<_> = fs::read_dir(directory).expect("directory").map(|e| e.expect("entry").path()).collect();
+        entries.sort();
+        for path in entries {
+            let relative = path.strip_prefix(root).expect("inside").display().to_string();
+            let metadata = fs::symlink_metadata(&path).expect("metadata");
+            if metadata.file_type().is_symlink() {
+                out.push(format!("{relative} -> {}", fs::read_link(&path).expect("link").display()));
+            } else if metadata.is_dir() {
+                out.push(format!("{relative}/"));
+                walk(&path, root, out);
+            } else {
+                out.push(format!("{relative} = {}", fs::read_to_string(&path).expect("text")));
+            }
+        }
+    }
+    let mut out = Vec::new();
+    walk(root, root, &mut out);
+    out
+}
+
+fn contents(s: &Sandbox) -> (Vec<String>, Vec<String>) {
+    (tree(&s.root), tree(&s.outside))
+}
+
+fn attempted(s: &Sandbox, call: &str) -> (String, String) {
+    let result = s.result(&format!("(attempt {call})"));
+    assert!(result.get("err").is_some(), "{call} succeeded");
+    let (kind, message) = error_kind(&result);
+    (kind.to_string(), message.to_string())
+}
+
+#[test]
+fn make_directory_creates_parents_and_is_idempotent() {
+    let s = Sandbox::new("mkdir");
+    let nested = s.at("a/b/c");
+    let source = format!("(let [_ (call fs.make-directory {{:path {p}}}) _ (call fs.make-directory {{:path {p}}})] (call fs.stat {{:path {p}}}))", p = quoted(&nested));
+    assert!(shown(&s.result(&source)).starts_with(r#"{"kind": "Directory""#));
+    assert!(s.root.join("a/b/c").is_dir());
+    s.result(&format!("(call fs.make-directory {{:path {}}})", quoted(&s.at("sub"))));
+    let explained = s.sx("explain", &format!("(call fs.make-directory {{:path {}}})", quoted(&nested)), &[]);
+    assert!(explained.stdout.contains("fs.make-directory  [write, idempotent]  allowed"), "{}", explained.stdout);
+}
+
+#[test]
+fn make_directory_refuses_what_is_not_a_plain_new_or_existing_directory() {
+    let s = Sandbox::new("mkdir-refused");
+    symlink(&s.outside, s.root.join("escape")).expect("link");
+    symlink(s.root.join("sub"), s.root.join("sub-link")).expect("link");
+    let before = contents(&s);
+    for path in [
+        s.at("note.txt"),
+        s.at("sub-link"),
+        s.at("note.txt/child"),
+    ] {
+        let (kind, message) = attempted(&s, &format!("(call fs.make-directory {{:path {}}})", quoted(&path)));
+        assert_eq!(kind, "Invalid", "{path}: {message}");
+    }
+    let denied = [
+        text(&s.root).to_string(),
+        text(&s.base).to_string(),
+        text(&s.outside.join("new")).to_string(),
+        s.at("escape/new"),
+        s.at("escape/deeper/new"),
+        s.at("missing/../escaped"),
+        s.at("sub/.."),
+        format!("{}-old/x", text(&s.root)),
+    ];
+    for path in &denied {
+        let (kind, message) = attempted(&s, &format!("(call fs.make-directory {{:path (str {})}})", quoted(path)));
+        assert_eq!(kind, "PermissionDenied", "{path}: {message}");
+    }
+    assert_eq!(contents(&s), before);
+}
+
+#[test]
+fn move_renames_files_symlinks_and_directories_without_following() {
+    let s = Sandbox::new("move");
+    symlink(s.outside.join("secret.txt"), s.root.join("link")).expect("link");
+    fs::write(s.root.join("sub/inner.txt"), "inner").expect("inner");
+    s.result(&format!("(call fs.move {{:from {} :to {}}})", quoted(&s.at("note.txt")), quoted(&s.at("sub/moved.txt"))));
+    s.result(&format!("(call fs.move {{:from {} :to {}}})", quoted(&s.at("link")), quoted(&s.at("renamed-link"))));
+    s.result(&format!("(call fs.move {{:from {} :to {}}})", quoted(&s.at("sub")), quoted(&s.at("dir"))));
+    assert_eq!(
+        tree(&s.root),
+        [
+            "dir/".to_string(),
+            "dir/inner.txt = inner".to_string(),
+            "dir/moved.txt = inside".to_string(),
+            format!("renamed-link -> {}", s.outside.join("secret.txt").display()),
+        ]
+    );
+    assert_eq!(fs::read_to_string(s.outside.join("secret.txt")).expect("secret"), "secret");
+    let explained = s.sx("explain", &format!("(call fs.move {{:from {} :to {}}})", quoted(&s.at("a")), quoted(&s.at("b"))), &[]);
+    assert!(explained.stdout.contains("fs.move  [write, not idempotent]  allowed"), "{}", explained.stdout);
+}
+
+#[test]
+fn move_never_replaces_and_leaves_both_sides_intact() {
+    let s = Sandbox::new("move-conflict");
+    fs::write(s.root.join("other.txt"), "other").expect("other");
+    fs::create_dir(s.root.join("empty")).expect("empty");
+    let before = contents(&s);
+    for to in ["other.txt", "empty", "sub"] {
+        let (kind, message) =
+            attempted(&s, &format!("(call fs.move {{:from {} :to {}}})", quoted(&s.at("note.txt")), quoted(&s.at(to))));
+        assert_eq!(kind, "Conflict", "{to}: {message}");
+    }
+    let (kind, _) = attempted(&s, &format!("(call fs.move {{:from {p} :to {p}}})", p = quoted(&s.at("note.txt"))));
+    assert_eq!(kind, "Conflict");
+    let (kind, _) = attempted(&s, &format!("(call fs.move {{:from {} :to {}}})", quoted(&s.at("absent")), quoted(&s.at("new"))));
+    assert_eq!(kind, "NotFound");
+    let (kind, _) = attempted(&s, &format!("(call fs.move {{:from {} :to {}}})", quoted(&s.at("note.txt")), quoted(&s.at("nowhere/new"))));
+    assert_eq!(kind, "NotFound");
+    let (kind, _) = attempted(&s, &format!("(call fs.move {{:from {} :to {}}})", quoted(&s.at("sub")), quoted(&s.at("sub/inside"))));
+    assert_eq!(kind, "Invalid");
+    assert_eq!(contents(&s), before);
+}
+
+#[test]
+fn move_outside_the_roots_is_refused_on_either_side_before_anything_runs() {
+    let s = Sandbox::new("move-refused");
+    symlink(&s.outside, s.root.join("escape")).expect("link");
+    symlink(s.root.join("note.txt"), s.root.join("note-link")).expect("link");
+    let secret = text(&s.outside.join("secret.txt")).to_string();
+    let before = contents(&s);
+    let pairs = [
+        (s.at("note.txt"), format!("{}/stolen.txt", text(&s.outside))),
+        (secret.clone(), s.at("taken.txt")),
+        (s.at("escape/secret.txt"), s.at("taken.txt")),
+        (s.at("note.txt"), s.at("escape/stolen.txt")),
+        (text(&s.root).to_string(), s.at("elsewhere")),
+        (s.at("note.txt"), text(&s.root).to_string()),
+        (s.at("note.txt"), s.at("missing/../x")),
+        (s.at("note.txt"), s.at("note-link")),
+        (s.at("note.txt"), s.at("sub/..")),
+    ];
+    for (from, to) in &pairs {
+        let (kind, message) =
+            attempted(&s, &format!("(call fs.move {{:from (str {}) :to (str {})}})", quoted(from), quoted(to)));
+        assert_eq!(kind, "PermissionDenied", "{from} -> {to}: {message}");
+    }
+    assert_eq!(contents(&s), before);
+}
+
+#[test]
+fn a_literal_move_out_of_scope_is_a_static_error_and_explain_judges_both_fields() {
+    let s = Sandbox::new("move-static");
+    let outside = text(&s.outside.join("stolen.txt")).to_string();
+    let secret = text(&s.outside.join("secret.txt")).to_string();
+    let before = contents(&s);
+    for (from, to) in [(s.at("note.txt"), outside.clone()), (secret.clone(), s.at("taken.txt"))] {
+        let source = format!("(call fs.move {{:from {} :to {}}})", quoted(&from), quoted(&to));
+        let checked = s.sx("check", &source, &[]);
+        assert_eq!(checked.code, 1, "{checked:?}");
+        assert!(checked.stdout.starts_with("error[out-of-scope]"), "{}", checked.stdout);
+        assert!(checked.stdout.contains("outside every granted root"), "{}", checked.stdout);
+        let ran = s.sx("run", &source, &["--format", "json"]);
+        assert_eq!(ran.code, 1, "{ran:?}");
+        assert!(ran.stdout.contains(r#""code": "out-of-scope""#), "{}", ran.stdout);
+    }
+    let source = format!(
+        "[(call fs.move {{:from {} :to {}}}) (call fs.move {{:from {} :to {}}}) (call fs.move {{:from {} :to {}}})]",
+        quoted(&s.at("note.txt")),
+        quoted(&s.at("new.txt")),
+        quoted(&s.at("note.txt")),
+        quoted(&outside),
+        quoted(&s.at("note.txt")),
+        quoted(&s.at("new.txt")),
+    );
+    let explained = s.sx("explain", &source, &["--format", "json"]);
+    let report = parse(&explained.stdout).expect("json");
+    let tool = report.get("tools").and_then(Json::as_array).and_then(|tools| tools.first()).expect("a tool");
+    let verdicts: Vec<&str> = tool
+        .get("verdicts")
+        .and_then(Json::as_array)
+        .expect("verdicts")
+        .iter()
+        .map(|v| v.get("verdict").and_then(Json::as_str).expect("verdict"))
+        .collect();
+    assert_eq!(verdicts, ["allowed", "denied", "allowed"]);
+    let text_form = s.sx("explain", &source, &[]);
+    assert!(text_form.stdout.contains("scope: denied: ") && text_form.stdout.contains("outside every granted root"), "{}", text_form.stdout);
+    assert_eq!(contents(&s), before);
+}
+
+#[test]
+fn delete_removes_files_symlinks_and_empty_directories_but_never_a_target() {
+    let s = Sandbox::new("delete");
+    symlink(s.outside.join("secret.txt"), s.root.join("link")).expect("link");
+    symlink(&s.outside, s.root.join("dir-link")).expect("dir link");
+    fs::create_dir(s.root.join("empty")).expect("empty");
+    for name in ["note.txt", "link", "dir-link", "empty"] {
+        s.result(&format!("(call fs.delete {{:path {}}})", quoted(&s.at(name))));
+    }
+    assert_eq!(tree(&s.root), ["sub/".to_string()]);
+    assert_eq!(tree(&s.outside), ["secret.txt = secret".to_string()]);
+    let (kind, _) = attempted(&s, &format!("(call fs.delete {{:path {}}})", quoted(&s.at("note.txt"))));
+    assert_eq!(kind, "NotFound");
+    let explained = s.sx("explain", &format!("(call fs.delete {{:path {}}})", quoted(&s.at("note.txt"))), &[]);
+    assert!(explained.stdout.contains("fs.delete  [write, idempotent]  allowed"), "{}", explained.stdout);
+}
+
+#[test]
+fn delete_of_a_non_empty_directory_fails_and_removes_nothing() {
+    let s = Sandbox::new("delete-nonempty");
+    fs::create_dir_all(s.root.join("sub/deep")).expect("deep");
+    fs::write(s.root.join("sub/deep/x.txt"), "x").expect("x");
+    let before = contents(&s);
+    let (kind, message) = attempted(&s, &format!("(call fs.delete {{:path {}}})", quoted(&s.at("sub"))));
+    assert_eq!(kind, "Invalid", "{message}");
+    assert_eq!(contents(&s), before);
+}
+
+#[test]
+fn delete_outside_the_roots_is_refused_and_touches_nothing() {
+    let s = Sandbox::new("delete-refused");
+    symlink(&s.outside, s.root.join("escape")).expect("link");
+    let before = contents(&s);
+    let paths = [
+        text(&s.outside.join("secret.txt")).to_string(),
+        s.at("escape/secret.txt"),
+        text(&s.root).to_string(),
+        text(&s.base).to_string(),
+        s.at("sub/.."),
+        s.at("missing/../note.txt"),
+        format!("{}-old/note.txt", text(&s.root)),
+    ];
+    for path in &paths {
+        let (kind, message) = attempted(&s, &format!("(call fs.delete {{:path (str {})}})", quoted(path)));
+        assert_eq!(kind, "PermissionDenied", "{path}: {message}");
+    }
+    let literal = s.sx("check", &format!("(call fs.delete {{:path {}}})", quoted(&paths[0])), &[]);
+    assert_eq!(literal.code, 1, "{literal:?}");
+    assert!(literal.stdout.starts_with("error[out-of-scope]"), "{}", literal.stdout);
+    assert_eq!(contents(&s), before);
 }

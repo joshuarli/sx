@@ -680,6 +680,9 @@ The `fs` pack declares these capabilities, each with the scope type `Record {roo
 | `fs.list` | `{path: String}` | `List<fs.Entry>` | read |
 | `fs.stat` | `{path: String}` | `Option<fs.Stat>` | read |
 | `fs.write-text` | `{path: String, text: String}` | `Unit` | write, idempotent |
+| `fs.make-directory` | `{path: String}` | `Unit` | write, idempotent |
+| `fs.move` | `{from: String, to: String}` | `Unit` | write, not idempotent |
+| `fs.delete` | `{path: String}` | `Unit` | write, idempotent |
 
 `fs.Kind` is the enum `File | Directory | Symlink | Other`. `fs.Entry` is `Record {name: String, kind: fs.Kind}`,
 and `fs.list` returns entries sorted by name, without following symlinks, so a link is `Symlink`.
@@ -688,6 +691,18 @@ and returns `none` when nothing is at the path. `fs.read-text` fails with `Inval
 not UTF-8. A read of anything but a regular file is `Invalid`. `fs.write-text` replaces the file with
 a temporary file in the same directory: it writes, syncs, renames, and syncs the directory, keeping
 an existing file's mode. A reader sees the old contents or the new, never a mix.
+
+`fs.make-directory` creates the directory and any missing parents, one component at a time, and
+succeeds when the path already is a directory. An existing non-directory, including a symlink at the
+final component even one that points to a directory, is `Invalid`, and so is a created or raced
+component that turns out not to be a real directory. `fs.move` renames a file, a symlink (the link
+itself, never its target), or a directory, and never replaces: when `to` exists it fails with
+`Conflict`, decided by the rename itself (`renamex_np` with `RENAME_EXCL` on macOS, `renameat2` with
+`RENAME_NOREPLACE` on Linux), so a file that appears at `to` is never overwritten. Moving a path onto
+itself is `Conflict`. `fs.delete` removes a regular file, a symlink (the link, never its target), or
+an empty directory. It is never recursive: a non-empty directory is `Invalid` and nothing is removed.
+A path that is not there is `NotFound`, so repeating a delete leaves the same state but fails the
+second time.
 
 Every root must be an absolute path to an existing directory. Granting loads each root and
 canonicalizes it, following symlinks, so a symlinked root grants its target, and a missing root, a
@@ -702,9 +717,14 @@ A request path passes the scope check by these rules:
    exist is refused, and so is one that cannot be resolved, such as a symlink loop.
 3. The resolved path must lie inside a canonical root, comparing whole path components, never string
    prefixes: `/data-old` is not inside `/data`.
-4. For `fs.write-text`, the parent directory is resolved by the same rules and must lie inside a root,
-   so a root itself is never written. The final component must not be `.` or `..`, and must not be an
-   existing symlink, even one that points inside a root.
+4. For `fs.write-text`, `fs.make-directory`, `fs.move`, and `fs.delete`, the parent directory is
+   resolved by the same rules and must lie inside a root, so a root itself is never the target. The
+   final component must not be `.` or `..`. For `fs.write-text` and the `to` of `fs.move` it must not
+   be an existing symlink, even one that points inside a root. For `fs.make-directory`, `fs.delete`,
+   and the `from` of `fs.move` it may be one, and the operation acts on the link, never its target.
+5. `fs.move` applies rule 4 to both `from` and `to`, and a request is denied when either fails. A
+   call whose whole input is literal is judged by `sx check` (`out-of-scope`) and `sx explain`; one
+   with any computed field is checked per request, before anything runs.
 
 On a case-insensitive file system, such as the default APFS on macOS, canonicalizing returns each
 existing component with its stored case, so `/Data/notes` and `/data/notes` resolve to the same path,
@@ -713,14 +733,16 @@ a file cannot exist there. On Linux it can, and `fs.list` of a directory holding
 `Invalid`, because a `String` cannot hold the name.
 
 Operating-system failures map to call error kinds by a closed table: not found is `NotFound`;
-permission denied is `PermissionDenied`; is a directory, not a directory, directory not empty,
+permission denied is `PermissionDenied`; already exists is `Conflict`; is a directory, not a directory, directory not empty,
 invalid argument, name too long, and a symlink met where none is followed are `Invalid`; anything
 else is `Failed`. A `fs.write-text` that renamed its file but could not sync the directory fails with
 `Failed`, because the write took effect.
 
 A scope protects against the program, not against another local process. The check resolves a path,
 and the operation then uses the resolved path, so a process that rewrites the tree between the two
-can redirect it. The pack narrows the window where the standard library allows: it opens the final
+can redirect it. `fs.make-directory`, `fs.move`, and `fs.delete` act on the resolved path with the
+final component never followed, but an intermediate directory swapped for a symlink after the check
+is not detected. The pack narrows the window where the standard library allows: it opens the final
 component with `O_NOFOLLOW`, so a symlink swapped in there fails instead of being followed, opens
 reads with `O_NONBLOCK` and refuses anything but a regular file, so a FIFO cannot block it, and
 creates the temporary file with `O_EXCL`. An intermediate directory swapped for a symlink is not

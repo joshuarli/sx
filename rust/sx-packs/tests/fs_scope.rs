@@ -299,6 +299,7 @@ fn os_errors_map_to_call_error_kinds_by_a_closed_table() {
     assert_eq!(kind(libc::ENOENT), CallErrorKind::NotFound);
     assert_eq!(kind(libc::EACCES), CallErrorKind::PermissionDenied);
     assert_eq!(kind(libc::EPERM), CallErrorKind::PermissionDenied);
+    assert_eq!(kind(libc::EEXIST), CallErrorKind::Conflict);
     for code in [libc::EISDIR, libc::ENOTDIR, libc::ENOTEMPTY, libc::EINVAL, libc::ENAMETOOLONG, libc::ELOOP] {
         assert_eq!(kind(code), CallErrorKind::Invalid, "errno {code}");
     }
