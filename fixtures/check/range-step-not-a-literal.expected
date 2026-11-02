@@ -1,0 +1,6 @@
+error[bad-literal] 3:24-3:25
+  (let [k 2] (range 0 10 k))
+                         ^
+  The step of range is a nonzero integer literal, such as 2 or -1.
+  A step that is computed, zero, or not an integer would make the length of the list unknown.
+  Help: sx help range

@@ -1,0 +1,22 @@
+{
+  "description": "range gives map an index list.",
+  "python": false,
+  "program": "(map (fn [i] (* i i)) (range 1 5))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list"
+  ],
+  "expect": {
+    "completed": [
+      1,
+      4,
+      9,
+      16
+    ]
+  }
+}

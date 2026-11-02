@@ -1,0 +1,55 @@
+{
+  "description": "The value put stores in an optional field may be plain, and becomes present.",
+  "python": false,
+  "program": "(let [row (first (call rows.list {}))] (put (put row \"note\" \"hello\") \"hits\" 3))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list"
+  ],
+  "responses": [
+    {
+      "capability": "rows.list",
+      "input": {},
+      "results": [
+        {
+          "output": [
+            {
+              "name": "r1",
+              "note": null,
+              "hits": null
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": {
+      "name": "r1",
+      "note": "hello",
+      "hits": 3
+    }
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "rows.list",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": [
+        {
+          "name": "r1",
+          "note": null,
+          "hits": null
+        }
+      ]
+    }
+  ]
+}

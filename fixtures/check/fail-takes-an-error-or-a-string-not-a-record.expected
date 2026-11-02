@@ -1,0 +1,7 @@
+error[type-mismatch] 3:7-3:21
+  (fail {:message "x"})
+        ^^^^^^^^^^^^^^
+  fail takes a String message, or a caught error to raise again, but this is a record.
+  Expected: String or CallError
+  Found: Record {message: String}
+  Help: sx help fail

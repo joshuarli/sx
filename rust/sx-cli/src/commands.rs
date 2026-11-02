@@ -504,6 +504,11 @@ fn command_run(
 
 fn report_run(format: Format, outcome: Outcome, machine: &Machine<'_>, output: &mut Output) -> Result<i32, Stop> {
     let report = run_report(outcome, machine)?;
+    if format == Format::Text {
+        for line in &report.logs {
+            output.stderr.push_str(&format!("log: {line}\n"));
+        }
+    }
     output.emit(format, report.json, &report.text)?;
     Ok(if report.completed { EXIT_OK } else { EXIT_FAILED })
 }
@@ -512,18 +517,28 @@ pub(crate) struct RunReport {
     pub completed: bool,
     pub json: Json,
     pub text: String,
+    pub logs: Vec<String>,
 }
 
 pub(crate) fn run_report(outcome: Outcome, machine: &Machine<'_>) -> Result<RunReport, Stop> {
     let trace = Json::Array(machine.trace().to_vec());
+    let logs = machine.logs().to_vec();
+    let logged = |mut fields: Vec<(&'static str, Json)>| {
+        if !logs.is_empty() {
+            fields.push(("logs", Json::Array(logs.iter().map(|line| Json::string(line.as_str())).collect())));
+        }
+        fields.push(("trace", trace.clone()));
+        Json::object(fields)
+    };
     match outcome {
         Outcome::Completed { value, json } => Ok(RunReport {
             completed: true,
-            json: Json::object([("outcome", Json::string("completed")), ("result", json), ("trace", trace)]),
+            json: logged(vec![("outcome", Json::string("completed")), ("result", json)]),
             text: show_value(&value),
+            logs: logs.clone(),
         }),
         Outcome::Failed(failure) => {
-            let json = Json::object([
+            let json = logged(vec![
                 ("outcome", Json::string("failed")),
                 (
                     "failure",
@@ -534,13 +549,13 @@ pub(crate) fn run_report(outcome: Outcome, machine: &Machine<'_>) -> Result<RunR
                         ("span", span_json(failure.span)),
                     ]),
                 ),
-                ("trace", trace),
             ]);
             let place = failure.span.map(|span| format!(" at {span}")).unwrap_or_default();
             Ok(RunReport {
                 completed: false,
                 json,
                 text: format!("failed[{}]{place}: {}", failure.kind.name(), failure.message),
+                logs: logs.clone(),
             })
         }
         Outcome::Suspended(_) => Err(Stop::Internal("the run ended suspended".to_string())),

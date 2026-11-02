@@ -131,6 +131,15 @@ fn shown(json: &Json) -> String {
     clipped(&dumps(json, Layout::Spaced).unwrap_or_else(|error| error.0))
 }
 
+fn logs_text(logs: &[String]) -> String {
+    if logs.is_empty() {
+        return String::new();
+    }
+    let mut lines = vec![format!("logs ({}):", logs.len())];
+    lines.extend(logs.iter().map(|line| format!("  {}", clipped(line))));
+    lines.join("\n") + "\n"
+}
+
 fn calls_text(trace: &Json) -> String {
     let mut calls: Vec<(String, String, Option<String>)> = Vec::new();
     for entry in trace.as_array().unwrap_or_default() {
@@ -346,10 +355,11 @@ impl CodeServer {
             crate::native::run(&proposal.program, &self.grants, &self.declared, session.as_ref(), &values, Budgets::default());
         let report = run_report(outcome, &machine)?;
         let calls = report.json.get("trace").map(calls_text).unwrap_or_default();
+        let logs = logs_text(&report.logs);
         Ok(Reply {
             is_error: !report.completed,
             structured: with_inferred(report.json, &proposal.inferred),
-            text: format!("{}\n{calls}", report.text),
+            text: format!("{}\n{logs}{calls}", report.text),
         })
     }
 

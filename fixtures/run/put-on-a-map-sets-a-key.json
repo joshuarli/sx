@@ -1,0 +1,25 @@
+{
+  "description": "put on a Map sets the key, replacing an earlier value.",
+  "python": false,
+  "program": "(let [m (assoc {} \"a\" 1) n (put (put m \"b\" 2) \"a\" 3)] [m n])",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list"
+  ],
+  "expect": {
+    "completed": [
+      {
+        "a": 1
+      },
+      {
+        "a": 3,
+        "b": 2
+      }
+    ]
+  }
+}

@@ -281,6 +281,14 @@ fn diagnostic_json(diagnostic: &Diagnostic) -> Json {
     ])
 }
 
+fn logged(mut fields: Vec<(&'static str, Json)>, logs: &[String], trace: &[Json]) -> Json {
+    if !logs.is_empty() {
+        fields.push(("logs", Json::Array(logs.iter().map(|line| Json::string(line.as_str())).collect())));
+    }
+    fields.push(("trace", Json::Array(trace.to_vec())));
+    Json::object(fields)
+}
+
 fn failure_json(failure: &Failure) -> Json {
     Json::object([
         ("kind", Json::string(failure.kind.name())),
@@ -705,20 +713,20 @@ impl<R: BufRead, W: Write> Session<'_, R, W> {
                     return Ok(Ending::Idle);
                 }
                 Ok(Outcome::Completed { json, .. }) => {
-                    let reply = Json::object([
-                        ("type", Json::string("completed")),
-                        ("value", json),
-                        ("trace", Json::Array(machine.trace().to_vec())),
-                    ]);
+                    let reply = logged(
+                        vec![("type", Json::string("completed")), ("value", json)],
+                        machine.logs(),
+                        machine.trace(),
+                    );
                     self.send(&with_edits(reply, &edits))?;
                     return Ok(Ending::Idle);
                 }
                 Ok(Outcome::Failed(failure)) => {
-                    let reply = Json::object([
-                        ("type", Json::string("failed")),
-                        ("failure", failure_json(&failure)),
-                        ("trace", Json::Array(machine.trace().to_vec())),
-                    ]);
+                    let reply = logged(
+                        vec![("type", Json::string("failed")), ("failure", failure_json(&failure))],
+                        machine.logs(),
+                        machine.trace(),
+                    );
                     self.send(&with_edits(reply, &edits))?;
                     return Ok(Ending::Idle);
                 }

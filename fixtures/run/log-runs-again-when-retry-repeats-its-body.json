@@ -1,0 +1,81 @@
+{
+  "description": "A retry that repeats its body logs again, because log is an effect of running the body.",
+  "python": false,
+  "program": "(retry {:delays [1s]} (let [_ (log \"try\") i (call store.get {:id \"a\"})] (get i :size)))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list"
+  ],
+  "responses": [
+    {
+      "capability": "store.get",
+      "input": {
+        "id": "a"
+      },
+      "results": [
+        {
+          "error": {
+            "kind": "Timeout",
+            "message": "slow"
+          }
+        },
+        {
+          "output": {
+            "id": "a",
+            "size": 7
+          }
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": 7
+  },
+  "logs": [
+    "try",
+    "try"
+  ],
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "store.get",
+      "input": {
+        "id": "a"
+      }
+    },
+    {
+      "response": "r:1",
+      "error": {
+        "kind": "Timeout",
+        "message": "slow"
+      }
+    },
+    {
+      "delay": "r:2",
+      "milliseconds": 1000
+    },
+    {
+      "response": "r:2",
+      "output": null
+    },
+    {
+      "request": "r:3",
+      "capability": "store.get",
+      "input": {
+        "id": "a"
+      }
+    },
+    {
+      "response": "r:3",
+      "output": {
+        "id": "a",
+        "size": 7
+      }
+    }
+  ]
+}

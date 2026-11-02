@@ -1,0 +1,17 @@
+{
+  "description": "fail stops the run with the failure class thrown.",
+  "python": false,
+  "program": "(fail \"boom\")",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list"
+  ],
+  "expect": {
+    "failed": "thrown"
+  }
+}

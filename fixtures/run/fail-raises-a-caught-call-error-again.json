@@ -1,0 +1,54 @@
+{
+  "description": "Given a caught error, fail raises it again with its kind and message, and an outer attempt sees the original error.",
+  "python": false,
+  "program": "(attempt (match (attempt (call store.get {:id \"a\"})) (ok i) (get i :size) (err e) (fail e)))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list"
+  ],
+  "responses": [
+    {
+      "capability": "store.get",
+      "input": {
+        "id": "a"
+      },
+      "results": [
+        {
+          "error": {
+            "kind": "NotFound",
+            "message": "gone"
+          }
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": {
+      "err": {
+        "kind": "NotFound",
+        "message": "gone"
+      }
+    }
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "store.get",
+      "input": {
+        "id": "a"
+      }
+    },
+    {
+      "response": "r:1",
+      "error": {
+        "kind": "NotFound",
+        "message": "gone"
+      }
+    }
+  ]
+}

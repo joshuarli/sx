@@ -410,7 +410,7 @@ fn run_rust(program: &sx_kernel::ir::Program, case: &RunCase) -> Result<(), Stri
     let budgets = case.case.budgets();
     let cores = Cores;
     let inputs = fixture_inputs(program, fixture)?;
-    let (outcome, trace) = if let Some(steps) = fixture.get("steps").and_then(Json::as_array) {
+    let (outcome, trace, logs) = if let Some(steps) = fixture.get("steps").and_then(Json::as_array) {
         let mut machine = Machine::new(program, &inputs, budgets, &cores);
         let mut outcome = machine.start();
         for step in steps {
@@ -433,7 +433,7 @@ fn run_rust(program: &sx_kernel::ir::Program, case: &RunCase) -> Result<(), Stri
             }
             outcome = machine.resume(responses);
         }
-        (outcome, machine.trace().to_vec())
+        (outcome, machine.trace().to_vec(), machine.logs().to_vec())
     } else {
         let responses = fixture.get("responses").cloned().unwrap_or(Json::Array(Vec::new()));
         let mut host =
@@ -442,7 +442,8 @@ fn run_rust(program: &sx_kernel::ir::Program, case: &RunCase) -> Result<(), Stri
         let grants = grants_for(&case.case, &registry);
         let finished = run(program, &grants, &mut host, &inputs, budgets, &cores).map_err(|e| format!("unexpected call: {e}"))?;
         let trace = finished.machine.trace().to_vec();
-        (finished.outcome, trace)
+        let logs = finished.machine.logs().to_vec();
+        (finished.outcome, trace, logs)
     };
     let expected = fixture.get("expect").expect("expect");
     let actual = expectation(&outcome);
@@ -453,6 +454,11 @@ fn run_rust(program: &sx_kernel::ir::Program, case: &RunCase) -> Result<(), Stri
     let actual = Json::Array(trace);
     if !python_equal(&actual, &wanted) {
         return Err(format!("trace {} != {}", shown(&actual), shown(&wanted)));
+    }
+    let wanted_logs = fixture.get("logs").cloned().unwrap_or(Json::Array(Vec::new()));
+    let actual_logs = Json::Array(logs.iter().map(|line| Json::string(line.as_str())).collect());
+    if !python_equal(&actual_logs, &wanted_logs) {
+        return Err(format!("logs {} != {}", shown(&actual_logs), shown(&wanted_logs)));
     }
     Ok(())
 }

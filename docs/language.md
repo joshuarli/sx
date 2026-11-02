@@ -150,7 +150,7 @@ protocol the first reply about a program carries the list before the host perfor
 | `Float` | IEEE-754 binary64, finite values only. JSON cannot carry an infinity or NaN, so an operation that would produce one stops the program. |
 | `String` | UTF-8 strings |
 | `Bytes` | An opaque byte string from a tool. It has no literal, and the prelude only measures and compares it. |
-| `Unit` | One value, returned by capabilities with no result and by `sleep` |
+| `Unit` | One value, written `unit`, returned by capabilities with no result, by `sleep`, and by `log`. It encodes as `null`. |
 | `List<T>` | Ordered, finite |
 | `Tuple<T1, ..., Tn>` | Produced by `par`, `group-by`, and bracket literals of mixed types or used as tuples |
 | `Option<T>` | `(some x)`, `none` |
@@ -295,6 +295,9 @@ because its text does not order like its value: the diagnostic names the core's 
 | `(retry {options} e)` | `T`. Re-evaluates `e` after a failure. |
 | `(wait-until {options} f e)` | `T`. Re-evaluates `e` until `f` returns `true` for its value. |
 | `(sleep d)` | `Unit`. `d` is a duration literal. Waits that long. See [sleep](#sleep). |
+| `(fail m)` | Any type, so it fits where a value is needed, as `recur` does. `m` is a `String`, or a `CallError` to raise again. See [fail](#fail). Rust and Lean only. |
+| `(log e ...)` | `Unit`. Appends one line to the run's logs. See [log](#log). Rust and Lean only. |
+| `unit` | `Unit`, the one value of that type. A local named `unit` hides it. Rust and Lean only. |
 | `(loop {:max n} [p1 e1 ...] body)` | The type of `body`'s non-`recur` results. `(recur ...)` repeats `body`. |
 | `(par e1 ... en)` | `Tuple<T1, ..., Tn>`. Every branch has only `read` effects. |
 | `(par-map {:limit n} f xs)` | `List<U>`. `n` is an integer literal. `f` has only `read` effects. |
@@ -310,14 +313,14 @@ suggests the lowercase name, because the name would otherwise mean the variant. 
 in a `match` pattern is still a variant pattern.
 
 A form name is a name for a value. The special forms are `let`, `if`, `cond`, `match`, `fn`, `get`, `call`,
-`attempt`, `retry`, `wait-until`, `sleep`, `loop`, `recur`, `par`, `par-map`, `some`, `ok`, and `err`, and `when`
-and `do`. Any of them may name a value in `let`, `loop`, `fn` and `defn` parameters, `def`, and a `match` pattern:
+`attempt`, `retry`, `wait-until`, `sleep`, `loop`, `recur`, `par`, `par-map`, `some`, `ok`, and `err`, and `when`,
+`do`, `fail`, and `log`. Any of them may name a value in `let`, `loop`, `fn` and `defn` parameters, `def`, and a `match` pattern:
 `(let [attempt 1] ...)`, `(fn [err] ...)`, `(loop {:max 5} [attempt 1] ...)`, `(match r (ok ok) ok (err err) err)`.
 Each position has exactly one meaning. In head position a form name is the form, so `(attempt ...)` is the form
 whatever is bound to `attempt`. In a pattern, `(some x)`, `(ok x)`, and `(err e)` are the constructors. In value
-position the name is the binding, and a name that is not bound is `unknown-name`. This is the rule for `when` and
-`do` too, with one exception that keeps programs that already check working: a local function named `when` or `do`
-hides the form, so `(when ...)` calls the function, as a local function named `count` hides `count`.
+position the name is the binding, and a name that is not bound is `unknown-name`. This is the rule for `when`,
+`do`, `fail`, and `log` too, with one exception that keeps programs that already check working: a local function
+named `when`, `do`, `fail`, or `log` hides the form, so `(when ...)` calls the function, as a local function named `count` hides `count`.
 
 Two things stay a `reserved-name` error, each with its reason. `none` cannot name a value, because `none` is the
 absent value as an expression and matches an absent value in a pattern, so a binding would give it a second
@@ -443,6 +446,44 @@ Errors other than `call-failed` and `invalid-input` pass through, as listed in [
   (ok found) (match found (some v) v none "unversioned")
   (err e) "unreadable")
 ```
+
+### fail
+
+`(fail m)` stops the program at that point. `m` is a `String`, or a `CallError` that an `attempt` caught.
+The form has no value, so its type is whatever the place needs: `(if (> n 5) (fail "too many") n)` is an
+`Int`, as a `recur` in a `loop` is.
+
+A `fail` raises a `CallError` like a failed call does. With a `String` the error is
+`{:kind Failed :message m}`. With a `CallError` it is that error unchanged, so `(match r (ok v) v (err e)
+(fail e))` raises again what `attempt` caught, with its kind and message. The error unwinds as a failed call
+does: an enclosing `attempt` returns it as `(err e)`, `retry` repeats the body when `:on` lists the error's
+kind, and a failure in a `par` or `par-map` branch fails the form like any branch failure. The default
+`retry` kinds are transient, so a `fail` with a `String` is not repeated unless `:on` lists `Failed`.
+
+An error that nothing catches ends the program with the failure class `thrown` and the error's message. It is
+not `call-failed`, because no tool call failed, even when `fail` raised again an error from a call. `thrown` is
+a program's own decision to stop, so `attempt` catches it as the error it raised and no other check or
+recovery treats it specially. `fail` is Rust and Lean only.
+
+### log
+
+`(log e ...)` appends one line to the run's `logs` and returns `Unit`. It evaluates its arguments in order,
+writes each as text, and joins the texts with single spaces; `(log)` appends an empty line.
+
+| Value | Text |
+| --- | --- |
+| `String` | itself |
+| `Int`, `Float`, `Bool`, an enum value with no payload | as `str` writes it |
+| anything else, including `unit` and `none`, which are `null` | as `to-json` writes it |
+
+The checker rejects an argument whose type has no JSON encoding with `no-encoding`, as it does for `to-json`.
+A line counts toward the value-size budget, and so does the total of all lines: logging more than the budget
+stops the program with `budget-exhausted`.
+
+Lines come in the order the machine ran the `log` forms. That is program order within a fiber and the order of
+the fibers' paths between fibers, so the logs of a `par-map` follow its list. A `retry` that repeats its body
+logs again, and a failed run keeps the lines logged before the failure. Where the logs appear is in
+[Logs in the outcome](#logs-in-the-outcome). `log` is Rust and Lean only.
 
 ### retry
 
@@ -584,12 +625,16 @@ as in Clojure.
 | `flatten` | `List<List<T>> -> List<T>` |
 | `contains?` | `List<T> T -> Bool`, or `Map<String, V> String -> Bool` to test for a key |
 | `assoc` | `Map<String, V> String V -> Map<String, V>`, the map with the key set, replacing any earlier value |
+| `put` | `Map<String, V> String V -> Map<String, V>`, which is `assoc`, or `R String V -> R` for a record `R`. On a record the key is a string literal naming a field `R` has, `V` is that field's type, and the result is the record with that field replaced and every other field kept, in the same order. A record that a tool declares open is rejected, because its undeclared fields are not in the value. The checker lowers a record `put` to a `let` that binds the record and a record literal, so the IR has no new node. Rust and Lean only. |
 | `dissoc` | `Map<String, V> String -> Map<String, V>`, the map without the key. An absent key is not an error. |
 | `keys` | `Map<String, V> -> List<String>`, ascending |
 | `vals` | `Map<String, V> -> List<V>`, in key order |
 | `entries` | `Map<String, V> -> List<Tuple<String, V>>`, in key order |
 | `into-map` | `List<Tuple<String, V>> -> Map<String, V>`. A later pair replaces an earlier pair with the same key. It takes the output of `group-by` when the key is a `String`. |
 | `identity` | `T -> T`, for use as a function argument such as `(group-by identity xs)` |
+| `range` | `Int Int -> List<Int>` or `Int Int Int -> List<Int>`: the integers from the first up to but not including the second, stepping by the third, which is a nonzero integer literal and defaults to 1. A negative step counts down. A range that cannot reach its end is empty. A list longer than the value-size budget stops the program with `budget-exhausted` before it is built. Any other step is `bad-literal`. Rust and Lean only. |
+| `enumerate` | `List<T> -> List<Tuple<Int, T>>`, each element with its index from 0. Rust and Lean only. |
+| `safe-int` | `Int -> Int`, the argument when it lies within plus or minus 2^53, the integers a double holds exactly. Outside that range it stops the program with `arithmetic`. The checker for TypeScript inserts it after `Int` arithmetic. Rust and Lean only. |
 | `map` | `(T -> U) List<T> -> List<U>` |
 | `filter` | `(T -> Bool) List<T> -> List<T>` |
 | `keep` | `(T -> Option<U>) List<T> -> List<U>`, the `some` values in order |
@@ -1416,8 +1461,8 @@ Nothing a program does is a protocol error.
 | `check`, program checks | `{"ok": BOOL, "explain": REPORT, "policy": VERDICT}`. `REPORT` is `sx explain --format json`, and `ok` is true when the policy approves |
 | `run`, program does not check | `{"outcome": "rejected", "diagnostics": [...]}` |
 | `run`, policy refuses | `{"outcome": "refused", "policy": VERDICT}` |
-| `run`, completed | `{"outcome": "completed", "result": JSON, "trace": [...]}` |
-| `run`, failed | `{"outcome": "failed", "failure": {"kind", "message", "request", "span"}, "trace": [...]}` |
+| `run`, completed | `{"outcome": "completed", "result": JSON, "trace": [...]}`, with `"logs": [...]` before `trace` when the program logged |
+| `run`, failed | `{"outcome": "failed", "failure": {"kind", "message", "request", "span"}, "trace": [...]}`, with `"logs": [...]` before `trace` when the program logged |
 
 Any of them adds `inferred_closers` when closers were inferred from indentation, as `sx run --format json`
 does. `trace` is the run trace of `sx run --format json`: each call as a `request` entry with its
@@ -1481,6 +1526,20 @@ or a value that does not match the output type, or if a request has no response.
 The trace records each request (ID, capability, input) and each response (ID, outcome). Fixtures
 compare traces sorted by request ID.
 
+### Logs in the outcome
+
+The machine keeps the lines that [`log`](#log) wrote, in order. Every place that reports a run reports them:
+`sx run --format json` and the `completed` and `failed` messages of the [host protocol](#host-protocol) have a
+`logs` field, a list of strings, before `trace`, and the `run` tool of `sx mcp code` has the same field in its
+`structuredContent`. The field is present only when the program logged at least one line, as
+`inferred_closers` is present only when closers were inferred, so a run that never logs reports exactly what it
+reported before `log` existed. A failed run reports the lines logged before it failed. In text form, `sx run`
+writes each line to standard error as `log: LINE`, so standard output is still only the result, and the `run`
+tool of `sx mcp code` lists the lines in its text block before the calls.
+
+A fixture's optional `logs` field lists the lines the run must produce, and a fixture without one must
+produce none.
+
 ## Failures
 
 | Error | Cause | Caught by `attempt` |
@@ -1490,12 +1549,13 @@ compare traces sorted by request ID.
 | `invalid-host-response` | See [Execution](#execution) | No |
 | `loop-limit` | A `loop` reached its `:max` and its body asked to `recur` again | No |
 | `budget-exhausted` | A budget ran out. The error names the budget. | No |
-| `arithmetic` | Overflow, division by zero, a `Float` result that is infinite or not a number, negative `take` count, or a core function whose arithmetic fails, such as a `decimal` result beyond 38 digits | No |
+| `arithmetic` | Overflow, division by zero, a `Float` result that is infinite or not a number, negative `take` count, an `Int` that `safe-int` finds outside plus or minus 2^53, or a core function whose arithmetic fails, such as a `decimal` result beyond 38 digits | No |
 | `invalid-input` | A core function refused an input outside its domain; the message says why, as in `yaml.get` on a flow collection, `json.get` on text that is not JSON, or `text.split` with an empty separator | Yes, as a `CallError` of kind `Invalid` |
 | `out-of-range` | `first` of an empty list, `nth` past the end, or `round`, `floor`, or `ceil` beyond the `Int` range | No |
+| `thrown` | A [`fail`](#fail) that nothing caught. The message is the error's message. | Yes, as the `CallError` it raised |
 | `internal` | Interpreter bug | No |
 
-**What `attempt` catches.** A call error, and a core's refusal. A refusal is raised as the call error
+**What `attempt` catches.** A call error, a core's refusal, and a `fail`. A refusal is raised as the call error
 `{:kind Invalid :message "FUNCTION: REASON"}` at the call, so it unwinds like a failed tool call: an enclosing
 `attempt` returns it as `err`, `retry` with `:on [Invalid]` repeats the body, and a refusal in a `par` or
 `par-map` branch fails the form like any branch failure (the lowest-numbered failed branch wins). A refusal that
@@ -1503,7 +1563,8 @@ nothing catches still ends the program as `invalid-input`, and its message is un
 not become `call-failed`, because no tool call failed.
 
 `arithmetic`, `out-of-range`, `loop-limit`, `budget-exhausted`, `invalid-host-response`, and `internal` stay
-uncatchable. A core refuses text because the program could not know the text was bad without parsing it, so the
+uncatchable, and `retry` never repeats them. `thrown` is the one class that is catchable: it is a `CallError` of
+kind `Failed` while it unwinds, and it becomes the class `thrown` only when nothing catches it. A core refuses text because the program could not know the text was bad without parsing it, so the
 program may need to recover from the refusal. `arithmetic` and `out-of-range` failures name a condition a
 program can test first: `(= n 0)` before `quot`, `(count xs)` before `first`, and `decimal.parse` before a
 `decimal` calculation. Catching them would let `attempt` turn a deterministic bug into a silent `err`. The other kinds report a broken host,
@@ -1684,8 +1745,8 @@ Kernel to host:
 | --- | --- | --- |
 | `rejected` | `diagnostics`, `rendered` | The program did not check, so nothing ran. `diagnostics` holds the [structured diagnostics](#diagnostics) (`code`, `construct`, `span`, `message`, `detail`, `fix`, `help`), and `rendered` the text a person reads. When the brackets did not balance and the reader inferred closers first, they refer to the inferred text, and the message also has `inferred_closers`. |
 | `requests` | `requests` | The run is suspended. Each request is `{"id", "kind": "call", "capability", "input"}` or `{"id", "kind": "delay", "milliseconds"}`. A delay is answered with `"output": null` once the host has waited. |
-| `completed` | `value`, `trace` | The program finished. `value` is the result and `trace` the [trace](#execution). |
-| `failed` | `failure`, `trace` | The program stopped. `failure` is `{"kind", "message", "span", "request"}`, where `span` and `request` may be `null`. |
+| `completed` | `value`, `trace`, and `logs` when the program logged | The program finished. `value` is the result and `trace` the [trace](#execution). `logs` is the list of [logged lines](#logs-in-the-outcome). |
+| `failed` | `failure`, `trace`, and `logs` when the program logged | The program stopped. `failure` is `{"kind", "message", "span", "request"}`, where `span` and `request` may be `null`. `logs` holds the lines logged before the failure. |
 | `explained` | `tools`, `inputs`, `result` | For each capability the program can call: `id`, `effect` (`read`, `write, idempotent`, or `write, not idempotent`), `allowed`, and the literal `inputs` of its calls, with `"computed at run time"` for arguments the program computes, and for a capability with a scope, `verdicts`. Also the inputs the program uses and its result type. For a script, `inputs` lists every declared input and `input_types` maps each to its type. Same as `sx explain --format json`. |
 | `scope-verdict` | `id`, `verdict`, and `reason` when denied | The answer to `check-scope`: `allowed`, `denied` with the pack's reason, or `unchecked` when the capability's scope came from a declarations file, so no registered check can judge it and the host must. |
 | `error` | `code`, `message` | The message was not valid, so the kernel did nothing with it. |

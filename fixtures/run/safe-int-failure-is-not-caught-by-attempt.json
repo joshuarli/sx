@@ -1,0 +1,17 @@
+{
+  "description": "attempt does not catch the safe-int failure.",
+  "python": false,
+  "program": "(attempt (safe-int (- -9007199254740992 1)))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list"
+  ],
+  "expect": {
+    "failed": "arithmetic"
+  }
+}

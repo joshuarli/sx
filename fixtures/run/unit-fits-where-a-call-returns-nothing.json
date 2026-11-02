@@ -1,0 +1,17 @@
+{
+  "description": "A branch that yields unit joins a branch that yields what a Unit tool returns.",
+  "python": false,
+  "program": "(if (> (count [1]) 5) unit (sleep 0ms))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list"
+  ],
+  "expect": {
+    "completed": null
+  }
+}

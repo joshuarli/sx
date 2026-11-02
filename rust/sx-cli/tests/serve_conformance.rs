@@ -247,8 +247,17 @@ fn span_list(span: &Json) -> Json {
     Json::Array(vec![number("start", "line"), number("start", "column"), number("end", "line"), number("end", "column")])
 }
 
+fn compare_logs(case: &Json, reply: &Json) -> Result<(), String> {
+    let logs = reply.get("logs").cloned().unwrap_or(Json::Array(Vec::new()));
+    let wanted = case.get("logs").cloned().unwrap_or(Json::Array(Vec::new()));
+    if python_equal(&logs, &wanted) { Ok(()) } else { Err(format!("logs {} != {}", shown(&logs), shown(&wanted))) }
+}
+
 fn compare(case: &Json, reply: &Json, python: Option<&Json>) -> Result<(), String> {
     let expected = case.get("expect").expect("expect");
+    if matches!(kind(reply), "completed" | "failed") {
+        compare_logs(case, reply)?;
+    }
     match kind(reply) {
         "completed" => {
             let value = reply.get("value").expect("value");

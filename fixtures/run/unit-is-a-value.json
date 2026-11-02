@@ -1,0 +1,20 @@
+{
+  "description": "unit is the Unit value, and it encodes as null.",
+  "python": false,
+  "program": "(let [_ (log \"no result\")] unit)",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list"
+  ],
+  "expect": {
+    "completed": null
+  },
+  "logs": [
+    "no result"
+  ]
+}

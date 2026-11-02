@@ -1,0 +1,22 @@
+{
+  "description": "attempt catches a fail as an error of kind Failed with the message.",
+  "python": false,
+  "program": "(attempt (fail \"boom\"))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list"
+  ],
+  "expect": {
+    "completed": {
+      "err": {
+        "kind": "Failed",
+        "message": "boom"
+      }
+    }
+  }
+}

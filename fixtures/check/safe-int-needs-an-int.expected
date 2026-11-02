@@ -1,0 +1,8 @@
+error[type-mismatch] 3:11-3:14
+  (safe-int 1.5)
+            ^^^
+  This is a Float, but an Int is needed here.
+  Expected: Int
+  Found: Float
+  Sx does not convert between number types. (round x), (floor x), and (ceil x) turn a Float into an Int.
+  Help: sx help round

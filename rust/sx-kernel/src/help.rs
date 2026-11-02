@@ -104,7 +104,7 @@ pub static PRELUDE: [Entry; 44] = [
     entry("group-by", "(group-by f xs) -> List<Tuple<K, List<T>>>", "Groups elements by key, as [key items] tuples in first-seen order.", "(group-by (fn [x] (rem x 2)) [1 2 3])", "[[1 [1 3]] [0 [2]]]"),
 ];
 
-pub static EXTENSIONS: [Entry; 6] = [entry(
+pub static EXTENSIONS: [Entry; 13] = [entry(
     "script",
     "(script {:inputs {:name \"Type\" ...}} body)",
     "The outermost form of a program that declares its own typed inputs, so it needs no host to declare them. Each type is a string in the declaration type language, such as \"List<String>\" or \"Option<Int>\", and the body reads each input by name. A header declares no authority. An Option input may be left out when running and is then none. Run this example with: sx run report.sx --input 'owners=[\"acme\",\"beta\",\"cyan\"]' --input limit=2",
@@ -140,6 +140,48 @@ pub static EXTENSIONS: [Entry; 6] = [entry(
     "Writes a value as compact JSON text, with the encoding a program's result has: Bytes as base64, an enum value without a payload as its variant name, none as null. Record fields and map keys come in ascending order, so equal values give equal text. A Float is written as str writes it, so 2.0 is 2. A type with no JSON encoding, such as an Option of an Option, is a check error. Use it with fs.write-text, or to send JSON text to a tool.",
     "(to-json {:name \"ada\" :langs [\"sx\" \"lean\"]})",
     "\"{\\\"langs\\\":[\\\"sx\\\",\\\"lean\\\"],\\\"name\\\":\\\"ada\\\"}\"",
+), entry(
+    "fail",
+    "(fail message)",
+    "Stops the program with the failure class thrown and the message. attempt catches it as an error of kind Failed with that message, so a failure raised inside attempt is handled like a failed call. Given a caught error instead of a String, it raises that same error again, keeping its kind and message. It has any type, so it fits where a value is needed. retry repeats it only when :on names Failed.",
+    "(attempt (fail \"boom\"))",
+    "(err {:kind Failed :message \"boom\"})",
+), entry(
+    "log",
+    "(log value ...)",
+    "Appends one line to the run's logs and returns Unit. The line is each value written and joined by single spaces: a String as itself, an Int, Float, Bool, or enum value as str writes it, and anything else as to-json writes it, so none and unit are null. The run result lists the lines in order under logs, and omits logs when there are none. Bind it to _ to run it as a step.",
+    "(let [_ (log \"total\" (+ 1 2) [1 2])] 3)",
+    "3",
+), entry(
+    "unit",
+    "unit",
+    "The Unit value, for a program or branch with no result. Tools that return nothing return it too.",
+    "(let [_ (log \"done\")] unit)",
+    "unit",
+), entry(
+    "put",
+    "(put target key value) -> same type",
+    "A record with one field replaced, or a Map with a key set. On a record the key is a string literal naming a field the record has, and the value must have that field's type. The record keeps its type and field order. On a Map it is assoc. A record a tool declares open cannot be put into.",
+    "[(put {:name \"ada\" :age 36} \"age\" 37) (put (assoc {} \"a\" 1) \"b\" 2)]",
+    "[{:name \"ada\" :age 37} (into-map [[\"a\" 1] [\"b\" 2]])]",
+), entry(
+    "range",
+    "(range start end [step]) -> List<Int>",
+    "The Ints from start up to but not including end, stepping by 1. A step is a nonzero integer literal; a negative one counts down and stops before end. An empty range is []. A range longer than the value-size budget stops the program.",
+    "[(range 1 4) (range 0 10 3) (range 5 0 -2)]",
+    "[[1 2 3] [0 3 6 9] [5 3 1]]",
+), entry(
+    "enumerate",
+    "(enumerate xs) -> List<Tuple<Int, T>>",
+    "Pairs each element with its index, from 0.",
+    "(enumerate [\"a\" \"b\"])",
+    "[[0 \"a\"] [1 \"b\"]]",
+), entry(
+    "safe-int",
+    "(safe-int n) -> Int",
+    "The Int itself when it lies within plus or minus 2^53, the Ints that a double holds exactly. Outside that range stops the program with the failure class arithmetic, which attempt does not catch.",
+    "[(safe-int 9007199254740992) (safe-int -5)]",
+    "[9007199254740992 -5]",
 )];
 
 pub fn types() -> Vec<Entry> {

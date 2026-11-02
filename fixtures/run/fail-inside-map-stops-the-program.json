@@ -1,0 +1,17 @@
+{
+  "description": "A fail inside a mapped function ends the program at the first element that fails.",
+  "python": false,
+  "program": "(map (fn [x] (if (> x 1) (fail (str \"big \" x)) x)) [1 2 3])",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list"
+  ],
+  "expect": {
+    "failed": "thrown"
+  }
+}

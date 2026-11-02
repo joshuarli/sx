@@ -1,0 +1,17 @@
+{
+  "description": "An Int one past 2^53 stops the run with arithmetic.",
+  "python": false,
+  "program": "(safe-int (+ 9007199254740992 1))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list"
+  ],
+  "expect": {
+    "failed": "arithmetic"
+  }
+}

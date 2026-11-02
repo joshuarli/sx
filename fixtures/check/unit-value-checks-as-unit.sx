@@ -1,0 +1,3 @@
+; declarations: fixtures/run/declarations.json
+; python: no
+(let [_ (log "a") r (put {:n 1} "n" 2) xs (enumerate (range 0 3)) k (safe-int 4)] [unit r xs k])

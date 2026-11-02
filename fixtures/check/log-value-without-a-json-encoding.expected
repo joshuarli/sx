@@ -1,0 +1,5 @@
+error[no-encoding] 3:10-3:25
+  (log "n" (some (some 1)))
+           ^^^^^^^^^^^^^^^
+  log cannot write an Option<Option<Int>>, which has no JSON encoding, because none and (some x) would both be null.
+  Help: sx help log

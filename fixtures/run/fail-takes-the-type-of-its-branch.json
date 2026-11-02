@@ -1,0 +1,17 @@
+{
+  "description": "A fail in one branch takes the type the other branch has, so the program checks and runs the other branch.",
+  "python": false,
+  "program": "(let [n (count [1 2])] (if (> n 5) (fail \"too many\") (* n 10)))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list"
+  ],
+  "expect": {
+    "completed": 20
+  }
+}

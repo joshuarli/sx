@@ -1,0 +1,23 @@
+{
+  "description": "Each log appends one line: strings as they are, numbers and booleans as str writes them, other values as to-json writes them, joined by single spaces.",
+  "python": false,
+  "program": "(let [_ (log \"start\") _ (log \"n =\" 3 2.50 true) _ (log {:b 1 :a \"x\"} [1 2] (some 4) none unit) _ (log)] 0)",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list"
+  ],
+  "expect": {
+    "completed": 0
+  },
+  "logs": [
+    "start",
+    "n = 3 2.5 true",
+    "{\"a\":\"x\",\"b\":1} [1,2] 4 null null",
+    ""
+  ]
+}

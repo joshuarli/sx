@@ -1,0 +1,4 @@
+; declarations: fixtures/run/declarations.json
+; allow: accounts.get
+; python: no
+(put (call accounts.get {}) "name" "x")

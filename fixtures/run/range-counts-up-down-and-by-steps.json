@@ -1,0 +1,48 @@
+{
+  "description": "range excludes its end, defaults to a step of 1, takes a nonzero integer literal step, and is empty when it cannot reach the end.",
+  "python": false,
+  "program": "[(range 0 5) (range 2 2) (range 5 2) (range 0 10 3) (range 10 0 -3) (range -3 3 2) (range 3 -3 1) (range 0 1 5)]",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list"
+  ],
+  "expect": {
+    "completed": [
+      [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      [],
+      [],
+      [
+        0,
+        3,
+        6,
+        9
+      ],
+      [
+        10,
+        7,
+        4,
+        1
+      ],
+      [
+        -3,
+        -1,
+        1
+      ],
+      [],
+      [
+        0
+      ]
+    ]
+  }
+}

@@ -112,6 +112,9 @@ pub enum PreludeOp {
     Vals,
     Entries,
     IntoMap,
+    Range,
+    Enumerate,
+    SafeInt,
     HigherOrder(HigherOrder),
 }
 
@@ -153,6 +156,9 @@ const PRELUDE_NAMES: &[(&str, PreludeOp)] = &[
     ("vals", PreludeOp::Vals),
     ("entries", PreludeOp::Entries),
     ("into-map", PreludeOp::IntoMap),
+    ("range", PreludeOp::Range),
+    ("enumerate", PreludeOp::Enumerate),
+    ("safe-int", PreludeOp::SafeInt),
     ("map", PreludeOp::HigherOrder(HigherOrder::Map)),
     ("filter", PreludeOp::HigherOrder(HigherOrder::Filter)),
     ("keep", PreludeOp::HigherOrder(HigherOrder::Keep)),
@@ -249,6 +255,8 @@ pub enum NodeKind {
     MakeVariant { enum_name: String, variant: String, payload: Option<Box<Node>> },
     Coerce { value: Box<Node>, conversion: Conversion },
     Attempt { body: Box<Node> },
+    Fail { message: Box<Node> },
+    Log { args: Vec<Node> },
     Retry(Retry),
     WaitUntil(WaitUntil),
     Sleep { milliseconds: i64 },
@@ -282,6 +290,8 @@ impl NodeKind {
             NodeKind::MakeVariant { .. } => "MakeVariant",
             NodeKind::Coerce { .. } => "Coerce",
             NodeKind::Attempt { .. } => "Attempt",
+            NodeKind::Fail { .. } => "Fail",
+            NodeKind::Log { .. } => "Log",
             NodeKind::Retry(_) => "Retry",
             NodeKind::WaitUntil(_) => "WaitUntil",
             NodeKind::Sleep { .. } => "Sleep",
@@ -404,7 +414,7 @@ fn children(node: &Node) -> Vec<&Node> {
     match &node.kind {
         NodeKind::Literal { .. } | NodeKind::Variable { .. } | NodeKind::Sleep { .. } | NodeKind::MakeEmptyBrace { .. } => {}
         NodeKind::Let(binding) => out.extend([&*binding.value, &*binding.body]),
-        NodeKind::LocalFunction { body, .. } | NodeKind::Attempt { body } => out.push(body),
+        NodeKind::LocalFunction { body, .. } | NodeKind::Attempt { body } | NodeKind::Fail { message: body } => out.push(body),
         NodeKind::If(branch) => out.extend([&*branch.condition, &*branch.then, &*branch.otherwise]),
         NodeKind::Match(arms) => {
             out.push(&arms.scrutinee);
@@ -415,7 +425,10 @@ fn children(node: &Node) -> Vec<&Node> {
             out.push(&function.body);
             out.extend(args);
         }
-        NodeKind::Prelude { args, .. } | NodeKind::CoreCall { args, .. } | NodeKind::Recur { args } => out.extend(args),
+        NodeKind::Prelude { args, .. }
+        | NodeKind::CoreCall { args, .. }
+        | NodeKind::Recur { args }
+        | NodeKind::Log { args } => out.extend(args),
         NodeKind::Call { argument, .. } => out.push(argument),
         NodeKind::Get { record, .. } => out.push(record),
         NodeKind::MakeRecord { fields } => out.extend(fields.iter().map(|(_, part)| part)),

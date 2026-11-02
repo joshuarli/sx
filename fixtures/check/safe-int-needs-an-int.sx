@@ -1,0 +1,3 @@
+; declarations: fixtures/run/declarations.json
+; python: no
+(safe-int 1.5)

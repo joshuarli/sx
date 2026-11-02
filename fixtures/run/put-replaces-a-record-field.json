@@ -1,0 +1,40 @@
+{
+  "description": "put returns a record with one field replaced, in the same field order, and leaves the original.",
+  "python": false,
+  "program": "(let [r {:name \"ada\" :age 36 :tags [\"x\"]} a (put r \"age\" 37) b (put a \"tags\" [\"y\" \"z\"])] [r a b])",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list"
+  ],
+  "expect": {
+    "completed": [
+      {
+        "name": "ada",
+        "age": 36,
+        "tags": [
+          "x"
+        ]
+      },
+      {
+        "name": "ada",
+        "age": 37,
+        "tags": [
+          "x"
+        ]
+      },
+      {
+        "name": "ada",
+        "age": 37,
+        "tags": [
+          "y",
+          "z"
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "description": "retry repeats only transient kinds by default, and a fail has kind Failed, so it ends the program at once with no delay.",
+  "python": false,
+  "program": "(retry {:delays [1s 2s]} (fail \"x\"))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list"
+  ],
+  "expect": {
+    "failed": "thrown"
+  }
+}

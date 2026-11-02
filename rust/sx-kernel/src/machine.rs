@@ -23,6 +23,7 @@ pub enum FailureKind {
     InvalidInput,
     OutOfRange,
     LoopLimit,
+    Thrown,
     Internal,
 }
 
@@ -36,6 +37,7 @@ impl FailureKind {
             FailureKind::InvalidInput => "invalid-input",
             FailureKind::OutOfRange => "out-of-range",
             FailureKind::LoopLimit => "loop-limit",
+            FailureKind::Thrown => "thrown",
             FailureKind::Internal => "internal",
         }
     }
@@ -175,6 +177,7 @@ fn plain(returned: Returned<'_>) -> Step<Value> {
 enum Cause {
     Call,
     CoreRefusal,
+    Thrown,
 }
 
 #[derive(Clone)]
@@ -301,6 +304,8 @@ pub struct Machine<'p> {
     issued: HashMap<String, FiberId>,
     sequences: HashMap<Vec<usize>, u64>,
     trace: Vec<Json>,
+    logs: Vec<String>,
+    logged: u64,
     steps: u64,
     calls: u64,
     applications: u64,
@@ -335,6 +340,8 @@ impl<'p> Machine<'p> {
             issued: HashMap::new(),
             sequences: HashMap::new(),
             trace: Vec::new(),
+            logs: Vec::new(),
+            logged: 0,
             steps: 0,
             calls: 0,
             applications: 0,
@@ -346,6 +353,10 @@ impl<'p> Machine<'p> {
 
     pub fn trace(&self) -> &[Json] {
         &self.trace
+    }
+
+    pub fn logs(&self) -> &[String] {
+        &self.logs
     }
 
     pub fn start(&mut self) -> Outcome {
@@ -515,6 +526,7 @@ impl<'p> Machine<'p> {
                     Failure::new(FailureKind::CallFailed, text, Some(failure.span))
                 }
                 Cause::CoreRefusal => Failure::new(FailureKind::InvalidInput, message, Some(failure.span)),
+                Cause::Thrown => Failure::new(FailureKind::Thrown, message, Some(failure.span)),
             });
         }
         let Some(result) = root.result.clone() else {
@@ -1066,6 +1078,35 @@ impl<'p> Machine<'p> {
                 self.set_returning(id, result);
                 Ok(())
             }
+            NodeKind::Fail { .. } => {
+                let error = match plain(single(values)?)? {
+                    Value::String(message) => call_error_value(CallErrorKind::Failed, &message),
+                    Value::Record(error) => error,
+                    _ => return Err(internal("fail needs a String or a CallError.", Some(span))),
+                };
+                self.fibers[id].raising = Some(Raised { error, span, cause: Cause::Thrown });
+                Ok(())
+            }
+            NodeKind::Log { .. } => {
+                let args = plain_all(values)?;
+                let mut parts = Vec::with_capacity(args.len());
+                for arg in &args {
+                    parts.push(log_text(arg, span)?);
+                }
+                let text = Value::string(&parts.join(" "));
+                self.check_size(&text, Some(span))?;
+                self.logged += size(&text);
+                if self.logged > self.budgets.value_size {
+                    let message = format!("The program logged more than the value-size budget of {}.", self.budgets.value_size);
+                    return Err(budget(message, Some(span)));
+                }
+                let Value::String(text) = text else {
+                    return Err(internal("A log line is not a String.", Some(span)));
+                };
+                self.logs.push(text.to_string());
+                self.set_returning(id, Value::Unit);
+                Ok(())
+            }
             NodeKind::Call { capability, .. } => {
                 self.calls += 1;
                 if self.calls > self.budgets.calls {
@@ -1418,6 +1459,36 @@ impl<'p> Machine<'p> {
                 self.check_size(&built, Some(span))?;
                 built
             }
+            PreludeOp::Range => {
+                let (start, end) = (i128::from(int(0)?), i128::from(int(1)?));
+                let step = if args.len() == 3 { i128::from(int(2)?) } else { 1 };
+                if step == 0 {
+                    return Err(Failure::new(FailureKind::Arithmetic, "range with a zero step.", Some(span)));
+                }
+                let distance = if step > 0 { end - start } else { start - end };
+                let count = if distance > 0 { (distance + step.abs() - 1) / step.abs() } else { 0 };
+                if count + 1 > i128::from(self.budgets.value_size) {
+                    let message = format!("A value grew past the value-size budget of {}.", self.budgets.value_size);
+                    return Err(budget(message, Some(span)));
+                }
+                let count = usize::try_from(count).unwrap_or(0);
+                Value::list((0..count).map(|at| Value::Int(i64::try_from(start + step * at as i128).unwrap_or(0))).collect())
+            }
+            PreludeOp::Enumerate => {
+                let built = Value::list(
+                    list(0)?.iter().enumerate().map(|(at, item)| Value::tuple(vec![Value::Int(at as i64), item.clone()])).collect(),
+                );
+                self.check_size(&built, Some(span))?;
+                built
+            }
+            PreludeOp::SafeInt => {
+                let n = int(0)?;
+                if n.unsigned_abs() > SAFE_INT_LIMIT {
+                    let message = format!("Integer {n} is outside the range of exact doubles, plus or minus 2^53.");
+                    return Err(Failure::new(FailureKind::Arithmetic, message, Some(span)));
+                }
+                Value::Int(n)
+            }
             PreludeOp::Divide => return Err(internal("No prelude rule for /.", Some(span))),
             PreludeOp::HigherOrder(_) => return Err(internal(format!("No prelude rule for {}.", op.name()), Some(span))),
         })
@@ -1456,6 +1527,8 @@ fn sequence_children(node: &Node) -> Step<Vec<Child<'_>>> {
         | NodeKind::CoreCall { args, .. }
         | NodeKind::ApplyLocal { args, .. }
         | NodeKind::Recur { args } => nodes(args),
+        NodeKind::Log { args } => nodes(args),
+        NodeKind::Fail { message } => vec![Child::Node(message)],
         NodeKind::Call { argument, .. } => vec![Child::Node(argument)],
         NodeKind::Get { record, .. } => vec![Child::Node(record)],
         NodeKind::MakeRecord { fields } => fields.iter().map(|(_, value)| Child::Node(value)).collect(),
@@ -1715,6 +1788,17 @@ fn finish_each(frame: EachFrame<'_>) -> Step<Value> {
 
 const INT_MIN_F: f64 = -9_223_372_036_854_775_808.0;
 const INT_LIMIT_F: f64 = 9_223_372_036_854_775_808.0;
+
+const SAFE_INT_LIMIT: u64 = 9_007_199_254_740_992;
+
+fn log_text(value: &Value, span: Span) -> Step<String> {
+    match value {
+        Value::String(_) | Value::Bool(_) | Value::Int(_) | Value::Float(_) => text_of(value, span),
+        Value::Variant(variant) if variant.payload.is_none() => text_of(value, span),
+        other => json_text(other)
+            .map_err(|NonFiniteFloat(f)| internal(format!("log met the non-finite Float {f}."), Some(span))),
+    }
+}
 
 fn checked_int(value: i128, span: Span) -> Step<i64> {
     i64::try_from(value).map_err(|_| {

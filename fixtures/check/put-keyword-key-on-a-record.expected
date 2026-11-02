@@ -1,0 +1,6 @@
+error[habit:keyword-value] 3:20-3:25
+  (put {:name "ada"} :name "bo")
+                     ^^^^^
+  put names a record field with a string, such as "name".
+  Fix: "name"
+  Help: sx help put

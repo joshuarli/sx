@@ -46,7 +46,8 @@ const PRELUDE: [&str; 45] = [
     "assoc", "dissoc", "keys", "vals", "entries", "into-map", "map", "filter", "keep", "any?", "all?", "reduce",
     "sort-by", "distinct-by", "group-by",
 ];
-const FIXED_ARITY: [(&str, usize); 43] = [
+const UNSUGGESTED_PRELUDE: [&str; 4] = ["put", "range", "enumerate", "safe-int"];
+const FIXED_ARITY: [(&str, usize); 46] = [
     ("+", 2),
     ("*", 2),
     ("/", 2),
@@ -90,6 +91,9 @@ const FIXED_ARITY: [(&str, usize); 43] = [
     ("vals", 1),
     ("entries", 1),
     ("into-map", 1),
+    ("put", 3),
+    ("enumerate", 1),
+    ("safe-int", 1),
 ];
 const DEFINITION: &str = "A definition belongs at the top level, before the program's final expression. Inside an expression, bind a local function with let: (let [f (fn [x] ...)] ...).";
 const HABIT_HEADS: [(&str, &str, &str); 12] = [
@@ -141,6 +145,7 @@ const MISSING_FUNCTIONS: [(&str, &str); 20] = [
     ("re-groups", "re.find already returns the whole match and then each group: (nth m 1) is group 1."),
 ];
 const DEFAULT_BINDER: &str = "#present";
+const PUT_BINDER: &str = "#put";
 const INT_TO_FLOAT_HINT: &str = "Sx does not convert between number types. (float n) turns an Int into a Float.";
 const FLOAT_TO_INT_HINT: &str =
     "Sx does not convert between number types. (round x), (floor x), and (ceil x) turn a Float into an Int.";
@@ -160,7 +165,7 @@ fn is_reserved(name: &str) -> bool {
 }
 
 fn is_prelude(name: &str) -> bool {
-    PRELUDE.contains(&name)
+    PRELUDE.contains(&name) || UNSUGGESTED_PRELUDE.contains(&name)
 }
 
 fn is_higher_order(name: &str) -> bool {
@@ -218,6 +223,10 @@ fn signature(op: &str) -> &'static str {
         "dissoc" => "map key",
         "keys" | "vals" | "entries" => "map",
         "into-map" => "pairs",
+        "put" => "target key value",
+        "range" => "start end [step]",
+        "enumerate" => "xs",
+        "safe-int" => "n",
         _ => binary_signature(op).unwrap_or("f xs"),
     }
 }
@@ -646,7 +655,7 @@ struct Checker<'r> {
     shapes: HashMap<usize, Shape>,
     presence_tests: Vec<PresenceTest>,
     late_sort_keys: Vec<(Type, Span)>,
-    late_json_values: Vec<(Type, Span)>,
+    late_json_values: Vec<(Type, Span, &'static str)>,
     record_literals: Vec<(Span, Vec<String>)>,
     unfilled_loops: usize,
     earlier: ArgumentTypes,
@@ -1269,6 +1278,9 @@ impl<'r> Checker<'r> {
             let t = option(inner);
             return self.coerce(literal(Value::None, t.clone(), span), &t, expected, span);
         }
+        if name == "unit" {
+            return self.coerce(literal(Value::Unit, UNIT, span), &UNIT, expected, span);
+        }
         if name == "_" {
             self.report(Diagnostic::new("bad-pattern", span, "_ discards a value in a pattern. It is not a value itself."));
             return self.placeholder(span);
@@ -1545,6 +1557,11 @@ impl<'r> Checker<'r> {
         }
         if name == "recur" {
             return self.form_recur(span, items, scope);
+        }
+        if matches!(name, "fail" | "log") && !matches!(scope.get(name), Some(Binding::Function(_))) {
+            return self.outside_tail(|c| {
+                if name == "fail" { c.form_fail(span, items, expected, scope) } else { c.form_log(span, items, expected, scope) }
+            });
         }
         if matches!(name, "when" | "do") && !matches!(scope.get(name), Some(Binding::Function(_))) {
             return if name == "when" {
@@ -2014,7 +2031,7 @@ impl<'r> Checker<'r> {
 
     fn check_late_json_values(&mut self) {
         let values = std::mem::take(&mut self.late_json_values);
-        for (t, span) in &values {
+        for (t, span, who) in &values {
             let t = self.zonk(t);
             if let Some(problem) = encodable_problem(&t) {
                 let reason = problem.split_once(" has no JSON encoding").map_or("", |(_, reason)| reason);
@@ -2022,9 +2039,9 @@ impl<'r> Checker<'r> {
                     Diagnostic::new(
                         "no-encoding",
                         *span,
-                        format!("to-json cannot write {}, which has no JSON encoding{reason}.", describe(&t)),
+                        format!("{who} cannot write {}, which has no JSON encoding{reason}.", describe(&t)),
                     )
-                    .help("to-json"),
+                    .help(*who),
                 );
             }
         }
@@ -3200,6 +3217,165 @@ impl<'r> Checker<'r> {
         (node(Ir::WaitUntil(ir::WaitUntil { intervals, predicate, body: Box::new(body) }), span), t)
     }
 
+    fn form_fail<'a>(&mut self, span: Span, items: &'a [Node], expected: Option<&Type>, scope: &Scope<'a>) -> Checked {
+        if !self.arity(span, items, 1, Some(1), "message") {
+            return self.placeholder(span);
+        }
+        let (message, t) = self.check(&items[1], None, scope);
+        let resolved = self.resolve(&t);
+        let accepted = match &resolved {
+            Type::Never => true,
+            Type::Variable(_) => self.trial(&resolved, &STRING),
+            other => *other == STRING || other.is_call_error(),
+        };
+        if !accepted {
+            let found = self.zonk(&t);
+            self.report(
+                Diagnostic::new(
+                    "type-mismatch",
+                    items[1].span,
+                    format!("fail takes a String message, or a caught error to raise again, but this is {}.", describe(&found)),
+                )
+                .detail(format!("Expected: String or CallError\nFound: {}", show_type(&found)))
+                .help("fail"),
+            );
+            return self.placeholder(span);
+        }
+        self.coerce(node(Ir::Fail { message: Box::new(message) }, span), &Type::Never, expected, span)
+    }
+
+    fn form_log<'a>(&mut self, span: Span, items: &'a [Node], expected: Option<&Type>, scope: &Scope<'a>) -> Checked {
+        let mut args = Vec::with_capacity(items.len() - 1);
+        for item in &items[1..] {
+            let (value, t) = self.check(item, None, scope);
+            self.late_json_values.push((t, item.span, "log"));
+            args.push(value);
+        }
+        self.coerce(node(Ir::Log { args }, span), &UNIT, expected, span)
+    }
+
+    fn form_range<'a>(&mut self, span: Span, items: &'a [Node], expected: Option<&Type>, scope: &Scope<'a>) -> Checked {
+        if !self.arity(span, items, 2, Some(3), signature("range")) {
+            return self.placeholder(span);
+        }
+        let mut operands = vec![self.check(&items[1], Some(&INT), scope).0, self.check(&items[2], Some(&INT), scope).0];
+        if let Some(step) = items.get(3) {
+            if matches!(step.kind, NodeKind::Int(n) if n != 0) {
+                operands.push(self.check(step, Some(&INT), scope).0);
+            } else {
+                self.report(
+                    Diagnostic::new("bad-literal", step.span, "The step of range is a nonzero integer literal, such as 2 or -1.")
+                        .detail("A step that is computed, zero, or not an integer would make the length of the list unknown.")
+                        .help("range"),
+                );
+                return self.placeholder(span);
+            }
+        }
+        self.coerce(prelude(PreludeOp::Range, operands, span), &list(INT), expected, span)
+    }
+
+    fn form_put<'a>(&mut self, span: Span, items: &'a [Node], expected: Option<&Type>, scope: &Scope<'a>) -> Checked {
+        let (target, key, value) = (&items[1], &items[2], &items[3]);
+        let (target_ir, target_type) = self.check(target, None, scope);
+        let mut resolved = self.resolve(&target_type);
+        if self.is_brace(&resolved) {
+            self.trial(&resolved, &empty_record());
+            resolved = self.resolve(&resolved);
+        }
+        if let Some(value_type) = self.map_value_of(&target_type) {
+            let (key_ir, _) = self.check(key, Some(&STRING), scope);
+            let (value_ir, _) = self.check(value, Some(&value_type), scope);
+            let operands = vec![target_ir, key_ir, value_ir];
+            return self.coerce(prelude(PreludeOp::Assoc, operands, span), &map_of(value_type), expected, span);
+        }
+        let record = match resolved {
+            Type::Never => return self.placeholder(span),
+            Type::Record(record) if !record.open => record,
+            Type::Record(_) => {
+                self.report(
+                    Diagnostic::new(
+                        "type-mismatch",
+                        target.span,
+                        "put cannot replace a field of an open record, because the program does not see the fields its type leaves out.",
+                    )
+                    .help("put"),
+                );
+                return self.placeholder(span);
+            }
+            other if self.is_open(&other) => {
+                self.report(Diagnostic::new(
+                    "unresolved-type",
+                    target.span,
+                    "The checker cannot tell which record or Map this is, so it cannot put into it.",
+                ));
+                return self.placeholder(span);
+            }
+            other => {
+                let found = self.zonk(&other);
+                self.report(
+                    Diagnostic::new("type-mismatch", target.span, format!("put takes a record or a Map, but this is {}.", describe(&found)))
+                        .detail(format!("Expected: Record or Map<String, ...>\nFound: {}", show_type(&found)))
+                        .help("put"),
+                );
+                return self.placeholder(span);
+            }
+        };
+        let field = match &key.kind {
+            NodeKind::String(field) => field.clone(),
+            NodeKind::Keyword(field) => {
+                self.report(
+                    habit("keyword-value", key.span, "put names a record field with a string, such as \"name\".")
+                        .fix(format!("\"{field}\""))
+                        .help("put"),
+                );
+                return self.placeholder(span);
+            }
+            _ => {
+                self.report(
+                    Diagnostic::new("bad-literal", key.span, "put on a record names the field with a string literal, such as \"name\".")
+                        .detail("A computed key is only for a Map.")
+                        .help("put"),
+                );
+                return self.placeholder(span);
+            }
+        };
+        let Some(field_type) = record.field(&field).cloned() else {
+            let names: Vec<&str> = record.fields.iter().map(|(n, _)| n.as_str()).collect();
+            let shown: Vec<String> = names.iter().map(|n| format!("\"{n}\"")).collect();
+            let suggestion = closest(&field, &names);
+            self.report(
+                Diagnostic::new("unknown-field", key.span, format!("This record has no field \"{field}\"."))
+                    .detail(format!("Fields: {}", shown.join(", ")))
+                    .maybe_fix(suggestion.map(|s| format!("\"{s}\"")))
+                    .help("put"),
+            );
+            return self.placeholder(span);
+        };
+        let (value_ir, _) = self.check(value, Some(&field_type), scope);
+        let held = node(Ir::Variable { name: PUT_BINDER.to_string() }, span);
+        let fields = record
+            .fields
+            .iter()
+            .map(|(name, _)| {
+                let part = if *name == field {
+                    value_ir.clone()
+                } else {
+                    node(Ir::Get { record: Box::new(held.clone()), field: name.clone() }, span)
+                };
+                (name.clone(), part)
+            })
+            .collect();
+        let rebuilt = node(
+            Ir::Let(ir::Let {
+                binder: Binder::Name(PUT_BINDER.to_string()),
+                value: Box::new(target_ir),
+                body: Box::new(node(Ir::MakeRecord { fields }, span)),
+            }),
+            span,
+        );
+        self.coerce(rebuilt, &Type::Record(record), expected, span)
+    }
+
     fn form_sleep(&mut self, span: Span, items: &[Node], expected: Option<&Type>) -> Checked {
         if !self.arity(span, items, 1, Some(1), "duration") {
             return self.placeholder(span);
@@ -3824,10 +4000,16 @@ impl<'r> Checker<'r> {
         if matches!(op, "assoc" | "dissoc") && args.len() >= 2 && keyword(&args[1]).is_some() {
             return self.unknown_head(span, items, scope);
         }
+        if op == "range" {
+            return self.form_range(span, items, expected, scope);
+        }
         if let Some(count) = fixed_arity(op)
             && !self.arity(span, items, count, Some(count), signature(op))
         {
             return self.placeholder(span);
+        }
+        if op == "put" {
+            return self.form_put(span, items, expected, scope);
         }
         if op == "identity" {
             return self.check(&args[0], expected, scope);
@@ -3961,8 +4143,18 @@ impl<'r> Checker<'r> {
             }
             "to-json" => {
                 let (value, t) = self.check(&args[0], None, scope);
-                self.late_json_values.push((t, args[0].span));
+                self.late_json_values.push((t, args[0].span, "to-json"));
                 self.coerce(prelude(prelude_op, vec![value], span), &STRING, expected, span)
+            }
+            "enumerate" => {
+                let (items_ir, t) = self.check(&args[0], None, scope);
+                let element = self.list_element(&t, &args[0], "enumerate");
+                let pair = Type::Tuple(vec![INT, element]);
+                self.coerce(prelude(prelude_op, vec![items_ir], span), &list(pair), expected, span)
+            }
+            "safe-int" => {
+                let (value, _) = self.check(&args[0], Some(&INT), scope);
+                self.coerce(prelude(prelude_op, vec![value], span), &INT, expected, span)
             }
             "concat" => self.form_concat(prelude_op, span, args, expected, scope),
             "flatten" => {
@@ -4412,7 +4604,7 @@ impl Checker<'_> {
                 self.settle_at(body, depth + 1);
                 None
             }
-            Ir::LocalFunction { body, .. } | Ir::Attempt { body } => {
+            Ir::LocalFunction { body, .. } | Ir::Attempt { body } | Ir::Fail { message: body } => {
                 self.settle_at(body, depth + 1);
                 None
             }
@@ -4438,7 +4630,7 @@ impl Checker<'_> {
                 self.settle_all(args, depth + 1);
                 None
             }
-            Ir::Prelude { args, .. } | Ir::CoreCall { args, .. } | Ir::Recur { args } => {
+            Ir::Prelude { args, .. } | Ir::CoreCall { args, .. } | Ir::Recur { args } | Ir::Log { args } => {
                 self.settle_all(args, depth + 1);
                 None
             }

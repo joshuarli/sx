@@ -1,0 +1,17 @@
+{
+  "description": "A range whose list would pass the value-size budget stops the program before it builds the list.",
+  "python": false,
+  "program": "(count (range 0 100000000))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list"
+  ],
+  "expect": {
+    "failed": "budget-exhausted"
+  }
+}

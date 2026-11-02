@@ -1,0 +1,20 @@
+{
+  "description": "A failed run keeps the lines logged before the failure.",
+  "python": false,
+  "program": "(let [_ (log \"before\") _ (fail \"after\") _ (log \"never\")] 1)",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list"
+  ],
+  "expect": {
+    "failed": "thrown"
+  },
+  "logs": [
+    "before"
+  ]
+}

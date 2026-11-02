@@ -1,0 +1,7 @@
+error[type-mismatch] 3:12-3:13
+  (enumerate 3)
+             ^
+  enumerate takes a list here, but this is an Int.
+  Expected: List<...>
+  Found: Int
+  Help: sx help enumerate

@@ -1,0 +1,33 @@
+{
+  "description": "enumerate pairs elements with indexes from 0, and an empty list stays empty.",
+  "python": false,
+  "program": "[(enumerate [\"a\" \"b\" \"c\"]) (enumerate (take 0 [\"a\"]))]",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list"
+  ],
+  "expect": {
+    "completed": [
+      [
+        [
+          0,
+          "a"
+        ],
+        [
+          1,
+          "b"
+        ],
+        [
+          2,
+          "c"
+        ]
+      ],
+      []
+    ]
+  }
+}

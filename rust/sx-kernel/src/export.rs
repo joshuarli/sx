@@ -422,6 +422,8 @@ impl<'a> Reader<'a> {
                 conversion: self.conversion(get("conversion")?)?,
             },
             "Attempt" => NodeKind::Attempt { body: self.boxed(json, "body", what)? },
+            "Fail" => NodeKind::Fail { message: self.boxed(json, "message", what)? },
+            "Log" => NodeKind::Log { args: self.nodes(get("args")?, "log arguments")? },
             "Retry" => {
                 let kinds = array(get("kinds")?, "retry kinds")?
                     .iter()
@@ -785,6 +787,8 @@ impl Writer<'_> {
             NodeKind::MakeVariant { enum_name, variant, payload } => self.variant_fields(enum_name, variant, payload.as_deref()),
             NodeKind::Coerce { value, conversion } => self.coerce_fields(value, conversion),
             NodeKind::Attempt { body } => self.only_node("body", body),
+            NodeKind::Fail { message } => self.only_node("message", message),
+            NodeKind::Log { args } => self.only_nodes("args", args),
             NodeKind::Retry(node) => self.retry_fields(node),
             NodeKind::WaitUntil(node) => self.wait_fields(node),
             NodeKind::Sleep { milliseconds } => vec![("milliseconds", Json::Int(*milliseconds))],

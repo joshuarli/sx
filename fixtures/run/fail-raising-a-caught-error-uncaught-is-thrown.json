@@ -1,0 +1,49 @@
+{
+  "description": "A caught call error raised again and caught by nothing stops the program as thrown, with the original message.",
+  "python": false,
+  "program": "(match (attempt (call store.get {:id \"a\"})) (ok i) (get i :size) (err e) (fail e))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list"
+  ],
+  "responses": [
+    {
+      "capability": "store.get",
+      "input": {
+        "id": "a"
+      },
+      "results": [
+        {
+          "error": {
+            "kind": "NotFound",
+            "message": "gone"
+          }
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "failed": "thrown"
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "store.get",
+      "input": {
+        "id": "a"
+      }
+    },
+    {
+      "response": "r:1",
+      "error": {
+        "kind": "NotFound",
+        "message": "gone"
+      }
+    }
+  ]
+}

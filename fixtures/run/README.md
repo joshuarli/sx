@@ -17,6 +17,7 @@ and types the cases share.
 | `steps` | Instead of `responses`: each step lists the request IDs the machine must suspend with, and the responses to resume it with, as `[id, {"output": ...}]` or `[id, {"error": ...}]` pairs |
 | `expect` | `{"completed": JSON}`, `{"failed": KIND}`, `{"rejected": [CODE, ...]}`, or `{"invalid-input": TEXT}` |
 | `trace` | The logical trace: each request, delay, and response, in the order the machine produced them |
+| `logs` | Optional, `python: false` cases only. The lines `log` wrote, in order. A case without it must write none. |
 
 A rejected case has no trace, because a rejected program never runs. A case that expects `invalid-input` has none either: the inputs
 do not decode, a name is not an input of the script, or a required input has no value, and the run never starts. `TEXT` must occur in

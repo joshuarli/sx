@@ -35,6 +35,7 @@ definition short: a step that grows long becomes two definitions or a helper `de
   when the field is `none`.
 - Results: `(ok x)` or `(err e)`, produced by `attempt`.
 - Durations, only in `retry`, `wait-until`, and `sleep`: `250ms`, `5s`, `2m`, `1h`.
+- `unit` is the Unit value, for a branch or program with no result.
 - Comments start with `;`.
 
 ## Forms
@@ -63,6 +64,8 @@ definition short: a step that grows long becomes two definitions or a helper `de
 (retry {:backoff [100ms 5s] :within 30s :on [Timeout]} expr)
 (wait-until {:within 2m :every 5s} (fn [v] done?) expr)
 (sleep 10s)               ; as a step: (def _ (sleep 10s))
+(fail "message")          ; stops the program; attempt catches it as kind Failed, and (fail e) raises a caught e again
+(log "text" value)        ; adds a line to the run's logs, gives unit: (def _ (log "found" n))
 (loop {:max 20} [x init y init2]
   (if (done? x) result (recur next-x next-y)))
 ```
@@ -98,6 +101,10 @@ definition short: a step that grows long becomes two definitions or a helper `de
 - Maps, `Map<String, V>`, list in key order. `(get m k)` is optional and `(get m k default)` is
   not. `(assoc m k v)`, `(dissoc m k)`, `(keys m)`, `(vals m)`, `(entries m)` as `[key value]`
   tuples, `(into-map pairs)`. `{}` is an empty map.
+- `(put r "field" v)` is a record with one field replaced, keeping its type; on a Map it is `assoc`.
+- `(range start end)` and `(range start end step)` list the Ints from `start` up to but not including `end`,
+  with a nonzero integer literal `step`. `(enumerate xs)` pairs each element with its index from 0.
+- `(safe-int n)` is `n` when it lies within plus or minus 2^53, and stops the program otherwise.
 - `f` is a `(fn [x] ...)`, a `defn` name, or a name such as `text.trim` or `+`.
 
 ## Examples

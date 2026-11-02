@@ -1,0 +1,17 @@
+{
+  "description": "retry does not repeat the safe-int failure, so no delay is requested.",
+  "python": false,
+  "program": "(retry {:delays [1s] :on [Timeout Failed]} (safe-int (* 9007199254740993 1)))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list"
+  ],
+  "expect": {
+    "failed": "arithmetic"
+  }
+}

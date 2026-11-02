@@ -1,0 +1,5 @@
+error[type-mismatch] 4:6-4:28
+  (put (call accounts.get {}) "name" "x")
+       ^^^^^^^^^^^^^^^^^^^^^^
+  put cannot replace a field of an open record, because the program does not see the fields its type leaves out.
+  Help: sx help put

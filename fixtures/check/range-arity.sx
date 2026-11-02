@@ -1,0 +1,3 @@
+; declarations: fixtures/run/declarations.json
+; python: no
+(range 5)

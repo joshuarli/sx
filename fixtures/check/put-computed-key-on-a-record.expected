@@ -1,0 +1,6 @@
+error[bad-literal] 3:36-3:37
+  (let [k "name"] (put {:name "ada"} k "bo"))
+                                     ^
+  put on a record names the field with a string literal, such as "name".
+  A computed key is only for a Map.
+  Help: sx help put

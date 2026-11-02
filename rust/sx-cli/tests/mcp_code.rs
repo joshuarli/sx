@@ -406,6 +406,22 @@ fn closers_inferred_from_indentation_are_reported_with_the_result() {
     assert_eq!(edits[0].get("line").and_then(Json::as_i64), Some(3));
 }
 
+#[test]
+fn logs_are_reported_next_to_the_result_and_survive_a_failure() {
+    let sandbox = Sandbox::new("logs", false, FS_GRANTS, OPEN_POLICY);
+    let mut client = sandbox.client();
+    let reply = client.program("run", "(let [_ (log \"found\" 2) _ (log {:ok true})] 5)");
+    assert!(!reply.is_error, "{}", shown(&reply.structured));
+    assert_eq!(shown(reply.structured.get("logs").expect("logs")), r#"["found 2", "{\"ok\":true}"]"#);
+    assert!(reply.text.contains("logs (2):\n  found 2\n"), "{}", reply.text);
+    let quiet = client.program("run", "5");
+    assert!(quiet.structured.get("logs").is_none(), "{}", shown(&quiet.structured));
+    let failed = client.program("run", "(let [_ (log \"before\")] (fail \"stop\"))");
+    assert!(failed.is_error);
+    assert_eq!(string_at(&failed.structured, &["failure", "kind"]), "thrown");
+    assert_eq!(shown(failed.structured.get("logs").expect("logs")), r#"["before"]"#);
+}
+
 fn refusal_kinds(reply: &Reply) -> Vec<String> {
     let refusals = reply.structured.get("policy").and_then(|p| p.get("refusals")).and_then(Json::as_array).expect("refusals");
     refusals.iter().map(|refusal| string_at(refusal, &["kind"]).to_string()).collect()

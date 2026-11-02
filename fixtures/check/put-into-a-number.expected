@@ -1,0 +1,7 @@
+error[type-mismatch] 3:6-3:7
+  (put 3 "a" 1)
+       ^
+  put takes a record or a Map, but this is an Int.
+  Expected: Record or Map<String, ...>
+  Found: Int
+  Help: sx help put

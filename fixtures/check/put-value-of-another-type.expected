@@ -1,0 +1,6 @@
+error[type-mismatch] 3:34-3:39
+  (put {:name "ada" :age 36} "age" "old")
+                                   ^^^^^
+  This is a String, but an Int is needed here.
+  Expected: Int
+  Found: String

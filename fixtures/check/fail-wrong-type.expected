@@ -1,0 +1,7 @@
+error[type-mismatch] 3:7-3:8
+  (fail 3)
+        ^
+  fail takes a String message, or a caught error to raise again, but this is an Int.
+  Expected: String or CallError
+  Found: Int
+  Help: sx help fail

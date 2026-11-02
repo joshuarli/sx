@@ -1,0 +1,21 @@
+{
+  "description": "safe-int returns an Int within plus or minus 2^53 and fails outside it.",
+  "python": false,
+  "program": "[(safe-int 9007199254740992) (safe-int -9007199254740992) (safe-int 0)]",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list"
+  ],
+  "expect": {
+    "completed": [
+      9007199254740992,
+      -9007199254740992,
+      0
+    ]
+  }
+}

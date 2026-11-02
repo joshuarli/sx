@@ -1,0 +1,7 @@
+error[unknown-field] 3:28-3:34
+  (put {:name "ada" :age 36} "agee" 37)
+                             ^^^^^^
+  This record has no field "agee".
+  Fields: "name", "age"
+  Fix: "age"
+  Help: sx help put
