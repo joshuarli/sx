@@ -1105,6 +1105,10 @@ class _Checker:
             pattern, inner, keys, total = self.match_pattern(pattern_node, scrutinee_type, scope)
             last = index == len(pairs) - 1
             wildcard = isinstance(pattern, ir.MatchAny)
+            if last and wildcard and not complete and covered and not self.missing_cases(scrutinee_type, covered):
+                self.check(body_node, None, inner)
+                complete = True
+                break
             if (
                 scrutinee_name is not None
                 and isinstance(scrutinee_option, OptionType)

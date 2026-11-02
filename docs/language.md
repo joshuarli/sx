@@ -183,7 +183,8 @@ The scrutinee's type determines which variant names are in scope, so patterns ar
 matches anything. A lowercase name matches anything too and binds the whole value to that name:
 `other (str "not green: " repo)`. A name follows every rule of `_`. A `match` without `_` or a
 name must name every variant. A final `_` or name clause is allowed even when the clauses before it
-name every variant. Any other clause that can never match is rejected. The name binds the value
+name every variant. Its result is still checked, but it can never run, so its type does not count
+toward the type of the `match`. Any other clause that can never match is rejected. The name binds the value
 itself, so it has type `Option<T>` in a match on an optional. Only a final `_` after `none`
 narrows.
 

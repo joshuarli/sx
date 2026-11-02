@@ -239,6 +239,10 @@ safe meaning. Each change cites the development failures behind it:
    `missing-field` rejections at the minimal level and the Phase 0 watch item.
 8. **`unclosed` and `unexpected-close` say where the form should close**, from the indentation of
    the lines after the opener. Evidence: four bracket rejections at the minimal level.
+9. **A final `_` that can never match does not widen the `match`.** Muse Spark hedged with
+   `(match (get s :ahead) (some a) a none 0 _ (get s :ahead))`, and the unreachable `_` made the
+   result `Option<Int>`, which then failed `(> ahead 0)`. Item 1 cited this failure but does not
+   fix it. Re-scoring the development answers under items 1-8 showed the cause.
 
 Out of the revision: `Map` and dynamic keys (`assoc`, `keys`), which also make up the
 expressiveness gap, belong to the type-set work in the roadmap.
