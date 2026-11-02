@@ -2,7 +2,8 @@ use crate::authority::{Grants, Screen, Verdict};
 use crate::help::effect_label;
 use crate::ir::{Literal, Program, call_sites};
 use crate::json::Json;
-use crate::registry::Registry;
+use crate::registry::{Effect, Registry};
+use crate::syntax::Span;
 
 pub const RUNTIME_INPUT: &str = "computed at run time";
 pub const PER_REQUEST: &str = "checked per request";
@@ -40,6 +41,7 @@ impl CallScope {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ExplainedCall {
+    pub span: Span,
     pub input: Option<Literal>,
     pub scope: Option<CallScope>,
 }
@@ -54,6 +56,7 @@ impl ExplainedCall {
 pub struct ExplainedTool {
     pub id: String,
     pub effect: &'static str,
+    pub writes: bool,
     pub allowed: bool,
     pub scoped: bool,
     pub calls: Vec<ExplainedCall>,
@@ -103,12 +106,14 @@ pub fn explain_tools(program: &Program, registry: &Registry, grants: &Grants) ->
             .iter()
             .filter(|site| site.capability == id)
             .map(|site| ExplainedCall {
+                span: site.span,
                 scope: scoped.then(|| call_scope(grants, &id, site.input.as_ref())),
                 input: site.input.clone(),
             })
             .collect();
         tools.push(ExplainedTool {
             effect: effect_label(signature.effect, signature.idempotent),
+            writes: signature.effect == Effect::Write,
             allowed: grants.contains(&id),
             scoped,
             calls,

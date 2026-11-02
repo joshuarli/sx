@@ -201,50 +201,65 @@ impl Server {
             Err(_) => error_result(CallErrorKind::Failed, &format!("performing {name} panicked")),
         })
     }
+}
 
-    fn initialize(&self, params: &Json) -> Json {
-        let asked = params.get("protocolVersion").and_then(Json::as_str).unwrap_or("");
-        let version = if ACCEPTED_VERSIONS.contains(&asked) { asked } else { PROTOCOL_VERSION };
-        Json::object([
-            ("protocolVersion", Json::string(version)),
-            ("capabilities", Json::object([("tools", Json::object([("listChanged", Json::Bool(false))]))])),
-            (
-                "serverInfo",
-                Json::object([("name", Json::string("sx")), ("version", Json::string(env!("CARGO_PKG_VERSION")))]),
-            ),
-        ])
+pub trait ToolHost: Sync {
+    fn tools(&self) -> Vec<Json>;
+    fn call(&self, params: &Json) -> Answer;
+}
+
+impl ToolHost for Server {
+    fn tools(&self) -> Vec<Json> {
+        Server::tools(self)
     }
 
-    fn route(&self, message: &Json) -> Step {
-        if !matches!(message, Json::Object(_)) {
-            return Step::Reply(rpc_error(&Json::Null, INVALID_REQUEST, "a message must be a JSON object"));
-        }
-        let id = message.get("id").filter(|id| !id.is_null());
-        let Some(method) = message.get("method").and_then(Json::as_str) else {
-            return match (id, message.get("result").or_else(|| message.get("error"))) {
-                (_, Some(_)) | (None, None) => Step::Silent,
-                (Some(id), None) => Step::Reply(rpc_error(id, INVALID_REQUEST, "a request needs a method")),
-            };
+    fn call(&self, params: &Json) -> Answer {
+        Server::call(self, params)
+    }
+}
+
+fn initialize(params: &Json) -> Json {
+    let asked = params.get("protocolVersion").and_then(Json::as_str).unwrap_or("");
+    let version = if ACCEPTED_VERSIONS.contains(&asked) { asked } else { PROTOCOL_VERSION };
+    Json::object([
+        ("protocolVersion", Json::string(version)),
+        ("capabilities", Json::object([("tools", Json::object([("listChanged", Json::Bool(false))]))])),
+        (
+            "serverInfo",
+            Json::object([("name", Json::string("sx")), ("version", Json::string(env!("CARGO_PKG_VERSION")))]),
+        ),
+    ])
+}
+
+fn route(host: &impl ToolHost, message: &Json) -> Step {
+    if !matches!(message, Json::Object(_)) {
+        return Step::Reply(rpc_error(&Json::Null, INVALID_REQUEST, "a message must be a JSON object"));
+    }
+    let id = message.get("id").filter(|id| !id.is_null());
+    let Some(method) = message.get("method").and_then(Json::as_str) else {
+        return match (id, message.get("result").or_else(|| message.get("error"))) {
+            (_, Some(_)) | (None, None) => Step::Silent,
+            (Some(id), None) => Step::Reply(rpc_error(id, INVALID_REQUEST, "a request needs a method")),
         };
-        let params = message.get("params").cloned().unwrap_or(Json::Null);
-        let reply = |outcome: Json| id.map_or(Step::Silent, |id| Step::Reply(response(id, ("result", outcome))));
-        match method {
-            "initialize" => reply(self.initialize(&params)),
-            "ping" => reply(Json::Object(Vec::new())),
-            "tools/list" => match params.get("cursor") {
-                None | Some(Json::Null) => reply(Json::object([("tools", Json::Array(self.tools()))])),
-                Some(_) => id.map_or(Step::Silent, |id| {
-                    Step::Reply(rpc_error(id, INVALID_PARAMS, "this server issues no cursors"))
-                }),
-            },
-            "tools/call" => id.map_or(Step::Silent, |id| Step::Call { id: id.clone(), params }),
-            "notifications/cancelled" => {
-                params.get("requestId").map_or(Step::Silent, |request| Step::Cancel(request.clone()))
-            }
-            other => id.map_or(Step::Silent, |id| {
-                Step::Reply(rpc_error(id, METHOD_NOT_FOUND, &format!("sx does not implement {other}")))
+    };
+    let params = message.get("params").cloned().unwrap_or(Json::Null);
+    let reply = |outcome: Json| id.map_or(Step::Silent, |id| Step::Reply(response(id, ("result", outcome))));
+    match method {
+        "initialize" => reply(initialize(&params)),
+        "ping" => reply(Json::Object(Vec::new())),
+        "tools/list" => match params.get("cursor") {
+            None | Some(Json::Null) => reply(Json::object([("tools", Json::Array(host.tools()))])),
+            Some(_) => id.map_or(Step::Silent, |id| {
+                Step::Reply(rpc_error(id, INVALID_PARAMS, "this server issues no cursors"))
             }),
+        },
+        "tools/call" => id.map_or(Step::Silent, |id| Step::Call { id: id.clone(), params }),
+        "notifications/cancelled" => {
+            params.get("requestId").map_or(Step::Silent, |request| Step::Cancel(request.clone()))
         }
+        other => id.map_or(Step::Silent, |id| {
+            Step::Reply(rpc_error(id, METHOD_NOT_FOUND, &format!("sx does not implement {other}")))
+        }),
     }
 }
 
@@ -293,7 +308,7 @@ fn key(id: &Json) -> String {
     serialized(id)
 }
 
-pub fn serve<R: BufRead, W: Write + Send>(server: &Server, mut input: R, output: W) -> Result<(), String> {
+pub fn serve<R: BufRead, W: Write + Send>(server: &impl ToolHost, mut input: R, output: W) -> Result<(), String> {
     let output = Output { sink: Mutex::new(output), broken: AtomicBool::new(false) };
     let slots = Slots { used: Mutex::new(0), freed: Condvar::new() };
     let in_flight: Mutex<HashMap<String, bool>> = Mutex::new(HashMap::new());
@@ -318,7 +333,7 @@ pub fn serve<R: BufRead, W: Write + Send>(server: &Server, mut input: R, output:
                     continue;
                 }
             };
-            match server.route(&message) {
+            match route(server, &message) {
                 Step::Silent => {}
                 Step::Reply(reply) => output.send(&reply),
                 Step::Cancel(request) => {

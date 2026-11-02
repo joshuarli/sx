@@ -11,4 +11,4 @@ pub use import::{ImportError, Imported, ResultKind, Skipped, capability_id, impo
 pub use schema::{Mapped, Side, Skip, map};
 pub use tools::{Binding, Bindings, Limits, Session, arguments, filled};
 pub use export::{Exported, RESULT_META, Shape, WRAPPED_KEY, WRAPPED_META, export, schema as json_schema, tool_name_problem};
-pub use server::{Answer, CONCURRENT_CALLS, NotServed, Server, error_result, serve};
+pub use server::{Answer, CONCURRENT_CALLS, NotServed, Server, ToolHost, error_result, serve};
