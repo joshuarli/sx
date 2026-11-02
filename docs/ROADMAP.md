@@ -128,6 +128,19 @@ comparison was harmful, so it earned nothing measurable. The next campaign has t
 advantages count where a model pays for them: in the guide, in cores, and in tasks where a wrong
 effect costs something.
 
+**Correctness caught up; cost did not.** The second campaign made the guide a function of the host:
+`sx guide` writes the kernel as a program of short definitions, maps TypeScript habits to Sx, adds a
+section per pack in use with notes both languages receive, and gives each granted tool a call template.
+It also widened the language wherever a TypeScript habit had exactly one safe meaning: top-level
+definitions in any order, defaults on any field, `when` and `do`, `_names` and form names as values,
+empty accumulators and arguments typed from their other uses, record joins in `concat`, a `re` core
+with `#"..."` patterns, a `json` core, an `attempt` that catches a core's refusal, and closers inferred
+from indentation when brackets do not balance. A corpus of a dozen worked programs in the prompt did
+not help. On eight workflows written blind, both languages were right at first attempt 24 of 24
+times. Sx still spends 1.8 times TypeScript's output tokens and a prompt five times larger, and three
+of its answers ran only because of closer inference. A model now writes correct Sx without having seen
+any; what it still lacks is fluency, and that shows up as cost rather than errors.
+
 ## Alternatives to rule out
 
 Full JavaScript is the baseline, not the strongest alternative. The strongest is a restricted,
