@@ -15,7 +15,7 @@ from sx.checker import Budgets
 from sx.diagnostics import render
 from sx.export import export_program
 from sx.program import compile_source
-from sx.registry import Core, Registry, load_declarations
+from sx.registry import Core, Registry, RegistryError, load_declarations
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 CORES: dict[str, Core] = {core.id: core for core in (TEXT, SEMVER, GIT, GITHUB)}
@@ -87,12 +87,23 @@ def generated() -> list[dict[str, Any]]:
     return [{"source": c.source, "allowed": list(c.allow), "budgets": dict(c.budgets)} for c in cases]
 
 
+def load_error(declarations: dict[str, Any]) -> str | None:
+    try:
+        load_declarations(Registry(), declarations)
+    except (RegistryError, KeyError, ValueError) as error:
+        return f"{type(error).__name__}: {error}"
+    return None
+
+
 def main(manifest: Path, target: Path) -> int:
     if manifest.name == "examples":
         target.write_text(json.dumps(examples()))
         return 0
     if manifest.name == "generated":
         target.write_text(json.dumps(generated()))
+        return 0
+    if manifest.name.endswith("-declarations.json"):
+        target.write_text(json.dumps([load_error(d) for d in json.loads(manifest.read_text())]))
         return 0
     cases = json.loads(manifest.read_text())
     registries: dict[str, Registry] = {}

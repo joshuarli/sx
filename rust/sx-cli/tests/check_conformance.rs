@@ -755,3 +755,56 @@ fn differential_corpus_checks_identically_in_rust_and_python() {
     }
     assert!(failures.is_empty(), "{} of {} differ:\n{}", failures.len(), tally.compared, failures.join("\n\n"));
 }
+
+const BAD_DECLARATIONS: &[&str] = &[
+    r#"{"capabilities": [{"effect": "read", "input": "Unit", "output": "Unit", "description": "x"}]}"#,
+    r#"{"capabilities": [{"id": "a.b", "effect": "poke", "input": "Unit", "output": "Unit", "description": "x"}]}"#,
+    r#"{"capabilities": [{"id": "a.b", "effect": 3, "input": "Unit", "output": "Unit", "description": "x"}]}"#,
+    r#"{"capabilities": [{"id": "a.b", "effect": "read", "output": "Unit", "description": "x"}]}"#,
+    r#"{"capabilities": [{"id": "a.b", "effect": "read", "input": "Unit", "output": "Unit"}]}"#,
+    r#"{"capabilities": [{"id": "ab", "effect": "read", "input": "Unit", "output": "Unit", "description": "x"}]}"#,
+    r#"{"capabilities": [{"id": "A.b", "effect": "read", "input": "Unit", "output": "Unit", "description": "x"}]}"#,
+    r#"{"capabilities": [{"id": "a.b-", "effect": "read", "input": "Unit", "output": "Unit", "description": "x"}]}"#,
+    r#"{"capabilities": [{"id": "a.b?", "effect": "read", "input": "Unit", "output": "Unit", "description": " "}]}"#,
+    r#"{"capabilities": [{"id": "a.b", "effect": "read", "idempotent": true, "input": "Unit", "output": "Unit", "description": "x"}]}"#,
+    r#"{"capabilities": [{"id": "a.b", "effect": "write", "input": "Unit", "output": "Unit", "description": "x"}, {"id": "a.b", "effect": "read", "input": "Unit", "output": "Unit", "description": "y"}]}"#,
+    r#"{"capabilities": [{"id": "a.b", "effect": "read", "input": "Map<Int, String>", "output": "Unit", "description": "x"}]}"#,
+    r#"{"capabilities": [{"id": "a.b", "effect": "read", "input": "Record {a: Int, a: Int}", "output": "Unit", "description": "x"}]}"#,
+    r#"{"capabilities": [{"id": "a.b", "effect": "read", "input": "List<Int", "output": "Unit", "description": "x"}]}"#,
+    r#"{"capabilities": [{"id": "a.b", "effect": "read", "input": "Option<Int, Int>", "output": "Unit", "description": "x"}]}"#,
+    r#"{"capabilities": [{"id": "a.b", "effect": "read", "input": "Thing", "output": "Unit", "description": "x"}]}"#,
+    r#"{"capabilities": [{"id": "a.b", "effect": "read", "input": "Int Int", "output": "Unit", "description": "x"}]}"#,
+    r#"{"types": {"A": "B", "B": "C"}}"#,
+    r#"{"types": {"A": "Record {b: B}", "B": "Record {a: A}"}}"#,
+    r#"{"types": {"A": "Record {x: Int}", "B": "List<A>", "C": "Nope"}}"#,
+    r#"{"enums": {"E": {"X": "Missing"}}}"#,
+    r#"{"enums": {"E": {"X": null}}, "types": {"E": "Int"}}"#,
+    r#"{"enums": {"E": {"X": null}, "F": {"Y": "E"}}, "types": {"T": "Record {e: F}"}, "capabilities": [{"id": "a.b", "effect": "read", "input": "T", "output": "Unit", "description": "fine"}]}"#,
+];
+
+#[test]
+fn bad_declarations_fail_with_python_s_error_text() {
+    let declarations: Vec<Json> = BAD_DECLARATIONS.iter().map(|text| parse(text).expect("declarations JSON")).collect();
+    let directory = Path::new(env!("CARGO_TARGET_TMPDIR"));
+    let manifest = directory.join("bad-declarations.json");
+    let target = directory.join("bad-declarations-python.json");
+    fs::write(&manifest, shown(&Json::Array(declarations.clone()))).expect("manifest written");
+    let status = Command::new("uv")
+        .args(["run", "--quiet", "python", "rust/scripts/check_corpus.py"])
+        .arg(&manifest)
+        .arg(&target)
+        .current_dir(root())
+        .status()
+        .expect("uv runs the Python corpus checker");
+    assert!(status.success());
+    let python = read_json(&target);
+    let mut failures = Vec::new();
+    for (declaration, expected) in declarations.iter().zip(python.as_array().expect("errors")) {
+        let rust = load_declarations(&mut Registry::new(), declaration).err().map(|e| e.to_string());
+        let expected = expected.as_str().map(|text| text.split_once(": ").map_or(text, |(_, message)| message).to_string());
+        if rust != expected {
+            failures.push(format!("{}: rust {rust:?} != python {expected:?}", shown(declaration)));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
