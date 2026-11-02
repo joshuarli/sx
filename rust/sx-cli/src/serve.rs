@@ -5,7 +5,7 @@ use sx_cores::kernel::{Cores, core};
 use sx_kernel::machine::CoreImplementations;
 use sx_kernel::protocol::{CoreLibrary, Ending, serve};
 use sx_kernel::registry::{Core, EndpointBinder, Pack};
-use sx_packs::http::EndpointLoader;
+use sx_packs::DeclaredLoader;
 
 struct Library;
 
@@ -23,7 +23,7 @@ impl CoreLibrary for Library {
     }
 
     fn endpoints(&self) -> Option<Box<dyn EndpointBinder>> {
-        Some(Box::new(EndpointLoader::new()))
+        Some(Box::new(DeclaredLoader::new()))
     }
 }
 

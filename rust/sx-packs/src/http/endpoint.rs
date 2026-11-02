@@ -11,6 +11,7 @@ use super::origin::{Origin, Url, encode_component};
 use super::scope::{self, Scope, check_endpoint, prepare, scope_type};
 use super::transport::{Headers, Limits, Outgoing, send, status_kind};
 use crate::Failure;
+use crate::declaration::{required, string_of, unknown_keys};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Scalar {
@@ -124,24 +125,6 @@ impl EndpointBinder for EndpointLoader {
 struct Declared {
     endpoint: Endpoint,
     capability: Capability,
-}
-
-fn string_of<'j>(json: &'j Json, what: &str) -> Result<&'j str, String> {
-    json.as_str().ok_or_else(|| format!("{what} must be a string, not {}", python_repr(json)))
-}
-
-fn required<'j>(json: &'j Json, key: &str, what: &str) -> Result<&'j Json, String> {
-    json.get(key).ok_or_else(|| format!("{what} needs {}", repr_str(key)))
-}
-
-fn unknown_keys(json: &Json, allowed: &[&str], what: &str) -> Result<(), String> {
-    let Json::Object(entries) = json else {
-        return Err(format!("{what} must be an object, not {}", python_repr(json)));
-    };
-    match entries.iter().find(|(key, _)| !allowed.contains(&key.as_str())) {
-        Some((key, _)) => Err(format!("{what} has an unknown key {}", repr_str(key))),
-        None => Ok(()),
-    }
 }
 
 impl Declared {

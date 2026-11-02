@@ -1,10 +1,13 @@
 #![deny(unsafe_code)]
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 
+mod declaration;
+pub mod declared;
 pub mod fs;
 pub mod http;
 pub mod mcp;
 pub mod process;
+pub mod sqlite;
 
 use std::fmt;
 
@@ -33,7 +36,7 @@ impl fmt::Display for Failure {
 pub type Performer = fn(&Value, &Value) -> Result<Value, Failure>;
 
 pub fn packs() -> Vec<Pack> {
-    vec![fs::pack(), http::pack(), process::pack()]
+    vec![fs::pack(), http::pack(), process::pack(), sqlite::pack()]
 }
 
 pub fn pack(id: &str) -> Option<Pack> {
@@ -41,21 +44,31 @@ pub fn pack(id: &str) -> Option<Pack> {
 }
 
 pub fn performer(capability: &str) -> Option<Performer> {
-    fs::performer(capability).or_else(|| http::performer(capability)).or_else(|| process::performer(capability))
+    fs::performer(capability)
+        .or_else(|| http::performer(capability))
+        .or_else(|| process::performer(capability))
+        .or_else(|| sqlite::performer(capability))
 }
 
-pub fn implemented(endpoints: &http::Endpoints, capability: &str) -> bool {
-    endpoints.get(capability).is_some() || performer(capability).is_some()
+pub use declared::{Declared, DeclaredLoader};
+
+pub fn implemented(declared: &Declared, capability: &str) -> bool {
+    declared.endpoints.get(capability).is_some()
+        || declared.statements.get(capability).is_some()
+        || performer(capability).is_some()
 }
 
 pub fn perform(
-    endpoints: &http::Endpoints,
+    declared: &Declared,
     capability: &str,
     scope: &Value,
     input: &Value,
 ) -> Option<Result<Value, Failure>> {
-    match endpoints.get(capability) {
-        Some(endpoint) => Some(endpoint.perform(scope, input)),
-        None => performer(capability).map(|perform| perform(scope, input)),
+    if let Some(endpoint) = declared.endpoints.get(capability) {
+        return Some(endpoint.perform(scope, input));
     }
+    if let Some(statement) = declared.statements.get(capability) {
+        return Some(statement.perform(scope, input));
+    }
+    performer(capability).map(|perform| perform(scope, input))
 }

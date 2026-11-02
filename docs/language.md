@@ -807,6 +807,91 @@ address, a private one included, so grant an origin only for a name you trust, a
 defend against DNS rebinding. It does not look at headers, paths, or bodies, and it cannot stop a granted
 method from doing harm on a granted origin.
 
+### The sqlite pack
+
+A declarations file registers it with `"packs": ["sqlite"]`. The pack bundles SQLite (rusqlite 0.41 with
+SQLite 3.54.1 compiled in, no system library) and has the scope type `Record {roots: List<String>}` of
+[the fs pack](#the-fs-pack). A database path follows the fs path rules: absolute, no NUL, resolved
+through symlinks, and inside a root, with the roots canonicalized when the grant loads. A statement that
+reads resolves the path as `fs.read-text` does, so a symlink inside the roots that leads inside them is
+followed. A statement that writes resolves it as `fs.write-text` does: the directory must be inside a
+root, and a database file that is itself a symlink is refused, so a link can never carry a write out of
+the grant. SQLite is also asked not to follow a final symlink. The residual race between the check and
+the open is the fs pack's.
+
+**`sqlite.execute`** takes `{database: String, sql: String}` and returns `Unit`. It is a `write` that is
+not idempotent. It runs one or more statements, such as `CREATE TABLE` and `CREATE INDEX`, in a single
+transaction, so a failing statement undoes the earlier ones, and it creates the database file when it is
+missing. A statement that has parameters or returns rows is a failure, since this capability binds and
+returns nothing. A literal `database` outside the grant is rejected by `check` with `out-of-scope`.
+
+**Typed statements.** A declarations file declares a statement as an ordinary capability by giving a
+`capabilities` entry a `sqlite` object:
+
+```json
+{"id": "store.add-repo",
+ "sqlite": {"database": "/data/store.db",
+            "statement": "INSERT INTO repo(name, stars) VALUES (:name, :stars)"},
+ "input": "Record {name: String, stars: Int}",
+ "output": "Int",
+ "effect": "write",
+ "idempotent": false}
+```
+
+`id`, `sqlite`, `input`, `output`, and `effect` are required, and `description` and `idempotent` behave as
+for any capability (the default description is the statement text). The scope type is implied and the
+statement is granted by its own ID, like an endpoint. The `sqlite` object has `database`, an absolute
+path, and `statement`, one SQL statement; an unknown key is an error. A mistake below is a declaration
+error that names the statement, found when the declarations load, so it needs no database to exist:
+
+- The input is a record. Every `:name` in the SQL, found outside string literals, quoted identifiers, and
+  comments, is a parameter that binds the input field of the same name, and every input field must be
+  the name of a parameter. A parameter may repeat. `?`, `?NNN`, `@name`, and `$name` are refused so that
+  nothing binds by position or by a second spelling.
+- An input field is a `String`, `Int`, `Float`, `Bool`, `Bytes`, or an `Option` of one, which binds
+  `NULL` when `none`. A `Bool` binds `0` or `1`. A value is bound, never spliced into the SQL.
+- The output is `Int` or `List<Record {...}>`. An `Int` is the number of rows the statement changed
+  (`sqlite3_changes`, so rows changed by triggers do not count), which requires `effect: write`. A list
+  is the rows of a statement that returns columns: a `SELECT`, or a write with `RETURNING`. Each
+  declared field is typed like an input field.
+
+**Rows.** A row decodes into the record by column name, in the record's field order. SQLite is
+dynamically typed, so the pack is strict: `String` reads `TEXT` that is UTF-8, `Int` reads `INTEGER`,
+`Float` reads `REAL` and also an `INTEGER` of magnitude at most 2^53, `Bool` reads `INTEGER` `0` or `1`,
+and `Bytes` reads `BLOB`. `NULL` is `none` for an `Option` column and a failure for any other. A column
+the record does not declare is a failure unless the record is open (`Record open {...}`), which drops it;
+a declared field with no column, a column name that appears twice, a type mismatch, and a non-finite
+`REAL` are failures that name the row and column, such as `row 2, column 'stars': expected Int, found
+TEXT`. The same holds when the statement's shape disagrees with its output. A result of more than
+100,000 rows is a failure, not a truncation; add a `LIMIT`.
+
+**Transactions and connections.** Each call opens its own connection and runs in one transaction, `BEGIN
+IMMEDIATE` for a `write` and `BEGIN` for a `read`, and commits only when the output decoded. Any failure
+rolls the whole call back, including a write whose `RETURNING` rows did not decode. A `read` opens the
+database read-only, never creates it, and is refused when SQLite reports that its statement would
+change the database. Foreign keys are enforced. `ATTACH` is disabled, so a program cannot reach a
+database outside the grant, and `VACUUM INTO` fails because it cannot run inside a transaction. The
+schema is untrusted, extension loading is off, and defensive mode is on. A call waits up to 5 seconds
+for a lock.
+
+**Errors.** One closed table maps every failure to a call error kind:
+
+| Failure | Kind |
+| --- | --- |
+| The database is outside the grant, SQLite reports a read-only database or a denied operation | `PermissionDenied` |
+| A constraint fails (unique, primary key, not null, check, foreign key), including at commit | `Conflict` |
+| The database is busy or locked past the timeout | `Unavailable` |
+| A read of a database that does not exist, or a write whose directory does not exist | `NotFound` |
+| A path that is a directory | `Invalid` |
+| A syntax error, an unknown table or column, SQLite's type mismatch or too-big errors, a statement that changes the database declared as a read, or a row that does not decode, in a `read` | `Invalid` |
+| The same failures in a `write` | `Failed` |
+| An input that does not match its type, a file that is not a database, an I/O error, a full disk, more rows than the cap, any other SQLite error | `Failed` |
+
+`Conflict`, `PermissionDenied`, `NotFound`, and `Invalid` are refusal kinds, and each is reported only
+when the transaction rolled back, so a write that reports one made no change. A decode failure of a
+write is `Failed`, as for an http endpoint, though it is rolled back as well. The message carries the
+database path and SQLite's message, never the bound values.
+
 ### MCP tools
 
 `sx mcp import` turns the tools of a Model Context Protocol server into declarations, and `sx mcp run`

@@ -15,7 +15,7 @@ use sx_kernel::ir::Program;
 use sx_kernel::json::{Json, Layout, dumps, python_repr, repr_str};
 use sx_kernel::machine::{Machine, Outcome};
 use sx_kernel::registry::{Registry, load_declarations_with};
-use sx_packs::http::{EndpointLoader, Endpoints};
+use sx_packs::{Declared, DeclaredLoader};
 use sx_packs::mcp::{Bindings, Session};
 use sx_kernel::syntax::Span;
 use sx_kernel::types::{Type, show_type};
@@ -123,9 +123,9 @@ fn listed_ids(declarations: &Json, shown: &str, key: &str, what: &str) -> Result
         .collect()
 }
 
-fn load_registry(path: Option<&str>, mut registry: Registry) -> Result<(Registry, Json, Endpoints), Stop> {
+fn load_registry(path: Option<&str>, mut registry: Registry) -> Result<(Registry, Json, Declared), Stop> {
     let Some(path) = path else {
-        return Ok((registry, Json::Object(Vec::new()), Endpoints::default()));
+        return Ok((registry, Json::Object(Vec::new()), Declared::default()));
     };
     let shown = path_text(path);
     let declarations = read_json(path, "declarations")?;
@@ -150,7 +150,7 @@ fn load_registry(path: Option<&str>, mut registry: Registry) -> Result<(Registry
         })?;
         registry.add_pack(pack).map_err(|e| Stop::usage(format!("invalid declarations {shown}: {e}")))?;
     }
-    let mut loader = EndpointLoader::new();
+    let mut loader = DeclaredLoader::new();
     load_declarations_with(&mut registry, &declarations, &mut loader)
         .map_err(|e| Stop::usage(format!("invalid declarations {shown}: {e}")))?;
     Ok((registry, declarations, loader.finish()))
@@ -242,7 +242,7 @@ fn diagnostic_json(diagnostic: &Diagnostic) -> Json {
 }
 
 fn command_program(args: &ProgramArgs, base: Registry, output: &mut Output, mcp: Option<&Host>) -> Result<i32, Stop> {
-    let (registry, declarations, endpoints) = load_registry(args.declarations.as_deref(), base)?;
+    let (registry, declarations, declared) = load_registry(args.declarations.as_deref(), base)?;
     let shown = path_text(&args.file);
     let source = read_text(Path::new(&args.file)).map_err(|e| Stop::usage(format!("cannot read {shown}: {e}")))?;
     let mut allowed: Vec<&String> = args.allow.iter().collect();
@@ -290,10 +290,10 @@ fn command_program(args: &ProgramArgs, base: Registry, output: &mut Output, mcp:
                 None => input_values(pairs, &inputs)?,
             };
             if let Some(host) = mcp {
-                return command_run_mcp(args.format, &program, &grants, &endpoints, &values, (host, &registry, &declarations), output);
+                return command_run_mcp(args.format, &program, &grants, &declared, &values, (host, &registry, &declarations), output);
             }
             match (responses.as_deref(), &args.grants) {
-                (None, Some(_)) => command_run_native(args.format, &program, &grants, &endpoints, None, &values, output),
+                (None, Some(_)) => command_run_native(args.format, &program, &grants, &declared, None, &values, output),
                 (responses, _) => {
                     let responses = load_responses(responses)?;
                     command_run(args.format, &program, &grants, &responses, &values, output)
@@ -420,7 +420,7 @@ fn command_run_mcp(
     format: Format,
     program: &Program,
     grants: &Grants,
-    endpoints: &Endpoints,
+    declared: &Declared,
     values: &[(String, Value)],
     (host, registry, declarations): (&Host, &Registry, &Json),
     output: &mut Output,
@@ -428,30 +428,30 @@ fn command_run_mcp(
     let bindings = Bindings::from_declarations(registry, declarations, host.name.as_deref())
         .map_err(|e| Stop::usage(format!("invalid declarations: {e}")))?;
     if !program.capabilities.iter().any(|id| bindings.get(id).is_some()) {
-        return command_run_native(format, program, grants, endpoints, None, values, output);
+        return command_run_native(format, program, grants, declared, None, values, output);
     }
     let session = Session::open(bindings, &host.command, host.limits)
         .map_err(|e| Stop::usage(format!("cannot connect to the MCP server: {e}")))?;
-    command_run_native(format, program, grants, endpoints, Some(&session), values, output)
+    command_run_native(format, program, grants, declared, Some(&session), values, output)
 }
 
 fn command_run_native(
     format: Format,
     program: &Program,
     grants: &Grants,
-    endpoints: &Endpoints,
+    declared: &Declared,
     mcp: Option<&Session>,
     values: &[(String, Value)],
     output: &mut Output,
 ) -> Result<i32, Stop> {
-    let missing = crate::native::unimplemented(program, endpoints, mcp);
+    let missing = crate::native::unimplemented(program, declared, mcp);
     if !missing.is_empty() {
         return Err(Stop::usage(format!(
             "no pack implements {}, so the program cannot run without --responses",
             missing.join(", ")
         )));
     }
-    let (outcome, machine) = crate::native::run(program, grants, endpoints, mcp, values, Budgets::default());
+    let (outcome, machine) = crate::native::run(program, grants, declared, mcp, values, Budgets::default());
     report_run(format, outcome, &machine, output)
 }
 

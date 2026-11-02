@@ -193,7 +193,7 @@ pub(crate) fn text_field<'v>(value: &'v Value, name: &str) -> Option<&'v str> {
     }
 }
 
-fn prepare(scope: &Value) -> Result<Value, String> {
+pub(crate) fn prepare(scope: &Value) -> Result<Value, String> {
     let roots = field(scope, "roots").and_then(strings).ok_or("a fs scope must be {:roots [PATH ...]}")?;
     if roots.is_empty() {
         return Err("a fs scope needs at least one root".to_string());

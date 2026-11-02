@@ -139,6 +139,32 @@ Status codes map to call error kinds by a closed table (`404` is `NotFound`, `42
 `5xx` is `Unavailable`), and one 30 second deadline and an 8 MiB body cap bound every request.
 [docs/language.md](docs/language.md#the-http-pack) has the origin rules, the endpoint format, and the table.
 
+## The sqlite pack
+
+`"packs": ["sqlite"]` registers `sqlite.execute`, which runs DDL, and a declarations file declares typed
+SQL statements the way it declares HTTP endpoints. `:name` parameters bind input fields, a query's rows
+decode into the declared output by column name, and a statement's output is its changed row count. A grant
+lists the directories databases may live in, as `fs` does:
+
+```sh
+cat > store.json <<'JSON'
+{"packs": ["sqlite"],
+ "capabilities": [{"id": "store.add", "effect": "write", "idempotent": true,
+   "sqlite": {"database": "/srv/data/store.db",
+              "statement": "INSERT OR REPLACE INTO repo(name, stars) VALUES (:name, :stars)"},
+   "input": "Record {name: String, stars: Int}", "output": "Int"},
+  {"id": "store.top", "effect": "read",
+   "sqlite": {"database": "/srv/data/store.db", "statement": "SELECT name, stars FROM repo ORDER BY stars DESC LIMIT 3"},
+   "input": "Record {}", "output": "List<Record {name: String, stars: Int}>"}]}
+JSON
+echo '{"sqlite.execute": {"roots": ["/srv/data"]}, "store.add": {"roots": ["/srv/data"]}, "store.top": {"roots": ["/srv/data"]}}' > grants.json
+sx run top.sx --declarations store.json --grants grants.json
+```
+
+Each call runs in its own transaction. Constraint failures are `Conflict`, a busy database is
+`Unavailable`, and a syntax error is `Invalid` for a read and `Failed` for a write.
+[docs/language.md](docs/language.md#the-sqlite-pack) has the declaration rules, the row types, and the table.
+
 ## Scripts and decimals
 
 A program may declare its own typed inputs, so it runs with no declarations file. This works on the Rust
