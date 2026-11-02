@@ -802,6 +802,129 @@ address, a private one included, so grant an origin only for a name you trust, a
 defend against DNS rebinding. It does not look at headers, paths, or bodies, and it cannot stop a granted
 method from doing harm on a granted origin.
 
+### MCP tools
+
+`sx mcp import` turns the tools of a Model Context Protocol server into declarations, and `sx mcp run`
+runs a program against that server. Neither is a pack: an imported tool is an ordinary capability whose
+declaration carries an `mcp` object, so `check`, `explain`, and `sx serve` need nothing new, and only
+`sx mcp run` performs it.
+
+```
+sx mcp import --name NAME -- COMMAND [ARG ...]      > tools.json
+sx mcp import --name NAME --tools SAVED_TOOLS_LIST  > tools.json
+sx mcp run program.sx --declarations tools.json --allow mcp-NAME.TOOL -- COMMAND [ARG ...]
+```
+
+**Protocol.** Sx speaks the stdio transport of MCP revision `2025-06-18`: one JSON-RPC 2.0 message per
+line on the server's standard input and output. It sends `initialize` with that `protocolVersion` and empty
+client capabilities, then the `notifications/initialized` notification. A server that answers with another
+version is accepted only if it is `2025-03-26` or `2024-11-05`, which share the subset below, and
+otherwise the connection is refused. The subset is `tools/list` with `cursor` and `nextCursor`,
+`tools/call` with `name` and `arguments`, and `notifications/cancelled` after a timeout. Sx reads a
+tool's `name`, `description`, `title`, `inputSchema`, `outputSchema`, and the `readOnlyHint`,
+`destructiveHint`, and `idempotentHint` annotations, and a result's `content`, `structuredContent`, and
+`isError`. It answers a server's `ping` and refuses every other server request (sampling, roots,
+elicitation) with `-32601`. Resources, prompts, subscriptions, `list_changed` notifications, progress,
+logging, and the HTTP transports are not implemented. A line over 16 MiB, or a line that is not JSON, ends
+the connection. The server inherits `sx`'s environment, is found through `PATH`, and keeps its standard
+error on `sx`'s. The command line is the user's own authority, so only the grant limits what a program may
+ask of the server.
+
+**Names.** A server `NAME` (lowercase letters and digits joined by `-`, starting with a letter) and a tool
+become the capability `mcp-NAME.TOOL`. The reader allows exactly one `.` in a capability ID, so
+`mcp.NAME.TOOL` is not writable and the namespace is `mcp-NAME`. A tool name is written in kebab case: an
+uppercase letter after a lowercase letter or digit starts a new word, `_`, `.`, and `-` separate words, and
+everything is lowercase, so `listIssues` is `list-issues` and `get_user.profile` is `get-user-profile`. A
+name with another character, a first character that is not a letter, or an empty word is skipped. The rule
+is not injective over all strings (`readFile` and `read_file` meet), so two tools in one import that
+produce one name, or one tool listed twice, are an error that names both. Enums are named
+`mcp-NAME.ToolInputPath` or `mcp-NAME.ToolOutputPath`, from the tool's words and the property path
+(`mcp-demo.EnumsInputMode`).
+
+**Types.** The mapping is a whitelist. Annotation keywords (`title`, `description`, `default`,
+`examples`, `deprecated`, `$comment`, `$schema`, `$id`) and keywords that only narrow a value
+(`minLength`, `maxLength`, `pattern`, `minimum`, `maximum`, `exclusiveMinimum`, `exclusiveMaximum`,
+`multipleOf`, `minItems`, `maxItems`, `uniqueItems`, `minProperties`, `maxProperties`, and `format` other
+than `byte` and `binary`) are ignored: the server enforces them. Any other keyword skips the tool.
+
+| JSON Schema | Sx type |
+| --- | --- |
+| `string`, `integer`, `number`, `boolean` | `String`, `Int`, `Float`, `Bool` |
+| `string` with `enum` of distinct non-empty strings | a new enum with those variants, named by the string |
+| `array` with one `items` schema | `List<T>` |
+| `array` with `prefixItems`, `items: false`, and `minItems` equal to its length | `Tuple<T1, ..., Tn>` |
+| `object` with `properties` | `Record {...}`. A property not in `required` is `Option<T>`. Closed for an input. For an output, open unless `additionalProperties` is `false` |
+| `object` with no `properties` and an `additionalProperties` schema | `Map<String, V>` |
+| `object` with neither, as the whole `inputSchema` | `Record {}` |
+| `type` list or `anyOf` of exactly one schema and `null` | `Option<T>` |
+| local `$ref` to `#/$defs/NAME` or `#/definitions/NAME` | the definition, inlined, when it does not recurse |
+
+A tool is skipped, with its reason on standard error, for `oneOf`, `allOf`, `not`, `anyOf` that is not
+the nullable pattern, `patternProperties`, `const`, `if`/`then`/`else`, `contentEncoding`,
+`format: byte`, any keyword not listed above (including `nullable`), a boolean schema, a recursive,
+remote, or dangling `$ref`, a `type` list that is not one type and `null`, a free-form nested `object`, an
+`array` without `items` or with an unfixed `prefixItems`, an `enum` that is not strings, `properties`
+beside an `additionalProperties` schema, a `required` name that is not a property, a property name that
+is not letters, digits, `_`, and `-` starting with a letter, an `outputSchema` that is not an object, a
+missing `inputSchema`, a schema nested more than 64 levels, a type that has no JSON encoding (an
+`Option` of an `Option`, a `Map` of `Option`), and an input property that is both required and nullable,
+because `none` is omitted from the arguments and could not send the `null`. A tool without an
+`outputSchema` returns `String`, the concatenation of its `text` content blocks. The skip is the whole
+tool: nothing is approximated, and the rest of the server's tools import.
+
+**Effects.** `readOnlyHint: true` is a `read`. Otherwise `destructiveHint: false` together with
+`idempotentHint: true` is an idempotent `write`. Anything else, including a tool with no annotations or
+with one hint, is a `write` that is not idempotent. The hints are the server's claim and the importer cannot
+verify them: a server that mislabels a mutating tool as read-only lets a program call it in `par`.
+
+**Declarations.** The importer prints a declarations object with `enums` and `capabilities`. Each
+capability has `id`, `effect`, `idempotent` for an idempotent write, a one-line `description` (the first
+line of the tool's description, else its title), `input`, `output`, and
+`"mcp": {"server": NAME, "tool": ORIGINAL_NAME, "result": "text" or "structured"}`. It declares no scope
+and grants nothing: `--allow mcp-NAME.TOOL` or `--grants` does. Several imports merge by concatenating
+`enums` and `capabilities`; a repeated capability ID is a loader error. `--tools FILE` reads a saved
+`tools/list` result, an object with a `tools` list, and refuses one that still has a `nextCursor`; it
+imports the same declarations a live server of the same tools gives. Every capability an import writes
+loads through the ordinary declaration loader before it is printed, and one that would not load is skipped.
+
+**Running.** `sx mcp run FILE --declarations FILE [--allow ID] [--grants FILE] [--input NAME=JSON]
+[--format text|json] [--name NAME] [--timeout-ms MS] -- COMMAND [ARG ...]` checks the program like
+`sx check`, so a program that is rejected, or that calls no tool of the server, never starts it. Native
+capabilities (`fs`, `http`, `process`) in the same program run as in `sx run --grants`. The declarations may
+hold the tools of several servers; `--name` chooses the one this command line starts, and a call to another
+server's tool fails with `no pack implements`. Each request becomes one `tools/call` with its own
+JSON-RPC id on the one connection, so the machine's concurrency budget bounds the calls in flight, and
+answers may arrive in any order. A property whose value is `none` is left out of `arguments` (but
+a `null` element of a list is sent), and an optional property the server leaves out of `structuredContent`
+reads as `none`. The server is stopped when the run ends, however it ends: Sx closes its standard
+input, waits up to 300 ms, and then sends `SIGKILL` to its process group, which also ends anything it
+started. The call timeout, which also bounds `initialize`, is 60 seconds, or `--timeout-ms`. A timed-out call sends
+`notifications/cancelled`, and a later answer is dropped.
+
+| Situation | Read | Write |
+| --- | --- | --- |
+| Result with `isError: true`; the message is its text | `Failed` | `Failed` |
+| The result does not decode against the `outputSchema`, has no `structuredContent` when it declares one, or has a non-text content block when it declares none | `Invalid` | `Failed` |
+| JSON-RPC error `-32602` (invalid params, including an unknown tool) | `Invalid` | `Failed` |
+| Any other JSON-RPC error | `Failed` | `Failed` |
+| The server exited, closed its output, wrote a line that is not JSON, or the pipe broke | `Unavailable` | `Failed` |
+| No answer within the timeout | `Timeout` | `Timeout` |
+
+`Invalid` is a refusal kind, so it is reported only for a read, where nothing took effect. A write
+whose answer cannot be understood may already have happened, so it is `Failed`, as in the
+[http pack](#the-http-pack). A server that cannot start, answers `initialize` with an unsupported version,
+or does not answer it in time is a command-line error before any call, exit status 64 for `run` and 2 for
+`import`.
+
+**Explain.** `sx explain program.sx --declarations tools.json` lists each imported tool the program calls
+with its effect (`read`, `write, idempotent`, or `write, not idempotent`), `allowed` or `not allowed`, and
+the literal input of each call site. It starts no server.
+
+**What this does not do.** It does not check at run time that the server still serves the declared tools or
+schemas: a tool that changed shape shows up as `Invalid` or `Failed` on the call. It does not confine the
+server, which runs as the user and can do anything the user can. It validates an input against the Sx type,
+not against the full schema, so a narrower constraint (`minimum`, `pattern`) is the server's to enforce.
+
 ## Execution
 
 The machine is a step function over a state held as plain data. Each run ends in one of three

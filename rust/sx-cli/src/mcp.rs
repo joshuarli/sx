@@ -31,7 +31,7 @@ run options:
   --format {text,json}
   --name NAME          Serve the tools of this server when the declarations
                        hold several
-  --timeout-ms MS      Per-call timeout, 60000 by default
+  --timeout-ms MS      Per-call and startup timeout, 60000 by default
 "#;
 
 const SAVED_RESULT_TOOLS: &str = "tools";
@@ -217,7 +217,7 @@ fn run_program(args: &[String], new_registry: &dyn Fn() -> Registry) -> Exit {
         Err(message) => return usage(&message),
     };
     let limits = match options.timeout() {
-        Ok(timeout) => Limits { call: timeout.unwrap_or(Limits::STANDARD.call), ..Limits::STANDARD },
+        Ok(timeout) => timeout.map_or(Limits::STANDARD, |timeout| Limits { startup: timeout, call: timeout }),
         Err(message) => return usage(&message),
     };
     let program = ProgramArgs {
