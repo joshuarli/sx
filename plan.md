@@ -168,7 +168,9 @@ campaign, Phases 15 to 17, Sx as code mode for any MCP client and a benchmark wh
 Phase 15 passed its gate. Phase 16's gate failed: on eight blind effects workflows both arms were
 correct in all 96 sessions, and the one policy-violating effect was Sx's. Phase 17 passed: on 64 real
 sessions over repomod, Sx answered 27 of 32 requests correctly against JavaScript's 32 of 32, in fewer
-turns, at about the same cost.
+turns, at about the same cost. A checkable-subset test then found that 91% of the JavaScript models wrote
+lowers into Sx's forms, and the owner chose the fifth campaign, Phases 18 to 22, a checkable
+TypeScript front end over the same kernel, which is planned and not started.
 
 **The Python prototype is frozen.** `src/sx` and the Python cores are frozen as of commit
 `15b6ed6`, the parent of the commit that records this, because Rust passed its gates. The prototype
@@ -1091,6 +1093,126 @@ private names (`common._catalog`, `common._select`, `common._print_json`,
 `github._discover_owner`, `status._checkout_status`, `status._todo_item_count`,
 `status._status_text`) and a `render_discover` function, with tests in repomod, and `sx-repomod`
 moves to it. **Gate:** repomod's suite, ruff, and ty pass, and the parity tests pass.
+
+### The fifth campaign: a checkable TypeScript front end
+
+Planned, not started. The fourth campaign found that models pay a reasoning tax to write Sx, and that
+the static safety it buys did not show where careful agents act in small steps. The checkable-subset
+test then found that 510 of 512 tool-calling scripts models wrote for pi's `codemode` name every tool
+literally, and 465 lower into Sx's forms with built-ins Sx already has. This campaign keeps everything
+below the surface (the checker, the semantic IR, `explain`, grants and scopes, the approval policy, the
+cores, the native host, and the Lean reference) and replaces the surface a model writes with a
+checkable subset of TypeScript. It asks two questions in order, and stops at the first "no":
+
+1. Can models write the subset as cheaply and as correctly as plain JavaScript, so the tax is gone?
+2. With the tax gone, does approving a whole program before it runs prevent harm or save approvals
+   where that should matter?
+
+#### Decisions
+
+These are the lead's recommendations; Phase 18 settles each one in the spec, and the owner reviews the
+spec before Phase 19 starts.
+
+- **The front end lowers to the syntax tree, not to Sx text.** `checker::check` takes a `syntax::Node`.
+  The front end parses TypeScript and builds that tree with spans into the TypeScript source, so every
+  diagnostic, `explain` call site, and policy refusal points at the code the model wrote. Nothing below
+  the tree changes, and the IR the checker emits is what Lean already judges.
+- **TypeScript syntax, with annotations erased.** Models write TypeScript and JavaScript equally, and
+  TypeScript's `.d.ts` is how the tools are shown. Type annotations are accepted and erased; the Sx
+  checker infers types from the tools' declarations as it does today. A program never needs one.
+- **An accepted program means what TypeScript says it means.** A construct whose JavaScript meaning
+  Sx cannot reproduce exactly is rejected with a diagnostic, never reinterpreted. This is the hard
+  part of the campaign, and three areas need rules:
+  - **Numbers.** An integral literal is an `Int` and `+`, `-`, `*` on `Int`s stay `Int`; `/` gives a
+    `Float`, a mix converts to `Float`, and `%` follows the dividend's sign as `rem` does. An `Int`
+    result outside ±2^53 fails at run time instead of losing precision silently.
+  - **Errors.** A failed tool call throws an error with `kind` and `message`; `try { ... } catch (e)`
+    lowers to `attempt` and a `match`. `throw new Error(text)` needs a kernel form that fails the run
+    with a message, new in Rust and Lean.
+  - **Mutation.** A `let` reassigned in a `for…of`, `array.push` into a local array, and a property
+    write on a local object lower to a fold over the loop when the variable does not escape into a
+    closure, and are rejected otherwise.
+- **Loops are bounded or rejected.** `for…of` over a list and a counted `for` lower to iteration (the
+  counted loop needs a `range`). `while`, `do`, and an uncounted `for` are rejected with a diagnostic
+  that points to `retry(...)` and `loop(...)`, builtins that lower to Sx's bounded forms. `break` in a
+  `for…of` lowers to an early-exit fold, or is rejected if Phase 18 finds no faithful lowering.
+- **The tool API is typed.** `tools.<namespace>.<camelName>(input)` returns the declared value, as in
+  the Phase 9 harness. A model sees the tools as a generated `.d.ts` with the behavior notes, so the
+  guide shrinks from a language manual to the subset's rules and the builtins.
+- **Builtins map to the prelude and the cores.** `Promise.all` over reads lowers to `par` and
+  `par-map`; `Promise.allSettled` to `par-map` with `attempt`; string and array methods to the prelude
+  and the `text` and `re` cores; `JSON.stringify` to `to-json`. `console.log` needs an output channel
+  the host returns beside the result. Dates, a `JSON.parse` that decodes into a declared type, `drop`,
+  `reverse`, and string slicing are the gaps the corpus showed, added in Rust and Lean as needed.
+- **The parser is chosen by measurement.** `oxc_parser` against a hand-written parser for the subset.
+  The subset is small and rejects most of the language anyway, so a hand-written parser is the
+  default, unless `oxc` keeps the release binary and the clean build within 10% of today's.
+- **Sx stays as it is.** The Sx surface remains the canonical text of the IR. The Python prototype
+  stays frozen, and new kernel forms land in Rust and Lean only, as since Phase 6.
+
+#### Phase 18: The subset's specification
+
+A specification in `docs/checkable-typescript.md`: the grammar the front end accepts; the lowering of
+each construct to Sx forms; the number, error, and mutation rules above with their edge cases; the
+tool API and its generated `.d.ts`; the builtins and what each lowers to; and the diagnostic for each
+rejected construct. The classifier in `bench/subset` is brought to the spec's exact rules and rerun on
+the corpus, after a mechanical rewrite of codemode's API (`tools.mcp__ns__name` and
+`structuredContent`) to the subset's. The parser measurement is made here.
+
+**Gate:** the owner approves the spec, and at least 85% of the corpus's tool-calling scripts are inside
+it under its exact rules.
+
+#### Phase 19: The front end
+
+`sx check`, `sx explain`, and `sx run` take TypeScript (`--language ts`, or a `.ts` file), and the
+kernel gains the forms the spec needs, in Rust and Lean. The proof is differential: every accepted
+program runs both as JavaScript in Bun, against a shim that answers tool calls from recorded responses,
+and as its lowered Sx in `sx`, and the two must agree on the result and on the sequence of tool calls.
+That runs on three sources: the corpus after the API rewrite, a generator of random programs over the
+subset's grammar beside the existing fuzzer, and hand-written fixtures for every number, error, and
+mutation rule. Every rejected construct has a fixture that shows its diagnostic.
+
+**Gate:** no disagreement between Bun and `sx` on any accepted program; every lowerable corpus script
+yields the call set the classifier read from it; Lean agrees on the fixtures; all existing gates pass;
+the binary and build stay within the parser measurement's limits.
+
+#### Phase 20: Checkable TypeScript as code mode
+
+`sx mcp code --language ts`: `check` and `run` take a TypeScript program, and `run`'s description
+carries the generated `.d.ts`, the behavior notes, and the subset's rules in place of the Sx guide. A
+policy refusal or diagnostic points at TypeScript source.
+
+**Gate:** the Phase 15 gate in TypeScript: an MCP client test over stdio against native and proxied
+tools, policy refusals that leave the sandbox untouched, and a pi session in print mode that solves a
+small task.
+
+#### Phase 21: Is the tax gone?
+
+Three arms in pi with the same model and tools: checkable TypeScript through `sx mcp code`, pi's
+`codemode`, and Sx. They run on a fresh blind set of eight workflows, written under Phase 12's rules
+in the effects format, and on Phase 17's real requests over repomod, with Muse Spark and `gpt-6-luna`
+at medium thinking, 3 samples. The codemode arm lists its tools directly, so tool discovery is not
+counted against it, unlike Phase 17.
+
+**Gate, fixed before any model runs:** checkable TypeScript is within 5 points of `codemode`'s
+correctness and costs at most 1.25 times as much per session. If it is not, the campaign stops here,
+and the result says which rule or diagnostic cost the most repairs.
+
+#### Phase 22: Does approval pay?
+
+Only if Phase 21 passes. A blind set built for the case the claim depends on, written under Phase 12's
+rules by an author who sees no earlier result:
+
+- data too large to read before acting, so a program must act on what it computes;
+- host policies the prompt does not state, which only the approver and the grants enforce;
+- a cost for every approval: the JavaScript arm's host approves calls one at a time as they happen,
+  the TypeScript arm's host approves the program once from its `explain` report, and each approval is
+  counted.
+
+**Gate, fixed before any model runs:** the TypeScript arm performs fewer policy-violating effects
+than `codemode`, and needs fewer approvals per solved task, at correctness within 5 points. If it
+does not, the product thesis stops, and the parts worth keeping (MCP import and export, the fs scope
+rules, the checker as a library) are recorded as the outcome.
 
 ### Phase 0: Skeleton, task corpus, and syntax pilot
 
