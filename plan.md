@@ -147,7 +147,8 @@ suite runs in an environment where repomod is not installed, which proves the bo
 
 ## Status
 
-Phase 0 and Phase 1 have passed their gates. Phase 2 is next.
+Phase 0 and Phase 1 have passed their gates. Phase 2 failed its gate on the first held-out run,
+on both models. Whether to spend the one allowed revision is undecided.
 
 **Phase 0.** The syntax pilot ran on the development set and drove one language revision.
 
@@ -179,6 +180,32 @@ both models: it ties `full` on first-attempt correctness at fewer tokens per sol
 `minimal` falls more than 5 points behind. On the development set the standard guide trails
 TypeScript by 6.7 points on Muse Spark and 26.7 points on Iceman at first attempt, so both fail
 the gate there.
+
+**Phase 2 held-out result.** The standard guide against TypeScript, two samples of the 24
+expressible held-out tasks on each model, with up to two repairs:
+
+| Model | Arm | First attempt | Final | Attempts | First prompt | Reasoning per trial | Tokens per solved task |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Muse Spark | TypeScript | 97.9% | 100.0% | 1.02 | 526 | 3,157 | 4,292 |
+| Muse Spark | Sx | 72.9% | 91.7% | 1.31 | 1,995 | 4,266 | 8,402 |
+| Iceman | TypeScript | 95.8% | 95.8% | 1.00 | 524 | 597 | 1,538 |
+| Iceman | Sx | 20.8% | 52.1% | 2.06 | 2,009 | 1,237 | 13,579 |
+
+Sx minus TypeScript at first attempt is -25.0 points on Muse Spark (95% interval -43.8 to -8.3)
+and -75.0 on Iceman (-89.6 to -58.3). At final it is -8.3 (-18.8 to 0.0) and -43.8 (-62.5 to
+-27.1). Sx also costs 2.0 and 8.8 times the tokens per solved task, so it fails every part of the
+gate on both models. The expressiveness gap is 6 of 30 held-out tasks.
+
+- Muse Spark fell from 93.3% on the development set to 72.9% here, and reasoned more in Sx than in
+  TypeScript, the reverse of the development sweep. The development set was written alongside the
+  language and overstates how well it transfers.
+- Muse Spark repaired all 20 diagnostics it received. Iceman repaired most type diagnostics but
+  only 0 of 7 `unclosed` and 1 of 5 `unexpected-close`, so balancing brackets is its hardest
+  problem.
+- Two final Sx trials on each model fail only because they waited `[0, 0]` where the reference
+  waited nothing. A `0ms` retry delay reaches the host as a wait, while an immediate TypeScript
+  retry calls no `sleep`. Counting those trials as correct moves each model by at most 2 of 48
+  trials, so the gate verdict stands. They were not rescored.
 
 Decided at the Phase 0 checkpoint:
 
