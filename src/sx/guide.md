@@ -35,6 +35,7 @@ only the forms and functions below exist.
       _ expr3             ; run for effect, discard the value
       f (fn [x] ...)]     ; a local function, called as (f x)
   body)                   ; exactly one body expression
+                          ; form names (attempt, match, ok, ...) cannot be bound: use attempts
 (if condition then else)  ; condition is true or false, or an optional name
 (cond test1 result1 test2 result2 :else other)   ; first true test wins; :else is required
 (get record :field)       ; read a record field; (get record :field default) for an optional
@@ -51,7 +52,7 @@ only the forms and functions below exist.
 (retry {:delays [1s 2s 4s]} expr)        ; run again after a transient failure
 (retry {:backoff [100ms 5s] :within 30s :on [Timeout]} expr)
 (wait-until {:within 2m :every 5s} (fn [v] done?) expr)
-(sleep 10s)                ; wait a literal duration, as one step: [_ (sleep 10s)]
+(sleep 10s)               ; wait a literal duration, as one step: [_ (sleep 10s)]
 (loop {:max 20} [x init y init2]         ; bounded loop
   (if (done? x) result (recur next-x next-y)))
 ```

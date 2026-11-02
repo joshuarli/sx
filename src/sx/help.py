@@ -24,7 +24,8 @@ def entry(name: str, signature: str, description: str, example: str, result: str
 
 FORMS = (
     entry("let", "(let [name value ...] body)", "Binds names, each visible to later bindings and the body. "
-          "A fn value binds a local function, and _ runs a value for its effect.",
+          "A fn value binds a local function, and _ runs a value for its effect. A form name such as attempt "
+          "cannot be a binding name: write attempts.",
           "(let [a 1 b (+ a 1) double (fn [x] (* 2 x))] (double b))", "4"),
     entry("if", "(if condition then else)", "Chooses a branch. The condition is true or false, or an "
           "optional, which tests that a value is present. When the condition is an optional name, the "

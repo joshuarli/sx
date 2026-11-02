@@ -151,6 +151,16 @@ A pattern `p` is a symbol, `_`, or a tuple pattern `[p1 ... pn]`. Patterns appea
 `loop`, and `fn` parameters. `_` evaluates the value and discards it, so
 `(let [_ (map send items)] (count items))` runs every send.
 
+The names of the special forms are reserved: `let`, `if`, `cond`, `match`, `fn`, `get`, `call`,
+`attempt`, `retry`, `wait-until`, `sleep`, `loop`, `recur`, `par`, `par-map`, `some`, `ok`, and
+`err`, and `none`. Binding one of them in `let`, `loop`, `fn` parameters, or a `match` pattern, or
+naming a local function with one, is a `reserved-name` error at the binding, with a fix that
+suggests another name, such as `attempts` for `attempt`. Without the rule a form that follows the
+binding, such as `(attempt ...)` after `[attempt 1]`, would call the local instead of the form.
+Prelude and core function names are not reserved, so a local may be named `count`. Inside its
+scope the local hides the function: using it in head position, as in `(count xs)`, is a
+`type-mismatch` that says the local hides the function.
+
 ### Conditions
 
 An `if` condition is a `Bool`, or an `Option<T>` where `T` is not `Bool`. An optional condition is a
@@ -591,7 +601,7 @@ The checker's codes are:
 | Group | Codes |
 | --- | --- |
 | Reading | `unclosed`, `unexpected-close`, `bad-literal`, `bad-symbol`, `int-range`, `bad-escape`, `record-key`, `record-missing-value`, `duplicate-field`, `empty-program`, `multiple-expressions` |
-| Names | `unknown-name`, `unknown-function`, `unknown-capability`, `unknown-field`, `missing-field`, `unknown-variant` |
+| Names | `unknown-name`, `unknown-function`, `unknown-capability`, `unknown-field`, `missing-field`, `unknown-variant`, `reserved-name` |
 | Calls | `arity`, `type-mismatch`, `unresolved-type`, `not-a-record`, `no-encoding` |
 | Forms | `condition-not-bool`, `missing-else`, `branch-mismatch`, `fn-position`, `bad-pattern`, `bad-option`, `recur-position`, `recur-arity` |
 | Match | `non-exhaustive`, `unreachable-clause` |

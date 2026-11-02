@@ -56,6 +56,11 @@ SPECIAL_FORMS = frozenset({
     "let", "if", "cond", "match", "fn", "get", "call", "attempt", "retry", "wait-until", "loop", "recur", "par",
     "par-map", "some", "ok", "err", "sleep",
 })
+RESERVED_NAMES = SPECIAL_FORMS | {"none"}
+RESERVED_SUGGESTIONS = {
+    "ok": "ok?", "err": "error", "some": "found", "none": "missing", "fn": "f", "if": "test", "get": "fetched",
+    "call": "called", "match": "matched", "retry": "retries", "let": "bound", "cond": "cases", "sleep": "slept",
+}
 HIGHER_ORDER = frozenset({"map", "filter", "keep", "any?", "all?", "reduce", "sort-by", "distinct-by", "group-by"})
 PRELUDE = frozenset({
     "+", "-", "*", "quot", "rem", "=", "not=", "<", "<=", ">", ">=", "not", "and", "or", "str", "count", "first",
@@ -217,6 +222,12 @@ def name_list(names: Sequence[str]) -> str:
     if len(names) <= 2:
         return " and ".join(names)
     return ", ".join(names[:-1]) + ", and " + names[-1]
+
+
+def suggested_name(name: str) -> str:
+    if name in RESERVED_SUGGESTIONS:
+        return RESERVED_SUGGESTIONS[name]
+    return f"{name}es" if name.endswith(("s", "x", "ch", "sh")) else f"{name}s"
 
 
 def head_name(node: Node) -> str | None:
@@ -908,16 +919,25 @@ class _Checker:
         if name == "recur":
             return self.form_recur(node, scope)
         with self.outside_tail():
+            if name in SPECIAL_FORMS:
+                return self.special_form(name, node, expected, scope)
             binding = scope.get(name)
             if isinstance(binding, FunctionBinding):
                 return self.apply_local(node, binding, expected, scope)
             if isinstance(binding, ValueBinding):
-                self.error(
-                    "type-mismatch", head.span, f"{name} is {describe(self.zonk(binding.type))}, not a function.",
-                )
+                found = describe(self.zonk(binding.type))
+                if name in PRELUDE:
+                    self.error(
+                        "type-mismatch", head.span, f"{name} is {found} here, which hides the function {name}.",
+                        detail=(
+                            "A name bound by let, loop, fn, or match hides the function of that name in the rest "
+                            "of its scope. Rename the local."
+                        ),
+                        help=name,
+                    )
+                else:
+                    self.error("type-mismatch", head.span, f"{name} is {found}, not a function.")
                 return self.placeholder(span)
-            if name in SPECIAL_FORMS:
-                return self.special_form(name, node, expected, scope)
             if name in PRELUDE:
                 return self.prelude(node, expected, scope)
             function = self.registry.function(name)
@@ -1026,6 +1046,7 @@ class _Checker:
                 if not isinstance(pattern, Symbol) or pattern.name == "_":
                     self.error("bad-pattern", pattern.span, "A local function needs a name.")
                     continue
+                self.reserved(pattern.name, pattern.span)
                 self.check_fn_shape(value)
                 function_binding: Binding = FunctionBinding(value, dict(inner), pattern.name)
                 inner = dict(inner)
@@ -1069,6 +1090,15 @@ class _Checker:
             return False
         return True
 
+    def reserved(self, name: str, span: Span) -> bool:
+        if name not in RESERVED_NAMES:
+            return False
+        self.error(
+            "reserved-name", span, f"{name} is the name of a form, so it cannot name a value.",
+            fix=suggested_name(name), help=name,
+        )
+        return True
+
     def bind(
         self, pattern: Node, t: Type, scope: Mapping[str, Binding], role: str, fix: str | None = None
     ) -> tuple[ir.Binder, dict[str, Binding]]:
@@ -1076,7 +1106,9 @@ class _Checker:
         match pattern:
             case Symbol(name="_"):
                 return ir.Discard(), inner
-            case Symbol(name=name, span=span) if not name[0].isupper() and name != "none":
+            case Symbol(name=name, span=span) if not name[0].isupper():
+                if self.reserved(name, span) and name == "none":
+                    return ir.Discard(), inner
                 inner[name] = ValueBinding(t)
                 return ir.BindName(name), inner
             case ListLiteral(items=items, span=span):
@@ -1371,6 +1403,7 @@ class _Checker:
                 )
             return ir.MatchVariant(node.name, None), dict(scope), {node.name}, True
         if isinstance(node, Symbol) and node.name[0].islower():
+            self.reserved(node.name, node.span)
             return ir.MatchAny(ir.BindName(node.name)), {**scope, node.name: ValueBinding(t)}, set(), True
         if isinstance(node, Symbol):
             self.error(
