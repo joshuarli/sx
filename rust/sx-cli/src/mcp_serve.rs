@@ -10,7 +10,7 @@ use crate::mcp::{Options, scan, usage};
 use crate::pyfile::path_text;
 use crate::{EXIT_FAILED, EXIT_OK, Exit};
 
-fn stopped(stop: Stop) -> Exit {
+pub(crate) fn stopped(stop: Stop) -> Exit {
     match stop {
         Stop::Usage(message) => usage(&message),
         Stop::Internal(message) => Exit { code: EXIT_FAILED, stdout: String::new(), stderr: format!("sx mcp: internal error: {message}\n") },

@@ -16,11 +16,15 @@ const MCP_HELP: &str = r#"usage: sx mcp import --name NAME (--tools FILE | -- CO
                   [--timeout-ms MS] -- COMMAND [ARG ...]
        sx mcp serve --declarations FILE [--grants FILE] [--allow ID ...]
        sx mcp describe --declarations FILE [--grants FILE] [--allow ID ...]
+       sx mcp code --declarations FILE --policy FILE [--grants FILE]
+                   [--allow ID ...] [--name NAME] [--timeout-ms MS]
+                   [-- COMMAND [ARG ...]]
 
 Import the tools of an MCP server as Sx declarations, run a program
 against that server over stdio, and serve granted capabilities as an MCP
 server on standard input and output, or describe what serve would list in
-Sx terms.
+Sx terms. Code serves two tools, check and run, that take a program in Sx,
+and runs it only when the approval policy allows.
 
 import options:
   --name NAME       Server name; its tools become capabilities mcp-NAME.TOOL
@@ -41,6 +45,15 @@ serve and describe options:
   --declarations FILE  Declarations of the capabilities and packs
   --grants FILE        JSON object granting capabilities, with their scopes
   --allow ID           Grant one capability that declares no scope
+
+code options (the serve options, and):
+  --policy FILE        JSON object judged against the explain report of each
+                       program before it runs: capabilities (required),
+                       computed_inputs, max_write_sites
+  --name NAME          Serve the tools of this server when the declarations
+                       hold several
+  --timeout-ms MS      Per-call and startup timeout, 60000 by default
+  -- COMMAND ...       The MCP server that provides the declared MCP tools
 "#;
 
 const SAVED_RESULT_TOOLS: &str = "tools";
@@ -105,7 +118,7 @@ impl Options {
         self.values.iter().filter(|(name, _)| name == flag).map(|(_, value)| value.clone()).collect()
     }
 
-    fn timeout(&self) -> Result<Option<Duration>, String> {
+    pub fn timeout(&self) -> Result<Option<Duration>, String> {
         match self.last("--timeout-ms") {
             None => Ok(None),
             Some(text) => match text.parse::<u64>() {
@@ -115,7 +128,7 @@ impl Options {
         }
     }
 
-    fn command(&self) -> Result<Vec<String>, String> {
+    pub fn command(&self) -> Result<Vec<String>, String> {
         match &self.command {
             Some(command) if !command.is_empty() => Ok(command.clone()),
             _ => Err("a server command is needed after --".to_string()),
@@ -132,8 +145,9 @@ pub fn run(args: &[String], new_registry: &dyn Fn() -> Registry) -> Exit {
         Some((word, rest)) if word == "run" => run_program(rest, new_registry),
         Some((word, rest)) if word == "serve" => crate::mcp_serve::serve(rest, new_registry),
         Some((word, rest)) if word == "describe" => crate::mcp_serve::describe(rest, new_registry),
-        Some((word, _)) => usage(&format!("{word:?} is not a subcommand; choose import, run, serve, or describe")),
-        None => usage("choose a subcommand: import, run, serve, or describe"),
+        Some((word, rest)) if word == "code" => crate::mcp_code::serve(rest, new_registry),
+        Some((word, _)) => usage(&format!("{word:?} is not a subcommand; choose import, run, serve, describe, or code")),
+        None => usage("choose a subcommand: import, run, serve, describe, or code"),
     }
 }
 

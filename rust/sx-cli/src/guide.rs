@@ -78,10 +78,19 @@ pub(crate) fn run(args: &[String], new_registry: &dyn Fn() -> Registry) -> Exit 
             return Exit { code: EXIT_FAILED, stdout: String::new(), stderr: format!("sx guide: internal error: {message}\n") };
         }
     };
-    let tools = granted_tools(&registry, &declarations, &grants);
-    let families: BTreeSet<Family> = tools.iter().filter_map(|tool| tool.family).collect();
-    let text = if notes_only { notes(&families) } else { tailored(&registry, &declarations, &tools, &families) };
+    let text = if notes_only {
+        let tools = granted_tools(&registry, &declarations, &grants);
+        notes(&tools.iter().filter_map(|tool| tool.family).collect())
+    } else {
+        guide_text(&registry, &declarations, &grants)
+    };
     Exit { code: EXIT_OK, stdout: text, stderr: String::new() }
+}
+
+pub(crate) fn guide_text(registry: &Registry, declarations: &Json, grants: &Grants) -> String {
+    let tools = granted_tools(registry, declarations, grants);
+    let families: BTreeSet<Family> = tools.iter().filter_map(|tool| tool.family).collect();
+    tailored(registry, declarations, &tools, &families)
 }
 
 fn guide_usage(message: &str) -> Exit {

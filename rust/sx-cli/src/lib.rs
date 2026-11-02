@@ -5,6 +5,8 @@ mod commands;
 mod guide;
 mod helptext;
 mod mcp;
+mod mcp_code;
+mod mcp_policy;
 mod mcp_serve;
 mod native;
 mod pyfile;

@@ -251,6 +251,15 @@ another language gets the same performers as `sx run`. `sx mcp describe` lists t
 in [docs/language.md](docs/language.md#serving-tools-over-mcp), and `bench/workflows/` runs workflows in Sx and
 in TypeScript on Bun against it.
 
+`sx mcp code --declarations D --grants G --policy P [-- COMMAND]` makes Sx the code mode of any MCP client. It
+serves two tools. `check` checks a program and returns its diagnostics, or its `explain` report and the
+policy's verdict, with no effect. `run` checks, explains, and applies the approval policy `P`, a JSON file of
+the capabilities a program may call, which of them may take an input the checker cannot see, and a limit on
+write call sites; only then does it run the program against the native packs and the one MCP server after
+`--`, and return the result, every call made, and any inferred closers. Both tool descriptions carry `sx guide`
+for the declarations and grants. A refused program performs nothing. The rules are in
+[docs/language.md](docs/language.md#sx-as-the-code-mode-of-an-mcp-client).
+
 ## Verify
 
 ```sh

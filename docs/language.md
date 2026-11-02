@@ -1338,6 +1338,74 @@ record types they use, in the shape of a declarations file. A client that genera
 declarations, such as the TypeScript declarations of `bench/codemode/typescript.py`, reads this instead of
 parsing `sx help`.
 
+### Sx as the code mode of an MCP client
+
+`sx mcp code` serves two tools, `check` and `run`, so an MCP client whose model writes Sx can use the host's
+tools through one program instead of one call at a time. The tools behind it are the same as for `sx run`:
+the native packs the declarations name, and at most one MCP server started after `--`, whose tools the
+declarations import as `sx mcp import` writes them and which are called as `sx mcp run` calls them.
+
+```sh
+sx mcp code --declarations FILE --policy FILE [--grants FILE] [--allow ID ...]
+            [--name NAME] [--timeout-ms MS] [-- COMMAND [ARG ...]]
+```
+
+`--declarations`, `--grants`, `--allow`, `--name`, and `--timeout-ms` mean what they mean for `sx mcp run`
+and `sx mcp serve`. A granted tool that is an MCP tool needs the server command, and a server command needs
+declarations that import MCP tools; either missing is a usage error. The server starts when a run first
+needs one of its tools, once for each `run`.
+
+**Tools.** Both take `program`, the program text, and reject any other argument. `run` also takes `inputs`,
+an object from each declared input name to its JSON value (a script's header inputs, or the `inputs` of the
+declarations). Both descriptions carry the output of `sx guide` for the server's declarations and grants,
+and a summary of the policy, so a client learns the language and what will be refused from `tools/list`.
+Each result has one text block for a reader and `structuredContent` for a program. `isError` is true when
+the program did not or would not run to completion: it does not check, the policy refuses it, or a call
+failed. A tool name the server does not offer and non-object `arguments` are the JSON-RPC error `-32602`.
+Nothing a program does is a protocol error.
+
+| Tool | `structuredContent` |
+| --- | --- |
+| `check`, program does not check | `{"ok": false, "diagnostics": [...]}`, the `diagnostics` of `sx check --format json` |
+| `check`, program checks | `{"ok": BOOL, "explain": REPORT, "policy": VERDICT}`. `REPORT` is `sx explain --format json`, and `ok` is true when the policy approves |
+| `run`, program does not check | `{"outcome": "rejected", "diagnostics": [...]}` |
+| `run`, policy refuses | `{"outcome": "refused", "policy": VERDICT}` |
+| `run`, completed | `{"outcome": "completed", "result": JSON, "trace": [...]}` |
+| `run`, failed | `{"outcome": "failed", "failure": {"kind", "message", "request", "span"}, "trace": [...]}` |
+
+Any of them adds `inferred_closers` when closers were inferred from indentation, as `sx run --format json`
+does. `trace` is the run trace of `sx run --format json`: each call as a `request` entry with its
+`capability` and `input`, followed by a `response` entry with the `output` or an `error` of the call error
+kind. A failed run keeps every entry up to the failure, and a call that completed is not undone. `check`
+performs no call. A program that is rejected or refused performs none either.
+
+**Approval policy.** `--policy FILE` is a JSON object the host writes. The server judges each program
+against its [explain report](#grants-and-scopes) before anything runs.
+
+| Key | Meaning |
+| --- | --- |
+| `capabilities` | Required. The capabilities a program may call. A call to any other is refused. |
+| `computed_inputs` | Optional, empty by default. The capabilities that may be called with an input the checker cannot see, which is a verdict of `checked per request`. Each must be in `capabilities` and declare a scope. |
+| `max_write_sites` | Optional, no limit by default. The most call sites of write capabilities the program text may hold. A site in a `map` counts once however many times it runs. |
+
+An unknown key, a capability the declarations do not define, an ID in `computed_inputs` that is not in
+`capabilities` or has no scope, and a limit that is negative or not a whole number are usage errors when
+the server starts. The policy is judged in addition to the grants: a call the grants do not cover does not
+check, so it never reaches the policy.
+
+The verdict is `{"verdict": "approved"}` or `{"verdict": "refused", "refusals": [...]}`. Each refusal has
+`kind`, `message`, and the place of the call in the program text:
+
+| `kind` | Refused when | Fields besides `kind` and `message` |
+| --- | --- | --- |
+| `capability-not-allowed` | A call site's capability is not in `capabilities` | `capability`, `span` |
+| `computed-input-not-allowed` | A call site's scope verdict is `checked per request` and its capability is not in `computed_inputs` | `capability`, `span` |
+| `outside-grant` | A call site's scope verdict is `denied` or `not granted`, which a program that checks never has | `capability`, `span` |
+| `too-many-write-sites` | The program holds more write call sites than `max_write_sites` | `limit`, `sites`: each with `capability` and `span` |
+
+Every refusal in a program is reported, in program order. The policy is the approver until a client that
+supports MCP elicitation is in hand.
+
 ## Execution
 
 The machine is a step function over a state held as plain data. Each run ends in one of three

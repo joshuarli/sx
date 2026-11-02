@@ -7,7 +7,7 @@ use sx_kernel::budgets::Budgets;
 use sx_kernel::checker::{closest, input_disagreement};
 use sx_kernel::closers::{CloserEdit, compile_source_inferring, edits_json, edits_note};
 use sx_kernel::diagnostics::{Diagnostic, render};
-use sx_kernel::explain::{RUNTIME_INPUT, explain_tools};
+use sx_kernel::explain::{ExplainedTool, RUNTIME_INPUT, explain_tools};
 use sx_kernel::export::export_program;
 use sx_kernel::help::{guide, lookup, names, render_cores};
 use sx_kernel::host::{FixtureHost, run};
@@ -202,7 +202,7 @@ fn command_help(args: &HelpArgs, base: Registry, output: &mut Output) -> Result<
     Ok(EXIT_REJECTED)
 }
 
-fn declared_inputs(registry: &Registry, declarations: &Json) -> Result<BTreeMap<String, Type>, Stop> {
+pub(crate) fn declared_inputs(registry: &Registry, declarations: &Json) -> Result<BTreeMap<String, Type>, Stop> {
     let raw = match declarations.get("inputs") {
         None => return Ok(BTreeMap::new()),
         Some(Json::Object(entries)) => entries,
@@ -220,7 +220,7 @@ fn declared_inputs(registry: &Registry, declarations: &Json) -> Result<BTreeMap<
     Ok(inputs)
 }
 
-fn span_json(span: Option<Span>) -> Json {
+pub(crate) fn span_json(span: Option<Span>) -> Json {
     let Some(span) = span else {
         return Json::Null;
     };
@@ -233,7 +233,7 @@ fn span_json(span: Option<Span>) -> Json {
     ])
 }
 
-fn diagnostic_json(diagnostic: &Diagnostic) -> Json {
+pub(crate) fn diagnostic_json(diagnostic: &Diagnostic) -> Json {
     let optional = |text: &Option<String>| text.as_deref().map_or(Json::Null, Json::string);
     Json::object([
         ("code", Json::string(diagnostic.code)),
@@ -342,8 +342,18 @@ fn command_explain(
     output: &mut Output,
 ) -> Result<i32, Stop> {
     let tools = explain_tools(program, registry, grants).map_err(Stop::Internal)?;
+    let (json, text) = explain_report(program, &tools, script)?;
+    output.emit(args.format, json, &text)?;
+    Ok(EXIT_OK)
+}
+
+pub(crate) fn explain_report(
+    program: &Program,
+    tools: &[ExplainedTool],
+    script: Option<&BTreeMap<String, Type>>,
+) -> Result<(Json, String), Stop> {
     let mut lines = vec!["tools:".to_string()];
-    for tool in &tools {
+    for tool in tools {
         lines.push(format!("  {}  [{}]  {}", tool.id, tool.effect, if tool.allowed { "allowed" } else { "not allowed" }));
         for call in &tool.calls {
             let text = match &call.input {
@@ -374,11 +384,10 @@ fn command_explain(
         fields.push(("input_types", Json::Object(types)));
     }
     fields.push(("result", Json::string(result.as_str())));
-    output.emit(args.format, Json::object(fields), &lines.join("\n"))?;
-    Ok(EXIT_OK)
+    Ok((Json::object(fields), lines.join("\n")))
 }
 
-fn script_input_values(pairs: &[String], header: &BTreeMap<String, Type>) -> Result<Vec<(String, Value)>, Stop> {
+pub(crate) fn script_input_values(pairs: &[String], header: &BTreeMap<String, Type>) -> Result<Vec<(String, Value)>, Stop> {
     let mut supplied: Vec<(String, Json)> = Vec::new();
     for pair in pairs {
         let Some((name, text)) = pair.split_once('=') else {
@@ -394,7 +403,7 @@ fn script_input_values(pairs: &[String], header: &BTreeMap<String, Type>) -> Res
     })
 }
 
-fn input_values(pairs: &[String], inputs: &BTreeMap<String, Type>) -> Result<Vec<(String, Value)>, Stop> {
+pub(crate) fn input_values(pairs: &[String], inputs: &BTreeMap<String, Type>) -> Result<Vec<(String, Value)>, Stop> {
     let mut values: Vec<(String, Value)> = Vec::new();
     for pair in pairs {
         let Some((name, text)) = pair.split_once('=') else {
@@ -494,16 +503,27 @@ fn command_run(
 }
 
 fn report_run(format: Format, outcome: Outcome, machine: &Machine<'_>, output: &mut Output) -> Result<i32, Stop> {
+    let report = run_report(outcome, machine)?;
+    output.emit(format, report.json, &report.text)?;
+    Ok(if report.completed { EXIT_OK } else { EXIT_FAILED })
+}
+
+pub(crate) struct RunReport {
+    pub completed: bool,
+    pub json: Json,
+    pub text: String,
+}
+
+pub(crate) fn run_report(outcome: Outcome, machine: &Machine<'_>) -> Result<RunReport, Stop> {
     let trace = Json::Array(machine.trace().to_vec());
     match outcome {
-        Outcome::Completed { value, json } => {
-            let payload =
-                Json::object([("outcome", Json::string("completed")), ("result", json), ("trace", trace)]);
-            output.emit(format, payload, &show_value(&value))?;
-            Ok(EXIT_OK)
-        }
+        Outcome::Completed { value, json } => Ok(RunReport {
+            completed: true,
+            json: Json::object([("outcome", Json::string("completed")), ("result", json), ("trace", trace)]),
+            text: show_value(&value),
+        }),
         Outcome::Failed(failure) => {
-            let payload = Json::object([
+            let json = Json::object([
                 ("outcome", Json::string("failed")),
                 (
                     "failure",
@@ -517,8 +537,11 @@ fn report_run(format: Format, outcome: Outcome, machine: &Machine<'_>, output: &
                 ("trace", trace),
             ]);
             let place = failure.span.map(|span| format!(" at {span}")).unwrap_or_default();
-            output.emit(format, payload, &format!("failed[{}]{place}: {}", failure.kind.name(), failure.message))?;
-            Ok(EXIT_FAILED)
+            Ok(RunReport {
+                completed: false,
+                json,
+                text: format!("failed[{}]{place}: {}", failure.kind.name(), failure.message),
+            })
         }
         Outcome::Suspended(_) => Err(Stop::Internal("the run ended suspended".to_string())),
     }
