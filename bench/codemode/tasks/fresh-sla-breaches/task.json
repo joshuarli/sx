@@ -1,0 +1,119 @@
+{
+  "id": "fresh-sla-breaches",
+  "split": "fresh",
+  "kinds": [
+    "arithmetic",
+    "ad-hoc-logic",
+    "schema-detail"
+  ],
+  "domain": "other",
+  "sx-expressible": true,
+  "description": "Find the tickets that have breached their response SLA at the current time of the desk clock (in minutes). The allowance is 30 minutes for priority 1, 120 for priority 2, and 480 for priority 3. A ticket has breached when it was answered more than its allowance after `opened` (`first-response` minus `opened` is above the allowance), or when it is still unanswered (`first-response` is absent) and the current time minus `opened` is above the allowance. The overshoot is the elapsed minutes minus the allowance. Return a list of records with `id` and `overshoot` for the breached tickets, sorted by overshoot highest first and then by `id`.",
+  "types": {
+    "Ticket": "Record {id: String, priority: Int, opened: Int, first-response: Option<Int>}"
+  },
+  "cores": [],
+  "capabilities": [
+    {
+      "id": "desk.now",
+      "effect": "read",
+      "input": "Record {}",
+      "output": "Int",
+      "description": "Reads the desk clock in minutes."
+    },
+    {
+      "id": "desk.tickets",
+      "effect": "read",
+      "input": "Record {}",
+      "output": "List<Ticket>",
+      "description": "Lists tickets with priority, the minute they were opened, and the minute of the first response if any."
+    }
+  ],
+  "responses": [
+    {
+      "capability": "desk.now",
+      "input": {},
+      "results": [
+        {
+          "output": 1000
+        }
+      ]
+    },
+    {
+      "capability": "desk.tickets",
+      "input": {},
+      "results": [
+        {
+          "output": [
+            {
+              "id": "a",
+              "priority": 1,
+              "opened": 900,
+              "first-response": 925
+            },
+            {
+              "id": "b",
+              "priority": 1,
+              "opened": 900,
+              "first-response": 950
+            },
+            {
+              "id": "c",
+              "priority": 2,
+              "opened": 800,
+              "first-response": null
+            },
+            {
+              "id": "d",
+              "priority": 3,
+              "opened": 600,
+              "first-response": null
+            },
+            {
+              "id": "e",
+              "priority": 2,
+              "opened": 700,
+              "first-response": 820
+            },
+            {
+              "id": "f",
+              "priority": 1,
+              "opened": 960,
+              "first-response": null
+            },
+            {
+              "id": "g",
+              "priority": 3,
+              "opened": 400,
+              "first-response": null
+            },
+            {
+              "id": "h",
+              "priority": 1,
+              "opened": 100,
+              "first-response": 130
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "expected": [
+    {
+      "id": "g",
+      "overshoot": 120
+    },
+    {
+      "id": "c",
+      "overshoot": 80
+    },
+    {
+      "id": "b",
+      "overshoot": 20
+    },
+    {
+      "id": "f",
+      "overshoot": 10
+    }
+  ]
+}

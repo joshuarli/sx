@@ -1,0 +1,139 @@
+{
+  "id": "fresh-denied-users",
+  "split": "fresh",
+  "kinds": [
+    "pagination",
+    "retry",
+    "filter-group"
+  ],
+  "domain": "other",
+  "sx-expressible": true,
+  "description": "Read every page of the access log. Pages are numbered from 1; stop after the first page whose `last` is true (at most 20 pages). When reading a page fails with RateLimited, retry it up to 4 more times, waiting 1 second before each retry; any other failure, or running out of retries, fails the whole task. Count the events whose `outcome` is `denied` per user. Return a list of records with `user` and `denied` for the users with at least 2 denied events, sorted by `denied` highest first and then by `user`.",
+  "types": {
+    "Event": "Record {user: String, outcome: String}",
+    "LogPage": "Record {events: List<Event>, last: Bool}"
+  },
+  "cores": [],
+  "capabilities": [
+    {
+      "id": "logs.page",
+      "effect": "read",
+      "input": "Record {page: Int}",
+      "output": "LogPage",
+      "description": "Reads one numbered page of the access log."
+    }
+  ],
+  "responses": [
+    {
+      "capability": "logs.page",
+      "input": {
+        "page": 1
+      },
+      "results": [
+        {
+          "output": {
+            "events": [
+              {
+                "user": "ann",
+                "outcome": "denied"
+              },
+              {
+                "user": "bo",
+                "outcome": "allowed"
+              },
+              {
+                "user": "ann",
+                "outcome": "denied"
+              }
+            ],
+            "last": false
+          }
+        }
+      ]
+    },
+    {
+      "capability": "logs.page",
+      "input": {
+        "page": 2
+      },
+      "results": [
+        {
+          "error": {
+            "kind": "RateLimited",
+            "message": "slow down"
+          }
+        },
+        {
+          "error": {
+            "kind": "RateLimited",
+            "message": "slow down"
+          }
+        },
+        {
+          "output": {
+            "events": [
+              {
+                "user": "cy",
+                "outcome": "denied"
+              },
+              {
+                "user": "bo",
+                "outcome": "denied"
+              },
+              {
+                "user": "ann",
+                "outcome": "allowed"
+              }
+            ],
+            "last": false
+          }
+        }
+      ]
+    },
+    {
+      "capability": "logs.page",
+      "input": {
+        "page": 3
+      },
+      "results": [
+        {
+          "output": {
+            "events": [
+              {
+                "user": "bo",
+                "outcome": "denied"
+              },
+              {
+                "user": "cy",
+                "outcome": "denied"
+              },
+              {
+                "user": "dee",
+                "outcome": "denied"
+              },
+              {
+                "user": "ann",
+                "outcome": "denied"
+              }
+            ],
+            "last": true
+          }
+        }
+      ]
+    }
+  ],
+  "expected": [
+    {
+      "user": "ann",
+      "denied": 3
+    },
+    {
+      "user": "bo",
+      "denied": 2
+    },
+    {
+      "user": "cy",
+      "denied": 2
+    }
+  ]
+}

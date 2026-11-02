@@ -1,0 +1,133 @@
+{
+  "id": "fresh-outdated-deps",
+  "split": "fresh",
+  "kinds": [
+    "core-composition",
+    "string",
+    "parallel"
+  ],
+  "domain": "other",
+  "sx-expressible": true,
+  "description": "Find the outdated dependencies of app `portal`. A dependency is outdated when the highest published version of its package is higher than its installed version. Published version strings may have surrounding whitespace, and strings that are not exactly MAJOR.MINOR.PATCH (after trimming) are ignored; a package with no valid published version is not outdated. Return a list of records with `name`, `installed`, and `latest` (the highest published version written as MAJOR.MINOR.PATCH), for the outdated dependencies, in the order the dependencies are listed.",
+  "types": {
+    "Dep": "Record {name: String, version: String}"
+  },
+  "cores": [
+    "text",
+    "semver"
+  ],
+  "capabilities": [
+    {
+      "id": "deps.installed",
+      "effect": "read",
+      "input": "Record {app: String}",
+      "output": "List<Dep>",
+      "description": "Lists an application's dependencies with their installed versions."
+    },
+    {
+      "id": "registry.versions",
+      "effect": "read",
+      "input": "Record {name: String}",
+      "output": "List<String>",
+      "description": "Lists every version string published for a package, in publication order."
+    }
+  ],
+  "responses": [
+    {
+      "capability": "deps.installed",
+      "input": {
+        "app": "portal"
+      },
+      "results": [
+        {
+          "output": [
+            {
+              "name": "a",
+              "version": "1.2.3"
+            },
+            {
+              "name": "b",
+              "version": "2.0.0"
+            },
+            {
+              "name": "c",
+              "version": "0.9.9"
+            },
+            {
+              "name": "d",
+              "version": "1.0.0"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "capability": "registry.versions",
+      "input": {
+        "name": "a"
+      },
+      "results": [
+        {
+          "output": [
+            "1.2.3",
+            "1.10.0 ",
+            "1.9.9",
+            "2.0.0-rc1"
+          ]
+        }
+      ]
+    },
+    {
+      "capability": "registry.versions",
+      "input": {
+        "name": "b"
+      },
+      "results": [
+        {
+          "output": [
+            "2.0.0",
+            " 1.9.0"
+          ]
+        }
+      ]
+    },
+    {
+      "capability": "registry.versions",
+      "input": {
+        "name": "c"
+      },
+      "results": [
+        {
+          "output": [
+            "0.9.9",
+            "0.10.0",
+            "v1.0.0"
+          ]
+        }
+      ]
+    },
+    {
+      "capability": "registry.versions",
+      "input": {
+        "name": "d"
+      },
+      "results": [
+        {
+          "output": []
+        }
+      ]
+    }
+  ],
+  "expected": [
+    {
+      "name": "a",
+      "installed": "1.2.3",
+      "latest": "1.10.0"
+    },
+    {
+      "name": "c",
+      "installed": "0.9.9",
+      "latest": "0.10.0"
+    }
+  ]
+}

@@ -1,0 +1,143 @@
+{
+  "id": "fresh-balanced-assign",
+  "split": "fresh",
+  "kinds": [
+    "write",
+    "ad-hoc-logic"
+  ],
+  "domain": "other",
+  "sx-expressible": true,
+  "description": "Assign each unassigned ticket, in the order the tickets are listed, to the agent who currently has the fewest assigned tickets, breaking ties by agent name (alphabetical). After each assignment, that agent's count goes up by one. Make one assign call per ticket. Return the assignments as a list of records with `ticket` and `agent`, in ticket order.",
+  "types": {
+    "Load": "Record {agent: String, count: Int}"
+  },
+  "cores": [],
+  "capabilities": [
+    {
+      "id": "desk.unassigned",
+      "effect": "read",
+      "input": "Record {}",
+      "output": "List<String>",
+      "description": "Lists the ids of tickets with no assignee."
+    },
+    {
+      "id": "desk.workloads",
+      "effect": "read",
+      "input": "Record {}",
+      "output": "List<Load>",
+      "description": "Lists each agent with the number of tickets currently assigned to them."
+    },
+    {
+      "id": "desk.assign",
+      "effect": "write",
+      "idempotent": true,
+      "input": "Record {ticket: String, agent: String}",
+      "output": "Unit",
+      "description": "Assigns a ticket to an agent; assigning it to the same agent again changes nothing."
+    }
+  ],
+  "responses": [
+    {
+      "capability": "desk.unassigned",
+      "input": {},
+      "results": [
+        {
+          "output": [
+            "t1",
+            "t2",
+            "t3",
+            "t4"
+          ]
+        }
+      ]
+    },
+    {
+      "capability": "desk.workloads",
+      "input": {},
+      "results": [
+        {
+          "output": [
+            {
+              "agent": "lee",
+              "count": 2
+            },
+            {
+              "agent": "kim",
+              "count": 2
+            },
+            {
+              "agent": "ana",
+              "count": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "capability": "desk.assign",
+      "input": {
+        "ticket": "t1",
+        "agent": "kim"
+      },
+      "results": [
+        {
+          "output": null
+        }
+      ]
+    },
+    {
+      "capability": "desk.assign",
+      "input": {
+        "ticket": "t2",
+        "agent": "lee"
+      },
+      "results": [
+        {
+          "output": null
+        }
+      ]
+    },
+    {
+      "capability": "desk.assign",
+      "input": {
+        "ticket": "t3",
+        "agent": "ana"
+      },
+      "results": [
+        {
+          "output": null
+        }
+      ]
+    },
+    {
+      "capability": "desk.assign",
+      "input": {
+        "ticket": "t4",
+        "agent": "kim"
+      },
+      "results": [
+        {
+          "output": null
+        }
+      ]
+    }
+  ],
+  "expected": [
+    {
+      "ticket": "t1",
+      "agent": "kim"
+    },
+    {
+      "ticket": "t2",
+      "agent": "lee"
+    },
+    {
+      "ticket": "t3",
+      "agent": "ana"
+    },
+    {
+      "ticket": "t4",
+      "agent": "kim"
+    }
+  ]
+}
