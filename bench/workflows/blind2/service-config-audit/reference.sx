@@ -1,0 +1,76 @@
+(let [base "{{root}}/services"
+      skip? (fn [name] (or (text.starts-with? name "_") (text.starts-with? name ".")))
+      join (fn [dir name] (if (= dir "") name (str dir "/" name)))
+      at (fn [dir] (if (= dir "") base (str base "/" dir)))
+      is-service (fn [l]
+                   (and (not= (get l :dir) "")
+                        (any? (fn [e] (and (= (get e :name) "service.json") (= (get e :kind) File))) (get l :entries))))
+      found (loop {:max 4} [frontier [""] services [] depth 0]
+              (let [listed (par-map {:limit 8}
+                                    (fn [dir] {:dir dir :entries (call fs.list {:path (at dir)})})
+                                    frontier)
+                    next (flatten (map (fn [l]
+                                         (map (fn [e] (join (get l :dir) (get e :name)))
+                                              (filter (fn [e] (and (= (get e :kind) Directory) (not (skip? (get e :name)))))
+                                                      (get l :entries))))
+                                       (filter (fn [l] (not (is-service l))) listed)))
+                    all (concat services (map (fn [l] (get l :dir)) (filter is-service listed)))]
+                (if (or (= (count next) 0) (>= depth 3)) all (recur next all (+ depth 1)))))
+      docs (par-map {:limit 8}
+                    (fn [path] {:path path :text (call fs.read-text {:path (str base "/" path "/service.json")})})
+                    found)
+      string-at (fn [text path] (if (= (json.kind text path) String) (json.get text path) none))
+      starts-https (fn [text path]
+                     (match (string-at text path) (some s) (text.starts-with? s "https://") none false))
+      port-of (fn [text]
+                (if (= (json.kind text ["port"]) Number)
+                  (match (json.get text ["port"])
+                    (some p) (match (text.to-int p)
+                               (some n) (if (and (>= n 1024) (<= n 65535)) (some n) none)
+                               none none)
+                    none none)
+                  none))
+      parsed (map (fn [d]
+                    (match (attempt (json.kind (get d :text) []))
+                      (ok _) {:path (get d :path) :valid true :text (get d :text)}
+                      (err _) {:path (get d :path) :valid false :text ""}))
+                  docs)
+      ports (keep (fn [p] (if (get p :valid) (port-of (get p :text)) none)) parsed)
+      audited (map (fn [p]
+                     (if (get p :valid)
+                       (let [text (get p :text)
+                             segments (text.split (get p :path) "/")
+                             port (port-of text)
+                             version-ok (match (string-at text ["version"])
+                                          (some v) (and (re.test #"^\d+\.\d+\.\d+$" v) (match (semver.parse v) (some _) true none false))
+                                          none false)
+                             repository-ok (cond (= (json.kind text ["repository"]) String) (starts-https text ["repository"])
+                                                 (= (json.kind text ["repository"]) Object) (starts-https text ["repository" "url"])
+                                                 :else false)
+                             owner-ok (match (string-at text ["owner"]) (some o) (not= o "") none false)
+                             name-ok (match (string-at text ["name"]) (some n) (= n (nth segments (- (count segments) 1))) none false)
+                             shared (match port (some n) (> (count (filter (fn [q] (= q n)) ports)) 1) none false)
+                             checks [["name" (not name-ok)]
+                                     ["version" (not version-ok)]
+                                     ["port" (match port (some _) false none true)]
+                                     ["port-conflict" shared]
+                                     ["repository" (not repository-ok)]
+                                     ["owner" (not owner-ok)]]
+                             findings (map (fn [c] (nth c 0)) (filter (fn [c] (nth c 1)) checks))]
+                         {:path (get p :path) :status (if (= (count findings) 0) "ok" "fail") :findings findings})
+                       {:path (get p :path) :status "invalid" :findings []}))
+                   parsed)
+      rows (sort-by (fn [a] (get a :path)) audited)
+      line (fn [a] (str (get a :path) "\t" (get a :status) "\t" (text.join "," (get a :findings)) "\n"))
+      _ (call fs.write-text {:path "{{root}}/audit.tsv" :text (text.join "" (map line rows))})
+      status-paths (fn [s] (map (fn [a] (get a :path)) (filter (fn [a] (= (get a :status) s)) rows)))
+      finding-names (map (fn [g] (first g)) (group-by identity (flatten (map (fn [a] (get a :findings)) rows))))
+      counts (sort-by (fn [c] [(- 0 (get c :count)) (get c :finding)])
+                      (map (fn [n] {:finding n :count (count (filter (fn [a] (contains? (get a :findings) n)) rows))})
+                           finding-names))]
+  {:services (count rows)
+   :ok (count (status-paths "ok"))
+   :fail (count (status-paths "fail"))
+   :invalid (count (status-paths "invalid"))
+   :invalid_paths (status-paths "invalid")
+   :findings counts})
