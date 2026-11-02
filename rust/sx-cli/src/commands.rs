@@ -4,7 +4,8 @@ use std::path::Path;
 use sx_cores::kernel::{Cores, core as builtin_core};
 use sx_kernel::authority::{Authority, GrantError, Grants};
 use sx_kernel::budgets::Budgets;
-use sx_kernel::checker::{closest, compile_source, input_disagreement};
+use sx_kernel::checker::{closest, input_disagreement};
+use sx_kernel::closers::{CloserEdit, compile_source_inferring, edits_json, edits_note};
 use sx_kernel::diagnostics::{Diagnostic, render};
 use sx_kernel::explain::{RUNTIME_INPUT, explain_tools};
 use sx_kernel::export::export_program;
@@ -41,6 +42,7 @@ impl Stop {
 struct Output {
     stdout: String,
     stderr: String,
+    inferred: Vec<CloserEdit>,
 }
 
 impl Output {
@@ -49,9 +51,12 @@ impl Output {
         self.stdout.push('\n');
     }
 
-    fn emit(&mut self, format: Format, payload: Json, text: &str) -> Result<(), Stop> {
+    fn emit(&mut self, format: Format, mut payload: Json, text: &str) -> Result<(), Stop> {
         match format {
             Format::Json => {
+                if let (Json::Object(fields), false) = (&mut payload, self.inferred.is_empty()) {
+                    fields.push(("inferred_closers".to_string(), edits_json(&self.inferred)));
+                }
                 let shown = dumps(&payload, Layout::Indented).map_err(|e| Stop::Internal(e.to_string()))?;
                 self.line(&shown);
             }
@@ -256,7 +261,14 @@ fn command_program(args: &ProgramArgs, base: Registry, output: &mut Output, mcp:
         ProgramKind::Explain => Authority::Unrestricted,
         _ => Authority::Granted(&grants),
     };
-    let checked = compile_source(&source, &registry, authority, &inputs, Budgets::default());
+    let compiled = compile_source_inferring(&source, &registry, authority, &inputs, Budgets::default());
+    let source = compiled.source;
+    let checked = compiled.check;
+    output.inferred = compiled.edits;
+    let emits_ir = matches!(args.kind, ProgramKind::Check { emit_ir: true });
+    if !output.inferred.is_empty() && (args.format == Format::Text || emits_ir) {
+        output.stderr.push_str(&format!("{}\n", edits_note(&output.inferred)));
+    }
     let Some(program) = checked.program else {
         let payload = Json::object([
             ("ok", Json::Bool(false)),

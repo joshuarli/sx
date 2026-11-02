@@ -5,7 +5,8 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use crate::authority::{Authority, GrantError, Grants, Screen, Verdict};
 use crate::budgets::Budgets;
-use crate::checker::{compile_source, input_disagreement};
+use crate::checker::input_disagreement;
+use crate::closers::{CloserEdit, compile_source_inferring, edits_json};
 use crate::explain::explain_tools;
 use crate::diagnostics::{Diagnostic, render};
 use crate::inputs::supply;
@@ -397,7 +398,23 @@ pub fn declare(declarations: &Json, library: &dyn CoreLibrary) -> Result<Declare
 
 enum Compiled {
     Rejected(Json),
-    Ready { program: Box<Program>, declared: DeclaredInputs, registry: Box<Registry>, grants: Box<Grants> },
+    Ready {
+        program: Box<Program>,
+        declared: DeclaredInputs,
+        registry: Box<Registry>,
+        grants: Box<Grants>,
+        edits: Vec<CloserEdit>,
+    },
+}
+
+fn with_edits(message: Json, edits: &[CloserEdit]) -> Json {
+    match message {
+        Json::Object(mut fields) if !edits.is_empty() => {
+            fields.push(("inferred_closers".to_string(), edits_json(edits)));
+            Json::Object(fields)
+        }
+        other => other,
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -440,7 +457,9 @@ fn compile(
         Purpose::Run => Authority::Granted(&grants),
         Purpose::Explain => Authority::Unrestricted,
     };
-    let checked = compile_source(&source.text, &registry, authority, &inputs, budgets);
+    let compiled = compile_source_inferring(&source.text, &registry, authority, &inputs, budgets);
+    let checked = compiled.check;
+    let edits = compiled.edits;
     match checked.program {
         Some(program) => {
             let declared = match checked.header_inputs {
@@ -452,13 +471,22 @@ fn compile(
                 }
                 None => DeclaredInputs::Host(inputs),
             };
-            Ok(Compiled::Ready { program: Box::new(program), declared, registry: Box::new(registry), grants: Box::new(grants) })
+            Ok(Compiled::Ready {
+                program: Box::new(program),
+                declared,
+                registry: Box::new(registry),
+                grants: Box::new(grants),
+                edits,
+            })
         }
-        None => Ok(Compiled::Rejected(Json::object([
-            ("type", Json::string("rejected")),
-            ("diagnostics", Json::Array(checked.diagnostics.iter().map(diagnostic_json).collect())),
-            ("rendered", Json::string(render(&source.text, &checked.diagnostics))),
-        ]))),
+        None => Ok(Compiled::Rejected(with_edits(
+            Json::object([
+                ("type", Json::string("rejected")),
+                ("diagnostics", Json::Array(checked.diagnostics.iter().map(diagnostic_json).collect())),
+                ("rendered", Json::string(render(&compiled.source, &checked.diagnostics))),
+            ]),
+            &edits,
+        ))),
     }
 }
 
@@ -632,8 +660,11 @@ impl<R: BufRead, W: Write> Session<'_, R, W> {
         let library = self.library;
         let reply = guarded(|| match compile(source, Purpose::Explain, Budgets::default(), library)? {
             Compiled::Rejected(rejection) => Ok(rejection),
-            Compiled::Ready { program, declared, registry, grants } => explain_report(&program, &registry, &grants, declared.script())
-                .map_err(|message| ProtocolError::new(ErrorCode::Internal, message)),
+            Compiled::Ready { program, declared, registry, grants, edits } => {
+                explain_report(&program, &registry, &grants, declared.script())
+                    .map(|report| with_edits(report, &edits))
+                    .map_err(|message| ProtocolError::new(ErrorCode::Internal, message))
+            }
         });
         match reply.and_then(|inner| inner) {
             Ok(reply) => self.send(&reply),
@@ -647,14 +678,14 @@ impl<R: BufRead, W: Write> Session<'_, R, W> {
             let compiled = compile(&start.source, Purpose::Run, start.budgets, library)?;
             match compiled {
                 Compiled::Rejected(rejection) => Ok(Err(rejection)),
-                Compiled::Ready { program, declared, grants, .. } => {
+                Compiled::Ready { program, declared, grants, edits, .. } => {
                     let values = values_of(&declared, &start.inputs)?;
-                    Ok(Ok((program, values, grants)))
+                    Ok(Ok((program, values, grants, edits)))
                 }
             }
         })
         .and_then(|inner| inner);
-        let (program, values, grants) = match compiled {
+        let (program, values, grants, edits) = match compiled {
             Err(error) => {
                 self.reject(&error)?;
                 return Ok(Ending::Idle);
@@ -679,7 +710,7 @@ impl<R: BufRead, W: Write> Session<'_, R, W> {
                         ("value", json),
                         ("trace", Json::Array(machine.trace().to_vec())),
                     ]);
-                    self.send(&reply)?;
+                    self.send(&with_edits(reply, &edits))?;
                     return Ok(Ending::Idle);
                 }
                 Ok(Outcome::Failed(failure)) => {
@@ -688,7 +719,7 @@ impl<R: BufRead, W: Write> Session<'_, R, W> {
                         ("failure", failure_json(&failure)),
                         ("trace", Json::Array(machine.trace().to_vec())),
                     ]);
-                    self.send(&reply)?;
+                    self.send(&with_edits(reply, &edits))?;
                     return Ok(Ending::Idle);
                 }
                 Ok(Outcome::Suspended(requests)) => requests,
@@ -697,7 +728,7 @@ impl<R: BufRead, W: Write> Session<'_, R, W> {
                 ("type", Json::string("requests")),
                 ("requests", Json::Array(requests.iter().map(request_json).collect())),
             ]);
-            self.send(&listed)?;
+            self.send(&with_edits(listed, &edits))?;
             match self.collect(&requests, &program, &grants)? {
                 Collected::Abandoned => return Ok(Ending::Abandoned),
                 Collected::Resume(responses) => outcome = guarded(|| machine.resume(responses)),

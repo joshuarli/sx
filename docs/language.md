@@ -60,6 +60,71 @@ program runs. There is no general recursion and no unbounded loop.
 | Record | `{:k v ...}` | Field names are unique. |
 | Form | `(head args...)` | |
 
+### Closer inference
+
+A model that writes one long nested form loses count of the closing brackets at the end of a line,
+though it indents correctly. When the brackets of a program do not balance, the Rust kernel infers
+the closers at the ends of lines from the indentation, and accepts the program when one repair is
+clearly best. The inferred program then goes through the rest of the reader and the checker like
+any other. The Python prototype is frozen and does not infer closers.
+
+The rule, in order:
+
+1. A program whose brackets balance is never changed, whatever its indentation.
+2. Only the run of closers at the end of a line may change. The run is every closer after the
+   last token that is not a closer, ignoring trailing whitespace, commas, and a `;` comment. A
+   line that holds only closers is one run, and a run may be empty, so closers can be added to a
+   line that has none. Openers, closers earlier in a line, strings, and comments never change.
+3. A repair gives every run the closers of the innermost open brackets, so it balances the
+   program. It must read as one expression and be the unique best repair.
+4. The best repair changes the fewest characters of closers, at most 6 in the whole program,
+   counting an insertion, a deletion, and a replacement as one each. A program with more closers
+   missing or extra than that is left to the reader's diagnostics.
+5. Among repairs with the fewest changes, three measures of indentation decide. Each measure
+   counts lower for a better repair:
+   - **short runs**: changed characters in runs that the model wrote with fewer than 3 closers,
+     because a miscount happens in a long run;
+   - **closed against the indentation**: at each line end, the brackets closed although the next
+     line is indented past their opener's column, plus the brackets left open although the next
+     line is indented no deeper than the line that opened them;
+   - **open against the indentation**: at each line end, the innermost open brackets whose
+     opener's column is at or right of the next line's indentation, the brackets that Parinfer's
+     indent mode would close.
+
+   The next line is the next line with code that does not start with a closer. Ranking the three
+   measures in each of their 6 orders gives each order's best repair. When every order has one
+   best repair and they are all the same repair, it is the inference. When the orders pick
+   different repairs, those are the candidates, and the checker decides: if exactly one candidate
+   checks against the declarations, it is the inference. When an order has a tie, there are no
+   candidates, and when no candidate or several candidates check, the inference is ambiguous.
+6. Nothing is inferred, and the reader reports its usual diagnostics for the text as written,
+   when the inference is ambiguous, when no repair of at most 6 characters exists, when the program
+   has fewer than two lines of code, when a string holds a newline or is never closed, when a
+   closer earlier in a line matches no open bracket, or when the repaired text does not read
+   cleanly (a habit, a literal error, or a second expression).
+
+An inference is reported to the host, never silently applied. `inferred_closers` is a list with
+one entry per changed line, in line order: `line` and `column` (1-based, the column where the run
+starts, or where closers were added), `written` (the closers the model wrote, without any space
+between them), and `used`.
+
+```
+{"ok": true, "result": "Int", "inferred_closers": [{"line": 3, "column": 9, "written": ")))", "used": "))"}]}
+```
+
+`sx check`, `sx explain`, `sx run`, and `sx mcp run` with `--format json` add the list to their
+JSON object whenever they inferred closers, and omit it otherwise. With the default text format,
+and with `--emit ir`, they print one line on standard error:
+
+```
+sx: the brackets did not balance, so closers were inferred from indentation: line 3 wrote ")))" used "))"
+```
+
+The [host protocol](#host-protocol) adds the same list to every reply about the program.
+Diagnostics of an inferred program that the checker then rejects, their spans, and their
+excerpts refer to the inferred text, which has the same lines as the program as written. Only the
+columns after an edited run differ.
+
 ## Types
 
 | Type | Values |
@@ -1457,13 +1522,15 @@ Kernel to host:
 
 | `type` | Fields | Meaning |
 | --- | --- | --- |
-| `rejected` | `diagnostics`, `rendered` | The program did not check, so nothing ran. `diagnostics` holds the [structured diagnostics](#diagnostics) (`code`, `construct`, `span`, `message`, `detail`, `fix`, `help`), and `rendered` the text a person reads. |
+| `rejected` | `diagnostics`, `rendered` | The program did not check, so nothing ran. `diagnostics` holds the [structured diagnostics](#diagnostics) (`code`, `construct`, `span`, `message`, `detail`, `fix`, `help`), and `rendered` the text a person reads. When the brackets did not balance and the reader inferred closers first, they refer to the inferred text, and the message also has `inferred_closers`. |
 | `requests` | `requests` | The run is suspended. Each request is `{"id", "kind": "call", "capability", "input"}` or `{"id", "kind": "delay", "milliseconds"}`. A delay is answered with `"output": null` once the host has waited. |
 | `completed` | `value`, `trace` | The program finished. `value` is the result and `trace` the [trace](#execution). |
 | `failed` | `failure`, `trace` | The program stopped. `failure` is `{"kind", "message", "span", "request"}`, where `span` and `request` may be `null`. |
 | `explained` | `tools`, `inputs`, `result` | For each capability the program can call: `id`, `effect` (`read`, `write, idempotent`, or `write, not idempotent`), `allowed`, and the literal `inputs` of its calls, with `"computed at run time"` for arguments the program computes, and for a capability with a scope, `verdicts`. Also the inputs the program uses and its result type. For a script, `inputs` lists every declared input and `input_types` maps each to its type. Same as `sx explain --format json`. |
 | `scope-verdict` | `id`, `verdict`, and `reason` when denied | The answer to `check-scope`: `allowed`, `denied` with the pack's reason, or `unchecked` when the capability's scope came from a declarations file, so no registered check can judge it and the host must. |
 | `error` | `code`, `message` | The message was not valid, so the kernel did nothing with it. |
+
+When the kernel [inferred closers](#closer-inference) for a program, every `rejected`, `requests`, `completed`, `failed`, and `explained` reply about that program also has `inferred_closers`, the list of `{"line", "column", "written", "used"}` entries. The field is absent when nothing was inferred, so a host that never sees it behaves as before. An `error` or `scope-verdict` reply never has it.
 
 After `requests` the host answers in any order, in as many `respond` messages as it likes, with
 any subset each time. The kernel resumes the machine once every outstanding request has a
@@ -1533,6 +1600,8 @@ error[unknown-field] 4:12-4:17
 The reader's bracket diagnostics read the indentation of the lines after an opener, because a
 model that loses count of brackets still indents correctly. Blank lines and lines holding only a
 comment are skipped.
+
+They appear only when [closer inference](#closer-inference) accepts nothing. A program the reader accepts after inference, but the checker rejects, gets the checker diagnostics for the inferred text, and the host sees `inferred_closers` with them.
 
 - `unclosed` says where to close. For an opener at some column, find the first later line whose
   indentation is at most that column. The fix adds the closer at the end of the last line before
