@@ -97,7 +97,7 @@ inductive Op where
   | add | sub | mul | div | quot | rem | toFloat | round | floor | ceil
   | eq | neq | lt | le | gt | ge
   | not | and | or
-  | str
+  | str | toJson
   | count | first | rest | nth | take | concat | flatten | contains
   | mapGet | assoc | dissoc | keys | vals | entries | intoMap
   | map | filter | keep | any | all | reduce | sortBy | distinctBy | groupBy
@@ -208,6 +208,7 @@ def Op.ofString : String → Option Op
   | "ceil" => some .ceil
   | "=" => some .eq | "not=" => some .neq | "<" => some .lt | "<=" => some .le | ">" => some .gt
   | ">=" => some .ge | "not" => some .not | "and" => some .and | "or" => some .or | "str" => some .str
+  | "to-json" => some .toJson
   | "count" => some .count | "first" => some .first | "rest" => some .rest | "nth" => some .nth
   | "take" => some .take | "concat" => some .concat | "flatten" => some .flatten
   | "contains?" => some .contains | "map-get" => some .mapGet | "assoc" => some .assoc

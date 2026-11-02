@@ -411,6 +411,70 @@ pub fn encode(value: &Value) -> Json {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct NonFiniteFloat(pub f64);
+
+pub fn json_text(value: &Value) -> Result<String, NonFiniteFloat> {
+    let mut out = String::new();
+    write_json_text(&encode(value), &mut out)?;
+    Ok(out)
+}
+
+fn write_json_text(json: &Json, out: &mut String) -> Result<(), NonFiniteFloat> {
+    match json {
+        Json::Null => out.push_str("null"),
+        Json::Bool(b) => out.push_str(if *b { "true" } else { "false" }),
+        Json::Int(n) => out.push_str(&n.to_string()),
+        Json::BigInt(digits) => out.push_str(digits),
+        Json::Float(f) if f.is_finite() => out.push_str(&float_text(*f)),
+        Json::Float(f) => return Err(NonFiniteFloat(*f)),
+        Json::String(text) => write_json_string(text, out),
+        Json::Array(items) => {
+            out.push('[');
+            for (at, item) in items.iter().enumerate() {
+                if at > 0 {
+                    out.push(',');
+                }
+                write_json_text(item, out)?;
+            }
+            out.push(']');
+        }
+        Json::Object(entries) => {
+            let mut ordered: Vec<&(String, Json)> = entries.iter().collect();
+            ordered.sort_by(|a, b| a.0.cmp(&b.0));
+            out.push('{');
+            for (at, (key, item)) in ordered.into_iter().enumerate() {
+                if at > 0 {
+                    out.push(',');
+                }
+                write_json_string(key, out);
+                out.push(':');
+                write_json_text(item, out)?;
+            }
+            out.push('}');
+        }
+    }
+    Ok(())
+}
+
+fn write_json_string(text: &str, out: &mut String) {
+    out.push('"');
+    for c in text.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            '\u{8}' => out.push_str("\\b"),
+            '\u{c}' => out.push_str("\\f"),
+            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+}
+
 pub fn show_value(value: &Value) -> String {
     match value {
         Value::Bool(b) => if *b { "true" } else { "false" }.to_string(),
@@ -550,6 +614,21 @@ mod tests {
         for (value, text) in cases {
             assert_eq!(float_text(value), text);
         }
+    }
+
+    #[test]
+    fn json_text_writes_a_payload_variant_and_a_failed_result_in_key_order() {
+        let payload = Value::variant("Branch", "OnBranch", Some(Value::string("main")));
+        assert_eq!(json_text(&payload).as_deref(), Ok("{\"tag\":\"OnBranch\",\"value\":\"main\"}"));
+        let failure = Value::Err(Arc::new(Value::Record(call_error_value(CallErrorKind::Timeout, "slow"))));
+        assert_eq!(json_text(&failure).as_deref(), Ok("{\"err\":{\"kind\":\"Timeout\",\"message\":\"slow\"}}"));
+        let unordered = Value::Record(RecordValue::new(vec![(Arc::from("b"), Value::Int(1)), (Arc::from("a"), Value::Int(2))]));
+        assert_eq!(json_text(&unordered).as_deref(), Ok("{\"a\":2,\"b\":1}"));
+    }
+
+    #[test]
+    fn json_text_refuses_a_float_that_is_not_finite() {
+        assert_eq!(json_text(&Value::float(f64::INFINITY)), Err(NonFiniteFloat(f64::INFINITY)));
     }
 
     #[test]

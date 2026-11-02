@@ -1,0 +1,5 @@
+error[no-encoding] 2:34-2:36
+  (let [xs []] (let [text (to-json xs)] (let [more (concat xs [(some (some 1))])] (count more))))
+                                   ^^
+  to-json cannot write a List<Option<Option<Int>>>, which has no JSON encoding, because none and (some x) would both be null.
+  Help: sx help to-json

@@ -40,13 +40,13 @@ const RESERVED_SUGGESTIONS: [(&str, &str); 13] = [
     ("sleep", "slept"),
 ];
 const HIGHER_ORDER: [&str; 9] = ["map", "filter", "keep", "any?", "all?", "reduce", "sort-by", "distinct-by", "group-by"];
-const PRELUDE: [&str; 44] = [
+const PRELUDE: [&str; 45] = [
     "+", "-", "*", "/", "quot", "rem", "float", "round", "floor", "ceil", "=", "not=", "<", "<=", ">", ">=", "not",
-    "and", "or", "str", "count", "first", "rest", "nth", "take", "concat", "flatten", "contains?", "identity",
+    "and", "or", "str", "to-json", "count", "first", "rest", "nth", "take", "concat", "flatten", "contains?", "identity",
     "assoc", "dissoc", "keys", "vals", "entries", "into-map", "map", "filter", "keep", "any?", "all?", "reduce",
     "sort-by", "distinct-by", "group-by",
 ];
-const FIXED_ARITY: [(&str, usize); 42] = [
+const FIXED_ARITY: [(&str, usize); 43] = [
     ("+", 2),
     ("*", 2),
     ("/", 2),
@@ -67,6 +67,7 @@ const FIXED_ARITY: [(&str, usize); 42] = [
     ("identity", 1),
     ("or", 2),
     ("count", 1),
+    ("to-json", 1),
     ("first", 1),
     ("rest", 1),
     ("nth", 2),
@@ -212,7 +213,7 @@ fn signature(op: &str) -> &'static str {
         "flatten" => "xss",
         "contains?" => "xs x",
         "reduce" => "f init xs",
-        "identity" => "x",
+        "identity" | "to-json" => "x",
         "assoc" => "map key value",
         "dissoc" => "map key",
         "keys" | "vals" | "entries" => "map",
@@ -558,6 +559,7 @@ struct Speculation {
     diagnostics: usize,
     presence_tests: usize,
     late_sort_keys: usize,
+    late_json_values: usize,
     record_literals: usize,
     instantiations: u64,
 }
@@ -569,6 +571,7 @@ impl Speculation {
             diagnostics: checker.diagnostics.len(),
             presence_tests: checker.presence_tests.len(),
             late_sort_keys: checker.late_sort_keys.len(),
+            late_json_values: checker.late_json_values.len(),
             record_literals: checker.record_literals.len(),
             instantiations: checker.instantiations,
         }
@@ -578,6 +581,7 @@ impl Speculation {
         checker.diagnostics.truncate(self.diagnostics);
         checker.presence_tests.truncate(self.presence_tests);
         checker.late_sort_keys.truncate(self.late_sort_keys);
+        checker.late_json_values.truncate(self.late_json_values);
         checker.record_literals.truncate(self.record_literals);
         checker.instantiations = self.instantiations;
     }
@@ -642,6 +646,7 @@ struct Checker<'r> {
     shapes: HashMap<usize, Shape>,
     presence_tests: Vec<PresenceTest>,
     late_sort_keys: Vec<(Type, Span)>,
+    late_json_values: Vec<(Type, Span)>,
     record_literals: Vec<(Span, Vec<String>)>,
     unfilled_loops: usize,
     earlier: ArgumentTypes,
@@ -2002,6 +2007,24 @@ impl<'r> Checker<'r> {
                         test.shown
                     ))
                     .help(test_help(test.who)),
+                );
+            }
+        }
+    }
+
+    fn check_late_json_values(&mut self) {
+        let values = std::mem::take(&mut self.late_json_values);
+        for (t, span) in &values {
+            let t = self.zonk(t);
+            if let Some(problem) = encodable_problem(&t) {
+                let reason = problem.split_once(" has no JSON encoding").map_or("", |(_, reason)| reason);
+                self.report(
+                    Diagnostic::new(
+                        "no-encoding",
+                        *span,
+                        format!("to-json cannot write {}, which has no JSON encoding{reason}.", describe(&t)),
+                    )
+                    .help("to-json"),
                 );
             }
         }
@@ -3936,6 +3959,11 @@ impl<'r> Checker<'r> {
                 let element = self.list_element(&t, &args[1], "take");
                 self.coerce(prelude(prelude_op, vec![count, items_ir], span), &list(element), expected, span)
             }
+            "to-json" => {
+                let (value, t) = self.check(&args[0], None, scope);
+                self.late_json_values.push((t, args[0].span));
+                self.coerce(prelude(prelude_op, vec![value], span), &STRING, expected, span)
+            }
             "concat" => self.form_concat(prelude_op, span, args, expected, scope),
             "flatten" => {
                 let (items_ir, t) = self.check(&args[0], None, scope);
@@ -4525,6 +4553,7 @@ fn elaborate(
         shapes: HashMap::new(),
         presence_tests: Vec::new(),
         late_sort_keys: Vec::new(),
+        late_json_values: Vec::new(),
         record_literals: Vec::new(),
         unfilled_loops: 0,
         earlier,
@@ -4570,6 +4599,7 @@ fn elaborate(
     *found = std::mem::take(&mut checker.arguments);
     checker.check_presence_tests();
     checker.check_late_sort_keys();
+    checker.check_late_json_values();
     checker.check_size(program);
     checker.settle(&mut body);
     let result = checker.zonk(&result);

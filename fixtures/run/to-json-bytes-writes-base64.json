@@ -1,0 +1,38 @@
+{
+  "description": "to-json writes Bytes as the canonical base64 string the result encoding uses.",
+  "python": false,
+  "program": "(to-json (call blob.get {:name \"a\"}))",
+  "declarations": "declarations.json",
+  "allow": [
+    "blob.get"
+  ],
+  "responses": [
+    {
+      "capability": "blob.get",
+      "input": {
+        "name": "a"
+      },
+      "results": [
+        {
+          "output": "/+8="
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": "\"/+8=\""
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "blob.get",
+      "input": {
+        "name": "a"
+      }
+    },
+    {
+      "response": "r:1",
+      "output": "/+8="
+    }
+  ]
+}

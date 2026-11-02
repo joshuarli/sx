@@ -1,0 +1,59 @@
+{
+  "description": "to-json writes records a tool returned with their optional fields as null or the value, fields in ascending order.",
+  "python": false,
+  "program": "(map to-json (call rows.list {}))",
+  "declarations": "declarations.json",
+  "allow": [
+    "rows.list"
+  ],
+  "responses": [
+    {
+      "capability": "rows.list",
+      "input": {},
+      "results": [
+        {
+          "output": [
+            {
+              "name": "ada",
+              "note": null,
+              "hits": 3
+            },
+            {
+              "name": "bo",
+              "note": "hi",
+              "hits": null
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": [
+      "{\"hits\":3,\"name\":\"ada\",\"note\":null}",
+      "{\"hits\":null,\"name\":\"bo\",\"note\":\"hi\"}"
+    ]
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "rows.list",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": [
+        {
+          "name": "ada",
+          "note": null,
+          "hits": 3
+        },
+        {
+          "name": "bo",
+          "note": "hi",
+          "hits": null
+        }
+      ]
+    }
+  ]
+}

@@ -104,7 +104,7 @@ pub static PRELUDE: [Entry; 44] = [
     entry("group-by", "(group-by f xs) -> List<Tuple<K, List<T>>>", "Groups elements by key, as [key items] tuples in first-seen order.", "(group-by (fn [x] (rem x 2)) [1 2 3])", "[[1 [1 3]] [0 [2]]]"),
 ];
 
-pub static EXTENSIONS: [Entry; 5] = [entry(
+pub static EXTENSIONS: [Entry; 6] = [entry(
     "script",
     "(script {:inputs {:name \"Type\" ...}} body)",
     "The outermost form of a program that declares its own typed inputs, so it needs no host to declare them. Each type is a string in the declaration type language, such as \"List<String>\" or \"Option<Int>\", and the body reads each input by name. A header declares no authority. An Option input may be left out when running and is then none. Run this example with: sx run report.sx --input 'owners=[\"acme\",\"beta\",\"cyan\"]' --input limit=2",
@@ -134,6 +134,12 @@ pub static EXTENSIONS: [Entry; 5] = [entry(
     "Evaluates each expression in order for its effect and returns the value of the last, like (let [_ e1 _ e2] last).",
     "(do (+ 1 1) (* 2 3))",
     "6",
+), entry(
+    "to-json",
+    "(to-json x) -> String",
+    "Writes a value as compact JSON text, with the encoding a program's result has: Bytes as base64, an enum value without a payload as its variant name, none as null. Record fields and map keys come in ascending order, so equal values give equal text. A Float is written as str writes it, so 2.0 is 2. A type with no JSON encoding, such as an Option of an Option, is a check error. Use it with fs.write-text, or to send JSON text to a tool.",
+    "(to-json {:name \"ada\" :langs [\"sx\" \"lean\"]})",
+    "\"{\\\"langs\\\":[\\\"sx\\\",\\\"lean\\\"],\\\"name\\\":\\\"ada\\\"}\"",
 )];
 
 pub fn types() -> Vec<Entry> {

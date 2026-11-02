@@ -224,6 +224,9 @@ theorem applyOp_typed {E : Enums} {limit : Nat} (op : Op) (ts : List Ty) (t : Ty
     subst h; rcases hvs with _ | ⟨⟨⟩, _ | ⟨⟨⟩, _ | _⟩⟩
     exact VT.bool
   next =>
+    subst h; rcases hvs with _ | ⟨_, _ | _⟩
+    exact sized VT.str
+  next =>
     obtain ⟨hall, rfl⟩ := h
     obtain ⟨ss, hss⟩ := textsOf_ok _ _ hvs (by simpa using hall)
     show SafeE _ (do let parts ← vs.mapM textOf; let v := Val.str (String.join parts); checkSize limit v; pure v)

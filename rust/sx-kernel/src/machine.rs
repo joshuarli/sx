@@ -11,7 +11,7 @@ use crate::json::{Json, repr_str};
 use crate::syntax::Span;
 use crate::types::{CallErrorKind, Type};
 use crate::values::{
-    MapValue, RecordValue, Value, call_error_value, decode, encode, float_text, show_value, size,
+    MapValue, NonFiniteFloat, RecordValue, Value, call_error_value, decode, encode, float_text, json_text, show_value, size,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1314,6 +1314,13 @@ impl<'p> Machine<'p> {
                 let joined = Value::string(&joined);
                 self.check_size(&joined, Some(span))?;
                 joined
+            }
+            PreludeOp::ToJson => {
+                let text = json_text(arg(0)?)
+                    .map_err(|NonFiniteFloat(f)| internal(format!("to-json met the non-finite Float {f}."), Some(span)))?;
+                let text = Value::string(&text);
+                self.check_size(&text, Some(span))?;
+                text
             }
             PreludeOp::Count => Value::Int(match arg(0)? {
                 Value::Map(map) => map.entries().len() as i64,

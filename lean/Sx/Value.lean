@@ -266,6 +266,48 @@ def textOf : Val → Except Failure String
   | .variant _ n none => pure n
   | _ => internal "str cannot write this value."
 
+def hexDigit (n : Nat) : Char := if n < 10 then Char.ofNat (48 + n) else Char.ofNat (87 + n)
+
+def jsonEscapeChar (c : Char) : String :=
+  if c = '"' then "\\\""
+  else if c = '\\' then "\\\\"
+  else if c = '\n' then "\\n"
+  else if c = '\r' then "\\r"
+  else if c = '\t' then "\\t"
+  else if c.val = 8 then "\\b"
+  else if c.val = 12 then "\\f"
+  else if c.val < 32 then "\\u00" ++ (hexDigit (c.val.toNat / 16)).toString ++ (hexDigit (c.val.toNat % 16)).toString
+  else c.toString
+
+def jsonString (s : String) : String :=
+  "\"" ++ String.join (s.toList.map jsonEscapeChar) ++ "\""
+
+mutual
+def Val.jsonText : Val → String
+  | .bool b => if b then "true" else "false"
+  | .int i => toString i
+  | .float f => floatText f
+  | .bytes b => jsonString b
+  | .str s => jsonString s
+  | .unit => "null"
+  | .none => "null"
+  | .list vs => "[" ++ ",".intercalate (jsonTextList vs) ++ "]"
+  | .tuple vs => "[" ++ ",".intercalate (jsonTextList vs) ++ "]"
+  | .record fs => "{" ++ ",".intercalate ((sortFields (jsonTextFields fs)).map Prod.snd) ++ "}"
+  | .map es => "{" ++ ",".intercalate ((sortFields (jsonTextFields es)).map Prod.snd) ++ "}"
+  | .some v => v.jsonText
+  | .ok v => "{\"ok\":" ++ v.jsonText ++ "}"
+  | .err v => "{\"err\":" ++ v.jsonText ++ "}"
+  | .variant _ n none => jsonString n
+  | .variant _ n (some p) => "{\"tag\":" ++ jsonString n ++ ",\"value\":" ++ p.jsonText ++ "}"
+def jsonTextList : List Val → List String
+  | [] => []
+  | v :: vs => v.jsonText :: jsonTextList vs
+def jsonTextFields : List (String × Val) → List (String × String)
+  | [] => []
+  | (k, v) :: fs => (k, jsonString k ++ ":" ++ v.jsonText) :: jsonTextFields fs
+end
+
 def checkedFloat (x : Float) : Except Failure Val :=
   if x.isFinite then pure (.float x)
   else failWith .arithmetic "Float overflow: the result is not a finite number, and JSON cannot carry one."
@@ -331,6 +373,10 @@ def applyOp (limit : Nat) : Op → List Val → Except Failure Val
     let v := Val.str (String.join parts)
     checkSize limit v
     pure v
+  | .toJson, [v] => do
+    let t := Val.str v.jsonText
+    checkSize limit t
+    pure t
   | .count, [.map es] => pure (.int es.length)
   | .count, [.list vs] => pure (.int vs.length)
   | .first, [.list []] => failWith .outOfRange "first of an empty list."

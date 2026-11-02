@@ -1,0 +1,5 @@
+error[no-encoding] 2:10-2:35
+  (to-json (assoc {} "pen" (some 4)))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  to-json cannot write a Map<String, Option<Int>>, which has no JSON encoding, because a null value and a missing key would collide.
+  Help: sx help to-json

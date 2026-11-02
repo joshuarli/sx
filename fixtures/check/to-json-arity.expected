@@ -1,0 +1,6 @@
+error[arity] 2:1-2:14
+  (to-json 1 2)
+  ^^^^^^^^^^^^^
+  to-json takes 1 argument, but this call has 2.
+  Signature: (to-json x)
+  Help: sx help to-json

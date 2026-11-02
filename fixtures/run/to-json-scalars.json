@@ -1,0 +1,22 @@
+{
+  "description": "to-json writes Int, Bool, String, and Float scalars as compact JSON: a Float as str writes it, negative zero as 0, exponents beyond the plain range with a sign.",
+  "python": false,
+  "program": "[(to-json 7) (to-json (- 0 7)) (to-json true) (to-json \"plain\") (to-json 1.5) (to-json 2.0) (to-json (- 0.0)) (to-json (/ 1.0 3.0)) (to-json (* 1000000000000.0 1000000000000.0)) (to-json (/ 1.0 10000000.0)) (to-json (- (- 9223372036854775807) 1))]",
+  "declarations": "declarations.json",
+  "allow": [],
+  "expect": {
+    "completed": [
+      "7",
+      "-7",
+      "true",
+      "\"plain\"",
+      "1.5",
+      "2",
+      "0",
+      "0.3333333333333333",
+      "1e+24",
+      "1e-7",
+      "-9223372036854775808"
+    ]
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "description": "to-json writes none as null, (some x) as x, an ok result as an object with ok, a tuple as an array, and an empty list and an empty map as [] and {}.",
+  "python": false,
+  "program": "[(to-json [(some 1) none (some 3)]) (to-json (attempt (+ 1 2))) (to-json [\"a\" 1 true]) (to-json (take 0 [1])) (to-json (dissoc (assoc {} \"k\" 1) \"k\"))]",
+  "declarations": "declarations.json",
+  "allow": [],
+  "expect": {
+    "completed": [
+      "[1,null,3]",
+      "{\"ok\":3}",
+      "[\"a\",1,true]",
+      "[]",
+      "{}"
+    ]
+  }
+}

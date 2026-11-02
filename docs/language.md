@@ -574,6 +574,7 @@ as in Clojure.
 | `not` | `Bool -> Bool` |
 | `and or` | `Bool Bool -> Bool`. Both arguments always evaluate. Use `if` to make a call conditional. |
 | `str` | `T ... -> String`, one or more arguments joined in order. Each is a `String`, an `Int` written in decimal, a `Float` written as JavaScript's `String(x)` writes a number, a `Bool` written `true` or `false`, or a value of an enum with no payloads written as its variant name. In a `sort-by` key every argument must be a `String`, because joining numbers into a string key sorts them as text. |
+| `to-json` | `T -> String`, the value as compact JSON text. Rust and Lean only. A `T` with no JSON encoding is a `no-encoding` error. |
 | `count` | `List<T> -> Int`, `Map<String, V> -> Int` for the number of entries, or `Bytes -> Int` for the number of bytes |
 | `first` | `List<T> -> T`. An empty list is an `out-of-range` error. On a tuple it is the first element, with that element's type. |
 | `rest` | `List<T> -> List<T>`, every element after the first. Empty for an empty list. |
@@ -607,6 +608,20 @@ zero (`0.0` divided by `0.0` included) and an overflowing `+`, `-`, `*`, or `/`.
 same value, with no trailing `.0`, so `1.0` is `1`. It uses plain notation for magnitudes from
 `1e-6` up to below `1e21` and an exponent outside that range, as in `1e+21` and `1e-7`. Negative
 zero is `0`.
+
+`to-json` writes its argument with the [JSON encoding](#values-and-json) of a program's result, as
+compact text with no spaces: `Bytes` as base64, an enum value without a payload as its variant name,
+`none` as `null`, `(some x)` as `x`, `(ok x)` as `{"ok":x}`. The text is canonical. It writes record
+fields and map keys in ascending order of their UTF-8 bytes, which is code point order, whatever order
+a record literal listed them in, so values that are equal give the same text. A `Float` is written
+as `str` writes it, so `2.0` is `2` and a reader that needs a `Float` still accepts it. A string
+escapes `"`, `\`, and the control characters below U+0020 (as `\n`, `\r`, `\t`, `\b`, `\f`, or
+`\u00xx` in lower case) and writes every other character as itself in UTF-8. The checker rejects a
+call whose argument type has no JSON encoding, such as `Option<Option<T>>` or `Map<String, Option<T>>`,
+with `no-encoding`, as it does for a program's result. No value of a type that has an encoding is
+refused at run time except by size: text longer than the value-size budget stops the program with
+`budget-exhausted`, as `str` does. Map keys are always `String`, and a `Float` is never infinite or not
+a number, so there is no other lossy case. The Python prototype has no `to-json`.
 
 Text operations other than `str`, `=`, and ordering live in the `text` core, for example
 `text.casefold` and `text.from-int`.

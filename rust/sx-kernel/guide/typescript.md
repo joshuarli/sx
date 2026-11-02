@@ -35,6 +35,7 @@ declaration.
 | `s.split("\n")`, `s.trim()`, `s.startsWith(p)` | `(text.split s "\n")`, `(text.trim s)`, `(text.starts-with? s p)` |
 | `parseInt(s, 10)` | `(text.to-int s)`, an `Option<Int>` |
 | `JSON.parse(s).deps.react` | `(json.get s ["deps" "react"])`, an `Option<String>` |
+| `JSON.stringify(x)` | `(to-json x)` |
 | `s.match(/(\d+)-(\w+)/)` | `(re.find #"(\d+)-(\w+)" s)`, an `Option` of the match and its groups |
 | `try { a } catch (e) { b }` | `(match (attempt a) (ok v) ... (err e) b)` |
 | `await Promise.all(xs.map(async x => ...))` | `(par-map {:limit 8} (fn [x] ...) xs)`, for reads |

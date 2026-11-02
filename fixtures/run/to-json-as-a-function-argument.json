@@ -1,0 +1,13 @@
+{
+  "description": "to-json can be named where a function is expected, and writes none and (some x) fields as null and the value.",
+  "python": false,
+  "program": "(map to-json [{:a 1 :b (some \"x\")} {:a 2 :b none}])",
+  "declarations": "declarations.json",
+  "allow": [],
+  "expect": {
+    "completed": [
+      "{\"a\":1,\"b\":\"x\"}",
+      "{\"a\":2,\"b\":null}"
+    ]
+  }
+}

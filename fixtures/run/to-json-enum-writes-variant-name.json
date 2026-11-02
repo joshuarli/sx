@@ -1,0 +1,52 @@
+{
+  "description": "to-json writes an enum value without a payload as its variant name.",
+  "python": false,
+  "program": "(to-json (call checks.list {}))",
+  "declarations": "declarations.json",
+  "allow": [
+    "checks.list"
+  ],
+  "responses": [
+    {
+      "capability": "checks.list",
+      "input": {},
+      "results": [
+        {
+          "output": [
+            {
+              "name": "lint",
+              "level": "Failing"
+            },
+            {
+              "name": "unit",
+              "level": "Passing"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": "[{\"level\":\"Failing\",\"name\":\"lint\"},{\"level\":\"Passing\",\"name\":\"unit\"}]"
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "checks.list",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": [
+        {
+          "name": "lint",
+          "level": "Failing"
+        },
+        {
+          "name": "unit",
+          "level": "Passing"
+        }
+      ]
+    }
+  ]
+}

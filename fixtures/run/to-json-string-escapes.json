@@ -1,0 +1,10 @@
+{
+  "description": "to-json escapes quote, backslash, and control characters, spells the short ones as JSON does, and writes every other character as itself, DEL and non-ASCII included.",
+  "python": false,
+  "program": "(to-json \"q\\\" b\\\\ n\\n r\\r t\\t c\\u{1} f\\u{c} b\\u{8} d\\u{7f} e\\u{e9} \\u{1f600}\")",
+  "declarations": "declarations.json",
+  "allow": [],
+  "expect": {
+    "completed": "\"q\\\" b\\\\ n\\n r\\r t\\t c\\u0001 f\\f b\\b d\u007f e\u00e9 \ud83d\ude00\""
+  }
+}

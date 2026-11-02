@@ -1,0 +1,14 @@
+{
+  "description": "The text to-json writes is an ordinary String: it can be counted, compared, and joined.",
+  "python": false,
+  "program": "(let [t (to-json {:id \"x\" :n 1})] [t (str \"body=\" t) (= t \"{\\\"id\\\":\\\"x\\\",\\\"n\\\":1}\")])",
+  "declarations": "declarations.json",
+  "allow": [],
+  "expect": {
+    "completed": [
+      "{\"id\":\"x\",\"n\":1}",
+      "body={\"id\":\"x\",\"n\":1}",
+      true
+    ]
+  }
+}

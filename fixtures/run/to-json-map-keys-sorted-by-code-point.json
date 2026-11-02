@@ -1,0 +1,10 @@
+{
+  "description": "to-json writes map keys in code point order: a supplementary-plane key follows U+FF5E, where UTF-16 order would put it first.",
+  "python": false,
+  "program": "(to-json (into-map [[\"\\u{1f600}\" 1] [\"\\u{ff5e}\" 2] [\"\\u{e9}\" 3] [\"z\" 4] [\"Z\" 5] [\"\" 6] [\"a b\" 7]]))",
+  "declarations": "declarations.json",
+  "allow": [],
+  "expect": {
+    "completed": "{\"\":6,\"Z\":5,\"a b\":7,\"z\":4,\"\u00e9\":3,\"\uff5e\":2,\"\ud83d\ude00\":1}"
+  }
+}

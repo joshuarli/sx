@@ -240,6 +240,7 @@ def opTy (E : Enums) : Op → List Ty → Option Ty
   | .not, [.bool] => some .bool
   | .and, [.bool, .bool] => some .bool
   | .or, [.bool, .bool] => some .bool
+  | .toJson, [_] => some .str
   | .str, t :: ts => if (t :: ts).all (strArg E) then some .str else none
   | .count, [.list _] => some .int
   | .count, [.map _] => some .int

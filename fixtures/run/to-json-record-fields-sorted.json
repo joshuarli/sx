@@ -1,0 +1,14 @@
+{
+  "description": "to-json writes record fields in ascending order whatever order the literal listed them in, so equal records give equal text.",
+  "python": false,
+  "program": "(let [a {:b 2 :a 1 :c {:z true :y \"s\"}} b {:c {:y \"s\" :z true} :a 1 :b 2}] [(to-json a) (to-json b) (= (to-json a) (to-json b))])",
+  "declarations": "declarations.json",
+  "allow": [],
+  "expect": {
+    "completed": [
+      "{\"a\":1,\"b\":2,\"c\":{\"y\":\"s\",\"z\":true}}",
+      "{\"a\":1,\"b\":2,\"c\":{\"y\":\"s\",\"z\":true}}",
+      true
+    ]
+  }
+}

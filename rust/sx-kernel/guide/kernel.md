@@ -84,6 +84,8 @@ definition short: a step that grows long becomes two definitions or a helper `de
 - `(+ a b)`, `(- a b)`, `(* a b)`, `(quot a b)`, `(rem a b)`, and `(- x)` negates.
   `(= a b)`, `(not= a b)`, `(< a b)`, `(<= a b)`, `(> a b)`, `(>= a b)`. `(not x)`, `(and a b)`, `(or a b)`.
 - `(str a b ...)` joins strings, numbers, booleans, and enum values.
+- `(to-json x)` writes any value as compact JSON text, with record fields and map keys in ascending
+  order, for `fs.write-text` or a tool that takes JSON text.
 - `(count xs)`, `(first xs)`, `(rest xs)`, `(nth xs i)`, `(take n xs)`, `(concat xs ys)`,
   `(flatten xss)`, `(contains? xs x)`, `(identity x)`. `first` and `nth` stop the program on a list
   that is too short.

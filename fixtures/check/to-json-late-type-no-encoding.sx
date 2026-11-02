@@ -1,0 +1,2 @@
+; python: no
+(let [xs []] (let [text (to-json xs)] (let [more (concat xs [(some (some 1))])] (count more))))

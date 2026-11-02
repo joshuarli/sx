@@ -1,0 +1,13 @@
+{
+  "description": "to-json stops with budget-exhausted when the text it writes is larger than the value-size budget allows, as str does, though the map it writes is small.",
+  "python": false,
+  "program": "(to-json (assoc {} \"kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk\" 1))",
+  "declarations": "declarations.json",
+  "allow": [],
+  "budgets": {
+    "value_size": 3
+  },
+  "expect": {
+    "failed": "budget-exhausted"
+  }
+}

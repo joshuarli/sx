@@ -1,0 +1,2 @@
+; python: no
+(to-json (assoc {} "pen" (some 4)))
