@@ -550,7 +550,7 @@ always knows the expected type, so every encoding below is unambiguous.
 | `Bool` | `true` or `false` |
 | `Int` | An integer in the signed 64-bit range. A fraction, an exponent, or `true` is rejected. |
 | `Float` | A JSON number, with or without a fraction or exponent: `21` and `21.5` both decode. A number outside the finite 64-bit range is a mismatch. Encoding writes a finite number. |
-| `String` | A string |
+| `String` | A string. A lone surrogate, which is not a Unicode scalar value, makes it a mismatch, as a map key does. |
 | `Bytes` | A string of standard base64 (RFC 4648 alphabet, `+` and `/`) with `=` padding, canonical: the padding bits are zero. The URL-safe alphabet, missing padding, whitespace, and any other character are mismatches. |
 | `Unit` | `null` |
 | `List<T>` | An array |

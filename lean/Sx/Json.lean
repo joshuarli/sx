@@ -481,7 +481,38 @@ partial def expandExponents (cs : List Char) (inString escaped : Bool) (out : St
       expandExponents after false false (out ++ expandExponent (String.ofList token))
     else expandExponents rest false false (out.push c)
 
+def hexValue? (c : Char) : Option Nat :=
+  if c.isDigit then some (c.toNat - '0'.toNat)
+  else if 'a' ≤ c ∧ c ≤ 'f' then some (c.toNat - 'a'.toNat + 10)
+  else if 'A' ≤ c ∧ c ≤ 'F' then some (c.toNat - 'A'.toNat + 10)
+  else none
+
+def hex4? : List Char → Option Nat
+  | a :: b :: c :: d :: _ => do
+    pure ((← hexValue? a) * 4096 + (← hexValue? b) * 256 + (← hexValue? c) * 16 + (← hexValue? d))
+  | _ => none
+
+partial def loneSurrogate : List Char → Bool → Bool
+  | [], _ => false
+  | '\\' :: 'u' :: rest, true =>
+    match hex4? rest with
+    | some v =>
+      if 0xD800 ≤ v ∧ v ≤ 0xDBFF then
+        match rest.drop 4 with
+        | '\\' :: 'u' :: next =>
+          match hex4? next with
+          | some w => if 0xDC00 ≤ w ∧ w ≤ 0xDFFF then loneSurrogate (next.drop 4) true else true
+          | none => true
+        | _ => true
+      else if 0xDC00 ≤ v ∧ v ≤ 0xDFFF then true
+      else loneSurrogate (rest.drop 4) true
+    | none => loneSurrogate rest true
+  | '\\' :: _ :: rest, true => loneSurrogate rest true
+  | '"' :: rest, inString => loneSurrogate rest (!inString)
+  | _ :: rest, inString => loneSurrogate rest inString
+
 def parseJsonText (text : String) : Except String Json :=
-  Json.parse (expandExponents text.toList false false "")
+  if loneSurrogate text.toList false then .error "a JSON string has a lone surrogate escape"
+  else Json.parse (expandExponents text.toList false false "")
 
 end Sx
