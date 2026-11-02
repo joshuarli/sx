@@ -217,30 +217,7 @@ pub fn lookup_entry(name: &str) -> Option<String> {
     entries().iter().find(|e| e.name == name).map(render_entry)
 }
 
-fn edit_distance(a: &str, b: &str) -> usize {
-    let b: Vec<char> = b.chars().collect();
-    let mut previous: Vec<usize> = (0..=b.len()).collect();
-    for (i, ca) in a.chars().enumerate() {
-        let mut current = vec![i + 1];
-        for (j, cb) in b.iter().enumerate() {
-            let substitution = previous[j] + usize::from(ca != *cb);
-            current.push((previous[j + 1] + 1).min(current[j] + 1).min(substitution));
-        }
-        previous = current;
-    }
-    previous[b.len()]
-}
-
-pub fn closest<'a>(name: &str, candidates: &'a [String]) -> Option<&'a str> {
-    candidates
-        .iter()
-        .filter(|c| c.as_str() != name)
-        .map(|c| (edit_distance(name, c), c.as_str()))
-        .min()
-        .and_then(|(distance, found)| (distance <= 2).then_some(found))
-}
-
 pub fn not_found_message(name: &str, candidates: &[String]) -> String {
-    let hint = closest(name, candidates).map(|s| format!(" Did you mean {s}?")).unwrap_or_default();
+    let hint = crate::checker::closest(name, candidates).map(|s| format!(" Did you mean {s}?")).unwrap_or_default();
     format!("sx help: nothing is named {name}.{hint}")
 }
