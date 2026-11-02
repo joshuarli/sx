@@ -8,7 +8,12 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+from cores import task_registry
+
+from sx.checker import check
 from sx.diagnostics import render
+from sx.host import FixtureHost, UnexpectedCallError, run
+from sx.machine import Completed, Failed
 from sx.reader import read
 from sx.syntax import Form, ListLiteral, Node, RecordLiteral, Symbol
 
@@ -48,6 +53,7 @@ class Run:
     diagnostics: list[str]
     rendered: str
     unknown: list[str]
+    outcome: str
 
 
 def task_section(task: Json, cores: Json) -> str:
@@ -205,6 +211,15 @@ def score(
 ) -> Run:
     program, fence = extract(reply)
     result = read(program)
+    diagnostics = result.diagnostics
+    outcome = "rejected"
+    if result.program is not None:
+        registry = task_registry(task)
+        allowed = frozenset(capability["id"] for capability in task["capabilities"])
+        checked = check(result.program, registry, allowed=allowed)
+        diagnostics = checked.diagnostics
+        if checked.program is not None:
+            outcome = execute(task, checked.program, registry)
     return Run(
         task=task["id"],
         sample=sample,
@@ -215,10 +230,25 @@ def score(
         program=program,
         tokens=tokens,
         error=error,
-        diagnostics=[d.label for d in result.diagnostics],
-        rendered=render(program, result.diagnostics),
+        diagnostics=[d.label for d in diagnostics],
+        rendered=render(program, diagnostics),
         unknown=[] if result.program is None else unknown_names(result.program, task, cores),
+        outcome=outcome,
     )
+
+
+def execute(task: Json, program: Any, registry: Any) -> str:
+    host = FixtureHost.from_responses(registry, task["responses"])
+    try:
+        finished = run(program, host).outcome
+    except UnexpectedCallError as unexpected:
+        return f"wrong call: {unexpected}"
+    if isinstance(finished, Failed):
+        return f"failed: {finished.failure.kind}: {finished.failure.message}"
+    assert isinstance(finished, Completed)
+    if host.unperformed_writes():
+        return "wrong: a required write did not happen"
+    return "correct" if finished.json == task["expected"] else f"wrong result: {json.dumps(finished.json)}"
 
 
 def run_one(task: Json, sample: int, model: str, thinking: str, prompt: Path, workdir: Path, cores: Json) -> Run:
@@ -293,6 +323,7 @@ def show(out: Path, task_ids: set[str]) -> None:
             else:
                 status = "read ok"
             unknown = f"; lacks {', '.join(run['unknown'])}" if run["unknown"] else ""
+            unknown += f"; {run['outcome']}"
             print(f"### sample {run['sample']}: {status}{unknown}; tokens {run['tokens']}")
             print(run["program"])
             if run["diagnostics"]:
@@ -302,20 +333,24 @@ def show(out: Path, task_ids: set[str]) -> None:
 def report(runs: list[Run], tasks: list[Json], out: Path) -> None:
     labels: Counter[str] = Counter()
     unknown: Counter[str] = Counter()
-    for run in runs:
-        unknown.update(set(run.unknown))
-        (out / run.task / f"{run.sample}.json").write_text(json.dumps(asdict(run), indent=2))
-        labels.update(set(run.diagnostics))
+    for saved in runs:
+        unknown.update(set(saved.unknown))
+        (out / saved.task / f"{saved.sample}.json").write_text(json.dumps(asdict(saved), indent=2))
+        labels.update(set(saved.diagnostics))
     for task in tasks:
         mine = [r for r in runs if r.task == task["id"]]
         answered = [r for r in mine if r.program]
-        read_ok = sum(1 for r in answered if not r.diagnostics)
+        checks_ok = sum(1 for r in answered if not r.diagnostics)
+        correct = sum(1 for r in answered if r.outcome == "correct")
         noisy = sum(1 for r in mine if r.error is not None)
-        print(f"{task['id']:24} read {read_ok}/{len(answered)}" + (f"  run errors {noisy}" if noisy else ""))
+        line = f"{task['id']:24} checks {checks_ok}/{len(answered)}  correct {correct}/{len(answered)}"
+        print(line + (f"  run errors {noisy}" if noisy else ""))
     answered = [r for r in runs if r.program]
     total_ok = sum(1 for r in answered if not r.diagnostics)
+    total_correct = sum(1 for r in answered if r.outcome == "correct")
     noisy = sum(1 for r in runs if r.error is not None)
-    print(f"total read {total_ok}/{len(answered)} answers from {len(runs)} runs; errors in {noisy} runs")
+    summary = f"total correct {total_correct}, checks {total_ok}, of {len(answered)} answers from {len(runs)} runs"
+    print(f"{summary}; errors in {noisy} runs")
     for label, count in labels.most_common():
         print(f"  {label}: {count} answers")
     print("names Sx does not have, in answers that read cleanly:")

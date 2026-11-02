@@ -4,7 +4,7 @@
   "kinds": ["retry", "partial-failure"],
   "domain": "repomod",
   "sx-expressible": true,
-  "description": "Look up the latest CI state of `acme/api`, `acme/old`, and `acme/web`. When a lookup fails because the service timed out, was unavailable, or rate limited the request, retry it up to 3 more times, waiting 1, 2, then 4 seconds before each retry. Do not retry any other failure. Return a list of records with `repo` and `state`, in the order above, where `state` is the CI state's name, or `missing` if the lookup still failed.",
+  "description": "Look up the latest CI state of `acme/api`, `acme/old`, and `acme/web`. When a lookup fails because the service timed out, was unavailable, or rate limited the request, retry it up to 3 more times, waiting 1, 2, then 4 seconds before each retry. Do not retry any other failure. Return a list of records with `repo` and `state`, in the order above, where `state` is the CI state's name exactly as the tool spells it, such as `Passing`, or `missing` if the lookup still failed.",
   "types": {"Ci": "Record {repo: String, state: ci.State}"},
   "enums": {"ci.State": {"Passing": null, "Failing": null, "Pending": null, "Unknown": null}},
   "cores": [],
