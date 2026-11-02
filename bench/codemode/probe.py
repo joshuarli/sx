@@ -31,6 +31,7 @@ TSCONFIG = {
     "files": ["api.d.ts", "solution.mts"],
 }
 REPAIRS = 2
+WAIT_KINDS = frozenset({"retry", "polling"})
 QUICK_TASKS = (
     "dev-retry-ci", "dev-wait-for-job", "dev-events-pages", "dev-ci-partial", "dev-tag-counts", "dev-csv-summary",
 )
@@ -141,7 +142,8 @@ def judge(
         return "wrong", writes_missing
     if result != task["expected"]:
         return "wrong", f"wrong result: {json.dumps(result)}"
-    if sorted(delays) != sorted(wanted_delays):
+    states_a_wait_policy = bool(WAIT_KINDS & set(task["kinds"]))
+    if states_a_wait_policy and sorted(delays) != sorted(wanted_delays):
         return "wrong", f"waited {sorted(delays)} instead of {sorted(wanted_delays)}"
     return "correct", ""
 
@@ -239,13 +241,40 @@ def run_trial(
     return trial
 
 
-def load_trials(out: Path) -> list[Trial]:
-    trials = []
+def rejudge(out: Path, cores: Json) -> int:
+    tasks = {t["id"]: t for t in (json.loads(p.read_text()) for p in (BENCH / "tasks").glob("*/task.json"))}
+    changed = 0
     for path in sorted(out.glob("*/*/trial.json")):
-        saved = json.loads(path.read_text())
-        attempts = [Attempt(**a) for a in saved.pop("attempts")]
-        trials.append(Trial(**saved, attempts=attempts))
-    return trials
+        trial = load_trial(path)
+        task = tasks[trial.task]
+        wanted = reference_delays(task)
+        kept: list[Attempt] = []
+        for index, attempt in enumerate(trial.attempts):
+            if attempt.status != "no-answer":
+                if trial.arm == "sx":
+                    status, detail, *_ = evaluate_sx(task, attempt.code, wanted)
+                else:
+                    workdir = path.parent / f"attempt-{index}"
+                    status, detail, *_ = evaluate_js(task, attempt.code, wanted, workdir, cores)
+                if (status, detail) != (attempt.status, attempt.detail):
+                    changed += 1
+                    attempt.status, attempt.detail = status, detail
+            kept.append(attempt)
+            if attempt.status == "correct":
+                break
+        trial.attempts = kept
+        path.write_text(json.dumps(asdict(trial), indent=2))
+    return changed
+
+
+def load_trial(path: Path) -> Trial:
+    saved = json.loads(path.read_text())
+    attempts = [Attempt(**a) for a in saved.pop("attempts")]
+    return Trial(**saved, attempts=attempts)
+
+
+def load_trials(out: Path) -> list[Trial]:
+    return [load_trial(path) for path in sorted(out.glob("*/*/trial.json"))]
 
 
 def bootstrap(differences: list[float], rounds: int = 10_000, seed: int = 7) -> tuple[float, float]:
@@ -371,12 +400,17 @@ def main() -> None:
     parser.add_argument("--quick", action="store_true", help="One sample of six development tasks, for iterating")
     parser.add_argument("--report", action="store_true", help="Report on saved trials without calling a model")
     parser.add_argument("--measure-guides", action="store_true", help="Measure each guide level's token cost")
+    parser.add_argument("--rejudge", action="store_true", help="Score saved attempts again with the current rules")
     args = parser.parse_args()
     args.out = args.out.resolve()
     all_tasks = [json.loads(p.read_text()) for p in (BENCH / "tasks").glob("*/task.json")]
     held_out = [t for t in all_tasks if t["split"] == "held-out"]
     gap = (sum(1 for t in held_out if not t["sx-expressible"]), len(held_out))
     if args.report:
+        print(report(load_trials(args.out), gap))
+        return
+    if args.rejudge:
+        print(f"{rejudge(args.out, json.loads((BENCH / 'cores.json').read_text()))} attempts changed")
         print(report(load_trials(args.out), gap))
         return
     if args.measure_guides:
