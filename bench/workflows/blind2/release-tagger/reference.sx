@@ -1,0 +1,46 @@
+(let [git (fn [args]
+            (get (call process.run {:program "/usr/bin/git" :args args :cwd "{{root}}/repo" :stdin none}) :stdout))
+      releases (keep (fn [t]
+                       (if (re.test #"^v\d+\.\d+\.\d+$" t)
+                         (match (semver.parse (text.replace t "v" ""))
+                           (some v) (some {:tag t :version v})
+                           none none)
+                         none))
+                     (text.split (text.trim (git ["tag" "--list"])) "\n"))
+      latest (reduce (fn [best c] (if (> (semver.compare (get c :version) (get best :version)) 0) c best))
+                     (first releases)
+                     (rest releases))
+      latest-tag (get latest :tag)
+      numbers (map (fn [n] (match (text.to-int n) (some i) i none 0)) (text.split (text.replace latest-tag "v" "") "."))
+      subjects (text.split (text.trim (git ["log" "--format=%s" (str latest-tag "..HEAD")])) "\n")
+      commits (keep (fn [s]
+                      (match (re.find #"^(feat|fix|perf|docs|chore|refactor|test|build|ci)(?:\([^)]*\))?(!)?: (.+)$" s)
+                        (some g) (some {:type (nth g 1) :breaking (= (nth g 2) "!") :description (nth g 3)})
+                        none none))
+                    subjects)
+      has-type (fn [t] (any? (fn [c] (= (get c :type) t)) commits))
+      bump (cond (any? (fn [c] (get c :breaking)) commits) "major"
+                 (has-type "feat") "minor"
+                 :else "patch")
+      major (nth numbers 0)
+      minor (nth numbers 1)
+      patch (nth numbers 2)
+      version (cond (= bump "major") (str (+ major 1) ".0.0")
+                    (= bump "minor") (str major "." (+ minor 1) ".0")
+                    :else (str major "." minor "." (+ patch 1)))
+      tag (str "v" version)
+      notes (text.join "\n"
+                       (map (fn [c] (str "- " (get c :description)))
+                            (filter (fn [c] (or (= (get c :type) "feat") (or (= (get c :type) "fix") (= (get c :type) "perf"))))
+                                    commits)))
+      _ (git ["tag" tag])
+      commit (text.trim (git ["rev-parse" "HEAD"]))
+      published (retry {:delays [100ms 100ms] :on [RateLimited]}
+                  (call releases.create {:tag tag :notes notes}))]
+  {:latest latest-tag
+   :since (count subjects)
+   :bump bump
+   :tag tag
+   :commit commit
+   :release_id (get published :id)
+   :notes notes})

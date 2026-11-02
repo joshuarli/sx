@@ -1,0 +1,15 @@
+{
+  "cores": ["text", "semver"],
+  "packs": ["process"],
+  "capabilities": [
+    {
+      "id": "releases.create",
+      "http": {"method": "POST", "url": "{{release_origin}}/releases", "query": []},
+      "input": "Record {tag: String, notes: String}",
+      "output": "Record open {id: Int}",
+      "effect": "write",
+      "idempotent": false,
+      "description": "Publishes the release notes of a tag and returns the id of the release."
+    }
+  ]
+}

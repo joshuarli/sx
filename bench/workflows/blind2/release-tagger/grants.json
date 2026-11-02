@@ -1,0 +1,12 @@
+{
+  "process.run": {
+    "commands": [
+      {"program": "/usr/bin/git", "args": [{"tag": "Exact", "value": "tag"}, {"tag": "Exact", "value": "--list"}]},
+      {"program": "/usr/bin/git", "args": [{"tag": "Exact", "value": "log"}, {"tag": "Exact", "value": "--format=%s"}, "AnyOne"]},
+      {"program": "/usr/bin/git", "args": [{"tag": "Exact", "value": "rev-parse"}, {"tag": "Exact", "value": "HEAD"}]},
+      {"program": "/usr/bin/git", "args": [{"tag": "Exact", "value": "tag"}, "AnyOne"]}
+    ],
+    "roots": ["{{root}}/repo"]
+  },
+  "releases.create": {"origins": ["{{release_origin}}"], "methods": ["POST"]}
+}
