@@ -104,6 +104,17 @@ join to `Record {number: Int, ok: Bool, kind: Option<String>}`, and `(get r :kin
 result. This holds wherever branches join: `if`, `match`, `cond`, and inside lists and tuples.
 Records whose shared fields have types that do not join are still a `branch-mismatch`.
 
+`concat` joins the records of its two lists in the same way. With `busy` holding `{start, end, title}`
+records from a tool, `(concat busy [{:start s :end e}])` has type
+`List<Record {start: Int, end: Int, title: Option<String>}>`, and so does `(concat [{:start s :end e}] busy)`.
+A field read from the result follows the rules above, so `(get m :title)` is optional. The join applies
+only to an argument that would otherwise be rejected, so a `concat` that checked before checks the same
+way, and only to records: other element types still have to be equal, with option promotion as before. Records whose shared fields do not join are
+rejected as they were, with the diagnostic for the second list checked against the first. Other
+functions that take two values of one type, such as `=`, `contains?`, `assoc`, and `reduce`, do not join: a
+comparison of two different record types is never true, `assoc` would have to convert the whole map, which the IR
+cannot express, and the function that `reduce` takes sees its accumulator's type before it returns.
+
 A joined field is optional wherever the join reaches, and Sx does not narrow it by another field. Given
 `(if ok {:id id :known true :entry e} {:id id :known false})`, the test `(get r :known)` does not
 make `(get r :entry)` present, so `(get (get r :entry) :size)` or `(+ 1 (get r :size))` is an error

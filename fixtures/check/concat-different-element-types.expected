@@ -1,0 +1,6 @@
+error[type-mismatch] 3:16-3:19
+  (concat [1 2] ["a"])
+                 ^^^
+  This is a String, but an Int is needed here.
+  Expected: Int
+  Found: String

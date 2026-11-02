@@ -1,0 +1,5 @@
+; declarations: fixtures/run/declarations.json
+; allow: orders.list
+; python: no
+(let [orders (call orders.list {})]
+  (concat orders [{:customer 5}]))

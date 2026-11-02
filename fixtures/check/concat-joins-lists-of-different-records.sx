@@ -1,0 +1,4 @@
+; declarations: fixtures/run/declarations.json
+; python: no
+(let [all (concat [{:id "a" :size 1}] [{:id "b" :note "late"}])]
+  (map (fn [r] [(get r :id) (get r :size 0) (get r :note "none")]) all))

@@ -1,0 +1,6 @@
+; declarations: fixtures/run/declarations.json
+; allow: orders.list
+; python: no
+(let [orders (call orders.list {})
+      all (concat [{:customer "walk-in"}] orders)]
+  (map (fn [o] (get o :total 0)) all))

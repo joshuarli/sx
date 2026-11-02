@@ -1,0 +1,12 @@
+error[missing-field] 5:19-5:32
+    (concat orders [{:customer 5}]))
+                    ^^^^^^^^^^^^^
+  This record is missing the field :total.
+  Expected: Order
+
+error[type-mismatch] 5:30-5:31
+    (concat orders [{:customer 5}]))
+                               ^
+  This is an Int, but a String is needed here.
+  Expected: String
+  Found: Int

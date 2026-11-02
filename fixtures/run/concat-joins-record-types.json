@@ -1,0 +1,17 @@
+{
+  "description": "concat joins the element types of its two lists, so a record with fewer fields can join a list of larger records, and the fields some lack read as optional.",
+  "python": false,
+  "program": "(let [orders (call orders.list {}) all (concat orders [{:customer \"walk-in\"}]) more (concat [{:id \"a\" :size 1}] [{:id \"b\" :note \"late\"}])] {:totals (map (fn [o] (get o :total 0)) all) :more (map (fn [r] [(get r :id) (get r :size 0) (get r :note \"none\")]) more) :count (count all)})",
+  "declarations": "declarations.json",
+  "allow": ["orders.list"],
+  "responses": [
+    {"capability": "orders.list", "input": {}, "results": [{"output": [{"customer": "ann", "total": 5}]}]}
+  ],
+  "expect": {
+    "completed": {"totals": [5, 0], "more": [["a", 1, "none"], ["b", 0, "late"]], "count": 2}
+  },
+  "trace": [
+    {"request": "r:1", "capability": "orders.list", "input": {}},
+    {"response": "r:1", "output": [{"customer": "ann", "total": 5}]}
+  ]
+}

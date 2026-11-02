@@ -611,6 +611,11 @@ struct OpenArgument {
     parameter: String,
 }
 
+struct JoinedConcat {
+    operands: (ir::Node, ir::Node),
+    list: Type,
+}
+
 struct SortKeyOwner {
     body: *const Node,
     params: String,
@@ -3919,12 +3924,7 @@ impl<'r> Checker<'r> {
                 let element = self.list_element(&t, &args[1], "take");
                 self.coerce(prelude(prelude_op, vec![count, items_ir], span), &list(element), expected, span)
             }
-            "concat" => {
-                let (first, t) = self.check(&args[0], None, scope);
-                let element = self.list_element(&t, &args[0], "concat");
-                let (second, _) = self.check(&args[1], Some(&list(element.clone())), scope);
-                self.coerce(prelude(prelude_op, vec![first, second], span), &list(element), expected, span)
-            }
+            "concat" => self.form_concat(prelude_op, span, args, expected, scope),
             "flatten" => {
                 let (items_ir, t) = self.check(&args[0], None, scope);
                 let outer = self.list_element(&t, &args[0], "flatten");
@@ -3998,6 +3998,72 @@ impl<'r> Checker<'r> {
             }
             _ => self.higher_order(syntax, items, op, expected, scope),
         }
+    }
+
+    fn keep_effects(&mut self, effects: Effects<'r>) {
+        if let Some(outer) = self.effects.last_mut() {
+            outer.calls.extend(effects.calls);
+        }
+    }
+
+    fn form_concat<'a>(
+        &mut self,
+        op: PreludeOp,
+        span: Span,
+        args: &'a [Node],
+        expected: Option<&Type>,
+        scope: &Scope<'a>,
+    ) -> Checked {
+        let (first, t) = self.check(&args[0], None, scope);
+        let element = self.list_element(&t, &args[0], "concat");
+        let wanted = list(element);
+        let before = Speculation::start(self);
+        let ((second, _), effects) = self.collecting(|c| c.check(&args[1], Some(&wanted), scope));
+        if self.diagnostics.len() == before.diagnostics {
+            self.keep_effects(effects);
+            return self.coerce(prelude(op, vec![first, second], span), &wanted, expected, span);
+        }
+        before.undo(self);
+        if let Some((joined, effects)) = self.join_concat(&first, &wanted, args, scope) {
+            self.keep_effects(effects);
+            let (first, second) = joined.operands;
+            return self.coerce(prelude(op, vec![first, second], span), &joined.list, expected, span);
+        }
+        let (second, _) = self.check(&args[1], Some(&wanted), scope);
+        self.coerce(prelude(op, vec![first, second], span), &wanted, expected, span)
+    }
+
+    fn join_concat<'a>(
+        &mut self,
+        first: &ir::Node,
+        wanted: &Type,
+        args: &'a [Node],
+        scope: &Scope<'a>,
+    ) -> Option<(JoinedConcat, Effects<'r>)> {
+        let before = Speculation::start(self);
+        let ((second, second_type), effects) = self.collecting(|c| c.check(&args[1], None, scope));
+        let found = self.zonk(&second_type);
+        let held = self.zonk(wanted);
+        let joined = match (&held, &found) {
+            (Type::List(held_element), Type::List(found_element))
+                if matches!((&**held_element, &**found_element), (Type::Record(_), Type::Record(_)))
+                    && self.diagnostics.len() == before.diagnostics =>
+            {
+                self.least_upper_bound(&held, &found)
+            }
+            _ => None,
+        };
+        let Some(target) = joined else {
+            before.undo(self);
+            return None;
+        };
+        let first = self.coerce_joining(first.clone(), &held, &target, args[0].span);
+        let second = self.coerce_joining(second, &found, &target, args[1].span);
+        if self.diagnostics.len() != before.diagnostics {
+            before.undo(self);
+            return None;
+        }
+        Some((JoinedConcat { operands: (first, second), list: target }, effects))
     }
 
     fn number_operands<'a>(
