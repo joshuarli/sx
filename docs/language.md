@@ -516,7 +516,9 @@ in parity tests, ignore object key order.
 
 ## Diagnostics
 
-The checker reports every error it finds, up to 20, followed by a count of the rest. The reader
+The checker reports every error it finds, up to 20, followed by a count of the rest. A local
+function is checked at each call, so one mistake in its body can be found many times: diagnostics
+with the same code, span, and message are reported once, the first. The reader
 recovers at the next balanced form, so one unclosed bracket does not hide later errors. Nothing
 runs while any error remains.
 

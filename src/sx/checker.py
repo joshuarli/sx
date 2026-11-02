@@ -267,7 +267,10 @@ def check(
             "no-encoding", program.span,
             f"The program's result is {describe(final)}, which has no JSON encoding{reason}.",
         )
-    diagnostics = tuple(sorted(checker.diagnostics, key=lambda d: (d.span.start.line, d.span.start.column)))
+    distinct: dict[tuple[str, Span, str], Diagnostic] = {}
+    for diagnostic in checker.diagnostics:
+        distinct.setdefault((diagnostic.code, diagnostic.span, diagnostic.message), diagnostic)
+    diagnostics = tuple(sorted(distinct.values(), key=lambda d: (d.span.start.line, d.span.start.column)))
     if diagnostics:
         return CheckResult(None, diagnostics)
     used_inputs = frozenset(name for name in declared_inputs if name in checker.inputs_used)
