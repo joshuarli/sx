@@ -1,0 +1,20 @@
+error[arity] 2:1-2:8
+  (def n)
+  ^^^^^^^
+  def takes a name and a value: (def name expr).
+  Found: 1 argument
+  Help: sx help let
+
+error[arity] 3:1-3:36
+  (defn bump "Adds one." [x] (+ x 1))
+  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  defn takes a name, a parameter vector, and one body expression: (defn name [params] body).
+  Found: 4 arguments
+  Sx has no docstrings. Leave the text out.
+  Help: sx help let
+
+error[bad-pattern] 4:13-4:14
+  (defn twice x (+ x x))
+              ^
+  A defn takes its parameters as a vector: (defn name [params] body).
+  Help: sx help let

@@ -6,10 +6,33 @@ interpreter in the same commit.
 
 ## Programs
 
-A program is one expression. There are no top-level definitions, imports, macros, quoting, or
-recursion. Evaluation is strict, and arguments evaluate left to right, except inside `par` and
-`par-map`. A program may instead be a [script](#scripts): one `script` form that declares typed
-inputs around that expression.
+A program is one expression, the result, optionally preceded by top-level definitions. There are no
+imports, macros, quoting, or recursion. Evaluation is strict, and arguments evaluate left to right,
+except inside `par` and `par-map`. A program may instead be a [script](#scripts): one `script` form
+that declares typed inputs around that expression.
+
+A definition is a form before the final expression:
+
+```
+(def repos (call catalog.list {}))
+(defn name-of [r] (get r :name))
+(def _ (call audit.log {:count (count repos)}))
+{:names (map name-of repos)}
+```
+
+`(def name expr)` binds a value, and `(defn name [params] body)` binds a local function, exactly as
+`(fn [params] body)` does in a `let` binding. The program means the same as one `let` that binds the
+definitions in order around the final expression, so a later form sees the names of the earlier ones, a
+`defn` body sees only the names before it and not its own name, and a later definition of the same name
+shadows the earlier one. `name` follows the rules of a `let` binding: a form name is a `reserved-name`
+error, `_` runs `expr` for its effect and binds nothing, and a tuple pattern takes a value apart. A `defn` takes
+one body expression and no docstring. `sx explain` and `--emit ir` see only the `let`. Definitions before a `script` form move into its body, so
+they see its inputs.
+
+A definition is allowed only at the top level, before the final expression. Anywhere else, `def` and
+`defn` are the `defn` habit, with a fix that points to `let`. A form before the final expression that is not
+a definition is `multiple-expressions`, with the fix `(def _ expr)`. A program whose last form is a definition has no
+result and is `missing-result`.
 
 Every program terminates. Iteration runs over lists that already exist, and every form that
 repeats, `retry`, `wait-until`, and `loop`, takes a literal bound the checker reads before the
@@ -1459,7 +1482,7 @@ The checker's codes are:
 
 | Group | Codes |
 | --- | --- |
-| Reading | `unclosed`, `unexpected-close`, `bad-literal`, `bad-symbol`, `int-range`, `float-range`, `bad-escape`, `record-key`, `record-missing-value`, `duplicate-field`, `empty-program`, `multiple-expressions` |
+| Reading | `unclosed`, `unexpected-close`, `bad-literal`, `bad-symbol`, `int-range`, `float-range`, `bad-escape`, `record-key`, `record-missing-value`, `duplicate-field`, `empty-program`, `multiple-expressions`, `missing-result` |
 | Names | `unknown-name`, `unknown-function`, `unknown-capability`, `unknown-field`, `missing-field`, `unknown-variant`, `reserved-name` |
 | Calls | `arity`, `type-mismatch`, `unresolved-type`, `not-a-record`, `no-encoding`. `bad-literal` also reports a literal argument that a core rejects at check time, as `re.find` does for a pattern that does not compile. |
 | Forms | `condition-not-bool`, `missing-else`, `branch-mismatch`, `fn-position`, `bad-pattern`, `bad-option`, `recur-position`, `recur-arity`, `loop-no-result` |

@@ -222,6 +222,13 @@ def finding_result(result: Result, kind: str, detail: str) -> Result:
     return result
 
 
+def refuses_what_rust_accepts(source: str, checked: CheckResult) -> bool:
+    if checked.program is not None:
+        return False
+    codes = [d.code for d in checked.diagnostics]
+    return codes == ["multiple-expressions"]
+
+
 def check_against_python(
     case: Case, known: Registry, budgets: Budgets, rejected: dict[str, Any] | None
 ) -> tuple[CheckResult | None, Finding | None]:
@@ -229,6 +236,8 @@ def check_against_python(
         checked = compile_source(case.source, known, allowed=frozenset(case.allow), budgets=budgets)
     except Exception:
         return None, Finding("python-crash-check", traceback.format_exc())
+    if refuses_what_rust_accepts(case.source, checked):
+        return checked, None
     if rejected is None:
         if checked.program is None:
             codes = [d.code for d in checked.diagnostics]

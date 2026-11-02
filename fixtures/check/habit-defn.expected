@@ -1,5 +1,5 @@
-error[habit:defn] 2:2-2:6
-  (defn ids [repos] (map (fn [r] (get r :id)) repos))
-   ^^^^
-  Sx has no top-level definitions. Bind a local function with let: (let [f (fn [x] ...)] ...).
+error[habit:defn] 4:4-4:8
+    (defn ids [rows] (map (fn [r] (get r :id)) rows)))
+     ^^^^
+  A definition belongs at the top level, before the program's final expression. Inside an expression, bind a local function with let: (let [f (fn [x] ...)] ...).
   Help: sx help let

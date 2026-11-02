@@ -1,0 +1,1 @@
+ok: (let [n 1 bump (fn [x] (+ x n)) _ (bump n)] (bump n))

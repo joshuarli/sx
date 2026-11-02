@@ -1,0 +1,5 @@
+error[habit:defn] 4:12-4:15
+    (let [y (def z 2)]
+             ^^^
+  A definition belongs at the top level, before the program's final expression. Inside an expression, bind values with let.
+  Help: sx help let

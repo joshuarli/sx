@@ -1,0 +1,31 @@
+{
+  "description": "Top-level definitions run in order as nested lets: a def named _ runs for its effect, a defn sees only the names before it, and a later def of the same name shadows.",
+  "python": false,
+  "program": "(def a (call store.get {:id \"a\"}))\n(def n (get a :size))\n(defn bump [x] (+ x n))\n(def n \"later\")\n(def _ (call store.put {:id n :size (bump 1)}))\n(bump 10)",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.put"
+  ],
+  "responses": [
+    {
+      "capability": "store.get",
+      "input": {"id": "a"},
+      "results": [{"output": {"id": "a", "size": 7}}]
+    },
+    {
+      "capability": "store.put",
+      "input": {"id": "later", "size": 8},
+      "results": [{"output": null}]
+    }
+  ],
+  "expect": {
+    "completed": 17
+  },
+  "trace": [
+    {"request": "r:1", "capability": "store.get", "input": {"id": "a"}},
+    {"response": "r:1", "output": {"id": "a", "size": 7}},
+    {"request": "r:2", "capability": "store.put", "input": {"id": "later", "size": 8}},
+    {"response": "r:2", "output": null}
+  ]
+}

@@ -90,11 +90,15 @@ const FIXED_ARITY: [(&str, usize); 42] = [
     ("entries", 1),
     ("into-map", 1),
 ];
-const DEFINITION: &str = "Sx has no top-level definitions. Bind a local function with let: (let [f (fn [x] ...)] ...).";
+const DEFINITION: &str = "A definition belongs at the top level, before the program's final expression. Inside an expression, bind a local function with let: (let [f (fn [x] ...)] ...).";
 const HABIT_HEADS: [(&str, &str, &str); 12] = [
     ("defn", "defn", DEFINITION),
     ("defn-", "defn", DEFINITION),
-    ("def", "defn", "Sx has no top-level definitions. Bind values with let."),
+    (
+        "def",
+        "defn",
+        "A definition belongs at the top level, before the program's final expression. Inside an expression, bind values with let.",
+    ),
     ("while", "while", "Sx has no unbounded loops. Map over a list, or use loop with :max."),
     ("for", "while", "Sx has no for. Map over a list, or use loop with :max."),
     ("doseq", "while", "Sx has no doseq. Map over a list, and bind the result to _ if you only need the effects."),
@@ -1485,6 +1489,21 @@ impl<'r> Checker<'r> {
         let construct = found.map(|(c, _)| c);
         if name == script::SCRIPT {
             self.report(script::position_diagnostic(head.span));
+            return self.placeholder(span);
+        }
+        if self.instantiating.iter().any(|n| n == name) {
+            self.report(
+                Diagnostic::new(
+                    "unknown-function",
+                    head.span,
+                    format!("{name} cannot call itself. Sx has no recursion."),
+                )
+                .detail("Repeat with loop and :max, or map over a list that already exists.")
+                .help("loop"),
+            );
+            for item in &items[1..] {
+                self.collecting(|c| c.check(item, None, scope));
+            }
             return self.placeholder(span);
         }
         for item in &items[1..] {

@@ -1,0 +1,13 @@
+error[reserved-name] 3:6-3:13
+  (def attempt 1)
+       ^^^^^^^
+  attempt is the name of a form, so it cannot name a value.
+  Fix: attempts
+  Help: sx help attempt
+
+error[reserved-name] 4:7-4:11
+  (defn loop [x] x)
+        ^^^^
+  loop is the name of a form, so it cannot name a value.
+  Fix: loops
+  Help: sx help loop

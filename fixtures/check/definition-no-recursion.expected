@@ -1,0 +1,6 @@
+error[unknown-function] 3:36-3:40
+  (defn fact [n] (if (< n 2) 1 (* n (fact (- n 1)))))
+                                     ^^^^
+  fact cannot call itself. Sx has no recursion.
+  Repeat with loop and :max, or map over a list that already exists.
+  Help: sx help loop

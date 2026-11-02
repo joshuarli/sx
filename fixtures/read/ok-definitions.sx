@@ -1,0 +1,5 @@
+; python: no
+(def n 1)
+(defn bump [x] (+ x n))
+(def _ (bump n))
+(bump n)

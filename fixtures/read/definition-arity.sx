@@ -1,0 +1,5 @@
+; python: no
+(def n)
+(defn bump "Adds one." [x] (+ x 1))
+(defn twice x (+ x x))
+n

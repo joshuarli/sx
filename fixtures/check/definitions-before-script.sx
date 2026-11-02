@@ -1,0 +1,5 @@
+; declarations: fixtures/run/declarations.json
+; python: no
+(def doubled (* n 2))
+(defn plus [x] (+ x doubled))
+(script {:inputs {:n "Int"}} (plus n))

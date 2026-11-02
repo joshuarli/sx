@@ -1,0 +1,8 @@
+; declarations: fixtures/run/declarations.json
+; python: no
+(def items (call store.list {}))
+(defn size-of [id] (get (call store.get {:id id}) :size))
+(def first-size (size-of (first items)))
+(def _ (call store.put {:id "copy" :size first-size}))
+(def items (concat items ["copy"]))
+{:count (count items) :first first-size}

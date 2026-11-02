@@ -1,0 +1,5 @@
+; declarations: fixtures/run/declarations.json
+; python: no
+(def attempt 1)
+(defn loop [x] x)
+(+ attempt 1)

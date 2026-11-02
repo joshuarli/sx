@@ -1,7 +1,7 @@
-error[multiple-expressions] 2:1-2:8
-  (+ x 1)
-  ^^^^^^^
-  A program is one expression, but this one has 2.
-  Bind intermediate steps with let and end with the result.
-  Fix: (let [a ... b ...] result)
+error[multiple-expressions] 2:1-2:21
+  (call store.list {})
+  ^^^^^^^^^^^^^^^^^^^^
+  Only (def ...) and (defn ...) forms come before the final expression.
+  A step that runs only for its effect is a definition named _.
+  Fix: (def _ (call store.list {}))
   Help: sx help let

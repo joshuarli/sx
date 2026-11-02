@@ -1,2 +1,4 @@
+; python: no
+(call store.list {})
 (def x 1)
 (+ x 1)

@@ -1,3 +1,4 @@
+use crate::definitions;
 use crate::diagnostics::Diagnostic;
 use crate::syntax::{DURATION_UNITS, Fields, Items, Keyword, Node, NodeKind, Position, RecordField, Span};
 use crate::unicode;
@@ -397,18 +398,11 @@ impl<'a> Reader<'a> {
                     Span::new(at, at),
                     "The program is empty. A program is one expression.",
                 ));
-            } else if self.top.len() > 1 {
-                let count = self.top.len();
-                self.diagnostics.push(
-                    Diagnostic::new(
-                        "multiple-expressions",
-                        self.top[1].span,
-                        format!("A program is one expression, but this one has {count}."),
-                    )
-                    .detail("Bind intermediate steps with let and end with the result.")
-                    .fix("(let [a ... b ...] result)")
-                    .help("let"),
-                );
+            } else {
+                match definitions::assemble(std::mem::take(&mut self.top)) {
+                    Ok(program) => self.top.push(program),
+                    Err(diagnostics) => self.diagnostics.extend(diagnostics),
+                }
             }
         }
         if !self.diagnostics.is_empty() {

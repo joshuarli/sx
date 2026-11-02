@@ -1,2 +1,4 @@
-; task: dev-failing-ci
-(defn ids [repos] (map (fn [r] (get r :id)) repos))
+; declarations: fixtures/run/declarations.json
+; python: no
+(let [x 1]
+  (defn ids [rows] (map (fn [r] (get r :id)) rows)))
