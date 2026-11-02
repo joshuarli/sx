@@ -24,6 +24,7 @@ NO_CORES: Json = {"types": {}, "functions": []}
 VIRTUAL_WAIT = "Time is virtual, so waiting costs nothing."
 REAL_WAIT = "The wait takes real time."
 MCP_PREFIX = "mcp-"
+STANDARD_CORES = ("text", "re")
 
 
 class ToolchainMissingError(RuntimeError):
@@ -80,6 +81,8 @@ class Files:
         self.directory = directory
         self.server = workflow.tool_server(sandbox)
         declarations = workflow.declarations_json(sandbox)
+        declared_cores = declarations.get("cores", [])
+        declarations["cores"] = [*declared_cores, *(core for core in STANDARD_CORES if core not in declared_cores)]
         self.imported: Json = imported_tools(self.server) if self.server is not None else {}
         declarations["enums"] = {**declarations.get("enums", {}), **self.imported.get("enums", {})}
         declarations["capabilities"] = [*declarations.get("capabilities", []), *self.imported.get("capabilities", [])]
