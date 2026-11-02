@@ -101,7 +101,26 @@ def node_run(task: Json, solution: Path) -> Json:
     return result
 
 
+TAILORED = "tailored"
+
+
+def tailored_guide(task: Json) -> str:
+    scratch = ROOT / ".work" / "tmp"
+    scratch.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=scratch) as workdir:
+        declarations_file, _, allowed = cli_task(task, Path(workdir))
+        completed = sx_run([
+            "guide", "--declarations", str(declarations_file), *(a for tool in allowed for a in ("--allow", tool)),
+        ])
+    if completed.returncode != 0:
+        raise RuntimeError(f"sx guide exited {completed.returncode}: {completed.stderr.strip()}")
+    return completed.stdout
+
+
 def sx_prompt(task: Json, level: str) -> str:
+    if level == TAILORED:
+        reply = "Reply with one Sx program in a ```sx code block, and nothing else."
+        return "\n".join([tailored_guide(task).rstrip(), "", "## Your task", "", task["description"], "", reply]) + "\n"
     return f"{guide(level)}\n\n{task_section(task)}\n"
 
 
@@ -466,7 +485,9 @@ def main() -> None:
     parser.add_argument("--arm", action="append", choices=["sx", "js"])
     parser.add_argument("--task", action="append")
     parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument("--guide", action="append", choices=list(GUIDE_LEVELS), help="Sx guide levels to run")
+    parser.add_argument(
+        "--guide", action="append", choices=[*GUIDE_LEVELS, TAILORED], help="Sx guide levels to run",
+    )
     parser.add_argument("--quick", action="store_true", help="One sample of six development tasks, for iterating")
     parser.add_argument("--report", action="store_true", help="Report on saved trials without calling a model")
     parser.add_argument("--measure-guides", action="store_true", help="Measure each guide level's token cost")
