@@ -1,0 +1,45 @@
+(let [engineers ["ines" "omar" "priya" "tariq"]
+      listing (loop {:max 10} [cursor none tasks [] n 0]
+                (let [page (call mcp-tracker.list-tasks {:cursor cursor})
+                      all (concat tasks (get page :tasks))]
+                  (match (get page :next_cursor)
+                    (some next) (recur next all (+ n 1))
+                    none {:pages (+ n 1) :tasks all})))
+      tasks (get listing :tasks)
+      number (fn [t] (match (text.to-int (text.replace (get t :id) "T-" "")) (some n) n none 0))
+      eligible (sort-by number
+                        (filter (fn [t]
+                                  (and (contains? (get t :labels) "bug")
+                                       (and (= (get t :status) "open")
+                                            (match (get t :assignee) none true (some _) false))))
+                                tasks))
+      initial (map (fn [e]
+                     (count (filter (fn [t]
+                                      (and (not= (get t :status) "done")
+                                           (match (get t :assignee) (some a) (= a e) none false)))
+                                    tasks)))
+                   engineers)
+      outcome (loop {:max 20} [todo eligible loads initial done [] failed []]
+                (if (= (count todo) 0)
+                  {:done done :failed failed :loads loads}
+                  (let [t (first todo)
+                        idx (reduce (fn [best i] (if (< (nth loads i) (nth loads best)) i best)) 0 [1 2 3])
+                        name (nth engineers idx)
+                        p0 (= (get t :priority) "p0")
+                        assigned (attempt (if p0
+                                            (call mcp-tracker.assign-task {:id (get t :id) :assignee name :status "in-progress"})
+                                            (call mcp-tracker.assign-task {:id (get t :id) :assignee name})))]
+                    (match assigned
+                      (ok _) (let [_ (if p0
+                                       (get (call mcp-tracker.add-comment {:id (get t :id) :text (str "Triaged to " name " (p0)")}) :comments)
+                                       0)]
+                               (recur (rest todo)
+                                      (map (fn [i] (if (= i idx) (+ (nth loads i) 1) (nth loads i))) [0 1 2 3])
+                                      (concat done [{:id (get t :id) :assignee name}])
+                                      failed))
+                      (err _) (recur (rest todo) loads done (concat failed [(get t :id)]))))))]
+  {:pages (get listing :pages)
+   :seen (count tasks)
+   :triaged (get outcome :done)
+   :failed (get outcome :failed)
+   :load (map (fn [i] {:engineer (nth engineers i) :load (nth (get outcome :loads) i)}) [0 1 2 3])})
