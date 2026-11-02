@@ -155,8 +155,8 @@ fn build(server: &str, tool: &Json, name: &str, member: &str) -> Result<Built, S
         ("id", Json::string(id)),
         ("effect", Json::string(effect.name())),
     ];
-    if idempotent {
-        entries.push(("idempotent", Json::Bool(true)));
+    if effect == Effect::Write {
+        entries.push(("idempotent", Json::Bool(idempotent)));
     }
     entries.push(("description", Json::string(describe(tool, name, server))));
     entries.push(("input", Json::string(show_type(&input.ty))));

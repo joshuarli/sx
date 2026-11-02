@@ -115,6 +115,7 @@
     {
       "id": "mcp-demo.plain-write",
       "effect": "write",
+      "idempotent": false,
       "description": "The MCP tool plain_write of the server demo.",
       "input": "Record {}",
       "output": "String",
@@ -127,6 +128,7 @@
     {
       "id": "mcp-demo.half-hinted",
       "effect": "write",
+      "idempotent": false,
       "description": "The MCP tool half_hinted of the server demo.",
       "input": "Record {}",
       "output": "String",

@@ -115,7 +115,7 @@ def described(files: Files) -> Json:
         "enums": {**served["enums"], **imported.get("enums", {})},
         "capabilities": [
             *served["capabilities"],
-            *({"idempotent": False, **capability} for capability in imported.get("capabilities", [])),
+            *imported.get("capabilities", []),
         ],
     }
 
