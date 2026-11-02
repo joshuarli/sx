@@ -173,6 +173,13 @@ With the checker and machine in place, the pilot scores answers exactly instead 
 Both Muse misses came from an ambiguous task description, since corrected. These are development
 results and say nothing about the held-out set.
 
+**Phase 2 guide level.** The development sweep ran every guide level and TypeScript, with two
+samples of all 15 tasks on each model. By the selection rule, the held-out run uses `standard` for
+both models: it ties `full` on first-attempt correctness at fewer tokens per solved task, and
+`minimal` falls more than 5 points behind. On the development set the standard guide trails
+TypeScript by 6.7 points on Muse Spark and 26.7 points on Iceman at first attempt, so both fail
+the gate there.
+
 Decided at the Phase 0 checkpoint:
 
 - Keywords used as values, such as `{:kind :unknown}`, appeared in both rounds despite the guide.
