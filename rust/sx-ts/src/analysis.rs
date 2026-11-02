@@ -514,3 +514,128 @@ fn events_in(stmts: &[Stmt], throwing: &HashSet<String>, scopes: &mut Scopes, ev
     }
     scopes.stack.pop();
 }
+
+struct AliasScan<'f> {
+    functions: &'f HashSet<&'f str>,
+    order: u32,
+    loops: Vec<u32>,
+    next_loop: u32,
+    mutations: Vec<(String, u32, Vec<u32>)>,
+    stores: Vec<(String, u32, Vec<u32>, sx_kernel::syntax::Span)>,
+}
+
+impl AliasScan<'_> {
+    fn tick(&mut self) -> u32 {
+        self.order += 1;
+        self.order
+    }
+
+    fn store(&mut self, e: &Expr) {
+        if let ExprKind::Ident(name) = &e.kind {
+            let order = self.tick();
+            self.stores.push((name.clone(), order, self.loops.clone(), e.span));
+        }
+    }
+
+    fn expr(&mut self, e: &Expr) {
+        let mut stored: Vec<&Expr> = Vec::new();
+        walk_expr(e, &mut |node| match &node.kind {
+            ExprKind::Array(items) => {
+                for item in items {
+                    if let ArrayItem::Item(item) = item {
+                        stored.push(item);
+                    }
+                }
+            }
+            ExprKind::Object(items) => {
+                for item in items {
+                    if let ObjectItem::Field { value, .. } = item {
+                        stored.push(value);
+                    }
+                }
+            }
+            ExprKind::Call(callee, args) => match &callee.kind {
+                ExprKind::Ident(name) if self.functions.contains(name.as_str()) => stored.extend(args.iter()),
+                ExprKind::Field(_, method) if method == "push" => stored.extend(args.iter()),
+                _ => {}
+            },
+            _ => {}
+        });
+        for e in stored {
+            self.store(e);
+        }
+    }
+
+    fn stmts(&mut self, list: &[Stmt]) {
+        list.iter().for_each(|s| self.stmt(s));
+    }
+
+    fn stmt(&mut self, stmt: &Stmt) {
+        match &stmt.kind {
+            StmtKind::Decl(_, decls) => {
+                for decl in decls {
+                    if let Some(init) = &decl.init {
+                        self.store(init);
+                        self.expr(init);
+                    }
+                }
+            }
+            StmtKind::Expr(e) => {
+                self.expr(e);
+                if let Some(Mutation::Push { name, .. } | Mutation::Put { name, .. } | Mutation::Reorder { name, .. }) = mutation(e) {
+                    let order = self.tick();
+                    self.mutations.push((name.to_string(), order, self.loops.clone()));
+                }
+            }
+            StmtKind::Return(Some(e)) | StmtKind::Throw(e) => self.expr(e),
+            StmtKind::If(c, a, b) => {
+                self.expr(c);
+                self.stmt(a);
+                if let Some(b) = b {
+                    self.stmt(b);
+                }
+            }
+            StmtKind::ForOf { source, body, .. } => {
+                self.expr(source);
+                self.next_loop += 1;
+                self.loops.push(self.next_loop);
+                self.stmt(body);
+                self.loops.pop();
+            }
+            StmtKind::For { init, test, update, body } => {
+                if let Some(init) = init {
+                    self.stmt(init);
+                }
+                self.next_loop += 1;
+                self.loops.push(self.next_loop);
+                if let Some(test) = test {
+                    self.expr(test);
+                }
+                if let Some(update) = update {
+                    self.expr(update);
+                }
+                self.stmt(body);
+                self.loops.pop();
+            }
+            StmtKind::Try { block, handler, .. } => {
+                self.stmts(block);
+                self.stmts(handler);
+            }
+            StmtKind::Block(body) => self.stmts(body),
+            _ => {}
+        }
+    }
+}
+
+pub fn alias_violations(stmts: &[Stmt], functions: &HashSet<&str>) -> Vec<(String, sx_kernel::syntax::Span)> {
+    let mut scan = AliasScan { functions, order: 0, loops: Vec::new(), next_loop: 0, mutations: Vec::new(), stores: Vec::new() };
+    scan.stmts(stmts);
+    let mut found = Vec::new();
+    for (name, order, loops, span) in &scan.stores {
+        let later = scan.mutations.iter().any(|(n, o, l)| n == name && (o > order || l.iter().any(|id| loops.contains(id))));
+        if later {
+            found.push((name.clone(), *span));
+        }
+    }
+    found
+}

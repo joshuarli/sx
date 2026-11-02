@@ -32,8 +32,18 @@ pub enum Dialect {
 }
 
 pub fn lower_source(source: &str, registry: &Registry) -> Result<Node, Vec<Diagnostic>> {
-    let program = parser::parse(source)?;
-    lower::lower(&program, source, registry)
+    let lowered = sx_kernel::stack::on_sized_stack(|| {
+        let program = parser::parse(source)?;
+        lower::lower(&program, source, registry)
+    });
+    match lowered {
+        Ok(result) => result,
+        Err(error) => {
+            let start = Position { line: 1, column: 1 };
+            let message = format!("The front end could not start a thread for this program: {error}.");
+            Err(vec![Diagnostic::new("too-large", Span::new(start, start), message)])
+        }
+    }
 }
 
 pub fn check_lowered(

@@ -166,6 +166,9 @@ fn mutation_rules() {
     rejects("ts-mutation-in-try", "let n = 0;\ntry { n = 1; await tools.fs.readText({ path: \"a\" }); } catch { n = 2; }\nreturn n;");
     rejects("ts-uninitialized", "let t;\nreturn t;");
     rejects("ts-uninitialized", "const t;");
+    rejects("ts-mutation-escape", "const xs = [];\nconst copy = xs;\nxs.push(1);\nreturn copy;");
+    rejects("ts-mutation-escape", "const xs = [];\nconst o = { list: xs };\nxs.push(1);\nreturn o;");
+    accepts("const xs = [];\nxs.push(1);\nconst copy = xs;\nreturn copy;");
     accepts("let t;\ntry { t = await tools.fs.readText({ path: \"a\" }); } catch { t = \"\"; }\nreturn t;");
     accepts("const o = { a: 1 };\no.b = 2;\nreturn o;");
 }

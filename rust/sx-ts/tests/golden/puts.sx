@@ -12,5 +12,5 @@
       rows (sort-by (fn [a] a) rows)
       rows (js.reverse rows)
       label "n:"
-      label (+ label (js.length rows))]
+      label (str label (js.length rows))]
   {:config config :index index :rows rows :label label})

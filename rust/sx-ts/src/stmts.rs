@@ -139,6 +139,13 @@ impl<'a> Lowerer<'a> {
             names.into_iter().collect()
         };
         let mutated = self.mutated.last().cloned().unwrap_or_default();
+        for (name, at) in alias_violations(list, &item_names) {
+            self.report(diag(
+                "ts-mutation-escape",
+                at,
+                format!("{name} is stored here while a later change to it can still run, so the stored copy would differ from JavaScript's alias"),
+            ));
+        }
         let mut hoisted: Vec<usize> = Vec::new();
         for (position, item) in items.iter().enumerate() {
             let free = free_names(item.function);
