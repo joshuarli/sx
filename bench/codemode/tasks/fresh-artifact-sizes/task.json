@@ -1,0 +1,99 @@
+{
+  "id": "fresh-artifact-sizes",
+  "split": "fresh",
+  "kinds": [
+    "retry",
+    "partial-failure",
+    "arithmetic"
+  ],
+  "domain": "repomod",
+  "sx-expressible": true,
+  "description": "Add up the sizes of the build artifacts for builds `b101`, `b102`, `b103`, and `b104`. When a size lookup fails with Timeout or Unavailable, retry it up to 2 more times, waiting 500 milliseconds before the first retry and 1500 milliseconds before the second. Do not retry other failures. Return a record with `total` (the sum of the sizes that were read, in bytes) and `missing` (the builds whose size could not be read, in the order above).",
+  "cores": [],
+  "capabilities": [
+    {
+      "id": "artifacts.size",
+      "effect": "read",
+      "input": "Record {build: String}",
+      "output": "Int",
+      "description": "Reads the size in bytes of a build's artifact bundle."
+    }
+  ],
+  "responses": [
+    {
+      "capability": "artifacts.size",
+      "input": {
+        "build": "b101"
+      },
+      "results": [
+        {
+          "error": {
+            "kind": "Timeout",
+            "message": "timed out"
+          }
+        },
+        {
+          "output": 1200
+        }
+      ]
+    },
+    {
+      "capability": "artifacts.size",
+      "input": {
+        "build": "b102"
+      },
+      "results": [
+        {
+          "error": {
+            "kind": "RateLimited",
+            "message": "slow down"
+          }
+        }
+      ]
+    },
+    {
+      "capability": "artifacts.size",
+      "input": {
+        "build": "b103"
+      },
+      "results": [
+        {
+          "output": 800
+        }
+      ]
+    },
+    {
+      "capability": "artifacts.size",
+      "input": {
+        "build": "b104"
+      },
+      "results": [
+        {
+          "error": {
+            "kind": "Unavailable",
+            "message": "503"
+          }
+        },
+        {
+          "error": {
+            "kind": "Unavailable",
+            "message": "503"
+          }
+        },
+        {
+          "error": {
+            "kind": "Unavailable",
+            "message": "503"
+          }
+        }
+      ]
+    }
+  ],
+  "expected": {
+    "total": 2000,
+    "missing": [
+      "b102",
+      "b104"
+    ]
+  }
+}
