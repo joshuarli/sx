@@ -12,11 +12,11 @@ ARMS: tuple[Arm, ...] = ("sx", "js")
 DEFAULT_MODEL = "opencode-go/muse-spark-1.3-contributor"
 
 
-def run_references(ids: list[str], arm_names: tuple[Arm, ...]) -> bool:
+def run_references(ids: list[str], arm_names: tuple[Arm, ...], root: Path) -> bool:
     all_correct = True
     print(f"{'workflow':24} {'arm':3} {'verdict':8} {'calls':>5} {'total s':>8} {'program s':>9}  detail")
     for workflow_id in ids:
-        workflow = definition.load(workflow_id)
+        workflow = definition.load(workflow_id, root)
         for arm in arm_names:
             run, status, detail = trial.reference(workflow, arm)
             all_correct &= status == "correct"
@@ -25,14 +25,14 @@ def run_references(ids: list[str], arm_names: tuple[Arm, ...]) -> bool:
     return all_correct
 
 
-def run_trials(args: argparse.Namespace, ids: list[str], arm_names: tuple[Arm, ...]) -> None:
+def run_trials(args: argparse.Namespace, ids: list[str], arm_names: tuple[Arm, ...], root: Path) -> None:
     out = Path(args.out).resolve()
     out.mkdir(parents=True, exist_ok=True)
     with ThreadPoolExecutor(max_workers=args.jobs) as pool:
         jobs = [
             pool.submit(
                 trial.run_trial,
-                definition.load(workflow_id), arm, args.model, args.thinking, args.guide, sample, out,
+                definition.load(workflow_id, root), arm, args.model, args.thinking, args.guide, sample, out,
                 ts_notes=args.ts_notes,
             )
             for workflow_id in ids
@@ -49,7 +49,8 @@ def run_trials(args: argparse.Namespace, ids: list[str], arm_names: tuple[Arm, .
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run workflows in Sx and in TypeScript on Bun.")
     parser.add_argument("mode", choices=["reference", "trials", "report"])
-    parser.add_argument("--workflow", action="append", help="Workflow ids; every workflow by default")
+    parser.add_argument("--set", choices=list(definition.SETS), default="dev", help="The development or blind set")
+    parser.add_argument("--workflow", action="append", help="Workflow ids; every workflow of the set by default")
     parser.add_argument("--arm", action="append", choices=list(ARMS))
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--thinking", default="medium")
@@ -59,20 +60,21 @@ def main() -> None:
     parser.add_argument("--jobs", type=int, default=4)
     parser.add_argument("--out", type=Path)
     args = parser.parse_args()
-    ids = args.workflow or definition.available()
+    root = definition.SETS[args.set]
+    ids = args.workflow or definition.available(root)
     arm_names = ARMS if not args.arm else tuple(arm for arm in ARMS if arm in args.arm)
     if args.mode == "report":
         if args.out is None:
             parser.error("report needs --out")
-        print(report.render(Path(args.out).resolve()))
+        print(report.render(Path(args.out).resolve(), root))
         return
     if "js" in arm_names:
         require_toolchain()
     if args.mode == "reference":
-        raise SystemExit(0 if run_references(ids, arm_names) else 1)
+        raise SystemExit(0 if run_references(ids, arm_names, root) else 1)
     if args.out is None:
         parser.error("trials need --out")
-    run_trials(args, ids, arm_names)
+    run_trials(args, ids, arm_names, root)
 
 
 if __name__ == "__main__":

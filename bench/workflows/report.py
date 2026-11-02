@@ -52,14 +52,14 @@ def table(out: Path, trials: list[Trial]) -> list[str]:
     return lines
 
 
-def host_code(ids: list[str]) -> list[str]:
+def host_code(ids: list[str], root: Path) -> list[str]:
     harness = sum(lines_of(Path(__file__).parent / "harness" / name) for name in HARNESS_FILES)
     lines = [
         "| Workflow | declarations.json | grants.json | server.json | api.d.ts (generated, TypeScript only) |",
         "| --- | --- | --- | --- | --- |",
     ]
     for workflow_id in ids:
-        workflow = definition.load(workflow_id)
+        workflow = definition.load(workflow_id, root)
         server = workflow.directory / "server.json"
         with workflow.sandbox() as sandbox:
             declarations = arms.typescript_declarations(
@@ -98,11 +98,11 @@ def explained(out: Path, trials: list[Trial]) -> list[str]:
     return lines
 
 
-def render(out: Path) -> str:
+def render(out: Path, root: Path) -> str:
     trials = load_trials(out)
     ids = sorted({t.task for t in trials})
     return "\n".join([
         "## Correctness, tokens, and time", "", *table(out, trials), "",
-        "## Host code", "", *host_code(ids), "",
+        "## Host code", "", *host_code(ids, root), "",
         "## What `sx explain` reported before the Sx answers ran", "", *explained(out, trials), "",
     ])

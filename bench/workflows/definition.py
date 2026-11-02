@@ -11,6 +11,8 @@ from sandbox import Sandbox
 
 HERE = Path(__file__).resolve().parent
 WORKFLOWS = HERE / "workflows"
+BLIND = HERE / "blind"
+SETS: dict[str, Path] = {"dev": WORKFLOWS, "blind": BLIND}
 PLACEHOLDER = re.compile(r"\{\{([a-z][a-z0-9_]*)\}\}")
 REFERENCES: dict[str, str] = {"sx": "reference.sx", "js": "reference.mts"}
 type Json = dict[str, Any]
