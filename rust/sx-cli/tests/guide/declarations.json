@@ -1,0 +1,20 @@
+{
+  "cores": ["text", "yaml", "decimal", "semver"],
+  "packs": ["fs", "process"],
+  "capabilities": [
+    {"id": "ci.checks", "http": {"method": "GET", "url": "http://ci.test/repos/{repo}/commits/{sha}/checks", "query": []},
+     "input": "Record {repo: String, sha: String}", "output": "Record open {state: String}", "effect": "read",
+     "description": "Returns the CI state of one commit."},
+    {"id": "shop.item", "http": {"method": "GET", "url": "http://shop.test/items/{sku}", "query": []},
+     "input": "Record {sku: String}", "output": "Record open {name: String}", "effect": "read",
+     "description": "Reads one item."},
+    {"id": "store.save-order", "sqlite": {"database": "/srv/store.db", "statement": "INSERT INTO orders(id, cents) VALUES (:id, :cents)"},
+     "input": "Record {id: String, cents: Int}", "output": "Int", "effect": "write", "idempotent": false,
+     "description": "Saves one order."},
+    {"id": "store.orders-over", "sqlite": {"database": "/srv/store.db", "statement": "SELECT id FROM orders WHERE cents > :cents"},
+     "input": "Record {cents: Int}", "output": "List<Record {id: String}>", "effect": "read",
+     "description": "Lists the orders over an amount."},
+    {"id": "mcp-shop.lookup-item", "input": "Record {sku: String}", "output": "Record open {sku: String}", "effect": "read",
+     "description": "Looks up one item."}
+  ]
+}

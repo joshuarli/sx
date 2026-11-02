@@ -4,6 +4,7 @@
 mod declaration;
 pub mod declared;
 pub mod fs;
+pub mod guide;
 pub mod http;
 pub mod mcp;
 pub mod process;

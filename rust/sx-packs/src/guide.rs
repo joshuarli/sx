@@ -1,0 +1,10 @@
+pub const FS: &str = include_str!("../guide/fs.md");
+pub const FS_NOTES: &str = include_str!("../guide/fs.notes.md");
+pub const PROCESS: &str = include_str!("../guide/process.md");
+pub const PROCESS_NOTES: &str = include_str!("../guide/process.notes.md");
+pub const HTTP: &str = include_str!("../guide/http.md");
+pub const HTTP_NOTES: &str = include_str!("../guide/http.notes.md");
+pub const SQLITE: &str = include_str!("../guide/sqlite.md");
+pub const SQLITE_NOTES: &str = include_str!("../guide/sqlite.notes.md");
+pub const MCP: &str = include_str!("../guide/mcp.md");
+pub const MCP_NOTES: &str = include_str!("../guide/mcp.notes.md");

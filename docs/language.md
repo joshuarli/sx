@@ -1491,6 +1491,26 @@ core function or type, or a capability. An entry has:
 The registry generates core and capability entries from their declarations. Every example is a
 test, so a help entry cannot drift from the interpreter.
 
+### The guide for one host
+
+`sx guide --declarations FILE [--grants FILE] [--allow ID ...]` prints what a model needs to write
+one program against those declarations. It has these sections, in order:
+
+1. The kernel guide that `sx help` prints.
+2. How TypeScript habits map to Sx.
+3. A section for each pack family whose tools are granted: files, programs, web services (raw or
+   typed endpoints), declared SQL statements, and MCP tools. Each section gives the Sx idioms with
+   an example, then notes on how those tools behave.
+4. A section for each core the declarations list, with its functions.
+5. Each granted tool, with its effect, its description, the method and URL of a typed endpoint, a
+   call template written in Sx, and its input and result shapes.
+6. A checklist of the mistakes models make most often.
+
+A tool that is not granted does not appear, and neither does the section of a pack with no granted
+tool. `--notes` prints only the behavior notes. They describe the tools and not Sx, so a host can
+give them to a model that writes another language against the same tools. Every example in the
+sections is checked against the tools it names by a test.
+
 ### Cores and assurance
 
 A core registers through the Python API with `Registry.add_core`. `sx help CORE` prints a core's

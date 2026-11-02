@@ -9,6 +9,7 @@
 pub mod decimal;
 pub mod git;
 pub mod github;
+pub mod guide;
 pub mod kernel;
 pub mod semver;
 mod tables;

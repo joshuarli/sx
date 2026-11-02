@@ -17,7 +17,7 @@ fn stopped(stop: Stop) -> Exit {
     }
 }
 
-fn grants_of(options: &Options, registry: &Registry) -> Result<Grants, Stop> {
+pub(crate) fn grants_of(options: &Options, registry: &Registry) -> Result<Grants, Stop> {
     let mut grants = match options.last("--grants") {
         None => Grants::new(),
         Some(path) => {

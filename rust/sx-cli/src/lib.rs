@@ -2,6 +2,7 @@
 
 mod argparse;
 mod commands;
+mod guide;
 mod helptext;
 mod mcp;
 mod mcp_serve;
@@ -24,10 +25,10 @@ pub struct Exit {
 }
 
 pub fn run(args: &[String], new_registry: &dyn Fn() -> Registry) -> Exit {
-    if let Some((word, rest)) = args.split_first()
-        && word == "mcp"
-    {
-        return mcp::run(rest, new_registry);
+    match args.split_first() {
+        Some((word, rest)) if word == "mcp" => return mcp::run(rest, new_registry),
+        Some((word, rest)) if word == "guide" => return guide::run(rest, new_registry),
+        _ => {}
     }
     match argparse::parse(args) {
         argparse::Parsed::Done(exit) => exit,

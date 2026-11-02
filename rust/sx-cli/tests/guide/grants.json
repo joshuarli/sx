@@ -1,0 +1,12 @@
+{
+  "fs.read-text": {"roots": ["/"]},
+  "fs.list": {"roots": ["/"]},
+  "fs.stat": {"roots": ["/"]},
+  "fs.write-text": {"roots": ["/"]},
+  "process.run": {"commands": [{"program": "/usr/bin/git", "args": ["Rest"]}], "roots": ["/"]},
+  "ci.checks": {"origins": ["http://ci.test"], "methods": ["GET"]},
+  "shop.item": {"origins": ["http://shop.test"], "methods": ["GET"]},
+  "store.save-order": {"roots": ["/"]},
+  "store.orders-over": {"roots": ["/"]},
+  "mcp-shop.lookup-item": null
+}
