@@ -1,0 +1,14 @@
+{
+  "packs": ["fs"],
+  "cores": ["text", "re", "json"],
+  "capabilities": [
+    {
+      "id": "shop.orders",
+      "http": {"method": "GET", "url": "{{shop_origin}}/orders", "query": ["page"]},
+      "input": "Record {page: Int}",
+      "output": "Record open {items: List<Record open {id: String, placed: String, customer: String, total_cents: Int}>, next: Option<Int>}",
+      "effect": "read",
+      "description": "Returns one page of October orders, counting pages from 1, with the number of the next page or none after the last."
+    }
+  ]
+}

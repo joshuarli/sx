@@ -1,0 +1,9 @@
+{
+  "shop.orders": {"origins": ["{{shop_origin}}"], "methods": ["GET"]},
+  "fs.read-text": {"roots": ["{{root}}/exports"]},
+  "fs.list": {"roots": ["{{root}}/exports"]},
+  "fs.stat": {"roots": ["{{root}}/exports"]},
+  "fs.make-directory": {"roots": ["{{root}}/exports"]},
+  "fs.write-text": {"roots": ["{{root}}/exports"]},
+  "fs.delete": {"roots": ["{{root}}/exports"]}
+}

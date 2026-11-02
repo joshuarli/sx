@@ -1,0 +1,26 @@
+(let [fetched (loop {:max 20} [page 1
+                               pages []]
+                (match (attempt (retry {:delays [100ms 200ms]} (call shop.orders {:page page})))
+                  (err _) {:failed page :pages []}
+                  (ok answer)
+                  (let [all (concat pages [{:number page :items (get answer :items)}])]
+                    (match (get answer :next)
+                      (some following) (recur following all)
+                      none {:failed 0 :pages all}))))
+      pages (get fetched :pages)]
+  (if (> (get fetched :failed) 0)
+    {:exported false :failed_page (get fetched :failed)}
+    (let [dir "{{root}}/exports/2026-10"
+          _ (call fs.make-directory {:path dir})
+          rows (fn [page]
+                 (map (fn [o] (str (get o :id) "," (get o :placed) "," (get o :customer) "," (get o :total_cents)))
+                      (get page :items)))
+          _ (map (fn [page]
+                   (call fs.write-text
+                         {:path (str dir "/orders-0" (get page :number) ".csv")
+                          :text (str (text.join "\n" (concat ["id,placed,customer,total_cents"] (rows page))) "\n")}))
+                 pages)
+          lines (reduce (fn [sum page] (+ sum (count (get page :items)))) 0 pages)
+          _ (call fs.write-text {:path (str dir "/manifest.json")
+                                 :text (str "{\"files\": " (count pages) ", \"rows\": " lines "}\n")})]
+      {:exported true :failed_page 0})))

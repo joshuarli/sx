@@ -1,0 +1,5 @@
+{
+  "capabilities": ["shop.orders", "fs.list", "fs.stat", "fs.make-directory", "fs.write-text", "fs.delete"],
+  "computed_inputs": ["shop.orders", "fs.list", "fs.stat", "fs.make-directory", "fs.write-text", "fs.delete"],
+  "max_write_sites": 4
+}
