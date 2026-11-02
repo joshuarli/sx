@@ -188,6 +188,14 @@ its reason on standard error, never approximated. The `readOnlyHint`, `destructi
 the `outputSchema`, and the closed table of call errors, the `2025-06-18` protocol subset, and the 60 second
 timeout are in [docs/language.md](docs/language.md#mcp-tools).
 
+`sx mcp serve --declarations D --grants G` goes the other way: it serves the granted capabilities the binary
+performs natively (`fs`, `process`, `http`, and declared endpoints) as an MCP server on standard input and
+output, with schemas generated from the Sx types, annotations from the effects, the grant's scope check on
+every call, and each failure returned as an `isError` result that names its call error kind. A client in
+another language gets the same performers as `sx run`. `sx mcp describe` lists them in Sx terms. The rules are
+in [docs/language.md](docs/language.md#serving-tools-over-mcp), and `bench/workflows/` runs workflows in Sx and
+in TypeScript on Bun against it.
+
 ## Verify
 
 ```sh

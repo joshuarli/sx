@@ -930,6 +930,98 @@ schemas: a tool that changed shape shows up as `Invalid` or `Failed` on the call
 server, which runs as the user and can do anything the user can. It validates an input against the Sx type,
 not against the full schema, so a narrower constraint (`minimum`, `pattern`) is the server's to enforce.
 
+### Serving tools over MCP
+
+`sx mcp serve` is the other direction: it exposes the capabilities the binary performs as an MCP server on
+its standard input and output, so a client in another language reaches the same performers that
+`sx run --grants` uses. `sx mcp describe` prints the same set in Sx terms.
+
+```
+sx mcp serve    --declarations FILE [--grants FILE] [--allow ID ...]
+sx mcp describe --declarations FILE [--grants FILE] [--allow ID ...]
+```
+
+**What is served.** Exactly the granted capabilities that the binary performs natively: the pack
+capabilities and the declared HTTP endpoints, and any kind added later through the same performer lookup.
+Grants load as for `sx run`, so a scoped capability needs its scope in `--grants`. A tool that is not granted
+is not listed, and calling it is the JSON-RPC error `-32602`. A granted capability with no native
+implementation, such as an imported MCP tool or a plain declared capability, is not served and is named on
+standard error. A granted capability whose types have no JSON Schema, an ID that is not a valid tool name,
+and a grant list with nothing to serve are usage errors. The tool name is the capability ID, `fs.read-text`
+or `github.repo`, and tools are listed in ID order on one page.
+
+**Protocol.** The stdio transport and the subset of [MCP tools](#mcp-tools), as a server. `initialize` answers
+with the client's `protocolVersion` when it is one of the three Sx accepts, else `2025-06-18`, and declares
+`tools` with `listChanged: false`. The methods are `ping`, `tools/list` (a `cursor` is `-32602`, because none is
+issued), `tools/call`, and the `notifications/cancelled` notification; any other request is `-32601`. A line that is not JSON is `-32700` with a
+null id, and a line over 16 MiB ends the connection. The server does not require `initialize` first.
+
+**Types.** The schema of a tool is the inverse of the import table. `inputSchema` is the input record, and a
+record field of type `Option<T>` is a property outside `required` with the schema of `T`, which is how the
+importer reads it back.
+
+| Sx type | JSON Schema |
+| --- | --- |
+| `Bool`, `Int`, `Float`, `String` | `boolean`, `integer`, `number`, `string` |
+| `Bytes` | `string` with `contentEncoding: base64` |
+| `Unit` | `null` |
+| `List<T>` | `array` with `items` |
+| `Tuple<T1, ..., Tn>` | `array` with `prefixItems`, `items: false`, and `minItems` and `maxItems` of `n` |
+| `Map<String, V>` | `object` with `additionalProperties` |
+| `Record {...}` | `object` with `properties`, `required`, and `additionalProperties: false`; a `Record open` omits `additionalProperties` |
+| `Option<T>` as an output field, or anywhere but an input field | `anyOf` of the schema of `T` and `{"type": "null"}`; an output field is also in `required`, because the result always carries it |
+| enum without payloads | `string` with `enum` |
+| enum with payloads | `oneOf` of the plain variants as one `string` enum and, per payload variant, `{"tag", "value"}` as the kernel encodes it |
+| `Result<T, E>` | `oneOf` of `{"ok": T}` and `{"err": E}` |
+| validated nominal | the schema of its base with the validation summary as `description` |
+
+**Results.** The result follows the output type. A `String` output has no `outputSchema`, and the result is
+one `text` block holding the string. A `Record` or `Map` output has an `outputSchema`, and the result carries
+`structuredContent` and the same JSON as a `text` block. Any other output, such as `List<fs.Entry>`,
+`Option<fs.Stat>`, or `Unit`, is wrapped: its `outputSchema` is an object with one required property `result`,
+the result is `{"result": VALUE}`, and the tool carries `"_meta": {"sx/result": "wrapped"}`, which a client
+reads to unwrap. Encoding is the kernel's, so a `none` field is `null`.
+
+**Annotations.** A read is `readOnlyHint: true`. A write that is idempotent is `readOnlyHint: false`,
+`destructiveHint: false`, `idempotentHint: true`, and any other write is `readOnlyHint: false`,
+`destructiveHint: true`, `idempotentHint: false`, the three combinations `sx mcp import` reads back as the same
+effect.
+
+**Calls.** A `tools/call` takes the input as `arguments`. An omitted optional property reads as `none`, and so
+does `null`. The arguments are decoded against the input type, screened by the grant's scope check, and
+performed by the same function `sx run` uses, with the grant's prepared scope. Each call runs on its own
+thread, up to 64 at a time, and answers arrive in completion order; at the limit the server stops reading
+until a call finishes. A `notifications/cancelled` for a call in flight drops its answer and does not interrupt
+the performer. When the client closes the server's input, the server lets the calls in flight finish, which
+each pack bounds, and exits with status 0.
+
+**Errors.** A failed call is a result with `isError: true`, a `text` block `KIND: message`, and
+`structuredContent` `{"kind": KIND, "message": TEXT}`, with `KIND` one of the eight call error kinds.
+
+| Situation | Kind |
+| --- | --- |
+| The arguments do not decode against the input type | `Invalid` |
+| The scope check denies the call | `PermissionDenied` |
+| The performer fails | the kind of its own table: [fs](#the-fs-pack), [process](#the-process-pack), [http](#the-http-pack) |
+
+A missing or unknown tool name and non-object `arguments` are the JSON-RPC error `-32602`, because no call
+was made. `sx mcp run` reads any `isError` result as `Failed`, so the kind survives only for a client that
+reads `structuredContent`.
+
+**Round trip.** `sx mcp import --name NAME -- sx mcp serve ...` reproduces the input and output types, the
+effect, and the idempotence of every tool whose types the import table can read: the capability
+`github.repo` comes back as `mcp-NAME.github-repo`. Four things do not come back. A wrapped output imports as
+`Record {result: T}`, and a `Unit` or zero-length tuple makes the importer skip the tool, because
+`type: null` alone has no Sx type. `Bytes` is skipped, because `contentEncoding` is not on the whitelist. An
+open input record imports closed, because every imported input is. Enums are renamed from the tool and the
+property path.
+
+**`describe`.** Prints `{"enums", "types", "capabilities"}`: the capabilities `serve` would list with
+`id`, `effect`, `idempotent`, `description`, `input`, and `output` as Sx type strings, and the enums and named
+record types they use, in the shape of a declarations file. A client that generates types from Sx
+declarations, such as the TypeScript declarations of `bench/codemode/typescript.py`, reads this instead of
+parsing `sx help`.
+
 ## Execution
 
 The machine is a step function over a state held as plain data. Each run ends in one of three
