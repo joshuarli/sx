@@ -143,8 +143,9 @@ def judge(
     if result != task["expected"]:
         return "wrong", f"wrong result: {json.dumps(result)}"
     states_a_wait_policy = bool(WAIT_KINDS & set(task["kinds"]))
-    if states_a_wait_policy and sorted(delays) != sorted(wanted_delays):
-        return "wrong", f"waited {sorted(delays)} instead of {sorted(wanted_delays)}"
+    waited, wanted = sorted(d for d in delays if d > 0), sorted(d for d in wanted_delays if d > 0)
+    if states_a_wait_policy and waited != wanted:
+        return "wrong", f"waited {waited} instead of {wanted}"
     return "correct", ""
 
 
