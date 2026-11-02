@@ -512,3 +512,448 @@ pub fn read_program_text(text: &str) -> Result<Program, IrError> {
     let json = parse(text).map_err(|e| IrError(format!("exported IR is not JSON: {e}")))?;
     read_program(&json)
 }
+
+struct Writer<'p> {
+    signatures: &'p Signatures,
+    enums: Vec<(String, Option<Json>)>,
+    defined: BTreeMap<String, Arc<EnumType>>,
+    capabilities: BTreeMap<String, Json>,
+    functions: BTreeMap<String, Json>,
+}
+
+fn int(n: impl TryInto<i64>) -> Json {
+    Json::Int(n.try_into().unwrap_or(i64::MAX))
+}
+
+fn span_json(span: Span) -> Json {
+    Json::Array(vec![int(span.start.line), int(span.start.column), int(span.end.line), int(span.end.column)])
+}
+
+fn optional(json: Option<Json>) -> Json {
+    json.unwrap_or(Json::Null)
+}
+
+impl Writer<'_> {
+    fn type_of(&mut self, t: &Type) -> Json {
+        match t {
+            Type::Primitive(p) => Json::string(p.name()),
+            Type::List(element) => self.wrapped_type("list", element),
+            Type::Map(value) => self.wrapped_type("map", value),
+            Type::Option(inner) => self.wrapped_type("option", inner),
+            Type::Tuple(items) => self.tuple_type(items),
+            Type::Result(ok, err) => self.result_type(ok, err),
+            Type::Record(record) => self.record_type(record),
+            Type::Enum(e) => self.enum_type(e),
+            Type::Nominal { name, base } => self.nominal_type(name, base),
+            Type::Variable(id) => Json::object([("var", int(*id))]),
+            Type::Never => Json::string("Never"),
+        }
+    }
+
+    fn wrapped_type(&mut self, key: &'static str, inner: &Type) -> Json {
+        let inner = self.type_of(inner);
+        Json::Object(vec![(key.to_string(), inner)])
+    }
+
+    fn tuple_type(&mut self, items: &[Type]) -> Json {
+        let items = items.iter().map(|i| self.type_of(i)).collect();
+        Json::Object(vec![("tuple".to_string(), Json::Array(items))])
+    }
+
+    fn result_type(&mut self, ok: &Type, err: &Type) -> Json {
+        let pair = vec![self.type_of(ok), self.type_of(err)];
+        Json::Object(vec![("result".to_string(), Json::Array(pair))])
+    }
+
+    fn record_type(&mut self, record: &RecordType) -> Json {
+        let mut fields = Vec::with_capacity(record.fields.len());
+        for (name, ft) in &record.fields {
+            let ft = self.type_of(ft);
+            fields.push(Json::Array(vec![Json::string(name.as_str()), ft]));
+        }
+        let name = record.name.as_deref().map_or(Json::Null, Json::string);
+        Json::Object(vec![
+            ("record".to_string(), Json::Array(fields)),
+            ("name".to_string(), name),
+            ("open".to_string(), Json::Bool(record.open)),
+        ])
+    }
+
+    fn nominal_type(&mut self, name: &str, base: &Type) -> Json {
+        let base = self.type_of(base);
+        Json::Object(vec![("nominal".to_string(), Json::string(name)), ("base".to_string(), base)])
+    }
+
+    fn enum_type(&mut self, e: &Arc<EnumType>) -> Json {
+        if !self.enums.iter().any(|(name, _)| *name == e.name) {
+            self.enums.push((e.name.clone(), None));
+            self.defined.insert(e.name.clone(), e.clone());
+            let mut variants = Vec::with_capacity(e.variants.len());
+            for (variant, payload) in &e.variants {
+                let payload = match payload {
+                    Some(p) => self.type_of(p),
+                    None => Json::Null,
+                };
+                variants.push(Json::Array(vec![Json::string(variant.as_str()), payload]));
+            }
+            if let Some(entry) = self.enums.iter_mut().find(|(name, _)| *name == e.name) {
+                entry.1 = Some(Json::Array(variants));
+            }
+        }
+        Json::Object(vec![("enum".to_string(), Json::string(e.name.as_str()))])
+    }
+
+    fn value(&self, value: &Value) -> Json {
+        match value {
+            Value::Bool(b) => Json::object([("bool", Json::Bool(*b))]),
+            Value::Int(n) => Json::object([("int", Json::Int(*n))]),
+            Value::Float(f) => Json::object([("float", Json::Float(f.0))]),
+            Value::Bytes(data) => Json::object([("bytes", Json::string(base64_encode(data)))]),
+            Value::String(s) => Json::object([("string", Json::string(&**s))]),
+            Value::Unit => Json::string("unit"),
+            Value::None => Json::string("none"),
+            Value::Some(inner) => Json::object([("some", self.value(inner))]),
+            Value::Ok(inner) => Json::object([("ok", self.value(inner))]),
+            Value::Err(inner) => Json::object([("err", self.value(inner))]),
+            Value::List(items) => Json::object([("list", Json::Array(items.iter().map(|i| self.value(i)).collect()))]),
+            Value::Tuple(items) => Json::object([("tuple", Json::Array(items.iter().map(|i| self.value(i)).collect()))]),
+            Value::Record(record) => {
+                let fields = record.fields().iter().map(|(n, v)| Json::Array(vec![Json::string(&**n), self.value(v)])).collect();
+                Json::object([("record", Json::Array(fields))])
+            }
+            Value::Map(map) => {
+                let entries = map.entries().iter().map(|(k, v)| Json::Array(vec![Json::string(&**k), self.value(v)])).collect();
+                Json::object([("map", Json::Array(entries))])
+            }
+            Value::Variant(variant) => Json::object([(
+                "variant",
+                Json::object([
+                    ("enum", Json::string(&*variant.enum_name)),
+                    ("name", Json::string(&*variant.variant)),
+                    ("payload", optional(variant.payload.as_ref().map(|p| self.value(p)))),
+                ]),
+            )]),
+        }
+    }
+
+    fn binder(&self, binder: &Binder) -> Json {
+        match binder {
+            Binder::Name(name) => Json::object([("bind", Json::string(name.as_str()))]),
+            Binder::Discard => Json::string("discard"),
+            Binder::Tuple(items) => Json::object([("tuple", Json::Array(items.iter().map(|b| self.binder(b)).collect()))]),
+        }
+    }
+
+    fn pattern(&self, pattern: &MatchPattern) -> Json {
+        match pattern {
+            MatchPattern::Some(inner) => Json::object([("some", self.pattern(inner))]),
+            MatchPattern::None => Json::string("none"),
+            MatchPattern::Ok(inner) => Json::object([("ok", self.pattern(inner))]),
+            MatchPattern::Err(inner) => Json::object([("err", self.pattern(inner))]),
+            MatchPattern::Variant { variant, inner } => Json::object([
+                ("variant", Json::string(variant.as_str())),
+                ("inner", optional(inner.as_ref().map(|p| self.pattern(p)))),
+            ]),
+            MatchPattern::Literal(value) => Json::object([("literal", self.value(value))]),
+            MatchPattern::Any(binder) => Json::object([("any", self.binder(binder))]),
+        }
+    }
+
+    fn conversion(&mut self, conversion: Option<&Conversion>) -> Json {
+        let Some(conversion) = conversion else {
+            return Json::Null;
+        };
+        match conversion {
+            Conversion::ToSome(inner) => Json::object([("to-some", self.conversion(inner.as_deref()))]),
+            Conversion::EachField(fields) => {
+                let fields = fields
+                    .iter()
+                    .map(|(name, c)| Json::Array(vec![Json::string(name.as_str()), self.conversion(c.as_ref())]))
+                    .collect();
+                Json::object([("each-field", Json::Array(fields))])
+            }
+            Conversion::WidenRecord(fields) => {
+                let fields = fields
+                    .iter()
+                    .map(|f| {
+                        Json::Array(vec![
+                            Json::string(f.name.as_str()),
+                            Json::Bool(f.present),
+                            self.conversion(f.conversion.as_ref()),
+                            self.type_of(&f.field_type),
+                        ])
+                    })
+                    .collect();
+                Json::object([("widen-record", Json::Array(fields))])
+            }
+            Conversion::EachItem(items) => {
+                Json::object([("each-item", Json::Array(items.iter().map(|c| self.conversion(c.as_ref())).collect()))])
+            }
+            Conversion::EachElement(element) => Json::object([("each-element", self.conversion(Some(element)))]),
+            Conversion::VariantName => Json::string("variant-name"),
+        }
+    }
+
+    fn capability(&mut self, id: &str) -> Json {
+        if let Some(signature) = self.signatures.capabilities.get(id) {
+            let entry = Json::object([
+                ("effect", Json::string(signature.effect.name())),
+                ("idempotent", Json::Bool(signature.idempotent)),
+                ("input", self.type_of(&signature.input)),
+                ("output", self.type_of(&signature.output)),
+            ]);
+            self.capabilities.insert(id.to_string(), entry);
+        }
+        Json::string(id)
+    }
+
+    fn function(&mut self, name: &str) -> Json {
+        if let Some(signature) = self.signatures.functions.get(name) {
+            let params = signature.params.iter().map(|p| self.type_of(p)).collect();
+            let entry = Json::object([("params", Json::Array(params)), ("output", self.type_of(&signature.output))]);
+            self.functions.insert(name.to_string(), entry);
+        }
+        Json::string(name)
+    }
+
+    fn nodes(&mut self, nodes: &[Node]) -> Json {
+        Json::Array(nodes.iter().map(|n| self.node(n)).collect())
+    }
+
+    fn lambda_fields(&mut self, lambda: &Lambda) -> Vec<(&'static str, Json)> {
+        let params = lambda.params.iter().map(|b| self.binder(b)).collect();
+        let types = lambda.param_types.iter().map(|t| self.type_of(t)).collect();
+        vec![
+            ("params", Json::Array(params)),
+            ("param_types", Json::Array(types)),
+            ("result", self.type_of(&lambda.result)),
+            ("body", self.node(&lambda.body)),
+            ("captured", lambda.captured.as_deref().map_or(Json::Null, Json::string)),
+        ]
+    }
+
+    fn lambda(&mut self, lambda: &Lambda) -> Json {
+        let mut fields = vec![("node", Json::string("Lambda"))];
+        fields.extend(self.lambda_fields(lambda));
+        fields.push(("span", span_json(lambda.span)));
+        Json::object(fields)
+    }
+
+    fn node(&mut self, node: &Node) -> Json {
+        let fields = self.node_fields(&node.kind);
+        let mut entries = Vec::with_capacity(fields.len() + 2);
+        entries.push(("node".to_string(), Json::string(node.kind.name())));
+        entries.extend(fields.into_iter().map(|(k, v)| (k.to_string(), v)));
+        entries.push(("span".to_string(), span_json(node.span)));
+        Json::Object(entries)
+    }
+
+    fn node_fields(&mut self, kind: &NodeKind) -> Vec<(&'static str, Json)> {
+        match kind {
+            NodeKind::Literal { value, value_type } => self.literal_fields(value, value_type),
+            NodeKind::Variable { name } => vec![("name", Json::string(name.as_str()))],
+            NodeKind::Let(node) => self.let_fields(node),
+            NodeKind::LocalFunction { name, body } => self.named_body("name", name, "body", body),
+            NodeKind::If(node) => self.if_fields(node),
+            NodeKind::Match(node) => self.match_fields(node),
+            NodeKind::Lambda(lambda) => self.lambda_fields(lambda),
+            NodeKind::ApplyLocal { name, function, args } => self.apply_fields(name, function, args),
+            NodeKind::Prelude { op, args } => self.named_nodes("op", op.name(), "args", args),
+            NodeKind::CoreCall { function, args } => self.core_fields(function, args),
+            NodeKind::Call { capability, argument } => self.call_fields(capability, argument),
+            NodeKind::Get { record, field } => self.get_fields(record, field),
+            NodeKind::MakeRecord { fields } => self.record_fields(fields),
+            NodeKind::MakeList { items, element } => self.typed_items("items", items, "element", element),
+            NodeKind::MakeTuple { items } => self.only_nodes("items", items),
+            NodeKind::MakeBracket { items, shape } => self.typed_items("items", items, "shape", shape),
+            NodeKind::MakeEmptyBrace { shape } => self.only_type("shape", shape),
+            NodeKind::Wrap { kind, value, wrapped_type } => self.wrap_fields(*kind, value, wrapped_type),
+            NodeKind::MakeVariant { enum_name, variant, payload } => self.variant_fields(enum_name, variant, payload.as_deref()),
+            NodeKind::Coerce { value, conversion } => self.coerce_fields(value, conversion),
+            NodeKind::Attempt { body } => self.only_node("body", body),
+            NodeKind::Retry(node) => self.retry_fields(node),
+            NodeKind::WaitUntil(node) => self.wait_fields(node),
+            NodeKind::Sleep { milliseconds } => vec![("milliseconds", Json::Int(*milliseconds))],
+            NodeKind::Loop(node) => self.loop_fields(node),
+            NodeKind::Recur { args } => self.only_nodes("args", args),
+            NodeKind::Par { branches } => self.only_nodes("branches", branches),
+            NodeKind::ParMap { limit, function, items } => self.par_map_fields(*limit, function, items),
+        }
+    }
+
+    fn literal_fields(&mut self, value: &Value, value_type: &Type) -> Vec<(&'static str, Json)> {
+        let value = self.value(value);
+        vec![("value", value), ("type", self.type_of(value_type))]
+    }
+
+    fn let_fields(&mut self, node: &Let) -> Vec<(&'static str, Json)> {
+        let binder = self.binder(&node.binder);
+        let value = self.node(&node.value);
+        vec![("binder", binder), ("value", value), ("body", self.node(&node.body))]
+    }
+
+    fn named_body(&mut self, key: &'static str, name: &str, body_key: &'static str, body: &Node) -> Vec<(&'static str, Json)> {
+        let body = self.node(body);
+        vec![(key, Json::string(name)), (body_key, body)]
+    }
+
+    fn named_nodes(&mut self, key: &'static str, name: &str, nodes_key: &'static str, nodes: &[Node]) -> Vec<(&'static str, Json)> {
+        let nodes = self.nodes(nodes);
+        vec![(key, Json::string(name)), (nodes_key, nodes)]
+    }
+
+    fn if_fields(&mut self, node: &If) -> Vec<(&'static str, Json)> {
+        let condition = self.node(&node.condition);
+        let then = self.node(&node.then);
+        vec![("condition", condition), ("then", then), ("otherwise", self.node(&node.otherwise))]
+    }
+
+    fn match_fields(&mut self, node: &Match) -> Vec<(&'static str, Json)> {
+        let scrutinee = self.node(&node.scrutinee);
+        let mut clauses = Vec::with_capacity(node.clauses.len());
+        for (pattern, body) in &node.clauses {
+            let pattern = self.pattern(pattern);
+            clauses.push(Json::Array(vec![pattern, self.node(body)]));
+        }
+        vec![("scrutinee", scrutinee), ("clauses", Json::Array(clauses))]
+    }
+
+    fn apply_fields(&mut self, name: &str, function: &Lambda, args: &[Node]) -> Vec<(&'static str, Json)> {
+        let function = self.lambda(function);
+        vec![("name", Json::string(name)), ("function", function), ("args", self.nodes(args))]
+    }
+
+    fn core_fields(&mut self, function: &str, args: &[Node]) -> Vec<(&'static str, Json)> {
+        let function = self.function(function);
+        vec![("function", function), ("args", self.nodes(args))]
+    }
+
+    fn call_fields(&mut self, capability: &str, argument: &Node) -> Vec<(&'static str, Json)> {
+        let capability = self.capability(capability);
+        vec![("capability", capability), ("argument", self.node(argument))]
+    }
+
+    fn get_fields(&mut self, record: &Node, field: &str) -> Vec<(&'static str, Json)> {
+        let record = self.node(record);
+        vec![("record", record), ("field", Json::string(field))]
+    }
+
+    fn record_fields(&mut self, fields: &[(String, Node)]) -> Vec<(&'static str, Json)> {
+        let mut parts = Vec::with_capacity(fields.len());
+        for (name, part) in fields {
+            let part = self.node(part);
+            parts.push(Json::Array(vec![Json::string(name.as_str()), part]));
+        }
+        vec![("fields", Json::Array(parts))]
+    }
+
+    fn typed_items(&mut self, key: &'static str, items: &[Node], type_key: &'static str, t: &Type) -> Vec<(&'static str, Json)> {
+        let items = self.nodes(items);
+        vec![(key, items), (type_key, self.type_of(t))]
+    }
+
+    fn only_nodes(&mut self, key: &'static str, nodes: &[Node]) -> Vec<(&'static str, Json)> {
+        vec![(key, self.nodes(nodes))]
+    }
+
+    fn only_node(&mut self, key: &'static str, node: &Node) -> Vec<(&'static str, Json)> {
+        vec![(key, self.node(node))]
+    }
+
+    fn only_type(&mut self, key: &'static str, t: &Type) -> Vec<(&'static str, Json)> {
+        vec![(key, self.type_of(t))]
+    }
+
+    fn wrap_fields(&mut self, kind: WrapKind, value: &Node, wrapped_type: &Type) -> Vec<(&'static str, Json)> {
+        let value = self.node(value);
+        vec![("kind", Json::string(kind.name())), ("value", value), ("type", self.type_of(wrapped_type))]
+    }
+
+    fn variant_fields(&mut self, enum_name: &str, variant: &str, payload: Option<&Node>) -> Vec<(&'static str, Json)> {
+        let payload = match payload {
+            Some(p) => self.node(p),
+            None => Json::Null,
+        };
+        vec![("enum", Json::string(enum_name)), ("variant", Json::string(variant)), ("payload", payload)]
+    }
+
+    fn coerce_fields(&mut self, value: &Node, conversion: &Conversion) -> Vec<(&'static str, Json)> {
+        let value = self.node(value);
+        vec![("value", value), ("conversion", self.conversion(Some(conversion)))]
+    }
+
+    fn retry_fields(&mut self, node: &Retry) -> Vec<(&'static str, Json)> {
+        let mut names: Vec<&str> = node.kinds.iter().map(|k| k.name()).collect();
+        names.sort_unstable();
+        let body = self.node(&node.body);
+        vec![
+            ("delays", Json::Array(node.delays.iter().map(|d| Json::Int(*d)).collect())),
+            ("kinds", Json::Array(names.into_iter().map(Json::string).collect())),
+            ("body", body),
+        ]
+    }
+
+    fn wait_fields(&mut self, node: &WaitUntil) -> Vec<(&'static str, Json)> {
+        let predicate = self.lambda(&node.predicate);
+        let body = self.node(&node.body);
+        vec![
+            ("intervals", Json::Array(node.intervals.iter().map(|d| Json::Int(*d)).collect())),
+            ("predicate", predicate),
+            ("body", body),
+        ]
+    }
+
+    fn loop_fields(&mut self, node: &Loop) -> Vec<(&'static str, Json)> {
+        let binders = Json::Array(node.binders.iter().map(|b| self.binder(b)).collect());
+        let initial = self.nodes(&node.initial);
+        let body = self.node(&node.body);
+        vec![("maximum", Json::Int(node.maximum)), ("binders", binders), ("initial", initial), ("body", body)]
+    }
+
+    fn par_map_fields(&mut self, limit: i64, function: &Lambda, items: &Node) -> Vec<(&'static str, Json)> {
+        let function = self.lambda(function);
+        let items = self.node(items);
+        vec![("limit", Json::Int(limit)), ("function", function), ("items", items)]
+    }
+}
+
+fn write(program: &Program) -> (Json, BTreeMap<String, Arc<EnumType>>) {
+    let mut writer = Writer {
+        signatures: &program.signatures,
+        enums: Vec::new(),
+        defined: BTreeMap::new(),
+        capabilities: BTreeMap::new(),
+        functions: BTreeMap::new(),
+    };
+    let body = writer.node(&program.body);
+    let result = writer.type_of(&program.result);
+    let inputs: Vec<(String, Json)> =
+        program.inputs.iter().map(|(name, t)| (name.clone(), writer.type_of(t))).collect();
+    let mut capabilities: Vec<&str> = program.capabilities.iter().map(String::as_str).collect();
+    capabilities.sort_unstable();
+    let mut enums: Vec<(String, Json)> = writer.enums.into_iter().map(|(name, v)| (name, optional(v))).collect();
+    enums.sort_by(|a, b| a.0.cmp(&b.0));
+    let json = Json::object([
+        ("body", body),
+        ("result", result),
+        ("capabilities", Json::Array(capabilities.into_iter().map(Json::string).collect())),
+        ("inputs", Json::Object(inputs)),
+        ("enums", Json::Object(enums)),
+        (
+            "signatures",
+            Json::object([
+                ("capabilities", Json::Object(writer.capabilities.into_iter().collect())),
+                ("functions", Json::Object(writer.functions.into_iter().collect())),
+            ]),
+        ),
+    ]);
+    (json, writer.defined)
+}
+
+pub fn export_program(program: &Program) -> Json {
+    write(program).0
+}
+
+pub fn referenced_enums(program: &Program) -> BTreeMap<String, Arc<EnumType>> {
+    write(program).1
+}

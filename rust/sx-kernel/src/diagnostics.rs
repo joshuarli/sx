@@ -43,6 +43,16 @@ impl Diagnostic {
         self
     }
 
+    pub fn maybe_detail(mut self, detail: Option<String>) -> Diagnostic {
+        self.detail = detail;
+        self
+    }
+
+    pub fn maybe_help(mut self, help: Option<String>) -> Diagnostic {
+        self.help = help;
+        self
+    }
+
     pub fn label(&self) -> String {
         match self.construct {
             None => self.code.to_string(),

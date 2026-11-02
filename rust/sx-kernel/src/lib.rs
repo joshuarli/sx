@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 pub mod budgets;
+pub mod checker;
 pub mod diagnostics;
 pub mod export;
 pub mod host;
