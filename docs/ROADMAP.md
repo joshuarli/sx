@@ -117,6 +117,17 @@ semantics from the specification exposed two Python bugs that every Python fixtu
 request IDs across two `par` forms on one fiber, and a local predicate that saw call-site
 bindings. The Rust port should be checked against both.
 
+**Near-parity on tool tasks did not carry over to real workflows.** On the six-workflow
+milestone, TypeScript on Bun was right at first attempt 18 of 18 times against 10 of 18 for Sx, at
+2.5 times fewer tokens, with the same tools behind both. The probe's tasks needed only the kernel,
+which the guide teaches; the workflows needed packs the guide does not cover, and TypeScript
+brings years of familiarity with files, processes, and HTTP. Sx led where a core did the work: on
+YAML edits it used 37% fewer tokens than TypeScript's hand-written line scanning. The authority
+`explain` reports before a run is real and TypeScript has nothing like it, but no answer in the
+comparison was harmful, so it earned nothing measurable. The next campaign has to make Sx's
+advantages count where a model pays for them: in the guide, in cores, and in tasks where a wrong
+effect costs something.
+
 ## Alternatives to rule out
 
 Full JavaScript is the baseline, not the strongest alternative. The strongest is a restricted,
