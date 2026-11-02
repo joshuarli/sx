@@ -586,6 +586,69 @@ write them. Functions that build, slice, or convert `Bytes` belong in a later co
 Encoding writes record fields in declaration order and map keys in ascending order. Comparisons of JSON values, in fixtures and
 in parity tests, ignore object key order.
 
+## Host protocol
+
+`sx serve` lets a host in any language run programs over standard input and output. The host
+writes one JSON message per line, and the kernel writes one JSON message per line back. Both
+sides use the [JSON encoding](#values-and-json) for values. A line longer than 16 MiB, a blank line,
+and a line the kernel cannot read are never fatal: blank lines are ignored, and the others get an
+`error` message. The kernel serves one execution at a time and any number of `explain` messages.
+
+The first message the host sends carries `"version": 1`. Later messages may repeat it, and any
+other number is an `unsupported-version` error. Unknown fields are errors, so a misspelled option
+never passes silently.
+
+Host to kernel:
+
+| `type` | Fields | Meaning |
+| --- | --- | --- |
+| `start` | `program`, `allow`, optional `declarations`, `inputs`, `budgets` | Check the program and run it. `allow` is the list of authorized capability IDs. `inputs` maps each declared input name to its value. `budgets` maps budget names (`steps`, `calls`, `delay_ms`, `source_bytes`, `nodes`, `depth`, `concurrency`, `value_size`, `applications`, `instantiations`) to counts. |
+| `explain` | `program`, optional `declarations`, `allow` | Check the program against every declared capability and report its authority without running it. |
+| `respond` | `responses` | Answer outstanding requests. Each response is `{"id": ID, "output": VALUE}` or `{"id": ID, "error": {"kind": KIND, "message": TEXT}}`. |
+| `cancel` | none | Stop answering. The machine resumes with the responses it has, so every unanswered request fails the run with `invalid-host-response`. |
+
+`declarations` is the object that `sx` reads with `--declarations`: `enums`, `types`,
+`capabilities`, and `inputs` (names mapped to type text). It also takes `cores`, a list of core
+IDs that the kernel registers before the rest, so a capability can name a core type such as
+`git.Checkout`. The kernel binary links the `text`, `semver`, `git`, and `github` cores.
+
+Kernel to host:
+
+| `type` | Fields | Meaning |
+| --- | --- | --- |
+| `rejected` | `diagnostics`, `rendered` | The program did not check, so nothing ran. `diagnostics` holds the [structured diagnostics](#diagnostics) (`code`, `construct`, `span`, `message`, `detail`, `fix`, `help`), and `rendered` the text a person reads. |
+| `requests` | `requests` | The run is suspended. Each request is `{"id", "kind": "call", "capability", "input"}` or `{"id", "kind": "delay", "milliseconds"}`. A delay is answered with `"output": null` once the host has waited. |
+| `completed` | `value`, `trace` | The program finished. `value` is the result and `trace` the [trace](#execution). |
+| `failed` | `failure`, `trace` | The program stopped. `failure` is `{"kind", "message", "span", "request"}`, where `span` and `request` may be `null`. |
+| `explained` | `tools`, `inputs`, `result` | For each capability the program can call: `id`, `effect` (`read`, `write, idempotent`, or `write, not idempotent`), `allowed`, and the literal `inputs` of its calls, with `"computed at run time"` for arguments the program computes. Also the inputs the program uses and its result type. Same as `sx explain --format json`. |
+| `error` | `code`, `message` | The message was not valid, so the kernel did nothing with it. |
+
+After `requests` the host answers in any order, in as many `respond` messages as it likes, with
+any subset each time. The kernel resumes the machine once every outstanding request has a
+response, or as soon as a response names an unknown or repeated ID, which fails the run with
+`invalid-host-response` as [Execution](#execution) says. Another `requests` message, or the end of
+the run, follows. While requests are outstanding the kernel reads only `respond`, `cancel`, and
+`explain`. An `error` message does not end the execution: the host may send a corrected message.
+If the input ends first, the kernel sends an `end-of-input` error and exits with status 1.
+
+Error codes: `malformed-json` (not JSON, not UTF-8, or nested too deeply),
+`line-too-long`, `invalid-message` (not an object, no or unknown `type`, a missing, unknown, or
+mistyped field, or a response that is not exactly one of `output` and `error`),
+`unsupported-version`, `unexpected-message` (a `respond` or `cancel` with nothing outstanding, or a
+`start` while one is), `invalid-declarations`, `unknown-capability` (`allow` names a capability the
+declarations do not define), `invalid-input` (a missing, undeclared, or mistyped input, which
+rejects the run before any request), `invalid-budget`, `end-of-input`, and `internal` (a kernel
+bug, after which the execution is abandoned and the session continues).
+
+An exchange, with the host's lines marked `>`:
+
+```
+> {"version": 1, "type": "start", "program": "(call store.get {:id \"a\"})", "allow": ["store.get"], "declarations": {...}}
+{"type": "requests", "requests": [{"id": "r:1", "kind": "call", "capability": "store.get", "input": {"id": "a"}}]}
+> {"type": "respond", "responses": [{"id": "r:1", "output": {"id": "a", "size": 1}}]}
+{"type": "completed", "value": {"id": "a", "size": 1}, "trace": [...]}
+```
+
 ## Diagnostics
 
 The checker reports every error it finds, up to 20, followed by a count of the rest. A local

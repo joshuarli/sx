@@ -9,6 +9,7 @@ pub mod host;
 pub mod ir;
 pub mod json;
 pub mod machine;
+pub mod protocol;
 pub mod reader;
 pub mod registry;
 pub mod syntax;

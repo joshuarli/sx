@@ -38,12 +38,16 @@ def parser() -> argparse.ArgumentParser:
 
 def execute(program: Program, inputs: dict[str, object], environment: Environment | None) -> Any:
     from sx_repomod.capabilities import Capabilities
+    from sx_repomod.kernel import KernelError
     from sx_repomod.runner import Errored, RejectedProgramError, Succeeded, run_program
 
     try:
         outcome = run_program(program, inputs, Capabilities(environment))
     except RejectedProgramError as rejected:
         print(f"sx-repomod: {program.name}.sx was rejected:\n{rejected}", file=sys.stderr)
+        return None
+    except KernelError as failure:
+        print(f"sx-repomod: the Rust kernel failed: {failure}", file=sys.stderr)
         return None
     if isinstance(outcome, Errored):
         print(f"repomod: {outcome.message}", file=sys.stderr)
