@@ -20,6 +20,7 @@ pub enum FailureKind {
     InvalidHostResponse,
     BudgetExhausted,
     Arithmetic,
+    InvalidInput,
     OutOfRange,
     LoopLimit,
     Internal,
@@ -32,6 +33,7 @@ impl FailureKind {
             FailureKind::InvalidHostResponse => "invalid-host-response",
             FailureKind::BudgetExhausted => "budget-exhausted",
             FailureKind::Arithmetic => "arithmetic",
+            FailureKind::InvalidInput => "invalid-input",
             FailureKind::OutOfRange => "out-of-range",
             FailureKind::LoopLimit => "loop-limit",
             FailureKind::Internal => "internal",
@@ -105,6 +107,7 @@ pub enum CoreError {
     Unimplemented,
     Failed(String),
     Arithmetic(String),
+    InvalidInput(String),
 }
 
 pub trait CoreImplementations {
@@ -1039,6 +1042,9 @@ impl<'p> Machine<'p> {
                         return Err(internal(format!("{function} has a signature but no implementation."), Some(span)));
                     }
                     Err(CoreError::Failed(message)) => return Err(internal(format!("{function}: {message}"), Some(span))),
+                    Err(CoreError::InvalidInput(message)) => {
+                        return Err(Failure::new(FailureKind::InvalidInput, format!("{function}: {message}"), Some(span)));
+                    }
                     Err(CoreError::Arithmetic(message)) => {
                         return Err(Failure::new(FailureKind::Arithmetic, format!("{function}: {message}"), Some(span)));
                     }

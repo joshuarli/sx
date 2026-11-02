@@ -818,7 +818,7 @@ fn yaml_call(function: &str, args: &[Value]) -> Option<Result<Value, CoreError>>
         ("yaml.keys", [text, path]) => yaml::keys(string_of(text)?, &strings_of(path)?).map(string_list),
         _ => return Some(Err(CoreError::Unimplemented)),
     };
-    Some(outcome.map_err(|error| CoreError::Arithmetic(error.to_string())))
+    Some(outcome.map_err(|error| CoreError::InvalidInput(error.to_string())))
 }
 
 pub struct Cores;
@@ -829,7 +829,7 @@ impl Cores {
             ("text.casefold", [s]) => Value::string(&text::casefold(string_of(s)?)),
             ("text.split", [s, separator]) => match text::split(string_of(s)?, string_of(separator)?) {
                 Ok(parts) => string_list(parts),
-                Err(TextError::EmptySeparator) => return Some(Err(CoreError::Failed("empty separator".to_string()))),
+                Err(TextError::EmptySeparator) => return Some(Err(CoreError::InvalidInput("empty separator".to_string()))),
             },
             ("text.join", [separator, parts]) => Value::string(&text::join(string_of(separator)?, &strings_of(parts)?)),
             ("text.chars", [s]) => string_list(text::chars(string_of(s)?)),

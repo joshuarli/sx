@@ -114,7 +114,7 @@ fn every_refused_golden_case_fails_with_its_reason() {
 }
 
 #[test]
-fn a_refused_document_makes_the_core_fail_as_an_arithmetic_stop() {
+fn a_refused_document_makes_the_core_fail_as_an_invalid_input_stop() {
     let mut registry = Registry::new();
     registry.add_core(yaml_core()).expect("the yaml core registers");
     let grants = Grants::new();
@@ -129,7 +129,7 @@ fn a_refused_document_makes_the_core_fail_as_an_arithmetic_stop() {
     let mut machine = Machine::new(&program, &[], Budgets::default(), &Cores);
     match machine.start() {
         Outcome::Failed(failure) => {
-            assert_eq!(failure.kind.to_string(), "arithmetic");
+            assert_eq!(failure.kind.to_string(), "invalid-input");
             assert!(failure.message.starts_with("yaml.get: line 1: flow collections are outside the supported YAML subset"), "{}", failure.message);
         }
         other => panic!("expected a failure, got {other:?}"),
