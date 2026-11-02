@@ -268,26 +268,20 @@ Build the harness in `bench/codemode` that runs the Phase 0 corpus in two arms.
   Node, with the same fixture responses. Repairs feed back `tsc` type errors before running and
   runtime errors after. JS gets its best realistic tooling, so a win comes from the language and
   not from weaker feedback.
-- Run `opencode-go/muse-spark-1.3-contributor` through `opencode run --format json`. The probe
-  uses a weak model on purpose: a language a weak model writes correctly is easy enough for a
-  strong one.
+- Run the model through the `pi` CLI with `--mode json`, `--no-tools`, `--no-skills`,
+  `--no-context-files`, `--no-extensions`, `--no-mcp`, `--no-prompt-templates`, `--no-session`,
+  and a fixed `--system-prompt`, so the model sees only the task. A one-line prompt then costs 69
+  input tokens. An earlier opencode harness could not remove its built-in tools: the model tried
+  to call them in up to 28 of 60 runs, and one looping run used 145,997 input tokens. Treat any
+  tool attempt as a harness failure to fix, not a data point.
+- Run `opencode-go/muse-spark-1.3-contributor` with `--thinking medium`. The probe uses a weak
+  model on purpose: a language a weak model writes correctly is easy enough for a strong one.
 - Also run `opencode-go/iceman-contributor-free`, which is free, weaker still, and from a
   different model family. It runs the full corpus. Muse Spark runs as much of the corpus as the
   OpenCode Go weekly limit allows, and Iceman is the fallback when that limit is reached. Both
   runs in a pair use the same model. Report results per model.
-- Call the model so that it is offered no tools. Denying permissions in an opencode agent does
-  not remove its built-in tools. In the pilot, the model tried to call opencode's skill tool in 12
-  and then 28 of 60 runs, sometimes leaking tool-call tokens into its answer. One looping run
-  used 145,997 input tokens. Token counts from such runs are meaningless. Use the provider's API
-  directly, or an opencode mode that offers no tools, and treat any tool attempt as a harness
-  failure to fix, not a data point.
-- Read token counts from the `step_finish` events in opencode's JSON output. Run opencode with
-  `OPENCODE_CONFIG_DIR` pointing at an empty directory and with `OPENCODE_DISABLE_CLAUDE_CODE`
-  and `OPENCODE_DISABLE_CLAUDE_CODE_SKILLS` set. Otherwise every prompt carries the user's
-  global instructions and skill list, and the model tries to call skills. A one-line prompt cost
-  9,209 input tokens with the default agent, 2,414 with the tool-free agent, and 386 isolated.
-  Subtract the isolated baseline, so the reported tokens are the task, the language guide, and
-  the answer.
+- Read token counts, reasoning tokens, and stop reasons from the assistant `message_end` events
+  in pi's JSON output.
 - Run each task several times per arm. Pair the runs. Allow a fixed number of repair attempts,
   feeding back the checker or runtime error.
 - Before the full run, measure the tokens of one paired task and size the corpus and sample count

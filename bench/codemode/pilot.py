@@ -1,6 +1,5 @@
 import argparse
 import json
-import os
 import re
 import subprocess
 from collections import Counter
@@ -24,19 +23,12 @@ PRELUDE = frozenset({
 
 BENCH = Path(__file__).parent
 ROOT = BENCH.parent.parent
-OPENCODE = Path.home() / ".opencode" / "bin" / "opencode"
-AGENT = "sx-probe"
-AGENT_CONFIG = {
-    "$schema": "https://opencode.ai/config.json",
-    "agent": {
-        AGENT: {
-            "mode": "primary",
-            "description": "Answers with one program and uses no tools.",
-            "prompt": "You write one program that solves the task you are given. Reply with the program only.",
-            "tools": {"*": False},
-        }
-    },
-}
+PI = Path.home() / ".local" / "bin" / "pi"
+SYSTEM_PROMPT = "You write one program that solves the task you are given. Reply with the program only."
+PI_ISOLATION = (
+    "--no-session", "--no-tools", "--no-extensions", "--no-mcp", "--no-skills", "--no-context-files",
+    "--no-prompt-templates", "--offline",
+)
 type Json = dict[str, Any]
 
 FENCE = re.compile(r"```([A-Za-z0-9_-]*)[^\n]*\n(.*?)```", re.DOTALL)
@@ -47,6 +39,7 @@ class Run:
     task: str
     sample: int
     model: str
+    thinking: str | None
     reply: str
     fence: str | None
     program: str
@@ -93,28 +86,15 @@ def task_section(task: Json, cores: Json) -> str:
     return "\n".join(lines)
 
 
-def isolated_environment(workdir: Path) -> dict[str, str]:
-    config = workdir / "config"
-    config.mkdir(exist_ok=True)
-    return {
-        **os.environ,
-        "PWD": str(workdir),
-        "OPENCODE_CONFIG_DIR": str(config),
-        "OPENCODE_DISABLE_CLAUDE_CODE": "1",
-        "OPENCODE_DISABLE_CLAUDE_CODE_SKILLS": "1",
-    }
-
-
-def ask(prompt: Path, model: str, workdir: Path) -> tuple[str, dict[str, int], str | None]:
-    command = [str(OPENCODE), "run", "--standalone", "--agent", AGENT, "-m", model, "--format", "json"]
+def ask(prompt: Path, model: str, thinking: str, workdir: Path) -> tuple[str, dict[str, int], str | None]:
+    command = [str(PI), "-p", "--mode", "json", *PI_ISOLATION, "--model", model, "--thinking", thinking]
     completed = subprocess.run(
-        [*command, "--file", str(prompt), "Solve the task in the attached file."],
+        [*command, "--system-prompt", SYSTEM_PROMPT, prompt.read_text()],
         stdin=subprocess.DEVNULL,
         capture_output=True,
         text=True,
         cwd=workdir,
-        env=isolated_environment(workdir),
-        timeout=600,
+        timeout=900,
         check=False,
     )
     text: list[str] = []
@@ -124,21 +104,24 @@ def ask(prompt: Path, model: str, workdir: Path) -> tuple[str, dict[str, int], s
         if not line.startswith("{"):
             continue
         event = json.loads(line)
-        if event["type"] == "text":
-            text.append(str(event["part"]["text"]))
-        elif event["type"] == "step_finish":
-            usage = event["part"]["tokens"]
-            tokens.update(
-                input=int(usage["input"]) + int(usage["cache"]["read"]),
-                output=int(usage["output"]),
-                reasoning=int(usage["reasoning"]),
-            )
-        elif event["type"] == "tool_use":
-            error = f"the model tried to use the {event['part']['tool']} tool"
-        elif event["type"] == "error":
-            error = str(event["error"].get("message", json.dumps(event["error"])))
+        if event.get("type") != "message_end" or event["message"].get("role") != "assistant":
+            continue
+        message = event["message"]
+        for part in message.get("content", []):
+            if part.get("type") == "text":
+                text.append(str(part["text"]))
+            elif part.get("type") != "thinking":
+                error = f"the reply contained a {part.get('type')} part"
+        usage = message["usage"]
+        tokens.update(
+            input=int(usage["input"]) + int(usage["cacheRead"]),
+            output=int(usage["output"]),
+            reasoning=int(usage["reasoning"]),
+        )
+        if message.get("stopReason") != "stop":
+            error = f"the model stopped with {message.get('stopReason')}: {message.get('errorMessage', '')}"
     if completed.returncode != 0 and error is None:
-        error = f"opencode exited {completed.returncode}: {completed.stderr.strip()[-500:]}"
+        error = f"pi exited {completed.returncode}: {completed.stderr.strip()[-500:]}"
     return "".join(text), dict(tokens), error
 
 
@@ -211,7 +194,14 @@ def unknown_names(node: Node, task: Json, cores: Json) -> list[str]:
 
 
 def score(
-    task: Json, sample: int, model: str, reply: str, tokens: dict[str, int], error: str | None, cores: Json
+    task: Json,
+    sample: int,
+    model: str,
+    thinking: str | None,
+    reply: str,
+    tokens: dict[str, int],
+    error: str | None,
+    cores: Json,
 ) -> Run:
     program, fence = extract(reply)
     result = read(program)
@@ -219,6 +209,7 @@ def score(
         task=task["id"],
         sample=sample,
         model=model,
+        thinking=thinking,
         reply=reply,
         fence=fence,
         program=program,
@@ -230,14 +221,15 @@ def score(
     )
 
 
-def run_one(task: Json, sample: int, model: str, prompt: Path, workdir: Path, cores: Json) -> Run:
-    reply, tokens, error = ask(prompt, model, workdir)
-    return score(task, sample, model, reply, tokens, error, cores)
+def run_one(task: Json, sample: int, model: str, thinking: str, prompt: Path, workdir: Path, cores: Json) -> Run:
+    reply, tokens, error = ask(prompt, model, thinking, workdir)
+    return score(task, sample, model, thinking, reply, tokens, error, cores)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the syntax pilot on the development tasks.")
-    parser.add_argument("--model", default="opencode-go/iceman-contributor-free")
+    parser.add_argument("--model", default="opencode-go/muse-spark-1.3-contributor")
+    parser.add_argument("--thinking", default="medium", help="Thinking level: off, minimal, low, medium, high")
     parser.add_argument("--samples", type=int, default=3)
     parser.add_argument("--jobs", type=int, default=4)
     parser.add_argument("--out", type=Path, default=ROOT / ".work" / "pilot" / "runs")
@@ -249,7 +241,6 @@ def main() -> None:
     args.out = args.out.resolve()
     workdir = args.out.parent
     workdir.mkdir(parents=True, exist_ok=True)
-    (workdir / "opencode.json").write_text(json.dumps(AGENT_CONFIG, indent=2))
     guide = (BENCH / "guide.md").read_text()
     cores = json.loads((BENCH / "cores.json").read_text())
     tasks = []
@@ -272,7 +263,8 @@ def main() -> None:
             saved = json.loads(path.read_text())
             if saved["task"] in by_id:
                 task = by_id[saved["task"]]
-                fields = (saved["sample"], saved["model"], saved["reply"], saved["tokens"], saved["error"])
+                reply, tokens, error = saved["reply"], saved["tokens"], saved["error"]
+                fields = (saved["sample"], saved["model"], saved.get("thinking"), reply, tokens, error)
                 runs.append(score(task, *fields, cores))
         report(runs, tasks, args.out)
         return
@@ -283,9 +275,8 @@ def main() -> None:
             prompt = args.out / task["id"] / "prompt.md"
             prompt.parent.mkdir(parents=True, exist_ok=True)
             prompt.write_text(f"{guide}\n\n{task_section(task, cores)}\n")
-            jobs.extend(
-                pool.submit(run_one, task, sample, args.model, prompt, workdir, cores) for sample in range(args.samples)
-            )
+            settings = (args.model, args.thinking, prompt, workdir, cores)
+            jobs.extend(pool.submit(run_one, task, sample, *settings) for sample in range(args.samples))
         runs = [job.result() for job in jobs]
     report(runs, tasks, args.out)
 
@@ -320,11 +311,11 @@ def report(runs: list[Run], tasks: list[Json], out: Path) -> None:
         answered = [r for r in mine if r.program]
         read_ok = sum(1 for r in answered if not r.diagnostics)
         noisy = sum(1 for r in mine if r.error is not None)
-        print(f"{task['id']:24} read {read_ok}/{len(answered)}" + (f"  harness noise {noisy}" if noisy else ""))
+        print(f"{task['id']:24} read {read_ok}/{len(answered)}" + (f"  run errors {noisy}" if noisy else ""))
     answered = [r for r in runs if r.program]
     total_ok = sum(1 for r in answered if not r.diagnostics)
     noisy = sum(1 for r in runs if r.error is not None)
-    print(f"total read {total_ok}/{len(answered)} answers from {len(runs)} runs; harness noise in {noisy} runs")
+    print(f"total read {total_ok}/{len(answered)} answers from {len(runs)} runs; errors in {noisy} runs")
     for label, count in labels.most_common():
         print(f"  {label}: {count} answers")
     print("names Sx does not have, in answers that read cleanly:")
