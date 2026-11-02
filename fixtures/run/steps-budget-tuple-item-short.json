@@ -1,0 +1,39 @@
+{
+  "description": "A tuple read counts the step that evaluates its literal index, so nine steps are not enough for (nth [1 \"a\"] 0).",
+  "program": "(nth [1 \"a\"] 0)",
+  "declarations": "declarations.json",
+  "allow": [
+    "accounts.get",
+    "accounts.list",
+    "accounts.put",
+    "blob.get",
+    "blob.list",
+    "blob.put",
+    "checks.add",
+    "checks.list",
+    "job.state",
+    "listing.get",
+    "mail.send",
+    "orders.list",
+    "profile.get",
+    "raw.get",
+    "rows.add",
+    "rows.list",
+    "sensor.get",
+    "sensor.list",
+    "sensor.put",
+    "store.get",
+    "store.list",
+    "store.put",
+    "totals.get",
+    "totals.put"
+  ],
+  "budgets": {
+    "steps": 9
+  },
+  "responses": [],
+  "expect": {
+    "failed": "budget-exhausted"
+  },
+  "trace": []
+}
