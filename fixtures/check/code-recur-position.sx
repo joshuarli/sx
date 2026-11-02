@@ -1,0 +1,2 @@
+; task: dev-failing-ci
+(loop {:max 5} [n 0] (map (fn [x] (recur x)) [n]))

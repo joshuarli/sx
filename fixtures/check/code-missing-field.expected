@@ -1,0 +1,5 @@
+error[missing-field] 2:18-2:20
+  (call audit.page {})
+                   ^^
+  The input to audit.page is missing the field :cursor.
+  Expected: Record {cursor: Option<String>}

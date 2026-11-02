@@ -1,0 +1,5 @@
+error[not-a-record] 2:6-2:16
+  (get "acme/api" :name)
+       ^^^^^^^^^^
+  get reads a field from a record, but this is a String.
+  Help: sx help get

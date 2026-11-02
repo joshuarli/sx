@@ -1,0 +1,6 @@
+error[habit:keyword-call] 2:15-2:18
+  (map (fn [r] (:id r)) (call catalog.list {:tags []}))
+                ^^^
+  A keyword is not a function. Read a field with get.
+  Fix: (get r :id)
+  Help: sx help get

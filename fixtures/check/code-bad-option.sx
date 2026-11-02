@@ -1,0 +1,2 @@
+; task: dev-failing-ci
+(retry {:delays [1s] :tries 3} (call catalog.list {:tags []}))

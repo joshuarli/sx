@@ -1,0 +1,4 @@
+error[bad-literal] 2:4-2:6
+  (+ 5s 1)
+     ^^
+  A duration only appears in retry and wait-until options.

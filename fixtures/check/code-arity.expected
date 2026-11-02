@@ -1,0 +1,6 @@
+error[arity] 2:1-2:16
+  (count [1] [2])
+  ^^^^^^^^^^^^^^^
+  count takes 1 argument, but this call has 2.
+  Signature: (count xs)
+  Help: sx help count

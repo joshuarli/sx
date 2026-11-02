@@ -1,0 +1,2 @@
+; task: dev-failing-ci
+(loop [n 0] (if (= n 3) n (recur (+ n 1))))

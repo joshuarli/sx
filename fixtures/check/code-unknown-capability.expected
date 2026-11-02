@@ -1,0 +1,5 @@
+error[unknown-capability] 2:7-2:19
+  (call github.repos {:repo "acme/api"})
+        ^^^^^^^^^^^^
+  There is no tool named github.repos.
+  Fix: github.repo

@@ -1,0 +1,2 @@
+; task: dev-failing-ci
+(match (get (call github.ci {:repo "a" :sha "b"}) :state) Passing 1 Broken 2 _ 0)

@@ -9,3 +9,9 @@ and capabilities of that task in `bench/codemode/tasks/`.
 The programs are model answers from the syntax pilot, copied verbatim. Each one is either a
 construct the pilot made legal, or a mistake that stays an error, with the diagnostic the checker
 must print for it.
+
+A fixture whose second line is `; allow: ID ...` checks with only those capabilities authorized.
+Otherwise every capability the task declares is authorized.
+
+`test_every_specified_diagnostic_code_has_a_pinned_fixture` fails when a code listed in
+[docs/language.md](../../docs/language.md#diagnostics) has no fixture here or in `fixtures/read`.

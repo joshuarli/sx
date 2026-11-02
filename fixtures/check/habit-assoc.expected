@@ -1,0 +1,4 @@
+error[habit:assoc] 2:15-2:20
+  (map (fn [r] (assoc r :archived true)) (call catalog.list {:tags []}))
+                ^^^^^
+  Sx has no assoc. Build a new record literal: {:a (get r :a) :b value}.

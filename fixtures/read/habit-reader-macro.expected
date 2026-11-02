@@ -1,0 +1,4 @@
+error[habit:reader-macro] 1:8-1:9
+  (count @items)
+         ^
+  Sx has no reader macros, so @ has no meaning.

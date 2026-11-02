@@ -1,0 +1,2 @@
+; task: dev-failing-ci
+(inc (count (call catalog.list {:tags []})))

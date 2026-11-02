@@ -1,0 +1,6 @@
+error[bad-option] 2:22-2:28
+  (retry {:delays [1s] :tries 3} (call catalog.list {:tags []}))
+                       ^^^^^^
+  retry has no option :tries.
+  Options: :delays, :backoff, :within, :on
+  Help: sx help retry

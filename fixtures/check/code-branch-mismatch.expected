@@ -1,0 +1,5 @@
+error[branch-mismatch] 2:12-2:17
+  (if true 1 "one")
+             ^^^^^
+  The branches return different types: Int and String.
+  Every branch of an if or match must return the same type.

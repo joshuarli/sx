@@ -1,0 +1,2 @@
+; task: dev-failing-ci
+(loop {:max 5} [n 0 total 0] (if (= n 3) total (recur (+ n 1))))

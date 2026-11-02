@@ -1,0 +1,5 @@
+error[par-map-limit] 2:10-2:22
+  (par-map {:limit 100} (fn [r] (call github.repo {:repo r})) ["a" "b"])
+           ^^^^^^^^^^^^
+  par-map takes {:limit N}, where N is an integer literal from 1 to 16.
+  Help: sx help par-map

@@ -1,0 +1,2 @@
+; task: dev-failing-ci
+(map (call catalog.list {:tags []}) (fn [r] (get r :id)))

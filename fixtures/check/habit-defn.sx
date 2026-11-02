@@ -1,0 +1,2 @@
+; task: dev-failing-ci
+(defn ids [repos] (map (fn [r] (get r :id)) repos))

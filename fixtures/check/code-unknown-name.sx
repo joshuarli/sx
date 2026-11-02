@@ -1,0 +1,2 @@
+; task: dev-failing-ci
+(let [repos (call catalog.list {:tags []})] (count repo))

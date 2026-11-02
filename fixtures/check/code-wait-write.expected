@@ -1,0 +1,5 @@
+error[wait-write] 2:50-2:85
+  (wait-until {:within 1m :every 5s} (fn [j] true) (call jobs.start {:name "reindex"}))
+                                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  wait-until repeats its expression, so it cannot call jobs.start, which writes.
+  Help: sx help wait-until

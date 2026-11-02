@@ -1,0 +1,6 @@
+error[parallel-write] 2:32-2:85
+  (par (call inventory.items {}) (call mail.send {:to "ops@example.com" :subject "x"}))
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  par runs in parallel, so it cannot call mail.send, which writes.
+  Call writes outside par and par-map, one at a time.
+  Help: sx help par

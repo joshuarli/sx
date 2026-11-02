@@ -1,0 +1,5 @@
+error[bad-pattern] 2:7-2:15
+  (let [(some x) none] x)
+        ^^^^^^^^
+  (some x) is not a pattern. A pattern is a name, _, or [a b ...].
+  To take a value apart, use match: (match value (some x) ... _ ...).

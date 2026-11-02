@@ -1,0 +1,4 @@
+error[unresolved-type] 2:19-2:20
+  (map (fn [x] (get x :id)) [])
+                    ^
+  The checker cannot tell which record this is, so it cannot read a field from it.

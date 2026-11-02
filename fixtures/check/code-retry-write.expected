@@ -1,0 +1,6 @@
+error[retry-write] 2:23-2:76
+  (retry {:delays [1s]} (call mail.send {:to "ops@example.com" :subject "x"}))
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  retry may repeat mail.send, which is a write that is not idempotent.
+  Retry only reads and idempotent writes.
+  Help: sx help retry

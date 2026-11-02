@@ -1,0 +1,2 @@
+; task: dev-wait-for-job
+(wait-until {:within 1m :every 5s} (fn [j] true) (call jobs.start {:name "reindex"}))

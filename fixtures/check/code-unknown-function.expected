@@ -1,0 +1,5 @@
+error[unknown-function] 2:2-2:5
+  (inc (count (call catalog.list {:tags []})))
+   ^^^
+  Sx has no inc.
+  Add 1 instead: (+ x 1).

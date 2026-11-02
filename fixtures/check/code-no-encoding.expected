@@ -1,0 +1,4 @@
+error[no-encoding] 2:1-2:12
+  (some none)
+  ^^^^^^^^^^^
+  The program's result is an Option<Option<?>>, which has no JSON encoding, because none and (some x) would both be null.

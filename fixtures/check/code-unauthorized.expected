@@ -1,0 +1,5 @@
+error[unauthorized] 3:7-3:18
+  (call github.repo {:repo "acme/api"})
+        ^^^^^^^^^^^
+  This program may not call github.repo.
+  The host allows: catalog.list

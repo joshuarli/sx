@@ -1,0 +1,2 @@
+; task: dev-failing-ci
+(map (fn [r] (assoc r :archived true)) (call catalog.list {:tags []}))

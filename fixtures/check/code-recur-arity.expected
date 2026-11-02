@@ -1,0 +1,5 @@
+error[recur-arity] 2:48-2:63
+  (loop {:max 5} [n 0 total 0] (if (= n 3) total (recur (+ n 1))))
+                                                 ^^^^^^^^^^^^^^^
+  This loop binds 2 names, so recur takes 2 values, but this one has 1.
+  Help: sx help loop

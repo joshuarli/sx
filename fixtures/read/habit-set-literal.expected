@@ -1,0 +1,6 @@
+error[habit:set-literal] 1:8-1:10
+  (count #{1 2 3})
+         ^^
+  Sx has no set literals. Use a list, and distinct-by to remove duplicates.
+  Fix: [a b c]
+  Help: sx help distinct-by

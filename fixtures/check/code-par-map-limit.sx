@@ -1,0 +1,2 @@
+; task: dev-failing-ci
+(par-map {:limit 100} (fn [r] (call github.repo {:repo r})) ["a" "b"])

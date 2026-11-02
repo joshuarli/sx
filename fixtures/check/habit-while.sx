@@ -1,0 +1,2 @@
+; task: dev-failing-ci
+(while true (call catalog.list {:tags []}))

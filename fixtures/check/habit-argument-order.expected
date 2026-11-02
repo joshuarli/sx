@@ -1,0 +1,6 @@
+error[habit:argument-order] 2:1-2:58
+  (map (call catalog.list {:tags []}) (fn [r] (get r :id)))
+  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  map takes the function first, as in Clojure.
+  Fix: (map (fn [r] (get r :id)) (call catalog.list {:tags []}))
+  Help: sx help map

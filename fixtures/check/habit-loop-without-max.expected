@@ -1,0 +1,6 @@
+error[habit:loop-without-max] 2:7-2:12
+  (loop [n 0] (if (= n 3) n (recur (+ n 1))))
+        ^^^^^
+  A loop needs a bound on its repetitions.
+  Fix: (loop {:max 100} [n 0] ...)
+  Help: sx help loop

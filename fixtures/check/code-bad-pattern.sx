@@ -1,0 +1,2 @@
+; task: dev-failing-ci
+(let [(some x) none] x)

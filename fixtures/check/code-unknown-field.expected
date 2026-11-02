@@ -1,0 +1,7 @@
+error[unknown-field] 2:21-2:26
+  (map (fn [r] (get r :nmae)) (call catalog.list {:tags []}))
+                      ^^^^^
+  This record has no field :nmae.
+  Fields: :id, :owner, :name, :tags, :archived
+  Fix: (get r :name)
+  Help: sx help get

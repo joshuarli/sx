@@ -1,0 +1,4 @@
+error[unreachable-clause] 2:71-2:79
+  (match (get (call audit.page {:cursor none}) :next) (some c) 1 none 2 (some d) 3)
+                                                                        ^^^^^^^^
+  This clause can never match, because an earlier clause covers the same case.

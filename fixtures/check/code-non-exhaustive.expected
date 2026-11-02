@@ -1,0 +1,6 @@
+error[non-exhaustive] 2:1-3:14
+  (match (get (call audit.page {:cursor none}) :next)
+  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  This match does not handle none.
+  Add a clause for each missing case, or end with _ to match anything else.
+  Help: sx help match

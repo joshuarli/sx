@@ -1,0 +1,2 @@
+; task: dev-failing-ci
+(map (fn [x] (get x :id)) [])

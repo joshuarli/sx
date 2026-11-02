@@ -1,0 +1,5 @@
+error[unknown-variant] 2:69-2:75
+  (match (get (call github.ci {:repo "a" :sha "b"}) :state) Passing 1 Broken 2 _ 0)
+                                                                      ^^^^^^
+  ci.State has no variant Broken.
+  Variants: Passing, Failing, Pending, Unknown

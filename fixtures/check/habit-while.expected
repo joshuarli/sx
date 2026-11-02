@@ -1,0 +1,4 @@
+error[habit:while] 2:2-2:7
+  (while true (call catalog.list {:tags []}))
+   ^^^^^
+  Sx has no unbounded loops. Map over a list, or use loop with :max.

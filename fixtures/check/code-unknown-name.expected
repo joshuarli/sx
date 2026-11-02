@@ -1,0 +1,5 @@
+error[unknown-name] 2:52-2:56
+  (let [repos (call catalog.list {:tags []})] (count repo))
+                                                     ^^^^
+  repo is not defined here.
+  Fix: repos

@@ -1,0 +1,2 @@
+; task: dev-low-stock-alerts
+(par (call inventory.items {}) (call mail.send {:to "ops@example.com" :subject "x"}))

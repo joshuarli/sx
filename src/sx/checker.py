@@ -188,6 +188,18 @@ def is_function_form(node: Node) -> TypeIs[Form]:
     return head_name(node) == "fn"
 
 
+def pattern_names(node: Node) -> list[str]:
+    match node:
+        case Symbol(name=name) if name[:1].islower() and name != "none":
+            return [name]
+        case Form(items=items) | ListLiteral(items=items):
+            return [name for item in items[1:] if isinstance(node, Form) for name in pattern_names(item)] + [
+                name for item in items if isinstance(node, ListLiteral) for name in pattern_names(item)
+            ]
+        case _:
+            return []
+
+
 def check(
     program: Node,
     registry: Registry,
@@ -657,7 +669,10 @@ class _Checker:
         head = node.items[0]
         assert isinstance(head, Symbol)
         name = head.name
+        construct = HABIT_HEADS[name][0] if name in HABIT_HEADS else None
         for item in node.items[1:]:
+            if construct == "defn" or (construct == "assoc" and isinstance(item, Keyword)):
+                continue
             with self.collecting():
                 self.check(item, None, scope)
         if name in HABIT_HEADS:
@@ -838,10 +853,17 @@ class _Checker:
                     binders.append(binder)
                 return ir.BindTuple(tuple(binders)), inner
             case _:
+                constructor = head_name(pattern)
+                detail = None
+                if constructor in {"some", "ok", "err"} or (constructor is not None and constructor[:1].isupper()):
+                    detail = f"To take a value apart, use match: (match value {show(pattern)} ... _ ...)."
                 self.error(
                     "bad-pattern", pattern.span,
                     f"{show(pattern)} is not a pattern. A pattern is a name, _, or [a b ...].",
+                    detail=detail,
                 )
+                for name in pattern_names(pattern):
+                    inner[name] = ValueBinding(NEVER)
                 return ir.Discard(), inner
 
     def form_if(self, node: Form, expected: Type | None, scope: Mapping[str, Binding]) -> tuple[ir.Node, Type]:

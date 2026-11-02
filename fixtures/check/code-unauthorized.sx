@@ -1,0 +1,3 @@
+; task: dev-failing-ci
+; allow: catalog.list
+(call github.repo {:repo "acme/api"})
