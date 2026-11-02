@@ -2,4 +2,4 @@ error[bad-escape] 1:6-1:8
   "bad \q escape"
        ^^
   \q is not a string escape.
-  Escapes: \" \\ \n \t \u{HEX}
+  Escapes: \" \\ \n \r \t \u{HEX}

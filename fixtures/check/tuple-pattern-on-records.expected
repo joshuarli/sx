@@ -1,0 +1,8 @@
+error[type-mismatch] 10:17-10:25
+    (sort-by (fn [[cust _]] cust)
+                  ^^^^^^^^
+  This parameter takes a tuple apart, but sort-by passes it a record.
+  Expected: Record {customer: String, total: Int}
+  Found: a tuple pattern [cust _]
+  Fix: (fn [r] (get r :customer))
+  Help: sx help sort-by

@@ -1,0 +1,14 @@
+; task: dev-order-totals
+(let [orders (call orders.list {:status "open"})
+      order-totals (map (fn [o]
+                          {:customer (get o :customer)
+                           :total (reduce (fn [s l] (+ s (* (get l :quantity) (get l :price))))
+                                          0
+                                          (get o :lines))})
+                        orders)
+      groups (group-by (fn [x] (get x :customer)) order-totals)]
+  (sort-by (fn [[cust _]] cust)
+           (map (fn [[cust items]]
+                  {:customer cust
+                   :total (reduce (fn [s x] (+ s (get x :total))) 0 items)})
+                groups)))

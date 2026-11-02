@@ -8,7 +8,7 @@ only the forms and functions below exist.
 
 - `true`, `false`
 - Integers: `42`, `-7`. There are no fractions.
-- Strings: `"text"`, with escapes `\"`, `\\`, `\n`, `\t`.
+- Strings: `"text"`, with escapes `\"`, `\\`, `\n`, `\r`, `\t`.
 - Lists: `[1 2 3]`
 - Records: `{:name "ada" :age 36}`. Field names are keywords. Commas are optional. Keywords
   only name fields. Use strings, such as `"failing"`, for labels.

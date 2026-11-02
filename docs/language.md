@@ -23,7 +23,7 @@ program runs. There is no general recursion and no unbounded loop.
 | Boolean | `true`, `false` | |
 | Integer | `-?[0-9]+` | Signed 64-bit. A literal outside that range is rejected. |
 | Duration | `250ms`, `5s`, `2m`, `1h` | Only in `retry` and `wait-until` options. |
-| String | `"..."` | UTF-8. Escapes: `\"`, `\\`, `\n`, `\t`, `\u{HEX}`. |
+| String | `"..."` | UTF-8. Escapes: `\"`, `\\`, `\n`, `\r`, `\t`, `\u{HEX}`. |
 | Keyword | `:name` | Record field names only. Same characters as a symbol. |
 | Symbol | `name`, `repo-id`, `repoId`, `ahead_count`, `ok?`, `acc'` | A lowercase letter, then letters, digits, `-`, and `_`, then optionally `?` or primes. |
 | Operator | `+ - * = not= < <= > >=` | Prelude functions |
@@ -58,8 +58,9 @@ variant carries zero or one value. A variant that needs several values carries a
 There is one implicit conversion, option promotion: where the checker expects `Option<T>`, a
 value of type `T` is accepted and becomes `(some value)`. So `(if empty? none name)` has type
 `Option<String>`, and `(recur next ...)` may pass a `String` to a binding of type
-`Option<String>`. Promotion never applies when `T` is itself an `Option`, and no other conversion
-exists.
+`Option<String>`. Branch results join field by field, so a branch returning
+`{:branch name}` and one returning `{:branch none}` join to `Record {branch: Option<String>}`.
+Promotion never applies when `T` is itself an `Option`, and no other conversion exists.
 
 A bracket literal is a list when its elements share a type, and a tuple when they do not, or when
 a tuple is expected. `[1 2]` is a `List<Int>`, and `[(- 0 count) tag]` is a

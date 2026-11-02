@@ -341,6 +341,8 @@ class _Reader:
                 chars.append("\n")
             elif escaped == "t":
                 chars.append("\t")
+            elif escaped == "r":
+                chars.append("\r")
             elif escaped == "u" and self.peek() == "{":
                 decoded = self.unicode_escape(escape_start)
                 if decoded is not None:
@@ -350,7 +352,7 @@ class _Reader:
                     "bad-escape",
                     Span(escape_start, self.position()),
                     f"\\{escaped} is not a string escape.",
-                    detail='Escapes: \\" \\\\ \\n \\t \\u{HEX}',
+                    detail='Escapes: \\" \\\\ \\n \\r \\t \\u{HEX}',
                 )
 
     def unicode_escape(self, escape_start: Position) -> str | None:

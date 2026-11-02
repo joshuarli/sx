@@ -117,7 +117,7 @@ def show_duration(milliseconds: int) -> str:
     raise AssertionError(milliseconds)
 
 
-_STRING_ESCAPES = {'"': '\\"', "\\": "\\\\", "\n": "\\n", "\t": "\\t"}
+_STRING_ESCAPES = {'"': '\\"', "\\": "\\\\", "\n": "\\n", "\r": "\\r", "\t": "\\t"}
 
 
 def _show_string(value: str) -> str:
