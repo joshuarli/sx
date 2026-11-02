@@ -1,0 +1,6 @@
+; declarations: fixtures/run/declarations.json
+; python: no
+(let [total (fn [booked] (reduce (fn [sum m] (+ sum (get m :size))) 0 booked))
+      report (fn [label booked] {:label label :total (total booked)})
+      kept [{:id "a" :size 3} {:id "b" :size 4}]]
+  [(report "first" []) (report "second" kept)])

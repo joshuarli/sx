@@ -1,0 +1,5 @@
+; declarations: fixtures/run/declarations.json
+; python: no
+(let [sizes (fn [by-id] (map (fn [group] (get (first group) :size)) (vals by-id)))
+      items [{:id "a" :size 1} {:id "b" :size 2}]]
+  [(sizes {}) (sizes (into-map (group-by (fn [i] (get i :id)) items)))])

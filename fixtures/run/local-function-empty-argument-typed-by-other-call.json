@@ -1,0 +1,16 @@
+{
+  "description": "An empty list, none, or {} passed to a local function takes the type the same parameter has at the function's other calls, and the program runs as if a typed value had been passed.",
+  "python": false,
+  "program": "(let [total (fn [booked] (reduce (fn [sum m] (+ sum (get m :size))) 0 booked)) report (fn [label booked] {:label label :total (total booked)}) size-of (fn [item] (match item (some i) (get i :size) none 0)) sizes (fn [by-id] (map (fn [group] (get (first group) :size)) (vals by-id))) kept [{:id \"a\" :size 3} {:id \"b\" :size 4}]] {:reports [(report \"first\" []) (report \"second\" kept)] :sizes [(size-of none) (size-of (some {:id \"a\" :size 5}))] :grouped [(sizes {}) (sizes (into-map (group-by (fn [i] (get i :id)) kept)))]})",
+  "declarations": "declarations.json",
+  "allow": [],
+  "responses": [],
+  "expect": {
+    "completed": {
+      "reports": [{"label": "first", "total": 0}, {"label": "second", "total": 7}],
+      "sizes": [0, 5],
+      "grouped": [[], [3, 4]]
+    }
+  },
+  "trace": []
+}

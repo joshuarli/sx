@@ -1,0 +1,4 @@
+; declarations: fixtures/run/declarations.json
+; python: no
+(let [size-of (fn [item] (match item (some i) (get i :size) none 0))]
+  [(size-of none) (size-of (some {:id "a" :size 5}))])

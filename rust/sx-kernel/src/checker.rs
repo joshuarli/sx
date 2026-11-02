@@ -241,6 +241,17 @@ fn empty_record() -> Type {
     Type::Record(RecordType::plain(Vec::new()))
 }
 
+fn mentions_never(t: &Type) -> bool {
+    match t {
+        Type::Never => true,
+        Type::List(inner) | Type::Map(inner) | Type::Option(inner) => mentions_never(inner),
+        Type::Tuple(items) => items.iter().any(mentions_never),
+        Type::Result(ok, err) => mentions_never(ok) || mentions_never(err),
+        Type::Record(record) => record.fields.iter().any(|(_, field_type)| mentions_never(field_type)),
+        _ => false,
+    }
+}
+
 fn record_names(record: &RecordType) -> BTreeSet<&str> {
     record.fields.iter().map(|(name, _)| name.as_str()).collect()
 }
@@ -569,6 +580,29 @@ impl Speculation {
     }
 }
 
+type ArgumentKey = (usize, usize);
+
+#[derive(Default)]
+struct ArgumentTypes {
+    observed: HashMap<ArgumentKey, Vec<Type>>,
+    implicated: BTreeSet<ArgumentKey>,
+}
+
+impl ArgumentTypes {
+    fn agreed(&self, key: ArgumentKey) -> Option<&Type> {
+        match self.observed.get(&key)?.as_slice() {
+            [only] if self.implicated.contains(&key) => Some(only),
+            _ => None,
+        }
+    }
+}
+
+struct OpenArgument {
+    key: ArgumentKey,
+    function: String,
+    parameter: String,
+}
+
 struct SortKeyOwner {
     body: *const Node,
     params: String,
@@ -597,6 +631,9 @@ struct Checker<'r> {
     late_sort_keys: Vec<(Type, Span)>,
     record_literals: Vec<(Span, Vec<String>)>,
     unfilled_loops: usize,
+    earlier: ArgumentTypes,
+    arguments: ArgumentTypes,
+    open_arguments: Vec<OpenArgument>,
     diagnostics: Vec<Diagnostic>,
     effects: Vec<Effects<'r>>,
     capabilities_used: BTreeSet<String>,
@@ -2408,7 +2445,15 @@ impl<'r> Checker<'r> {
                     record_node.span,
                     "The checker cannot tell which record this is, so it cannot read a field from it.",
                 );
-                self.report(if self.unfilled_loops > 0 { diagnostic.detail(UNFILLED_LOOP_HINT) } else { diagnostic });
+                let diagnostic = if self.unfilled_loops > 0 {
+                    diagnostic.detail(UNFILLED_LOOP_HINT)
+                } else if let Some(open) = self.open_arguments.first() {
+                    diagnostic.detail(self.open_argument_detail(open))
+                } else {
+                    diagnostic
+                };
+                self.implicate_open_arguments();
+                self.report(diagnostic);
                 return self.placeholder(span);
             }
             Type::Record(record) => record.clone(),
@@ -3452,6 +3497,11 @@ impl<'r> Checker<'r> {
             );
             return (empty_lambda(span, captured), Type::Never);
         }
+        let key = std::ptr::from_ref(form).addr();
+        let open = self.open_arguments.len();
+        if let Some(local) = local {
+            self.open_parameters(key, local, param_nodes, &params);
+        }
         let mut inner = scope.clone();
         let mut binders = Vec::new();
         for (pattern, t) in param_nodes.iter().zip(&params) {
@@ -3468,10 +3518,69 @@ impl<'r> Checker<'r> {
         self.tail = saved;
         if local.is_some() {
             self.instantiating.pop();
+            self.open_arguments.truncate(open);
+            self.observe_parameters(key, &params);
         }
         let lambda =
             Lambda { params: binders, param_types: params, result: t.clone(), body: Box::new(body), captured, span };
         (lambda, t)
+    }
+
+    fn open_parameters(&mut self, key: usize, function: &str, patterns: &[Node], params: &[Type]) {
+        for (index, (pattern, t)) in patterns.iter().zip(params).enumerate() {
+            if !self.unsettled(t) {
+                continue;
+            }
+            if let Some(agreed) = self.earlier.agreed((key, index)).cloned() {
+                self.trial(t, &agreed);
+            }
+            if self.unsettled(t) {
+                self.open_arguments.push(OpenArgument {
+                    key: (key, index),
+                    function: function.to_string(),
+                    parameter: symbol(pattern).map_or_else(|| show(pattern), str::to_string),
+                });
+            }
+        }
+    }
+
+    fn observe_parameters(&mut self, key: usize, params: &[Type]) {
+        for (index, t) in params.iter().enumerate() {
+            if self.unsettled(t) {
+                continue;
+            }
+            let known = self.zonk(t);
+            if mentions_never(&known) {
+                continue;
+            }
+            let seen = self.arguments.observed.entry((key, index)).or_default();
+            if !seen.contains(&known) {
+                seen.push(known);
+            }
+        }
+    }
+
+    fn open_argument_detail(&self, open: &OpenArgument) -> String {
+        let (function, parameter) = (&open.function, &open.parameter);
+        let others = match self.earlier.observed.get(&open.key).map(Vec::as_slice) {
+            None | Some([]) => format!("No other call of {function} passes {parameter} a value with a known type."),
+            Some([only]) => {
+                format!("Other calls of {function} pass {parameter} as {}, which does not fit this call.", show_type(only))
+            }
+            Some(several) => {
+                let shown: Vec<String> = several.iter().map(show_type).collect();
+                format!("The other calls of {function} pass {parameter} as different types: {}.", shown.join("; "))
+            }
+        };
+        format!(
+            "The parameter {parameter} of {function} is passed [], {{}}, or none at a call, and nothing gives that value a type. {others}\n\
+             Pass {function} a value of the right shape at this call, or pass the same type for {parameter} at every call."
+        )
+    }
+
+    fn implicate_open_arguments(&mut self) {
+        let keys: Vec<ArgumentKey> = self.open_arguments.iter().map(|open| open.key).collect();
+        self.arguments.implicated.extend(keys);
     }
 
     fn record_fix(&self, pattern: &Node, t: &Type, body: &Node) -> Option<String> {
@@ -4224,7 +4333,16 @@ pub fn check(
     inputs: &BTreeMap<String, Type>,
     budgets: Budgets,
 ) -> CheckResult {
-    match crate::stack::on_sized_stack(|| elaborate(program, registry, authority, inputs, budgets)) {
+    let checked = crate::stack::on_sized_stack(|| {
+        let mut arguments = ArgumentTypes::default();
+        let first = elaborate(program, registry, authority, inputs, budgets, ArgumentTypes::default(), &mut arguments);
+        let unresolved = first.diagnostics.iter().any(|d| d.code == "unresolved-type");
+        if !unresolved || arguments.implicated.is_empty() {
+            return first;
+        }
+        elaborate(program, registry, authority, inputs, budgets, arguments, &mut ArgumentTypes::default())
+    });
+    match checked {
         Ok(result) => result,
         Err(error) => {
             let message = format!("The checker could not start a thread for this program: {error}.");
@@ -4239,6 +4357,8 @@ fn elaborate(
     authority: Authority<'_>,
     inputs: &BTreeMap<String, Type>,
     budgets: Budgets,
+    earlier: ArgumentTypes,
+    found: &mut ArgumentTypes,
 ) -> CheckResult {
     let mut checker = Checker {
         registry,
@@ -4251,6 +4371,9 @@ fn elaborate(
         late_sort_keys: Vec::new(),
         record_literals: Vec::new(),
         unfilled_loops: 0,
+        earlier,
+        arguments: ArgumentTypes::default(),
+        open_arguments: Vec::new(),
         diagnostics: Vec::new(),
         effects: Vec::new(),
         capabilities_used: BTreeSet::new(),
@@ -4288,6 +4411,7 @@ fn elaborate(
     }
     let (mut body, result) = checker.check(body_node, None, &scope);
     drop(scope);
+    *found = std::mem::take(&mut checker.arguments);
     checker.check_presence_tests();
     checker.check_late_sort_keys();
     checker.check_size(program);

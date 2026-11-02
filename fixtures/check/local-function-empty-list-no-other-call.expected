@@ -1,0 +1,6 @@
+error[unresolved-type] 3:41-3:42
+  (let [ids (fn [items] (map (fn [i] (get i :id)) items))]
+                                          ^
+  The checker cannot tell which record this is, so it cannot read a field from it.
+  The parameter items of ids is passed [], {}, or none at a call, and nothing gives that value a type. No other call of ids passes items a value with a known type.
+  Pass ids a value of the right shape at this call, or pass the same type for items at every call.

@@ -1,0 +1,6 @@
+; declarations: fixtures/run/declarations.json
+; python: no
+(let [ids (fn [items] (map (fn [i] (get i :id)) items))
+      before (ids [])
+      after (ids [{:id "a" :size 1}])]
+  [before after])

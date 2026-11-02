@@ -260,6 +260,22 @@ cannot call itself, and it cannot be returned, stored in a record or list, or pa
 capability. The checker types its body at each call with the argument types of that call, so its
 parameters need no annotations.
 
+An argument whose type nothing fixes, `[]`, `none`, or `{}` used as a map, takes the type the same
+parameter has at the function's other calls in the program, when every other call passes it the same
+type. The program then means what it would with a non-empty value of that type written there, and
+the order of the calls does not matter:
+
+```
+(let [ids (fn [items] (map (fn [i] (get i :id)) items))]
+  [(ids []) (ids [{:id "a" :size 1}])])
+```
+
+The rule applies only to a program that would otherwise be rejected with `unresolved-type`, so it
+changes no program that checked before. When no other call passes a typed value, or the other calls
+pass different types, the field read is still `unresolved-type`, and the diagnostic names the
+parameter and the function and says which of the two it is. Pass the function a value of the right
+shape at that call, or pass the same type at every call.
+
 ### Match
 
 ```
