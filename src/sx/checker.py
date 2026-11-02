@@ -35,6 +35,7 @@ from sx.types import (
     TRANSIENT_KINDS,
     EnumType,
     ListType,
+    MapType,
     Never,
     NominalType,
     OptionType,
@@ -47,7 +48,7 @@ from sx.types import (
     encodable_problem,
     show_type,
 )
-from sx.values import NONE_VALUE, UNIT_VALUE, VariantValue
+from sx.values import NONE_VALUE, UNIT_VALUE, MapValue, VariantValue
 
 SPECIAL_FORMS = frozenset({
     "let", "if", "cond", "match", "fn", "get", "call", "attempt", "retry", "wait-until", "loop", "recur", "par",
@@ -56,13 +57,14 @@ SPECIAL_FORMS = frozenset({
 HIGHER_ORDER = frozenset({"map", "filter", "keep", "any?", "all?", "reduce", "sort-by", "distinct-by", "group-by"})
 PRELUDE = frozenset({
     "+", "-", "*", "quot", "rem", "=", "not=", "<", "<=", ">", ">=", "not", "and", "or", "str", "count", "first",
-    "rest", "nth", "take", "concat", "flatten", "contains?", "identity",
+    "rest", "nth", "take", "concat", "flatten", "contains?", "identity", "assoc", "dissoc", "keys", "vals", "entries",
+    "into-map",
 }) | HIGHER_ORDER
 FIXED_ARITY = {
     "+": 2, "*": 2, "quot": 2, "rem": 2, "=": 2, "not=": 2, "<": 2, "<=": 2, ">": 2, ">=": 2, "not": 1, "and": 2,
     "identity": 1, "or": 2, "count": 1, "first": 1, "rest": 1, "nth": 2, "take": 2, "concat": 2, "flatten": 1,
     "contains?": 2, "map": 2, "filter": 2, "keep": 2, "any?": 2, "all?": 2, "reduce": 3, "sort-by": 2, "distinct-by": 2,
-    "group-by": 2,
+    "group-by": 2, "assoc": 3, "dissoc": 2, "keys": 1, "vals": 1, "entries": 1, "into-map": 1,
 }
 HABIT_HEADS = {
     "defn": ("defn", "Sx has no top-level definitions. Bind a local function with let: (let [f (fn [x] ...)] ...)."),
@@ -72,11 +74,17 @@ HABIT_HEADS = {
     "for": ("while", "Sx has no for. Map over a list, or use loop with :max."),
     "doseq": ("while", "Sx has no doseq. Map over a list, and bind the result to _ if you only need the effects."),
     "dotimes": ("while", "Sx has no dotimes. Use loop with :max."),
-    "assoc": ("assoc", "Sx has no assoc. Build a new record literal: {:a (get r :a) :b value}."),
+    "assoc": (
+        "assoc",
+        "assoc takes a Map and a string key. For a record, build a new record literal: {:a (get r :a) :b value}.",
+    ),
     "assoc-in": ("assoc", "Sx has no assoc-in. Build a new record literal."),
     "update": ("assoc", "Sx has no update. Build a new record literal."),
     "merge": ("assoc", "Sx has no merge. Build a new record literal."),
-    "dissoc": ("assoc", "Sx has no dissoc. Build a new record literal without the field."),
+    "dissoc": (
+        "assoc",
+        "dissoc takes a Map and a string key. For a record, build a new record literal without the field.",
+    ),
 }
 MISSING_FUNCTIONS = {
     "inc": "Add 1 instead: (+ x 1).",
@@ -94,8 +102,6 @@ MISSING_FUNCTIONS = {
     "apply": "Call the function with its arguments directly.",
     "println": "A program returns its result. It does not print.",
     "print": "A program returns its result. It does not print.",
-    "keys": "Sx records have fixed fields. Read one with get.",
-    "vals": "Sx records have fixed fields. Read one with get.",
     "remove": "Use filter with the opposite test.",
     "sort": "Use sort-by with the value itself as the key: (sort-by (fn [x] x) xs).",
 }
@@ -155,6 +161,11 @@ class Test:
 class BracketShape:
     element: Type
     count: int
+
+
+@dataclass(frozen=True, slots=True)
+class BraceShape:
+    pass
 
 
 @dataclass(slots=True)
@@ -236,9 +247,10 @@ def check(
     final = checker.zonk(result)
     problem = encodable_problem(final)
     if problem is not None:
+        reason = problem.split(" has no JSON encoding", 1)[1]
         checker.error(
             "no-encoding", program.span,
-            f"The program's result is {describe(final)}, which {problem[len(show_type(final)) + 1:]}.",
+            f"The program's result is {describe(final)}, which has no JSON encoding{reason}.",
         )
     diagnostics = tuple(sorted(checker.diagnostics, key=lambda d: (d.span.start.line, d.span.start.column)))
     if diagnostics:
@@ -253,7 +265,7 @@ class _Checker:
         self.allowed = allowed
         self.budgets = budgets
         self.substitution: dict[int, Type] = {}
-        self.shapes: dict[int, BracketShape] = {}
+        self.shapes: dict[int, BracketShape | BraceShape] = {}
         self.counter = itertools.count()
         self.diagnostics: list[Diagnostic] = []
         self.effects: list[Effects] = []
@@ -298,6 +310,10 @@ class _Checker:
 
 
     def settle(self, node: object) -> object:
+        if isinstance(node, ir.MakeEmptyBrace):
+            if isinstance(self.resolve(node.shape), MapType):
+                return ir.Literal(MapValue(()), node.span)
+            return ir.MakeRecord((), node.span)
         if isinstance(node, ir.MakeBracket):
             items = tuple(self.settle(item) for item in node.items)
             made = ir.MakeTuple if isinstance(self.resolve(node.shape), TupleType) else ir.MakeList
@@ -324,9 +340,12 @@ class _Checker:
         t = self.resolve(t)
         match t:
             case Variable(id=other) if other in self.shapes:
-                return ListType(self.zonk(self.shapes[other].element))
+                shape = self.shapes[other]
+                return ListType(self.zonk(shape.element)) if isinstance(shape, BracketShape) else RecordType(())
             case ListType(element=element):
                 return ListType(self.zonk(element))
+            case MapType(value=value):
+                return MapType(self.zonk(value))
             case TupleType(items=items):
                 return TupleType(tuple(self.zonk(item) for item in items))
             case OptionType(inner=inner):
@@ -343,9 +362,13 @@ class _Checker:
         match t:
             case Variable(id=other):
                 shape = self.shapes.get(other)
-                return other == variable.id or (shape is not None and self.occurs(variable, shape.element))
+                return other == variable.id or (
+                    isinstance(shape, BracketShape) and self.occurs(variable, shape.element)
+                )
             case ListType(element=element):
                 return self.occurs(variable, element)
+            case MapType(value=value):
+                return self.occurs(variable, value)
             case OptionType(inner=inner):
                 return self.occurs(variable, inner)
             case TupleType(items=items):
@@ -368,6 +391,8 @@ class _Checker:
         match a, b:
             case ListType(), ListType():
                 return self.unify(a.element, b.element)
+            case MapType(), MapType():
+                return self.unify(a.value, b.value)
             case OptionType(), OptionType():
                 return self.unify(a.inner, b.inner)
             case TupleType(), TupleType():
@@ -396,6 +421,11 @@ class _Checker:
             if other_shape is None:
                 self.substitution[other.id] = variable
                 return True
+            if isinstance(shape, BraceShape) or isinstance(other_shape, BraceShape):
+                if not (isinstance(shape, BraceShape) and isinstance(other_shape, BraceShape)):
+                    return False
+                self.substitution[variable.id] = other
+                return True
             self.substitution[variable.id] = other
             if shape.count != other_shape.count:
                 self.substitution[other.id] = ListType(other_shape.element)
@@ -403,6 +433,11 @@ class _Checker:
         if shape is None:
             self.substitution[variable.id] = t
             return True
+        if isinstance(shape, BraceShape):
+            if isinstance(other, MapType) or (isinstance(other, RecordType) and not other.fields):
+                self.substitution[variable.id] = other
+                return True
+            return False
         match other:
             case ListType(element=element):
                 self.substitution[variable.id] = other
@@ -513,7 +548,9 @@ class _Checker:
                 return self.is_sort_key(element)
             case NominalType(base=base):
                 return self.is_sort_key(base)
-            case Never() | Variable():
+            case Variable(id=other):
+                return not isinstance(self.shapes.get(other), BraceShape)
+            case Never():
                 return True
             case _:
                 return False
@@ -721,9 +758,21 @@ class _Checker:
             order = [name for name, _ in hint.fields]
             fields.sort(key=lambda item: order.index(item[0]))
             return self.coerce(ir.MakeRecord(tuple(fields), span), hint, expected, span)
+        if not node.fields:
+            if isinstance(hint, MapType):
+                return self.coerce(ir.Literal(MapValue(()), span), hint, expected, span)
+            shape = self.fresh()
+            self.shapes[shape.id] = BraceShape()
+            return self.coerce(ir.MakeEmptyBrace(shape, span), shape, expected, span)
         checked = [(f.key.name, *self.check(f.value, None, scope)) for f in node.fields]
         t = RecordType(tuple((name, ft) for name, _, ft in checked))
-        return self.coerce(ir.MakeRecord(tuple((name, n) for name, n, _ in checked), span), t, expected, span)
+        built = ir.MakeRecord(tuple((name, n) for name, n, _ in checked), span)
+        if isinstance(hint, MapType):
+            return self.coerce(
+                built, t, expected, span,
+                detail_hint="A record literal is never a map. Build one with assoc or into-map.", help_name="assoc",
+            )
+        return self.coerce(built, t, expected, span)
 
 
     def form(self, node: Form, expected: Type | None, scope: Mapping[str, Binding]) -> tuple[ir.Node, Type]:
@@ -1283,13 +1332,25 @@ class _Checker:
         record_node, key = node.items[1], node.items[2]
         default_node = node.items[3] if len(node.items) == 4 else None
         record_ir, record_type = self.check(record_node, None, scope)
+        resolved = self.resolve(record_type)
         if not isinstance(key, Keyword):
+            value_type = self.map_value_of(record_type)
+            if value_type is not None:
+                return self.map_get(node, record_ir, value_type, key, default_node, expected, scope)
             fix = f'(get {show(record_node)} :{key.value})' if isinstance(key, StringLiteral) else None
             self.error(
                 "bad-literal", key.span, "get takes a field name as a keyword, such as :name.", fix=fix, help="get",
             )
             return self.placeholder(node.span)
-        resolved = self.resolve(record_type)
+        if self.is_brace(resolved):
+            self.trial(resolved, RecordType(()))
+            resolved = self.resolve(resolved)
+        if isinstance(resolved, MapType):
+            self.habit(
+                "keyword-value", key.span, "A Map is keyed by strings. Keywords only name record fields.",
+                fix=f'"{key.name}"', help="get",
+            )
+            return self.placeholder(node.span)
         if isinstance(resolved, Never):
             return self.placeholder(node.span)
         if self.is_open(resolved):
@@ -1339,6 +1400,57 @@ class _Checker:
             node.span,
         )
         return self.coerce(choice, resolved_field.inner, expected, node.span)
+
+    def is_brace(self, t: Type) -> bool:
+        resolved = self.resolve(t)
+        return isinstance(resolved, Variable) and isinstance(self.shapes.get(resolved.id), BraceShape)
+
+    def map_value_of(self, t: Type) -> Type | None:
+        resolved = self.resolve(t)
+        if isinstance(resolved, MapType):
+            return resolved.value
+        if isinstance(resolved, Variable):
+            value = self.fresh()
+            if self.trial(resolved, MapType(value)):
+                return value
+        return None
+
+    def map_value(self, t: Type, node: Node, who: str) -> Type:
+        value = self.map_value_of(t)
+        if value is not None:
+            return value
+        resolved = self.resolve(t)
+        if not isinstance(resolved, Never):
+            hint = (
+                "A record has fixed fields. Read one with get: (get r :field)."
+                if isinstance(resolved, RecordType)
+                else None
+            )
+            self.error(
+                "type-mismatch", node.span,
+                f"{who} takes a Map here, but this is {describe(self.zonk(resolved))}.",
+                detail=f"Expected: Map<String, ...>\nFound: {show_type(self.zonk(resolved))}"
+                + (f"\n{hint}" if hint is not None else ""),
+                help=who,
+            )
+        return NEVER
+
+    def map_get(
+        self, node: Form, map_ir: ir.Node, value_type: Type, key: Node, default_node: Node | None,
+        expected: Type | None, scope: Mapping[str, Binding],
+    ) -> tuple[ir.Node, Type]:
+        span = node.span
+        key_ir, _ = self.check(key, STRING, scope)
+        lookup = ir.Prelude("map-get", (map_ir, key_ir), span)
+        if default_node is None:
+            return self.coerce(lookup, OptionType(value_type), expected, span)
+        default, _ = self.check(default_node, value_type, scope)
+        present = ir.Variable(DEFAULT_BINDER, span)
+        choice = ir.Match(
+            lookup, ((ir.MatchSome(ir.MatchAny(ir.BindName(DEFAULT_BINDER))), present), (ir.MatchNone(), default)),
+            span,
+        )
+        return self.coerce(choice, value_type, expected, span)
 
     def form_call(self, node: Form, expected: Type | None, scope: Mapping[str, Binding]) -> tuple[ir.Node, Type]:
         span = node.span
@@ -1704,8 +1816,8 @@ class _Checker:
             return resolved.element
         if isinstance(resolved, Variable):
             element = self.fresh()
-            self.unify(t, ListType(element))
-            return element
+            if self.trial(t, ListType(element)):
+                return element
         if not isinstance(resolved, Never):
             hint = (
                 "text functions take strings; split one into a list with text.split or text.chars."
@@ -1863,6 +1975,8 @@ class _Checker:
             if not self.arity(node, 1, None, "String ..."):
                 return self.placeholder(span)
             return self.prelude_str(node, expected, scope)
+        if op in {"assoc", "dissoc"} and len(args) >= 2 and isinstance(args[1], Keyword):
+            return self.unknown_head(node, scope)
         if op in FIXED_ARITY and not self.arity(node, FIXED_ARITY[op], FIXED_ARITY[op], self.signature(op)):
             return self.placeholder(span)
         match op:
@@ -1898,7 +2012,10 @@ class _Checker:
                 return self.check(args[0], expected, scope)
             case "count":
                 items, t = self.check(args[0], None, scope)
-                self.list_element(t, args[0], "count")
+                if self.is_map(t):
+                    self.map_value(t, args[0], "count")
+                else:
+                    self.list_element(t, args[0], "count")
                 return self.coerce(ir.Prelude(op, (items,), span), INT, expected, span)
             case "first":
                 items, t = self.check(args[0], None, scope)
@@ -1934,9 +2051,45 @@ class _Checker:
                 return self.coerce(ir.Prelude(op, (items,), span), ListType(inner), expected, span)
             case "contains?":
                 items, t = self.check(args[0], None, scope)
-                element = self.list_element(t, args[0], "contains?")
+                if self.is_map(t):
+                    self.map_value(t, args[0], "contains?")
+                    element: Type = STRING
+                else:
+                    element = self.list_element(t, args[0], "contains?")
                 value, _ = self.check(args[1], element, scope)
                 return self.coerce(ir.Prelude(op, (items, value), span), BOOL, expected, span)
+            case "assoc":
+                items, t = self.check(args[0], None, scope)
+                value_type = self.map_value(t, args[0], "assoc")
+                key, _ = self.check(args[1], STRING, scope)
+                value, _ = self.check(args[2], value_type, scope)
+                return self.coerce(ir.Prelude(op, (items, key, value), span), MapType(value_type), expected, span)
+            case "dissoc":
+                items, t = self.check(args[0], None, scope)
+                value_type = self.map_value(t, args[0], "dissoc")
+                key, _ = self.check(args[1], STRING, scope)
+                return self.coerce(ir.Prelude(op, (items, key), span), MapType(value_type), expected, span)
+            case "keys" | "vals" | "entries":
+                items, t = self.check(args[0], None, scope)
+                value_type = self.map_value(t, args[0], op)
+                result: Type = {
+                    "keys": ListType(STRING),
+                    "vals": ListType(value_type),
+                    "entries": ListType(TupleType((STRING, value_type))),
+                }[op]
+                return self.coerce(ir.Prelude(op, (items,), span), result, expected, span)
+            case "into-map":
+                pairs, t = self.check(args[0], None, scope)
+                value_type = self.fresh()
+                if not self.trial(t, ListType(TupleType((STRING, value_type)))):
+                    found = self.zonk(t)
+                    self.error(
+                        "type-mismatch", args[0].span,
+                        f"into-map takes a list of [String value] pairs, but this is {describe(found)}.",
+                        detail=f"Expected: List<Tuple<String, ...>>\nFound: {show_type(found)}", help="into-map",
+                    )
+                    value_type = NEVER
+                return self.coerce(ir.Prelude(op, (pairs,), span), MapType(value_type), expected, span)
             case "reduce":
                 initial, accumulator = self.check(args[1], None, scope)
                 items, t = self.check(args[2], None, scope)
@@ -1945,12 +2098,17 @@ class _Checker:
                 return self.coerce(ir.Prelude(op, (function, initial, items), span), accumulator, expected, span)
         return self.higher_order(node, op, expected, scope)
 
+    def is_map(self, t: Type) -> bool:
+        return isinstance(self.resolve(t), MapType) or self.is_brace(t)
+
     def signature(self, op: str) -> str:
         return {
             "=": "a b", "not=": "a b", "<": "a b", "<=": "a b", ">": "a b", ">=": "a b",
             "not": "Bool", "and": "Bool Bool", "or": "Bool Bool",
             "count": "xs", "first": "xs", "rest": "xs", "nth": "xs i", "take": "n xs", "concat": "xs ys",
             "flatten": "xss", "contains?": "xs x", "reduce": "f init xs", "identity": "x",
+            "assoc": "map key value", "dissoc": "map key", "keys": "map", "vals": "map", "entries": "map",
+            "into-map": "pairs",
         }.get(op, BINARY_SIGNATURE.get(op, "f xs"))
 
     def looks_like_function(self, node: Node, scope: Mapping[str, Binding]) -> bool:

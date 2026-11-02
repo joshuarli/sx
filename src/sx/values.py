@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
+import json
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from typing import override
 
@@ -12,6 +13,7 @@ from sx.types import (
     UNIT,
     EnumType,
     ListType,
+    MapType,
     NominalType,
     OptionType,
     RecordType,
@@ -65,6 +67,25 @@ class RecordValue:
 
 
 @dataclass(frozen=True, slots=True)
+class MapValue:
+    entries: tuple[tuple[str, Value], ...]
+    _index: dict[str, Value] = field(default_factory=dict, compare=False, hash=False, repr=False)
+
+    def __post_init__(self) -> None:
+        self._index.update(self.entries)
+
+    def get(self, key: str) -> Value | None:
+        return self._index.get(key)
+
+    def has(self, key: str) -> bool:
+        return key in self._index
+
+
+def make_map(pairs: Iterable[tuple[str, Value]]) -> MapValue:
+    return MapValue(tuple(sorted(dict(pairs).items())))
+
+
+@dataclass(frozen=True, slots=True)
 class SomeValue:
     value: Value
 
@@ -95,8 +116,8 @@ class VariantValue:
 
 
 type Value = (
-    bool | int | str | UnitValue | ListValue | TupleValue | RecordValue | SomeValue | NoneValue | OkValue | ErrValue
-    | VariantValue
+    bool | int | str | UnitValue | ListValue | TupleValue | RecordValue | MapValue | SomeValue | NoneValue | OkValue
+    | ErrValue | VariantValue
 )
 
 
@@ -112,6 +133,8 @@ def size(value: Value) -> int:
             return 1 + sum(size(item) for item in items)
         case RecordValue(fields=fields):
             return 1 + sum(size(v) for _, v in fields)
+        case MapValue(entries=entries):
+            return 1 + sum(size(v) for _, v in entries)
         case SomeValue(value=inner) | OkValue(value=inner) | ErrValue(value=inner):
             return 1 + size(inner)
         case VariantValue(payload=payload):
@@ -201,6 +224,13 @@ def decode(value: object, t: Type, path: str = "$") -> Value:
             if obj is not None and set(obj) == {"err"}:
                 return ErrValue(decode(obj["err"], err, f"{path}.err"))
             raise fail('{"ok": ...} or {"err": ...}')
+        case MapType(value=value_type):
+            obj = _json_object(value)
+            if obj is None:
+                raise fail(show_type(t))
+            return MapValue(
+                tuple((key, decode(obj[key], value_type, f"{path}[{json.dumps(key)}]")) for key in sorted(obj)),
+            )
         case RecordType(fields=fields):
             obj = _json_object(value)
             if obj is None:
@@ -253,6 +283,9 @@ def encode(value: Value, t: Type) -> object:
             return {"ok": encode(inner, t.ok if isinstance(t, ResultType) else t)}
         case ErrValue(value=inner):
             return {"err": encode(inner, t.err if isinstance(t, ResultType) else CALL_ERROR)}
+        case MapValue(entries=entries):
+            value_type = t.value if isinstance(t, MapType) else t
+            return {key: encode(v, value_type) for key, v in entries}
         case RecordValue(fields=fields):
             types = dict(t.fields) if isinstance(t, RecordType) else {}
             return {name: encode(v, types.get(name, t)) for name, v in fields}
@@ -283,6 +316,9 @@ def show_value(value: Value) -> str:
             return "[" + " ".join(show_value(item) for item in items) + "]"
         case RecordValue(fields=fields):
             return "{" + " ".join(f":{name} {show_value(v)}" for name, v in fields) + "}"
+        case MapValue(entries=entries):
+            pairs = " ".join(f"[{show_value(key)} {show_value(v)}]" for key, v in entries)
+            return f"(into-map [{pairs}])"
         case SomeValue(value=inner):
             return f"(some {show_value(inner)})"
         case NoneValue():

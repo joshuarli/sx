@@ -22,6 +22,11 @@ class ListType:
 
 
 @dataclass(frozen=True, slots=True)
+class MapType:
+    value: Type
+
+
+@dataclass(frozen=True, slots=True)
 class TupleType:
     items: tuple[Type, ...]
 
@@ -87,8 +92,8 @@ class Never:
 NEVER = Never()
 
 type Type = (
-    Primitive | ListType | TupleType | OptionType | ResultType | RecordType | EnumType | NominalType | Variable
-    | Never
+    Primitive | ListType | MapType | TupleType | OptionType | ResultType | RecordType | EnumType | NominalType
+    | Variable | Never
 )
 
 CALL_ERROR_KINDS = (
@@ -105,6 +110,8 @@ def show_type(t: Type) -> str:
             return name
         case ListType(element=element):
             return f"List<{show_type(element)}>"
+        case MapType(value=value):
+            return f"Map<String, {show_type(value)}>"
         case TupleType(items=items):
             return f"Tuple<{', '.join(show_type(item) for item in items)}>"
         case OptionType(inner=inner):
@@ -136,7 +143,6 @@ class TypeSyntaxError(ValueError):
 
 
 UNSUPPORTED = {
-    "Map": "Sx v0 has no Map type",
     "Float": "Sx v0 has no Float type",
     "Bytes": "Sx v0 has no Bytes type",
 }
@@ -199,6 +205,13 @@ class _TypeParser:
                 return CALL_ERROR
             case "List":
                 return ListType(self.arguments(1, name)[0])
+            case "Map":
+                key, value = self.arguments(2, name)
+                if key != STRING:
+                    raise TypeSyntaxError(
+                        f"Map keys must be String, because JSON object keys are strings: {self.text!r}"
+                    )
+                return MapType(value)
             case "Option":
                 return OptionType(self.arguments(1, name)[0])
             case "Result":
@@ -235,6 +248,10 @@ def encodable_problem(t: Type) -> str | None:
             return encodable_problem(inner)
         case ListType(element=element):
             return encodable_problem(element)
+        case MapType(value=value):
+            if isinstance(value, OptionType):
+                return f"{show_type(t)} has no JSON encoding, because a null value and a missing key would collide"
+            return encodable_problem(value)
         case TupleType(items=items):
             return next((problem for item in items if (problem := encodable_problem(item)) is not None), None)
         case ResultType(ok=ok, err=err):

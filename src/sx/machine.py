@@ -12,10 +12,12 @@ from sx.types import CALL_ERROR_KINDS, Type
 from sx.values import (
     INT_MAX,
     INT_MIN,
+    NONE_VALUE,
     UNIT_VALUE,
     DecodeError,
     ErrValue,
     ListValue,
+    MapValue,
     NoneValue,
     OkValue,
     RecordValue,
@@ -26,6 +28,7 @@ from sx.values import (
     call_error,
     decode,
     encode,
+    make_map,
     size,
 )
 
@@ -930,6 +933,16 @@ def list_arg(value: Value) -> tuple[Value, ...]:
     return value.items
 
 
+def map_arg(value: Value) -> MapValue:
+    assert isinstance(value, MapValue)
+    return value
+
+
+def str_arg(value: Value) -> str:
+    assert isinstance(value, str)
+    return value
+
+
 def same(a: Value, b: Value) -> bool:
     return type(a) is type(b) and a == b
 
@@ -973,6 +986,8 @@ def pure_prelude(op: str, args: list[Value], span: Span, machine: Machine) -> Va
             machine.check_size(joined, span)
             return joined
         case "count":
+            if isinstance(args[0], MapValue):
+                return len(args[0].entries)
             return len(list_arg(args[0]))
         case "first":
             items = list_arg(args[0])
@@ -1000,5 +1015,30 @@ def pure_prelude(op: str, args: list[Value], span: Span, machine: Machine) -> Va
         case "flatten":
             return ListValue(tuple(item for inner in list_arg(args[0]) for item in list_arg(inner)))
         case "contains?":
+            if isinstance(args[0], MapValue):
+                return args[0].has(str_arg(args[1]))
             return any(same(item, args[1]) for item in list_arg(args[0]))
+        case "map-get":
+            found = map_arg(args[0]).get(str_arg(args[1]))
+            return NONE_VALUE if found is None else SomeValue(found)
+        case "assoc":
+            assigned = make_map([*map_arg(args[0]).entries, (str_arg(args[1]), args[2])])
+            machine.check_size(assigned, span)
+            return assigned
+        case "dissoc":
+            return MapValue(tuple(entry for entry in map_arg(args[0]).entries if entry[0] != str_arg(args[1])))
+        case "keys":
+            return ListValue(tuple(key for key, _ in map_arg(args[0]).entries))
+        case "vals":
+            return ListValue(tuple(item for _, item in map_arg(args[0]).entries))
+        case "entries":
+            return ListValue(tuple(TupleValue((key, item)) for key, item in map_arg(args[0]).entries))
+        case "into-map":
+            pairs: list[tuple[str, Value]] = []
+            for pair in list_arg(args[0]):
+                assert isinstance(pair, TupleValue)
+                pairs.append((str_arg(pair.items[0]), pair.items[1]))
+            built = make_map(pairs)
+            machine.check_size(built, span)
+            return built
     raise _TerminalError(Failure(FailureKind.INTERNAL, f"No prelude rule for {op}.", span=span))

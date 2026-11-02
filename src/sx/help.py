@@ -39,9 +39,11 @@ FORMS = (
           "(match (some 3) (some n) (+ n 1) none 0)", "4"),
     entry("fn", "(fn [param ...] body)", "A function, as an argument to map, filter, and the like, "
           "or as the value of a let binding.", "(map (fn [x] (+ x 1)) [1 2])", "[2 3]"),
-    entry("get", "(get record :field) or (get record :field default)", "Reads a record field. With a default, "
-          "the field must be optional, and the default replaces none.",
-          '(get {:nick none} :nick "anon")', '"anon"'),
+    entry("get", "(get record :field [default]) or (get map \"key\" [default])", "Reads a record field, or a map "
+          "entry by its string key. A map entry is optional unless you give a default. With a default, a record "
+          "field must be optional, and the default replaces none.",
+          '(let [stock (assoc {} "pen" 3)] [(get {:nick none} :nick "anon") (get stock "pen") (get stock "ink" 0)])',
+          '["anon" (some 3) 0]'),
     entry("call", "(call tool.name {:field value})", "Calls a tool with an input record.",
           '(count (call people.list {:team "infra"}))', "3"),
     entry("attempt", "(attempt expression)", "(ok value), or (err {:kind K :message m}) if a tool call failed.",
@@ -92,7 +94,7 @@ PRELUDE = (
     entry("or", "(or a b) -> Bool", "True when either is true. Both arguments always evaluate.",
           "(or true false)", "true"),
     entry("str", "(str s ...) -> String", "Joins strings.", '(str "a" "b" "c")', '"abc"'),
-    entry("count", "(count xs) -> Int", "The number of elements.", "(count [1 2 3])", "3"),
+    entry("count", "(count xs) -> Int", "The number of elements, or of map entries.", "(count [1 2 3])", "3"),
     entry("first", "(first xs) -> T", "The first element. An empty list stops the program.", "(first [1 2 3])", "1"),
     entry("rest", "(rest xs) -> List<T>", "Every element after the first.", "(rest [1 2 3])", "[2 3]"),
     entry("nth", "(nth xs i) -> T", "The element at index i, from 0. A missing index stops the program.",
@@ -100,8 +102,23 @@ PRELUDE = (
     entry("take", "(take n xs) -> List<T>", "The first n elements.", "(take 2 [1 2 3])", "[1 2]"),
     entry("concat", "(concat xs ys) -> List<T>", "Joins two lists.", "(concat [1] [2 3])", "[1 2 3]"),
     entry("flatten", "(flatten xss) -> List<T>", "Joins a list of lists.", "(flatten [[1] [2 3]])", "[1 2 3]"),
-    entry("contains?", "(contains? xs x) -> Bool", "True when the list holds the value.", "(contains? [1 2] 2)",
-          "true"),
+    entry("contains?", "(contains? xs x) -> Bool", "True when the list holds the value, or the map has the key.",
+          "(contains? [1 2] 2)", "true"),
+    entry("assoc", "(assoc m key value) -> Map<String, V>", "A map with the key set to the value, replacing any "
+          "earlier value. Start from {}. Maps list in key order.",
+          '(assoc (assoc {} "b" 2) "a" 1)', '(into-map [["a" 1] ["b" 2]])'),
+    entry("dissoc", "(dissoc m key) -> Map<String, V>", "A map without the key. A key that is absent is fine.",
+          '(dissoc (assoc (assoc {} "a" 1) "b" 2) "a")', '(into-map [["b" 2]])'),
+    entry("keys", "(keys m) -> List<String>", "The keys of a map in ascending order.",
+          '(keys (assoc (assoc {} "b" 2) "a" 1))', '["a" "b"]'),
+    entry("vals", "(vals m) -> List<V>", "The values of a map, in key order.",
+          '(vals (assoc (assoc {} "b" 2) "a" 1))', "[1 2]"),
+    entry("entries", "(entries m) -> List<Tuple<String, V>>", "The [key value] pairs of a map, in key order.",
+          '(entries (assoc (assoc {} "b" 2) "a" 1))', '[["a" 1] ["b" 2]]'),
+    entry("into-map", "(into-map pairs) -> Map<String, V>", "Builds a map from [key value] pairs. A later pair "
+          "replaces an earlier pair with the same key. It takes the output of group-by when the key is a string.",
+          '(into-map (group-by (fn [x] (if (> x 1) "big" "small")) [1 2 3]))',
+          '(into-map [["big" [2 3]] ["small" [1]]])'),
     entry("identity", "(identity x) -> T", "Returns its argument. Pass it as a function, for example as the key of "
           "group-by.", "(group-by identity [1 2 1])", "[[1 [1 1]] [2 [2]]]"),
     entry("map", "(map f xs) -> List<U>", "Applies f to each element, in order.", "(map (fn [x] (* x x)) [1 2 3])",
@@ -135,6 +152,9 @@ TYPES = (
           + ", ".join(CALL_ERROR_KINDS) + ". Branch on the kind, never the message.",
           '(match (attempt (call metrics.uptime {:host "gone"})) (ok m) "up" (err e) (match (get e :kind) '
           'NotFound "missing" _ "other"))', '"missing"'),
+    entry("Map", "Map<String, V>: (into-map [[key value] ...])", "A JSON object with string keys and values of "
+          "one type V, listed in key order. Keys are strings, never keywords: keywords only name record fields.",
+          '(get (assoc {} "pen" 3) "pen" 0)', "3"),
     entry("Tuple", "Tuple<A, B, ...>: [a b ...]", "A fixed-size group of values of different types, from par, "
           "group-by, and bracket literals of mixed types or that a tuple pattern takes apart.",
           '(let [[n s] [1 "a"]] s)', '"a"'),

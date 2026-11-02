@@ -47,6 +47,7 @@ program runs. There is no general recursion and no unbounded loop.
 | `Option<T>` | `(some x)`, `none` |
 | `Result<T, E>` | `(ok x)`, `(err e)` |
 | `Record {k: T, ...}` | Structural, with exactly the declared fields |
+| `Map<String, V>` | Any number of string keys, each with a value of type `V`. Keys are always strings, because JSON object keys are strings, so `Map<Int, V>` and every other key type are rejected. |
 | Core enum | Nominal, declared by a core, for example `git.Checkout` |
 | Core nominal | Nominal wrapper over a base type, declared by a core, for example `git.RepoId` |
 
@@ -92,6 +93,17 @@ each `[(get s :repo) b]` is a `Tuple<String, String>`. Two undecided literals of
 become lists. A use that fits neither shape, such as a tuple pattern of another length, is a
 `type-mismatch`.
 
+A `Map<String, V>` holds string keys that a program computes, where a record has fixed field names.
+It is always in ascending key order, by Unicode code point, whatever order its entries were added
+in: `keys`, `vals`, `entries`, and the JSON encoding all follow that order. Equality on maps is
+structural and ignores insertion order. Nothing writes a map directly. Tools return one, and
+`assoc` and `into-map` build one. `{}` with a known `Map<String, V>` type is the empty map, and a
+non-empty record literal is never a map. A `{}` with no known type is the empty record until its
+first use settles it: `(assoc {} "a" 1)` and `(reduce (fn [acc x] (assoc acc ...)) {} xs)` make it
+an empty `Map<String, V>`, and a record use such as `(get {} :a)` or a result that nothing else
+constrains keeps it an empty record. A map value that is `Option<T>` cannot be encoded, because a
+`null` value and a missing key would collide. See [Values and JSON](#values-and-json).
+
 Programs have no type annotations. The checker infers types bidirectionally from literals,
 bindings, prelude and core signatures, capability signatures, and the expected type of each
 argument position. A lambda parameter gets its type from the position the lambda fills. `none`,
@@ -103,7 +115,7 @@ element type of an empty list, is harmless and allowed.
 Equality is structural on every type. Ordering with `<`, `<=`, `>`, and `>=` is defined on `Int`
 and on `String`, where strings compare lexicographically by Unicode code point. Sort keys, used by
 `sort-by`, may also be `Bool` (`false` first) and tuples or lists of sort keys, compared element
-by element.
+by element. A map is not a sort key.
 
 ## Special forms
 
@@ -115,6 +127,8 @@ by element.
 | `(match e clause...)` | See [Match](#match). |
 | `(fn [p ...] body)` | A function argument, or the value of a `let` binding. See [Functions](#functions). |
 | `(get r :field)` | `r` is a record with `field`. A missing field is rejected by the checker. |
+| `(get m key)` | `m` is a `Map<String, V>` and `key` is a `String`. The result is `Option<V>`, `none` when the key is absent. A keyword key, as in `(get m :name)`, is rejected with the habit `keyword-value` and the fix `"name"`, because keywords only name record fields. |
+| `(get m key default)` | `default` has type `V`. The result is `V`: the value when the key is present, otherwise `default`, which evaluates only then. |
 | `(get r :field default)` | `field` has type `Option<T>`, and `default` has type `T`. The result is `T`: the value when present, otherwise `default`, which evaluates only then. A field whose type is not an `Option` is rejected with `arity`, because it is always present. |
 | `(call cap.id arg)` | `arg` has the capability's input type. The result has its output type. |
 | `(attempt e)` | `Result<T, CallError>`, where `e` has type `T`. See [Recovery and repetition](#recovery-and-repetition). |
@@ -298,14 +312,20 @@ as in Clojure.
 | `not` | `Bool -> Bool` |
 | `and or` | `Bool Bool -> Bool`. Both arguments always evaluate. Use `if` to make a call conditional. |
 | `str` | `String ... -> String`, one or more strings joined in order |
-| `count` | `List<T> -> Int` |
+| `count` | `List<T> -> Int`, or `Map<String, V> -> Int` for the number of entries |
 | `first` | `List<T> -> T`. An empty list is an `out-of-range` error. |
 | `rest` | `List<T> -> List<T>`, every element after the first. Empty for an empty list. |
 | `nth` | `List<T> Int -> T`, counting from 0. A missing index is an `out-of-range` error. |
 | `take` | `Int List<T> -> List<T>`. A negative count is an arithmetic error. |
 | `concat` | `List<T> List<T> -> List<T>` |
 | `flatten` | `List<List<T>> -> List<T>` |
-| `contains?` | `List<T> T -> Bool` |
+| `contains?` | `List<T> T -> Bool`, or `Map<String, V> String -> Bool` to test for a key |
+| `assoc` | `Map<String, V> String V -> Map<String, V>`, the map with the key set, replacing any earlier value |
+| `dissoc` | `Map<String, V> String -> Map<String, V>`, the map without the key. An absent key is not an error. |
+| `keys` | `Map<String, V> -> List<String>`, ascending |
+| `vals` | `Map<String, V> -> List<V>`, in key order |
+| `entries` | `Map<String, V> -> List<Tuple<String, V>>`, in key order |
+| `into-map` | `List<Tuple<String, V>> -> Map<String, V>`. A later pair replaces an earlier pair with the same key. It takes the output of `group-by` when the key is a `String`. |
 | `identity` | `T -> T`, for use as a function argument such as `(group-by identity xs)` |
 | `map` | `(T -> U) List<T> -> List<U>` |
 | `filter` | `(T -> Bool) List<T> -> List<T>` |
@@ -437,21 +457,25 @@ always knows the expected type, so every encoding below is unambiguous.
 | `Option<T>` | `null` for `none`, the encoding of `x` for `(some x)` |
 | `Result<T, E>` | `{"ok": x}` or `{"err": e}` |
 | `Record {k: T, ...}` | An object with exactly the declared fields, named without the colon |
+| `Map<String, V>` | An object with any keys, each value encoded as `V` |
 | Core enum, variant without a value | The variant name as a string, for example `"Missing"` |
 | Core enum, variant with a value | `{"tag": "OnBranch", "value": x}` |
 | Core nominal | The encoding of its base type |
 
 `Option<T>` has no JSON encoding when `T` itself can encode as `null`, which is when `T` is `Unit`
-or another `Option`. `none` and `(some x)` would both be `null`. The checker rejects a capability
-input or output, a program input, or a program result whose type contains such an `Option`.
+or another `Option`. `none` and `(some x)` would both be `null`. `Map<String, Option<T>>` has none
+either, because a `null` value and a missing key would collide. The checker rejects a capability
+input or output, a program input, or a program result whose type contains such a type.
 
 Decoding a capability response fails with `invalid-host-response` when a value does not match
 the expected type. A missing field, an extra field, and `null` for a non-`Option` type are all
 mismatches. Nothing is dropped, defaulted, or converted. The error gives the path to the bad
 value, the expected type, and what was found, for example
-`$.repos[3].name: expected String, found number`.
+`$.repos[3].name: expected String, found number`. A map value's path names its key as a JSON
+string, for example `$.totals["c-ada"]: expected Int, found a string`. A map decodes its entries in
+ascending key order, so the first error is the same every time.
 
-Encoding writes record fields in declaration order. Comparisons of JSON values, in fixtures and
+Encoding writes record fields in declaration order and map keys in ascending order. Comparisons of JSON values, in fixtures and
 in parity tests, ignore object key order.
 
 ## Diagnostics
@@ -523,6 +547,9 @@ The checker's codes are:
 
 A habit diagnostic names the language the construct comes from and gives the Sx form. For
 example, `(:name repo)` gets `Fix: (get repo :name)`.
+A keyword used as a map key, as in `(get m :name)`, is the `keyword-value` habit with the fix `"name"`.
+`assoc` and `dissoc` given a keyword, as in `(assoc r :archived true)`, are the `assoc` habit, with
+`assoc-in`, `update`, and `merge`: a record has fixed fields, so build a new record literal.
 
 A runtime failure is reported in the same format. It adds the error class from
 [Failures](#failures), and, for capability errors, the request ID and capability. Its span points
@@ -554,7 +581,7 @@ The host sets every budget. A program cannot read or raise one.
 | `calls` | Total capability requests |
 | `delay` | Total time requested by delays across the run |
 | `concurrency` | Requests in one suspension. A larger `par-map` limit is rejected. |
-| `value-size` | Size of any intermediate or final value |
+| `value-size` | Size of any intermediate or final value. A map counts one for itself plus the size of each value, like a record. |
 | `applications` | Function argument applications |
 | `instantiations` | Local function bodies the checker types, one per call site |
 

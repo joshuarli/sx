@@ -76,6 +76,10 @@ only the forms and functions below exist.
   `(flatten xss)`, `(contains? xs x)`. `first` and `nth` stop the program on a list that is too
   short, so check `(count xs)` first when it may be.
 - `(identity x)` returns `x`.
+- Maps, `Map<String, V>`, are JSON objects with string keys, and always list in key order: `(get m "k")`
+  is optional, `(get m "k" default)` is not, `(assoc m "k" v)`, `(dissoc m "k")`, `(keys m)`, `(vals m)`,
+  `(entries m)` (`[key value]` tuples), `(into-map pairs)` (a later pair wins), and `count` and
+  `contains?` (a key) take a map. `{}` starts an empty one: `(reduce (fn [m x] (assoc m ...)) {} xs)`.
 - `(map f xs)`, `(filter f xs)`, `(any? f xs)`, `(all? f xs)`, `(reduce f init xs)`
 - `(keep f xs)` applies `f`, which returns an optional, and keeps the `some` values unwrapped.
 - `(sort-by f xs)` sorts ascending by a key: an integer, a string, or a tuple of keys compared in
