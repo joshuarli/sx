@@ -369,9 +369,9 @@ as in Clojure.
 | `and or` | `Bool Bool -> Bool`. Both arguments always evaluate. Use `if` to make a call conditional. |
 | `str` | `T ... -> String`, one or more arguments joined in order. Each is a `String`, an `Int` written in decimal, a `Bool` written `true` or `false`, or a value of an enum with no payloads written as its variant name. In a `sort-by` key every argument must be a `String`, because joining numbers into a string key sorts them as text. |
 | `count` | `List<T> -> Int`, or `Map<String, V> -> Int` for the number of entries |
-| `first` | `List<T> -> T`. An empty list is an `out-of-range` error. |
+| `first` | `List<T> -> T`. An empty list is an `out-of-range` error. On a tuple it is the first element, with that element's type. |
 | `rest` | `List<T> -> List<T>`, every element after the first. Empty for an empty list. |
-| `nth` | `List<T> Int -> T`, counting from 0. A missing index is an `out-of-range` error. |
+| `nth` | `List<T> Int -> T`, counting from 0. A missing index is an `out-of-range` error. On a tuple the index must be an integer literal within the tuple, checked statically, and the result has that element's type. |
 | `take` | `Int List<T> -> List<T>`. A negative count is an arithmetic error. |
 | `concat` | `List<T> List<T> -> List<T>` |
 | `flatten` | `List<List<T>> -> List<T>` |

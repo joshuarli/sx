@@ -2040,6 +2040,23 @@ class _Checker:
         self.read_only(effects, "par-map")
         return self.coerce(ir.ParMap(limit, function, items, span), ListType(result), expected, span)
 
+    def tuple_item(
+        self, items: ir.Node, t: Type, index: int, where: Node, node: Form, expected: Type | None,
+    ) -> tuple[ir.Node, Type]:
+        resolved = self.resolve(t)
+        assert isinstance(resolved, TupleType)
+        size = len(resolved.items)
+        if not 0 <= index < size:
+            self.error(
+                "type-mismatch", where.span,
+                f"This tuple has {size} elements, so its indexes are 0 to {size - 1}, not {index}.",
+                help="nth",
+            )
+            return self.placeholder(node.span)
+        element = resolved.items[index]
+        return self.coerce(ir.Prelude("tuple-item", (items, ir.Literal(index, node.span)), node.span), element,
+                           expected, node.span)
+
     def list_element(self, t: Type, node: Node, who: str) -> Type:
         resolved = self.resolve(t)
         if isinstance(resolved, ListType):
@@ -2253,6 +2270,8 @@ class _Checker:
                 return self.coerce(ir.Prelude(op, (items,), span), INT, expected, span)
             case "first":
                 items, t = self.check(args[0], None, scope)
+                if isinstance(self.resolve(t), TupleType):
+                    return self.tuple_item(items, t, 0, args[0], node, expected)
                 element = self.list_element(t, args[0], "first")
                 return self.coerce(ir.Prelude(op, (items,), span), element, expected, span)
             case "rest":
@@ -2261,6 +2280,15 @@ class _Checker:
                 return self.coerce(ir.Prelude(op, (items,), span), ListType(element), expected, span)
             case "nth":
                 items, t = self.check(args[0], None, scope)
+                if isinstance(shape := self.resolve(t), TupleType):
+                    if not isinstance(args[1], IntLiteral):
+                        self.error(
+                            "type-mismatch", args[1].span,
+                            "A tuple's elements have their own types, so nth on a tuple needs a literal index.",
+                            detail=f"Take it apart instead: (let [{tuple_names(shape)}] ...).", help="nth",
+                        )
+                        return self.placeholder(span)
+                    return self.tuple_item(items, t, args[1].value, args[1], node, expected)
                 element = self.list_element(t, args[0], "nth")
                 index, _ = self.check(args[1], INT, scope)
                 return self.coerce(ir.Prelude(op, (items, index), span), element, expected, span)
@@ -2442,6 +2470,11 @@ class _Checker:
             )
             checked.append(value)
         return self.coerce(ir.Prelude("str", tuple(checked), span), STRING, expected, span)
+
+
+def tuple_names(t: TupleType) -> str:
+    names = [f"x{i}" for i in range(len(t.items))]
+    return f"[{' '.join(names)}] tuple"
 
 
 def program_span(source: str) -> Span:

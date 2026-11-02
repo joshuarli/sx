@@ -1,0 +1,3 @@
+; task: dev-tag-counts
+(let [pair [1 "a"]]
+  (nth pair 2))

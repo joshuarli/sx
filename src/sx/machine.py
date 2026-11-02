@@ -1025,6 +1025,11 @@ def pure_prelude(op: str, args: list[Value], span: Span, machine: Machine) -> Va
             return items[0]
         case "rest":
             return ListValue(list_arg(args[0])[1:])
+        case "tuple-item":
+            whole, index = args[0], int_arg(args[1])
+            if not isinstance(whole, TupleValue):
+                raise _TerminalError(Failure(FailureKind.INTERNAL, "tuple-item of a non-tuple.", span=span))
+            return whole.items[index]
         case "nth":
             items, index = list_arg(args[0]), int_arg(args[1])
             if not 0 <= index < len(items):
