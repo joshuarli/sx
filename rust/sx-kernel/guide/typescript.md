@@ -29,6 +29,7 @@ mutation: every form is an expression with a value, and the program's last value
 | `` `${a}/${b}` `` | `(str a "/" b)` |
 | `s.split("\n")`, `s.trim()`, `s.startsWith(p)` | `(text.split s "\n")`, `(text.trim s)`, `(text.starts-with? s p)` |
 | `parseInt(s, 10)` | `(text.to-int s)`, an `Option<Int>` |
+| `s.match(/(\d+)-(\w+)/)` | `(re.find #"(\d+)-(\w+)" s)`, an `Option` of the match and its groups |
 | `try { a } catch (e) { b }` | `(match (attempt a) (ok v) ... (err e) b)` |
 | `await Promise.all(xs.map(async x => ...))` | `(par-map {:limit 8} (fn [x] ...) xs)`, for reads |
 | `for (const x of xs) { await write(x); }` | `(map (fn [x] (call ...)) xs)`, one at a time, in order |
@@ -62,6 +63,5 @@ mutation: every form is an expression with a value, and the program's last value
   `Option` type, and you take it apart with `match`, a default, or `(if x ...)` on a name.
 - **A tool failure stops the program** unless an `attempt` encloses the call, like an exception nobody
   catches. Wrap every call whose failure the task tells you to handle.
-- **There is no regular expression.** Parse with `text.split`, `text.starts-with?`, and
-  `text.to-int`, and check each part: `"main.c:9:18: error: x"` split on `": "` gives
-  `["main.c:9:18" "error" "x"]`, and the first part split on `":"` gives `["main.c" "9" "18"]`.
+- **Regular expressions come from the `re` core** when the declarations list it: `line.match(/(\d+)/)` is
+  `(re.find #"(\d+)" line)`, with the pattern first, written as `#"..."` so backslashes stay.

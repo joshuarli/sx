@@ -4,6 +4,7 @@ pub fn section(core: &str) -> Option<&'static str> {
         "yaml" => Some(include_str!("../guide/yaml.md")),
         "decimal" => Some(include_str!("../guide/decimal.md")),
         "semver" => Some(include_str!("../guide/semver.md")),
+        "re" => Some(include_str!("../guide/re.md")),
         _ => None,
     }
 }
