@@ -801,12 +801,13 @@ built-in code mode is the baseline, so both arms run in the same agent with the 
 
 What Sx can claim and TypeScript cannot, which this campaign must measure rather than assume:
 
-- A program that does not check performs no effect. TypeScript's `tsc` catches type errors before a
-  run too, so the difference is the errors only Sx catches: a call the host did not grant or that a
-  literal input puts out of scope, a retried write that is not idempotent, a write inside `par`, a
-  misused enum or optional.
+- A program that does not check performs no effect. pi's `codemode` runs JavaScript with no type check,
+  so every mistake surfaces at run time, after the calls before it; the Phase 9 to 14 arm had `tsc`,
+  which this baseline lacks. Sx also catches what no type checker would: a call the host did not grant
+  or that a literal input puts out of scope, a retried write that is not idempotent, a write inside
+  `par`.
 - Before anything runs, `sx explain` lists every tool a program can call, with each literal input and
-  its scope verdict, so a host can approve or refuse the program as a whole. A TypeScript host learns
+  its scope verdict, so a host can approve or refuse the program as a whole. A JavaScript host learns
   the calls only as they happen. The same performers enforce the grants at run time in both arms, so
   run-time refusal is not an Sx advantage.
 
