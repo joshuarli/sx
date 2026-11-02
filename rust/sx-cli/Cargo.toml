@@ -11,3 +11,7 @@ path = "src/main.rs"
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+sx-kernel = { path = "../sx-kernel" }
+sx-cores = { path = "../sx-cores" }
