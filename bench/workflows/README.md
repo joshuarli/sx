@@ -29,8 +29,9 @@ and reference program of every development workflow except the one being solved 
 `example-summary`). `--ts-notes` adds the behavior notes of `sx guide --notes` to the TypeScript prompt,
 so both arms see the same facts about the tools.
 
-Every workflow's Sx declarations also list the pure cores `text` and `re`, the standard library a
-host would give any program, as TypeScript has its string methods and regular expressions built in.
+Every workflow's Sx declarations also list the pure cores `text`, `re`, and `json`, the standard library
+a host would give any program, as TypeScript has string methods, regular expressions, and `JSON.parse`
+built in.
 
 `reference` runs each workflow's two reference solutions without a model and exits 1 unless both
 are judged correct. `trials` asks the model through the probe's `pi` harness (`pilot.ask`), allows

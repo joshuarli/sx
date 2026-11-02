@@ -12,6 +12,6 @@ so `(text.to-int (yaml.get doc ["replicas"]))` needs the value to be present: ma
 replicas
 ```
 
-A file outside the supported subset (flow collections, anchors, block scalars, several documents) stops
-the program, and `attempt` does not catch it, so leave such a file alone when the task says how to
-recognize it.
+A file outside the supported subset (flow collections, anchors, block scalars, several documents) is a
+refusal: inside an `attempt` it gives `(err {:kind Invalid :message ...})`, and outside one it stops the
+program.

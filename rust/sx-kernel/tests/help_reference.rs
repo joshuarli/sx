@@ -64,6 +64,15 @@ fn python_reference() -> Json {
     parse(std::str::from_utf8(&output.stdout).expect("utf-8 output")).expect("json output")
 }
 
+const RUST_CHANGES: &[(&str, &str)] = &[(
+    "(ok value), or (err {:kind K :message m}) if a tool call failed.",
+    "(ok value), or (err {:kind K :message m}) if a tool call failed or a core refused its input.",
+)];
+
+fn in_rust(python: &str) -> String {
+    RUST_CHANGES.iter().fold(python.to_string(), |text, (old, new)| text.replace(old, new))
+}
+
 fn text<'a>(value: &'a Json, key: &str) -> &'a str {
     value.get(key).and_then(Json::as_str).expect("text field")
 }
@@ -84,7 +93,8 @@ fn every_help_output_is_byte_identical_to_python() {
                 None => (String::new(), format!("{}\n", not_found_message(name, &candidates)), 1),
             },
         };
-        let expected = (text(case, "stdout"), text(case, "stderr"), case.get("code").and_then(Json::as_i64));
+        let expected_stdout = in_rust(text(case, "stdout"));
+        let expected = (expected_stdout.as_str(), text(case, "stderr"), case.get("code").and_then(Json::as_i64));
         if (stdout.as_str(), stderr.as_str(), Some(code)) != expected {
             failures.push(format!("{case:?}\n--- rust\n{stdout}{stderr}"));
         }
@@ -101,7 +111,7 @@ fn the_tables_and_example_data_match_python() {
     for (rust, python) in actual.iter().zip(expected) {
         assert_eq!(rust.name, text(python, "name"));
         assert_eq!(rust.signature, text(python, "signature"));
-        assert_eq!(rust.description, text(python, "description"));
+        assert_eq!(rust.description, in_rust(text(python, "description")));
         assert_eq!(rust.example, text(python, "example"));
         assert_eq!(rust.result, text(python, "result"));
     }

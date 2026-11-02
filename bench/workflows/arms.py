@@ -24,7 +24,7 @@ NO_CORES: Json = {"types": {}, "functions": []}
 VIRTUAL_WAIT = "Time is virtual, so waiting costs nothing."
 REAL_WAIT = "The wait takes real time."
 MCP_PREFIX = "mcp-"
-STANDARD_CORES = ("text", "re")
+STANDARD_CORES = ("text", "re", "json")
 
 
 class ToolchainMissingError(RuntimeError):

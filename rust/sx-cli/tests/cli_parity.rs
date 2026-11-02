@@ -149,6 +149,10 @@ options:
   --input NAME=JSON     One input value
 "#,
     ),
+    (
+        "(ok value), or (err {:kind K :message m}) if a tool call failed.",
+        "(ok value), or (err {:kind K :message m}) if a tool call failed or a core refused its input.",
+    ),
 ];
 
 fn usage_of(help: &str) -> &str {

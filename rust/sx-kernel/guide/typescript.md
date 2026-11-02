@@ -33,6 +33,7 @@ declaration.
 | `` `${a}/${b}` `` | `(str a "/" b)` |
 | `s.split("\n")`, `s.trim()`, `s.startsWith(p)` | `(text.split s "\n")`, `(text.trim s)`, `(text.starts-with? s p)` |
 | `parseInt(s, 10)` | `(text.to-int s)`, an `Option<Int>` |
+| `JSON.parse(s).deps.react` | `(json.get s ["deps" "react"])`, an `Option<String>` |
 | `s.match(/(\d+)-(\w+)/)` | `(re.find #"(\d+)-(\w+)" s)`, an `Option` of the match and its groups |
 | `try { a } catch (e) { b }` | `(match (attempt a) (ok v) ... (err e) b)` |
 | `await Promise.all(xs.map(async x => ...))` | `(par-map {:limit 8} (fn [x] ...) xs)`, for reads |
@@ -63,6 +64,7 @@ declaration.
 - **Optional values are explicit.** `none` is not `null`: a field or map entry that may be missing has an
   `Option` type, and you take it apart with `match`, a default, or `(if x ...)` on a name.
 - **A tool failure stops the program** unless an `attempt` encloses the call, like an exception nobody
-  catches. Wrap every call whose failure the task tells you to handle.
+  catches. Wrap every call whose failure the task tells you to handle. A core that refuses its input,
+  such as `json.get` on text that is not JSON, is caught the same way, as kind `Invalid`.
 - **Regular expressions come from the `re` core**: `line.match(/(\d+)/)` is `(re.find #"(\d+)" line)`,
   with the pattern first, written as `#"..."` so backslashes stay.

@@ -5,6 +5,7 @@ pub fn section(core: &str) -> Option<&'static str> {
         "decimal" => Some(include_str!("../guide/decimal.md")),
         "semver" => Some(include_str!("../guide/semver.md")),
         "re" => Some(include_str!("../guide/re.md")),
+        "json" => Some(include_str!("../guide/json.md")),
         _ => None,
     }
 }
