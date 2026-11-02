@@ -1010,6 +1010,41 @@ sessions safe: reading in one run and writing literal paths in the next, which `
 a program read an earlier run's result is a language change, and 17 retyped runs do not yet justify it.
 Session-wide limits wait for more than one violation.
 
+**The checkable-subset test.** The campaign's conclusion was that writing Sx costs models a reasoning
+tax for a static safety benefit that careful agents do not need. That leaves one design: keep the
+kernel, checker, explain report, policy, and Lean semantics, and lower a checkable subset of a
+language models already write into the semantic IR. Before building anything, `bench/subset`
+measured how much of what models wrote for pi's `codemode` would fall inside such a subset. The corpus
+is all 660 scripts of Phases 16 and 17, 512 of which call a tool:
+
+```sh
+uv run python bench/subset/corpus.py --effects .work/effects --real .work/real --out .work/tmp/subset/corpus.jsonl
+bun bench/subset/classify.mjs .work/tmp/subset/corpus.jsonl > .work/tmp/subset/classified.jsonl
+uv run python bench/subset/summary.py .work/tmp/subset/classified.jsonl
+```
+
+| Tier, of 512 tool-calling scripts | Scripts |
+| --- | --- |
+| Exact call set: every tool named literally, `tools` never indexed or passed on, no `eval` | 510 (100%) |
+| Lowerable as written: also no loop but `for…of`, no mutation, `try`, or `throw` | 315 (62%) |
+| Lowerable with rewriting: local mutation, counted `for`, and `try` rewritten; no unbounded loop or recursion | 492 (96%) |
+| ...and using only built-ins Sx already has | 465 (91%) |
+
+Among the 72 scripts with three or more tool call sites, 79% lower with rewriting. What blocks the rest
+is 8 retry or polling loops with a call budget, such as `while (pending.length > 0 && totalCalls < 10)`,
+which is what Sx's `retry` and `loop :max` express, and 7 recursive directory walks. The missing
+built-ins are dates (9), a `JSON.parse` that decodes a typed value (7), slices other than a length cap
+(9), and `reverse` and `pop` (4); `JSON.stringify` maps to `to-json`. 44% of tool calls have a fully
+literal input, so the checker could judge their scope before the run. The syntax a front end needs is
+modest: `await`, arrows, `for…of`, optional chaining, `if`, `??`, templates, destructuring, ternaries,
+and `break`.
+
+The classifier's rules are tested in `bench/subset/classify.test.mjs`. These scripts were written
+against codemode's API, where a call returns an MCP `CallToolResult`; a subset front end would give
+typed values and `attempt`. The measure is of the structure of the scripts models write, not their
+API. The open problems for a front end are semantic fidelity: a JavaScript number against Sx's `Int`
+and `Float`, exceptions against `Result`, and mutation.
+
 #### Phase 16: The effects benchmark
 
 Workflows in `bench/workflows` format where a wrong effect costs something, each with a
