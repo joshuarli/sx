@@ -112,6 +112,33 @@ started are killed when the request ends. `check` rejects a literal call the gra
 `explain` shows each call's verdict. [docs/language.md](docs/language.md#the-process-pack) has the
 pattern rules, the error table, and what the scope does not confine.
 
+## The http pack
+
+`"packs": ["http"]` registers `http.request` and `http.get`, which send a request through h12tiny's
+blocking client and return `{status, headers, body}` for any status. A declarations file can also declare
+an HTTP endpoint as a typed capability, whose path and query come from its input, whose other fields are
+the JSON body of a `POST`, `PUT`, or `PATCH`, and whose `2xx` response is decoded against its declared output:
+
+```sh
+cat > api.json <<'JSON'
+{"packs": ["http"],
+ "capabilities": [{"id": "github.repo",
+   "http": {"method": "GET", "url": "https://api.github.com/repos/{owner}/{name}", "query": [],
+            "headers": {"accept": "application/vnd.github+json"}},
+   "input": "Record {owner: String, name: String}",
+   "output": "Record open {full_name: String, stargazers_count: Int}", "effect": "read"}]}
+JSON
+echo '{"github.repo": {"origins": ["https://api.github.com"], "methods": ["GET"]}}' > grants.json
+echo '(call github.repo {:owner "laputa-systems" :name "h12tiny"})' > repo.sx
+sx run repo.sx --declarations api.json --grants grants.json
+```
+
+A grant lists origins and methods, `check` rejects a literal call outside them with `out-of-scope`, and a
+denied request never opens a socket. Redirects are followed only inside the grant, at most 5 times.
+Status codes map to call error kinds by a closed table (`404` is `NotFound`, `429` is `RateLimited`,
+`5xx` is `Unavailable`), and one 30 second deadline and an 8 MiB body cap bound every request.
+[docs/language.md](docs/language.md#the-http-pack) has the origin rules, the endpoint format, and the table.
+
 ## Verify
 
 ```sh
