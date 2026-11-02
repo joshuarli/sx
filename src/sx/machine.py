@@ -268,11 +268,6 @@ class Fiber:
     cancelled: bool = False
     result: Value | None = None
     failure: Raised | None = None
-    sequence: int = 0
-
-    def next_id(self) -> str:
-        self.sequence += 1
-        return "r" + "".join(f".{index}" for index in self.path) + f":{self.sequence}"
 
     @property
     def runnable(self) -> bool:
@@ -298,12 +293,18 @@ class Machine:
         self.root = Fiber(path=(), parent=None, node=program.body, env=env)
         self.fibers: list[Fiber] = [self.root]
         self.issued: dict[str, Fiber] = {}
+        self.sequences: dict[tuple[int, ...], int] = {}
         self.trace: list[dict[str, object]] = []
         self.steps = 0
         self.calls = 0
         self.applications = 0
         self.delay = 0
         self.finished: Outcome | None = None
+
+    def next_id(self, fiber: Fiber) -> str:
+        sequence = self.sequences.get(fiber.path, 0) + 1
+        self.sequences[fiber.path] = sequence
+        return "r" + "".join(f".{index}" for index in fiber.path) + f":{sequence}"
 
     def start(self) -> Outcome:
         return self.run()
@@ -648,7 +649,7 @@ class Machine:
         if self.delay > self.budgets.delay_ms:
             message = f"The program asked for more than {self.budgets.delay_ms} ms of delays (delay budget)."
             raise _TerminalError(budget(message, span))
-        fiber.waiting = DelayRequest(fiber.next_id(), milliseconds)
+        fiber.waiting = DelayRequest(self.next_id(fiber), milliseconds)
 
     def each(self, fiber: Fiber, frame: EachFrame, value: Value) -> None:
         op = frame.op
@@ -696,7 +697,7 @@ class Machine:
                     message = f"The program made more than {self.budgets.calls} tool calls (calls budget)."
                     raise _TerminalError(budget(message, span))
                 payload = encode(plain(values[0]), capability.input)
-                fiber.waiting = CallRequest(fiber.next_id(), capability.id, payload)
+                fiber.waiting = CallRequest(self.next_id(fiber), capability.id, payload)
                 fiber.waiting_type = capability.output
                 fiber.call_span = span
             case ir.Get(field=name):

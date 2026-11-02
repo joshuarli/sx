@@ -1,0 +1,88 @@
+{
+  "description": "A later par or par-map on the same fiber path continues that path's request numbering, so no request ID repeats.",
+  "program": "(let [a (par (call store.get {:id \"a\"})) b (par-map {:limit 1} (fn [i] (call store.get {:id i})) [\"b\"])] [a b])",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state"
+  ],
+  "responses": [
+    {
+      "capability": "store.get",
+      "input": {
+        "id": "a"
+      },
+      "results": [
+        {
+          "output": {
+            "id": "a",
+            "size": 1
+          }
+        }
+      ]
+    },
+    {
+      "capability": "store.get",
+      "input": {
+        "id": "b"
+      },
+      "results": [
+        {
+          "output": {
+            "id": "b",
+            "size": 2
+          }
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": [
+      [
+        {
+          "id": "a",
+          "size": 1
+        }
+      ],
+      [
+        {
+          "id": "b",
+          "size": 2
+        }
+      ]
+    ]
+  },
+  "trace": [
+    {
+      "request": "r.0:1",
+      "capability": "store.get",
+      "input": {
+        "id": "a"
+      }
+    },
+    {
+      "response": "r.0:1",
+      "output": {
+        "id": "a",
+        "size": 1
+      }
+    },
+    {
+      "request": "r.0:2",
+      "capability": "store.get",
+      "input": {
+        "id": "b"
+      }
+    },
+    {
+      "response": "r.0:2",
+      "output": {
+        "id": "b",
+        "size": 2
+      }
+    }
+  ]
+}

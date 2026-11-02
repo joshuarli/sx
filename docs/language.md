@@ -466,7 +466,7 @@ Evaluation runs in fibers. The program starts in one fiber, and each `par` branc
 each level, so the second element of a `par-map` inside the first `par` branch has path `0.1`.
 Within a fiber, evaluation is sequential.
 
-A request's ID is `r`, the fiber path, a colon, and the request's sequence number in that fiber:
+A request's ID is `r`, the fiber path, a colon, and the request's sequence number on that path:
 `r:1`, `r.0:2`, `r.0.1:1`. IDs never depend on completion order, and no two requests in one run
 share one. A suspension holds every request that is ready, up to the `concurrency` budget. Any
 others wait for the next suspension, lowest IDs first.
