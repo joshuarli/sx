@@ -1,0 +1,6 @@
+(let [latest (fn [tags]
+               (if (= (count tags) 0)
+                 none
+                 (some (first tags)))))
+      names (call catalog.list {:tags []})]
+  [latest names])

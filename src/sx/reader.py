@@ -244,7 +244,16 @@ class _Reader:
         if not self.stack:
             self.extra_close(char, span)
             return
-        frame = self.stack.pop()
+        frame = self.stack[-1]
+        if char != frame.closer and self.stays_open(frame, span):
+            self.error(
+                "unexpected-close", span,
+                f"This {char} is one too many: the {frame.opener} at {_at(frame.span)} is still open, "
+                f"because the next line is indented inside it.",
+                fix="remove it",
+            )
+            return
+        self.stack.pop()
         whole = Span(frame.span.start, span.end)
         resume = False
         if char != frame.closer:
@@ -260,6 +269,16 @@ class _Reader:
             self.emit(node)
         if resume:
             self.close_with(char, span)
+
+    def stays_open(self, frame: _Frame, closer: Span) -> bool:
+        rest = self.lines[closer.start.line - 1][closer.end.column - 1 :]
+        if rest.strip(" \t)]}") and not rest.strip(" \t)]}").startswith(";"):
+            return False
+        column = frame.span.start.column - 1
+        for text in self.lines[closer.start.line :]:
+            if not _is_blank(text):
+                return _indent(text) > column
+        return False
 
     def extra_close(self, char: str, span: Span) -> None:
         message = f"This {char} closes nothing, because every bracket before it is already closed."
