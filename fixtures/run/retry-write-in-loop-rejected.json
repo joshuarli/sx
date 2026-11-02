@@ -1,0 +1,15 @@
+{
+  "description": "A retry on refusal kinds rejects a non-idempotent write inside a loop body, which can run more than once.",
+  "program": "(retry {:delays [1s] :on [RateLimited]} (loop {:max 2} [i 0] (let [_ (call mail.send {:to \"x\"})] (if (> i 0) i (recur (+ i 1))))))",
+  "declarations": "declarations.json",
+  "allow": [
+    "mail.send"
+  ],
+  "responses": [],
+  "expect": {
+    "rejected": [
+      "retry-write"
+    ]
+  },
+  "trace": []
+}
