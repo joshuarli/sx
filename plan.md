@@ -624,8 +624,9 @@ cores, which the fixtures and the benchmark use. Optimization, WASM, and host SD
 campaign 4.
 
 **Layout.** A Cargo workspace in `rust/` with three crates: `sx-kernel` (a library whose modules
-mirror `src/sx`), `sx-cores` (the four cores), and `sx-cli` (the binary). A stable toolchain is
-pinned in `rust/rust-toolchain.toml`. Dependencies stay minimal. JSON goes through mitsuhiko's
+mirror `src/sx`), `sx-cores` (the four cores), and `sx-cli` (the binary). The owner pins the
+toolchain in the root `rust-toolchain.toml`, a nightly with `rust-src` and `clippy`, and the
+port never changes that pin. Dependencies stay minimal. JSON goes through mitsuhiko's
 `deser` crates (`deser-json`, `deser-value`), not serde, by the owner's choice. HTTP and HTTPS,
 when the `http` capability pack needs them, go through the owner's `h12tiny` (`~/d/h12tiny`),
 whose blocking client fits a synchronous host. The case-folding table for `text.casefold` is
