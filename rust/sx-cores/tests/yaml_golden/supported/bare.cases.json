@@ -1,0 +1,6 @@
+[
+  {"get": [], "is": "just a scalar"},
+  {"get": ["a"], "is": null},
+  {"set": [], "value": "other", "replace": ["just a scalar # note", "other # note"]},
+  {"error": "keys", "path": [], "contains": "the document root is a scalar, so it has no keys"}
+]

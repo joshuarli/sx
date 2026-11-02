@@ -2524,7 +2524,10 @@ impl<'r> Checker<'r> {
             return;
         };
         let granted = match grants.get(&capability.id) {
-            Some(Grant::Scoped { scope, .. }) => Some(format!("Granted scope: {}", show_value(scope))),
+            Some(Grant::Scoped { scope, check }) => {
+                let shown = check.as_ref().map_or_else(|| scope.clone(), |check| check.shown(scope));
+                Some(format!("Granted scope: {}", show_value(&shown)))
+            }
             _ => None,
         };
         self.report(

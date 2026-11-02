@@ -14,7 +14,7 @@ use crate::{Failure, Performer};
 
 pub use endpoint::{Endpoint, EndpointLoader, Endpoints};
 pub use origin::{Origin, Scheme, Url};
-pub use scope::{Scope, prepare, scope_type};
+pub use scope::{Scope, hide_secrets, prepare, resolve, scope_type};
 pub use transport::{Headers, Limits, Outgoing, Reply, USER_AGENT, send, status_kind};
 
 pub const REQUEST: &str = "http.request";
@@ -73,14 +73,14 @@ pub fn pack() -> Pack {
                 request_input,
                 "Sends an HTTP request and returns its status, headers, and UTF-8 body.",
                 Effect::Write,
-                ScopeCheck::new(prepare, scope::check_request),
+                ScopeCheck::new(prepare, scope::check_request).resolving(resolve).showing(hide_secrets),
             ),
             capability(
                 GET,
                 get_input,
                 "Sends an HTTP GET request and returns its status, headers, and UTF-8 body.",
                 Effect::Read,
-                ScopeCheck::new(prepare, scope::check_get),
+                ScopeCheck::new(prepare, scope::check_get).resolving(resolve).showing(hide_secrets),
             ),
         ],
     }
@@ -160,6 +160,7 @@ fn perform(
     let scope = Scope::of(scope_value).map_err(denied)?;
     let url = scope.permits_url(url, method).map_err(denied)?;
     let headers = headers_of(input, capability)?;
+    scope.permits_headers(&url.origin, headers.names()).map_err(denied)?;
     let reply = send(limits, &scope, Outgoing { method: method.to_string(), url, headers, body })?;
     response_value(reply, is_safe(method))
 }

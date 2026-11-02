@@ -13,3 +13,4 @@ pub mod kernel;
 pub mod semver;
 mod tables;
 pub mod text;
+pub mod yaml;

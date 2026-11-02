@@ -504,7 +504,7 @@ struct NoEndpoints;
 impl EndpointBinder for NoEndpoints {
     fn bind(&mut self, _registry: &mut Registry, entry: &Json) -> Result<(), String> {
         let id = entry.get("id").and_then(Json::as_str).unwrap_or("?");
-        Err(format!("capability {} declares an http endpoint, which this loader does not bind", repr_str(id)))
+        Err(format!("capability {} declares an http endpoint or a sqlite statement, which this loader does not bind", repr_str(id)))
     }
 }
 
@@ -564,7 +564,7 @@ pub fn load_declarations_with(
         }
     };
     for entry in capabilities {
-        if entry.get("http").is_some() {
+        if entry.get("http").is_some() || entry.get("sqlite").is_some() {
             endpoints.bind(registry, entry).map_err(LoadError::Value)?;
             continue;
         }

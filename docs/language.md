@@ -465,7 +465,7 @@ value that does not decode to the declared type.
 
 The kernel never interprets a scope. The pack that implements a scoped capability registers two
 functions. One prepares a scope when the grant is loaded, for example by canonicalizing directories,
-and its error is a usage error. The other is the scope check, a function from the prepared scope and
+and its error is a usage error. A pack may also register a resolver that rewrites the written scope before it decodes, which the http pack uses to read `{"env": NAME}`, and a function that shows a granted scope in a diagnostic with its secrets hidden. The other is the scope check, a function from the prepared scope and
 a request's input to allowed, or denied with a reason. The check runs in two places:
 
 - **Before the run.** When a call's input is known before the run, the checker applies the check and
@@ -655,7 +655,7 @@ the two can redirect it.
 ### The http pack
 
 A declarations file registers it with `"packs": ["http"]`. It declares two capabilities, each with the scope
-type `Record {origins: List<String>, methods: List<String>}`:
+type `Record {origins: List<String>, methods: List<String>, headers: Map<String, Map<String, String>>}`:
 
 | Capability | Input | Output | Effect |
 | --- | --- | --- | --- |
@@ -685,6 +685,33 @@ is a usage error:
   `https://a.example` and `https://a.example:443` are one origin. An empty port, `0`, and a port above
   65535 are refused.
 - An origin has no userinfo, path, query, or fragment, not even a trailing `/`.
+
+**Credentials.** `headers` is optional in a grants file and maps an origin to the headers the host adds to
+every request sent to that origin, such as `{"https://api.example.com": {"authorization": "Bearer ..."}}`.
+The program never holds them:
+
+- A value may be written `{"env": "NAME"}`, which reads the host's environment variable when the grant
+  loads. A variable that is not set, not UTF-8, or named with `=` or NUL is a usage error, and the error names
+  the variable, never a value. `sx serve` reads its own environment when the host's `grants` arrive.
+- Each origin is normalized as in `origins` and must be one of them, and an origin may appear once. A
+  header name follows the client's header rules above, is lowercased, and appears once per origin. A value
+  must be a non-empty valid header value. Any violation is a usage error that does not echo a value.
+- The header is added when the request is sent, to the first request and to every redirect hop, according
+  to the origin of that hop. It is in no request value, so it is in no trace, `explain` output, `check`
+  diagnostic (a diagnostic shows a granted scope with every value as `[hidden]`), or error message. A redirect
+  to another granted origin carries that origin's headers and none of the program's, and a redirect that
+  leaves the grant is not followed.
+- A request whose headers include one the grant injects for its origin is denied, whichever way the
+  name is cased: `PermissionDenied` at run time with a reason that names the header and no value. For a typed
+  endpoint, the declared `headers` take the place of the program's, and a declared header the grant also
+  injects (an endpoint with a JSON body sets `content-type`) is `out-of-scope` before the run when the endpoint
+  is called with a literal input. A raw call's `headers` map is never a literal, so only the run-time denial
+  covers it. A program therefore cannot override a credential, and the denial confirms that a credential
+  exists for the header name the program tried, and nothing more.
+- A response that echoes an injected value back, in its body or its headers, has that value replaced
+  with `[redacted]` before the program or an error message sees it, as does the part of a value after its
+  first space of at least 8 bytes, so `Bearer TOKEN` is hidden whole and as `TOKEN`. This catches a server
+  that returns the request's headers, and not one that transforms them (base64, JSON escaping).
 
 A request is allowed only when its URL's normalized origin is in `origins` and its method, compared
 exactly and case-sensitively (`get` is not `GET`), is in `methods`. The URL is parsed by the same rules
@@ -769,6 +796,7 @@ every other embedding of the declaration loader, refuses an entry with an `http`
 | --- | --- |
 | The request is denied by the grant | `PermissionDenied` |
 | A header is invalid or reserved | `Invalid` |
+| A header the grant injects for the origin is set by the request | `PermissionDenied` |
 | Connection refused, unreachable, or reset while connecting; DNS failure | `Unavailable` |
 | A connect, write, header, or body read, or the whole request, exceeds the timeout | `Timeout` |
 | A TLS handshake or certificate failure | `Failed` |
@@ -804,8 +832,99 @@ budget does not bound a request.
 
 **What the scope does not do.** It names origins, not addresses: a granted name can resolve to any
 address, a private one included, so grant an origin only for a name you trust, and the pack does not
-defend against DNS rebinding. It does not look at headers, paths, or bodies, and it cannot stop a granted
-method from doing harm on a granted origin.
+defend against DNS rebinding. It does not look at the program's headers, paths, or bodies, except to refuse the headers the grant
+injects, and it cannot stop a granted method from doing harm on a granted origin. A granted origin receives
+its credential on every request, including any request the program can build with a granted method, so grant a
+credential only to an origin and methods the program may use it for.
+
+### The sqlite pack
+
+A declarations file registers it with `"packs": ["sqlite"]`. The pack bundles SQLite (rusqlite 0.41 with
+SQLite 3.54.1 compiled in, no system library) and has the scope type `Record {roots: List<String>}` of
+[the fs pack](#the-fs-pack). A database path follows the fs path rules: absolute, no NUL, resolved
+through symlinks, and inside a root, with the roots canonicalized when the grant loads. A statement that
+reads resolves the path as `fs.read-text` does, so a symlink inside the roots that leads inside them is
+followed. A statement that writes resolves it as `fs.write-text` does: the directory must be inside a
+root, and a database file that is itself a symlink is refused, so a link can never carry a write out of
+the grant. SQLite is also asked not to follow a final symlink. The residual race between the check and
+the open is the fs pack's.
+
+**`sqlite.execute`** takes `{database: String, sql: String}` and returns `Unit`. It is a `write` that is
+not idempotent. It runs one or more statements, such as `CREATE TABLE` and `CREATE INDEX`, in a single
+transaction, so a failing statement undoes the earlier ones, and it creates the database file when it is
+missing. A statement that has parameters or returns rows is a failure, since this capability binds and
+returns nothing. A literal `database` outside the grant is rejected by `check` with `out-of-scope`.
+
+`sx serve` binds statement declarations as it binds endpoints, so its checker and `check-scope` judge them, and the
+host that answers the requests must perform them under the rules here. A loader that binds neither refuses an entry
+with an `sqlite` key.
+
+**Typed statements.** A declarations file declares a statement as an ordinary capability by giving a
+`capabilities` entry a `sqlite` object:
+
+```json
+{"id": "store.add-repo",
+ "sqlite": {"database": "/data/store.db",
+            "statement": "INSERT INTO repo(name, stars) VALUES (:name, :stars)"},
+ "input": "Record {name: String, stars: Int}",
+ "output": "Int",
+ "effect": "write",
+ "idempotent": false}
+```
+
+`id`, `sqlite`, `input`, `output`, and `effect` are required, and `description` and `idempotent` behave as
+for any capability (the default description is the statement text). The scope type is implied and the
+statement is granted by its own ID, like an endpoint. The `sqlite` object has `database`, an absolute
+path, and `statement`, one SQL statement; an unknown key is an error. A mistake below is a declaration
+error that names the statement, found when the declarations load, so it needs no database to exist:
+
+- The input is a record. Every `:name` in the SQL, found outside string literals, quoted identifiers, and
+  comments, is a parameter that binds the input field of the same name, and every input field must be
+  the name of a parameter. A parameter may repeat. `?`, `?NNN`, `@name`, and `$name` are refused so that
+  nothing binds by position or by a second spelling.
+- An input field is a `String`, `Int`, `Float`, `Bool`, `Bytes`, or an `Option` of one, which binds
+  `NULL` when `none`. A `Bool` binds `0` or `1`. A value is bound, never spliced into the SQL.
+- The output is `Int` or `List<Record {...}>`. An `Int` is the number of rows the statement changed
+  (`sqlite3_changes`, so rows changed by triggers do not count), which requires `effect: write`. A list
+  is the rows of a statement that returns columns: a `SELECT`, or a write with `RETURNING`. Each
+  declared field is typed like an input field.
+
+**Rows.** A row decodes into the record by column name, in the record's field order. SQLite is
+dynamically typed, so the pack is strict: `String` reads `TEXT` that is UTF-8, `Int` reads `INTEGER`,
+`Float` reads `REAL` and also an `INTEGER` of magnitude at most 2^53, `Bool` reads `INTEGER` `0` or `1`,
+and `Bytes` reads `BLOB`. `NULL` is `none` for an `Option` column and a failure for any other. A column
+the record does not declare is a failure unless the record is open (`Record open {...}`), which drops it;
+a declared field with no column, a column name that appears twice, a type mismatch, and a non-finite
+`REAL` are failures that name the row and column, such as `row 2, column 'stars': expected Int, found
+TEXT`. The same holds when the statement's shape disagrees with its output. A result of more than
+100,000 rows is a failure, not a truncation; add a `LIMIT`.
+
+**Transactions and connections.** Each call opens its own connection and runs in one transaction, `BEGIN
+IMMEDIATE` for a `write` and `BEGIN` for a `read`, and commits only when the output decoded. Any failure
+rolls the whole call back, including a write whose `RETURNING` rows did not decode. A `read` opens the
+database read-only, never creates it, and is refused when SQLite reports that its statement would
+change the database. Foreign keys are enforced. `ATTACH` is disabled, so a program cannot reach a
+database outside the grant, and `VACUUM INTO` fails because it cannot run inside a transaction. The
+schema is untrusted, extension loading is off, and defensive mode is on. A call waits up to 5 seconds
+for a lock.
+
+**Errors.** One closed table maps every failure to a call error kind:
+
+| Failure | Kind |
+| --- | --- |
+| The database is outside the grant, SQLite reports a read-only database or a denied operation | `PermissionDenied` |
+| A constraint fails (unique, primary key, not null, check, foreign key), including at commit | `Conflict` |
+| The database is busy or locked past the timeout | `Unavailable` |
+| A read of a database that does not exist, or a write whose directory does not exist | `NotFound` |
+| A path that is a directory | `Invalid` |
+| A syntax error, an unknown table or column, SQLite's type mismatch or too-big errors, a statement that changes the database declared as a read, or a row that does not decode, in a `read` | `Invalid` |
+| The same failures in a `write` | `Failed` |
+| An input that does not match its type, a file that is not a database, an I/O error, a full disk, more rows than the cap, any other SQLite error | `Failed` |
+
+`Conflict`, `PermissionDenied`, `NotFound`, and `Invalid` are refusal kinds, and each is reported only
+when the transaction rolled back, so a write that reports one made no change. A decode failure of a
+write is `Failed`, as for an http endpoint, though it is rolled back as well. The message carries the
+database path and SQLite's message, never the bound values.
 
 ### MCP tools
 
@@ -1439,6 +1558,74 @@ other `CoreError::Failed` is `internal`.
 by `rust/sx-cores/scripts/decimal_vectors.py`. A test regenerates them and fails when the committed
 file is stale. The Lean reference runs decimal programs with its own implementation of the core, so
 the agreement check compares two implementations.
+
+## The yaml core
+
+`yaml` is a Rust core, registered by listing `"yaml"` under `cores`. It reads and edits YAML text in
+place and has no dependency: a parser for a documented subset finds each scalar's byte span, and an
+edit replaces that span and nothing else.
+
+| Function | Type |
+| --- | --- |
+| `yaml.get` | `String List<String> -> Option<String>`, the scalar at the path, or `none` when the path is absent |
+| `yaml.set` | `String List<String> String -> String`, the text with the scalar at the path replaced |
+| `yaml.keys` | `String List<String> -> List<String>`, a mapping's keys in document order, or a sequence's indexes |
+
+A path lists mapping keys from the root. Where the node is a sequence, a component is a decimal index
+without a sign or leading zeros (`"0"`, `"12"`), so `["containers" "0" "image"]` reads the first
+container's image. A key is matched on its decoded text, so a quoted key matches its unquoted spelling.
+The empty path names the document root. A path that does not exist, including one that runs through a
+scalar or past the end of a sequence, is absent: `yaml.get` returns `none` and `yaml.keys` returns `[]`.
+A null or empty value (`key:`) reads as the empty string, and a quoted empty string reads the same.
+`yaml.get` and `yaml.set` on a mapping or sequence, `yaml.keys` on a scalar, and `yaml.set` on an
+absent path are failures, since each is a mistake the program should not carry past.
+
+**The subset.** Block mappings and block sequences, nested to any depth, with plain, single-quoted,
+and double-quoted scalars as keys and values; comments on their own line or after a value; blank lines;
+`\n` and `\r\n` line ends; one optional `---` before the content; a sequence under a key at the key's own
+indentation or deeper; and a sequence item that opens a mapping (`- name: web`) or another sequence.
+Double-quoted scalars decode the YAML escapes (`\n`, `\"`, `\\`, `\xNN`, `\uNNNN`, `\UNNNNNNNN`, `\N`, `\L`,
+`\P`, and the rest), and single-quoted scalars decode `''`. A plain scalar ends at the end of its line or
+at ` #`, and a scalar is always read as a string: `3`, `true`, and `null` are the text `3`, `true`, and `null`.
+
+Everything else is refused with a failure that names the line and the construct, and the whole text is
+checked on every call, so a refused construct anywhere fails even a read of a different key:
+
+| Refused | Failure |
+| --- | --- |
+| Flow collections (`[a, b]`, `{a: 1}`) | `flow collections` |
+| Anchors, aliases, tags | `anchors`, `aliases`, `tags` |
+| Block scalars (`\|`, `>`), a plain or quoted scalar that continues on the next line, a scalar placed on the line after its key, an escaped line break | `multi-line scalars` |
+| A second document (`---` or `...` after the content) | `multiple documents or document end markers` |
+| Directives, content after `---`, a byte order mark | `directives`, `content on the document start line`, `a byte order mark` |
+| Tabs in indentation | `tabs used for indentation` |
+| Complex keys (`? key`) | `complex keys` |
+
+Text that is not valid YAML in the subset is refused the same way, with a message about what is wrong:
+a duplicate key in one mapping, a line indented deeper than the structure above it, content that does not
+fit the structure, `a: b: c`, text after a closing quote, an undefined escape, and a plain scalar that starts
+with `@`, a backtick, `,`, `]`, or `}`.
+
+**How a failure reaches the program.** A refusal is `CoreError::Arithmetic`, so the machine stops the
+program with the `arithmetic` failure kind and the message `yaml.get: line 3: flow collections are
+outside the supported YAML subset, so the text is left alone`. `attempt` does not catch it, like every
+`arithmetic` failure. A dedicated failure kind would need a new row in the failure table of the Rust
+machine and the Lean model, and the existing `arithmetic` kind is the one a core can already raise.
+
+**Quoting.** `yaml.set` writes the new value in the style of the scalar it replaces: a double-quoted
+scalar stays double-quoted, a single-quoted one stays single-quoted (double-quoted instead when the value
+has a newline, a control character, or another line break, which single quotes cannot hold), and a plain one
+stays plain when that is safe. Plain text is unsafe for an empty value, a value with leading or trailing
+whitespace, a tab or control character, `: ` or ` #` inside it, a trailing `:`, a leading `,[]{}#&*!|>'"%@`
+or backtick, a leading `-`, `?`, or `:` followed by a space or nothing, or a leading `---` or `...`; the
+value is double-quoted then. A plain scalar that is text also stays text: replacing `tag: stable` with
+`1.10` writes `tag: "1.10"`, because plain `1.10` would be read as a number by other tools. When the old
+scalar was a number, a boolean, a null, or a date, or was empty, the new value is written plain whenever
+the syntax allows, so `replicas: 3` set to `5` is `replicas: 5`. An empty value (`key:`, `-`) gains the
+value after the colon or dash and keeps a trailing comment: `key: # c` becomes `key: v # c`.
+
+An edit replaces the bytes of one scalar, so the text before and after it, comments, blank lines,
+indentation, key order, line ends, and the scalar's own trailing spaces and comment are unchanged.
 
 ## Budgets
 

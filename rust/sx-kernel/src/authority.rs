@@ -15,9 +15,13 @@ pub enum Verdict {
 
 type PrepareScope = dyn Fn(&Value) -> Result<Value, String> + Send + Sync;
 type CheckScope = dyn Fn(&Value, &Value) -> Verdict + Send + Sync;
+type ResolveScope = dyn Fn(&Json) -> Result<Json, String> + Send + Sync;
+type ShowScope = dyn Fn(&Value) -> Value + Send + Sync;
 
 #[derive(Clone)]
 pub struct ScopeCheck {
+    resolve: Option<Arc<ResolveScope>>,
+    show: Option<Arc<ShowScope>>,
     prepare: Arc<PrepareScope>,
     check: Arc<CheckScope>,
 }
@@ -27,7 +31,34 @@ impl ScopeCheck {
         prepare: impl Fn(&Value) -> Result<Value, String> + Send + Sync + 'static,
         check: impl Fn(&Value, &Value) -> Verdict + Send + Sync + 'static,
     ) -> ScopeCheck {
-        ScopeCheck { prepare: Arc::new(prepare), check: Arc::new(check) }
+        ScopeCheck { resolve: None, show: None, prepare: Arc::new(prepare), check: Arc::new(check) }
+    }
+
+    pub fn resolving(
+        mut self,
+        resolve: impl Fn(&Json) -> Result<Json, String> + Send + Sync + 'static,
+    ) -> ScopeCheck {
+        self.resolve = Some(Arc::new(resolve));
+        self
+    }
+
+    pub fn showing(mut self, show: impl Fn(&Value) -> Value + Send + Sync + 'static) -> ScopeCheck {
+        self.show = Some(Arc::new(show));
+        self
+    }
+
+    pub fn shown(&self, scope: &Value) -> Value {
+        match &self.show {
+            Some(show) => show(scope),
+            None => scope.clone(),
+        }
+    }
+
+    pub fn resolve(&self, written: &Json) -> Result<Json, String> {
+        match &self.resolve {
+            Some(resolve) => resolve(written),
+            None => Ok(written.clone()),
+        }
     }
 
     pub fn prepare(&self, scope: &Value) -> Result<Value, String> {
@@ -129,8 +160,12 @@ impl Grants {
             }
             (Some(scope_type), given) => {
                 let invalid = |message: String| GrantError::InvalidScope { capability: id.to_string(), message };
-                let decoded = decode(given, scope_type, "$").map_err(|e| invalid(e.to_string()))?;
                 let check = registry.scope_check(id);
+                let resolved = match &check {
+                    Some(check) => check.resolve(given).map_err(invalid)?,
+                    None => given.clone(),
+                };
+                let decoded = decode(&resolved, scope_type, "$").map_err(|e| invalid(e.to_string()))?;
                 let scope = match &check {
                     Some(check) => check.prepare(&decoded).map_err(invalid)?,
                     None => decoded,

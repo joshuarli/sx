@@ -1,0 +1,23 @@
+containers:
+- name: web
+  image: nginx:1.25
+  ports:
+  - 80
+  - 443   # tls
+- name: sidecar
+  image: "busybox:1.36"
+  args:
+    - --verbose
+    - 'it''s'
+tolerations:
+  - key: dedicated
+    value: ci
+  -   key: spare
+      value: yes
+matrix:
+  - - a
+    - b
+  - - c
+empty:
+  -
+  - plain

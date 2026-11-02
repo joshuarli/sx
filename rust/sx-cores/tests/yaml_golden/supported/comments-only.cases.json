@@ -1,0 +1,7 @@
+[
+  {"get": [], "is": null},
+  {"get": ["a"], "is": null},
+  {"keys": [], "is": []},
+  {"error": "set", "path": [], "value": "x", "contains": "does not exist"},
+  {"error": "set", "path": ["a"], "value": "x", "contains": "does not exist"}
+]

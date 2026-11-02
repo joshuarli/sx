@@ -1,0 +1,17 @@
+# service manifest
+name: demo   # the service
+version: 1.2.3
+
+spec:
+  replicas: 3
+  image: registry.example.com:5000/app:1.2
+  resources:
+      limits:
+          cpu: 500m
+      requests:
+          cpu: 250m   # half
+  labels:
+    app.kubernetes.io/name: demo
+    "quoted key": value
+    'single key': value
+# trailing comment

@@ -15,7 +15,7 @@ use super::client::{ACCEPTED_VERSIONS, LINE_LIMIT, PROTOCOL_VERSION, read_line};
 use super::describe::describe;
 use super::export::{Shape, WRAPPED_KEY, export};
 use super::tools::filled;
-use crate::http::Endpoints;
+use crate::declared::Declared;
 use crate::{Failure, implemented, perform};
 
 pub const CONCURRENT_CALLS: usize = 64;
@@ -48,7 +48,7 @@ pub struct Server {
     served: BTreeMap<String, Served>,
     not_served: Vec<NotServed>,
     grants: Grants,
-    endpoints: Endpoints,
+    declared: Declared,
 }
 
 #[derive(Clone, Debug)]
@@ -115,13 +115,13 @@ fn rpc_error(id: &Json, code: i64, message: &str) -> Json {
 }
 
 impl Server {
-    pub fn new(registry: &Registry, grants: Grants, endpoints: Endpoints) -> Result<Server, String> {
+    pub fn new(registry: &Registry, grants: Grants, declared: Declared) -> Result<Server, String> {
         let ids: Vec<String> = grants.ids().map(str::to_string).collect();
         let mut served = BTreeMap::new();
         let mut not_served = Vec::new();
         for id in ids {
             let capability = registry.capability(&id).ok_or_else(|| format!("no capability is named {id}"))?;
-            if !implemented(&endpoints, &id) {
+            if !implemented(&declared, &id) {
                 not_served.push(NotServed { id, reason: "the binary has no native implementation of it".to_string() });
                 continue;
             }
@@ -137,7 +137,7 @@ impl Server {
                 },
             );
         }
-        Ok(Server { served, not_served, grants, endpoints })
+        Ok(Server { served, not_served, grants, declared })
     }
 
     pub fn not_served(&self) -> &[NotServed] {
@@ -174,7 +174,7 @@ impl Server {
             Some(Grant::Scoped { scope, .. }) => scope.clone(),
             _ => Value::Unit,
         };
-        match perform(&self.endpoints, id, &scope, &value) {
+        match perform(&self.declared, id, &scope, &value) {
             None => Err(Failure::new(CallErrorKind::Failed, format!("{id} has no native implementation"))),
             Some(performed) => performed.map(|output| encode(&output, &served.output)),
         }
