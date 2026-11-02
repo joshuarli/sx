@@ -116,7 +116,11 @@ for example an `Option` field or a field whose name differs from the obvious one
 through the `pi` CLI, with every tool, skill, and context file disabled, and allows two repairs.
 
 - The Sx arm gets a guide level from `sx help --level` and the task's tool listing. Its answer is
-  checked and run on the Sx machine against the task's fixtures.
+  checked and run by the Rust `sx` binary against the task's fixtures, with `--format json`. The probe
+  uses `$SX_BIN` if set, else `rust/target/release/sx`, else `rust/target/debug/sx`, and stops with the
+  build command if none exists. `compare_kernels.py` scores every saved development and retired
+  held-out Sx answer under `.work/probe` with both the Python kernel and the binary and prints the
+  counts and the ids that disagree.
 - The TypeScript arm gets TypeScript declarations generated from the task by `typescript.py`. Its
   answer is checked by `tsc` and run by `run_js.mjs` against the same fixtures, through `host.mjs`.
 - A repair feeds back only what a real host would show: diagnostics, a type error, a runtime

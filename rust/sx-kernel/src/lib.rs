@@ -12,6 +12,7 @@ pub mod machine;
 pub mod protocol;
 pub mod reader;
 pub mod registry;
+pub mod stack;
 pub mod syntax;
 pub mod types;
 pub mod unicode;

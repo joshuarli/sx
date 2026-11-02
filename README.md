@@ -42,6 +42,17 @@ uv run sx run fixtures/cli/uptimes.sx --declarations fixtures/cli/declarations.j
 
 Each command takes `--format json`.
 
+## The Rust command line
+
+`rust/` holds the same command line as a Rust binary, `sx`, with the same options, exit codes, and
+output as the Python one. Build it with `cargo build --release --manifest-path rust/Cargo.toml -p sx-cli`.
+Two things differ on purpose. The Rust binary reads `"cores": ["text", "semver", "git", "github"]` in a
+declarations file and registers those built-in cores, where the Python command refuses. And it
+validates declarations more strictly than Python's duck typing does, for example `"types": []`.
+`rust/sx-cli/tests/cli_parity.rs` runs every `tests/test_cli.py` scenario, every `fixtures/cli`
+combination, every help entry, and the argument and file error paths through both commands and compares
+stdout, stderr, and exit status.
+
 ## Verify
 
 ```sh

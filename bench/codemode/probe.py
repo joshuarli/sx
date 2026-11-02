@@ -1,7 +1,9 @@
 import argparse
 import json
+import os
 import random
 import subprocess
+import tempfile
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
@@ -9,16 +11,11 @@ from pathlib import Path
 from statistics import mean
 from typing import Any
 
-from cores import SIGNATURES, task_registry
+from cores import SIGNATURES
 from pilot import ask, extract, task_section
 from typescript import declarations
 
-from sx.checker import check
-from sx.diagnostics import render
 from sx.help import GUIDE_LEVELS, guide
-from sx.host import FixtureHost, UnexpectedCallError, run
-from sx.machine import Completed, Failed
-from sx.reader import read
 
 BENCH = Path(__file__).parent
 ROOT = BENCH.parent.parent
@@ -36,6 +33,9 @@ QUICK_TASKS = (
     "dev-retry-ci", "dev-wait-for-job", "dev-events-pages", "dev-ci-partial", "dev-tag-counts", "dev-csv-summary",
 )
 FEEDBACK_LINES = 40
+SX_TIMEOUT = 60
+SX_EXITS = {"ok": 0, "rejected": 1, "failed": 2}
+DECLARATION_KEYS = ("types", "enums", "cores", "capabilities")
 type Json = dict[str, Any]
 
 
@@ -149,32 +149,96 @@ def judge(
     return "correct", ""
 
 
+def sx_binary() -> Path:
+    override = os.environ.get("SX_BIN")
+    if override is not None:
+        binary = Path(override)
+        if not binary.is_file():
+            raise FileNotFoundError(f"SX_BIN={override} is not a file")
+        return binary
+    candidates = [ROOT / "rust" / "target" / profile / "sx" for profile in ("release", "debug")]
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    searched = " or ".join(str(c) for c in candidates)
+    raise FileNotFoundError(
+        f"no sx binary at {searched}; build one with `cargo build --release --manifest-path rust/Cargo.toml -p sx-cli`"
+        " or point SX_BIN at one"
+    )
+
+
+def cli_task(task: Json, directory: Path) -> tuple[Path, Path, list[str]]:
+    declarations_file, responses_file = directory / "declarations.json", directory / "responses.json"
+    declarations_file.write_text(json.dumps({key: task[key] for key in DECLARATION_KEYS if key in task}))
+    responses_file.write_text(json.dumps(task["responses"]))
+    return declarations_file, responses_file, [c["id"] for c in task["capabilities"]]
+
+
+def sx_run(arguments: list[str]) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [str(sx_binary()), *arguments],
+        stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=SX_TIMEOUT, check=False,
+    )
+
+
+def label(diagnostic: Json) -> str:
+    code, construct = str(diagnostic["code"]), diagnostic["construct"]
+    return code if construct is None else f"{code}:{construct}"
+
+
+def show_span(span: Json) -> str:
+    return f"{span['start']['line']}:{span['start']['column']}-{span['end']['line']}:{span['end']['column']}"
+
+
+def unperformed_write(task: Json, calls: list[Json]) -> str | None:
+    writes = {c["id"] for c in task["capabilities"] if c["effect"] == "write"}
+    served: Counter[int] = Counter()
+    for call in calls:
+        for index, entry in enumerate(task["responses"]):
+            if entry["capability"] == call["capability"] and entry["input"] == call["input"]:
+                served[index] += 1
+                break
+    for index, entry in enumerate(task["responses"]):
+        if entry["capability"] in writes and served[index] != len(entry["results"]):
+            return str(entry["capability"])
+    return None
+
+
 def evaluate_sx(task: Json, code: str, wanted_delays: list[int]) -> Verdict:
-    parsed = read(code)
-    if parsed.program is None:
-        return "rejected", "", render(code, parsed.diagnostics), [d.label for d in parsed.diagnostics], 0, 0
-    registry = task_registry(task)
-    allowed = frozenset(c["id"] for c in task["capabilities"])
-    checked = check(parsed.program, registry, allowed=allowed)
-    if checked.program is None:
-        return "rejected", "", render(code, checked.diagnostics), [d.label for d in checked.diagnostics], 0, 0
-    host = FixtureHost.from_responses(registry, task["responses"])
-    try:
-        finished = run(checked.program, host)
-    except UnexpectedCallError as error:
-        return "failed", str(error), unexpected(str(error)), [], len(host.calls), duplicates(host.calls, task)
-    calls, dups = len(host.calls), duplicates(host.calls, task)
-    outcome = finished.outcome
-    if isinstance(outcome, Failed):
-        failure = outcome.failure
-        where = f" at {failure.span}" if failure.span is not None else ""
-        message = f"The program failed{where} with {failure.kind.value}: {failure.message}"
-        return "failed", message, message, [], calls, dups
-    assert isinstance(outcome, Completed)
-    missing = host.unperformed_writes()
-    writes = None if not missing else f"a required write did not happen: {missing[0].capability}"
-    status, detail = judge(task, outcome.json, host.delays, wanted_delays, writes)
-    return status, detail, None, [], calls, dups
+    scratch = ROOT / ".work" / "tmp"
+    scratch.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=scratch) as workdir:
+        directory = Path(workdir)
+        declarations_file, responses_file, allowed = cli_task(task, directory)
+        program = directory / "program.sx"
+        program.write_bytes(code.encode())
+        arguments = [
+            str(program), "--declarations", str(declarations_file), *(a for tool in allowed for a in ("--allow", tool)),
+        ]
+        completed = sx_run(["run", *arguments, "--responses", str(responses_file), "--format", "json"])
+        if completed.returncode == SX_EXITS["rejected"]:
+            diagnostics = json.loads(completed.stdout)["diagnostics"]
+            rendered = sx_run(["check", *arguments]).stdout
+            return "rejected", "", rendered, [label(d) for d in diagnostics], 0, 0
+        if completed.returncode not in (SX_EXITS["ok"], SX_EXITS["failed"]):
+            raise RuntimeError(f"sx run exited {completed.returncode}: {completed.stderr.strip()}")
+    report = json.loads(completed.stdout)
+    if report["outcome"] == "unexpected-call":
+        message = str(report["message"])
+        seen: list[Json] = report["calls"]
+        return "failed", message, unexpected(message), [], len(seen), duplicates(seen, task)
+    calls = [{"capability": e["capability"], "input": e["input"]} for e in report["trace"] if "request" in e]
+    delays = [e["milliseconds"] for e in report["trace"] if "delay" in e]
+    count, dups = len(calls), duplicates(calls, task)
+    if report["outcome"] == "failed":
+        failure = report["failure"]
+        where = f" at {show_span(failure['span'])}" if failure["span"] is not None else ""
+        message = f"The program failed{where} with {failure['kind']}: {failure['message']}"
+        return "failed", message, message, [], count, dups
+    missing = unperformed_write(task, calls)
+    writes = None if missing is None else f"a required write did not happen: {missing}"
+    status, detail = judge(task, report["result"], delays, wanted_delays, writes)
+    return status, detail, None, [], count, dups
 
 
 def evaluate_js(task: Json, code: str, wanted_delays: list[int], workdir: Path, cores: Json) -> Verdict:
@@ -243,10 +307,12 @@ def run_trial(
 
 
 def rejudge(out: Path, cores: Json) -> int:
-    tasks = {t["id"]: t for t in (json.loads(p.read_text()) for p in (BENCH / "tasks").glob("*/task.json"))}
+    tasks: dict[str, Json] = {}
     changed = 0
     for path in sorted(out.glob("*/*/trial.json")):
         trial = load_trial(path)
+        if trial.task not in tasks:
+            tasks[trial.task] = json.loads((BENCH / "tasks" / trial.task / "task.json").read_text())
         task = tasks[trial.task]
         wanted = reference_delays(task)
         kept: list[Attempt] = []

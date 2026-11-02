@@ -48,6 +48,20 @@ def test_run_fails_loudly_when_a_tool_call_has_no_recorded_response(capsys: pyte
     assert "metrics.uptime has no fixture for this input" in capsys.readouterr().out
 
 
+def test_an_unexpected_call_reports_the_calls_the_host_saw(capsys: pytest.CaptureFixture[str]) -> None:
+    code = main([
+        "run", str(CLI / "uptimes.sx"), *DECLARATIONS, "--responses", str(CLI / "responses.json"),
+        "--allow", "metrics.uptime", "--input", 'hosts=["db1","db9"]', "--format", "json",
+    ])
+    out = json.loads(capsys.readouterr().out)
+    assert code == EXIT_FAILED
+    assert out["outcome"] == "unexpected-call"
+    assert out["calls"] == [
+        {"capability": "metrics.uptime", "input": {"host": "db1"}},
+        {"capability": "metrics.uptime", "input": {"host": "db9"}},
+    ]
+
+
 def test_a_missing_input_is_a_usage_error(capsys: pytest.CaptureFixture[str]) -> None:
     code = main(["run", str(CLI / "uptimes.sx"), *DECLARATIONS, "--allow", "metrics.uptime"])
     assert code == EXIT_USAGE
