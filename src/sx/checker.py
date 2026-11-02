@@ -1079,9 +1079,11 @@ class _Checker:
                     help="match",
                 )
             return ir.MatchVariant(node.name, None), dict(scope), {node.name}, True
+        if isinstance(node, Symbol) and node.name[0].islower():
+            return ir.MatchAny(ir.BindName(node.name)), {**scope, node.name: ValueBinding(t)}, set(), True
         if isinstance(node, Symbol):
             self.error(
-                "bad-pattern", node.span, f"{node.name} is not a match pattern. Use _ to match anything.",
+                "bad-pattern", node.span, f"{node.name} is not a match pattern. Use a name or _ to match anything.",
                 help="match",
             )
             return ir.MatchAny(ir.Discard()), {**scope, node.name: ValueBinding(NEVER)}, set(), False

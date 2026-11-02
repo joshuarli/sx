@@ -160,9 +160,12 @@ parameters need no annotations.
 
 The scrutinee's type determines which variant names are in scope, so patterns are unqualified.
 `Option` patterns are `(some x)` and `none`. `Result` patterns are `(ok x)` and `(err e)`. `_`
-matches anything. A `match` without `_` must name every variant. A final `_` clause is allowed
-even when the clauses before it name every variant. Any other clause that can never match is
-rejected.
+matches anything. A lowercase name matches anything too and binds the whole value to that name:
+`other (str "not green: " repo)`. A name follows every rule of `_`. A `match` without `_` or a
+name must name every variant. A final `_` or name clause is allowed even when the clauses before it
+name every variant. Any other clause that can never match is rejected. The name binds the value
+itself, so it has type `Option<T>` in a match on an optional. Only a final `_` after `none`
+narrows.
 
 When the scrutinee is a bare name of type `Option<T>` and a `none` clause comes before a final `_`
 clause, the `_` clause sees that name as the inner value, of type `T`:

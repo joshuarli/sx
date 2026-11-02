@@ -31,7 +31,8 @@ FORMS = (
           "then-branch sees the value inside it.",
           '(let [n (some 3)] (if n (+ n 1) 0))', "4"),
     entry("match", "(match value pattern result ...)", "Chooses the first clause whose pattern matches. "
-          "Patterns: (some x) none (ok x) (err e) Variant (Variant x) _.",
+          "Patterns: (some x) none (ok x) (err e) Variant (Variant x) _, or a name that binds the "
+          "whole value like _.",
           "(match (some 3) (some n) (+ n 1) none 0)", "4"),
     entry("fn", "(fn [param ...] body)", "A function, as an argument to map, filter, and the like, "
           "or as the value of a let binding.", "(map (fn [x] (+ x 1)) [1 2])", "[2 3]"),

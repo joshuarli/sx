@@ -1,0 +1,4 @@
+error[unreachable-clause] 5:5-5:12
+      Passing "green"))
+      ^^^^^^^
+  This clause can never match, because the clauses before it cover every case.

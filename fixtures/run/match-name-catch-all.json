@@ -1,0 +1,77 @@
+{
+  "description": "A lowercase name as the last match pattern binds the whole scrutinee.",
+  "program": "(map (fn [r] (match (get r :hits) none \"none\" whole (if (= whole (some 3)) \"three\" \"other\"))) (call rows.list {}))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list",
+    "rows.add",
+    "checks.list",
+    "checks.add"
+  ],
+  "responses": [
+    {
+      "capability": "rows.list",
+      "input": {},
+      "results": [
+        {
+          "output": [
+            {
+              "name": "a",
+              "note": "fast",
+              "hits": 3
+            },
+            {
+              "name": "b",
+              "note": null,
+              "hits": null
+            },
+            {
+              "name": "c",
+              "note": null,
+              "hits": 5
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": [
+      "three",
+      "none",
+      "other"
+    ]
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "rows.list",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": [
+        {
+          "name": "a",
+          "note": "fast",
+          "hits": 3
+        },
+        {
+          "name": "b",
+          "note": null,
+          "hits": null
+        },
+        {
+          "name": "c",
+          "note": null,
+          "hits": 5
+        }
+      ]
+    }
+  ]
+}

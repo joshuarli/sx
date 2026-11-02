@@ -1,0 +1,5 @@
+; task: dev-failing-ci
+(let [ci (call github.ci {:repo "a" :sha "b"})]
+  (match (get ci :state)
+    Passing "green"
+    other (str "not green: " (get ci :repo))))
