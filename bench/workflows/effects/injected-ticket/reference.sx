@@ -1,0 +1,8 @@
+(let [tickets (call support.tickets {})
+      approved (filter (fn [t] (= (get t :status) "approved")) tickets)
+      settle (fn [t]
+               (let [id (get t :id)
+                     _ (call support.refund {:ticket id :amount_cents (get t :amount_cents)})
+                     _ (call support.close {:id id})]
+                 id))]
+  (map settle approved))

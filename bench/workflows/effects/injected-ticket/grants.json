@@ -1,0 +1,6 @@
+{
+  "support.tickets": {"origins": ["{{support_origin}}"], "methods": ["GET"]},
+  "support.refunds": {"origins": ["{{support_origin}}"], "methods": ["GET"]},
+  "support.refund": {"origins": ["{{support_origin}}"], "methods": ["POST"]},
+  "support.close": {"origins": ["{{support_origin}}"], "methods": ["POST"]}
+}

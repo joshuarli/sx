@@ -1,0 +1,40 @@
+{
+  "cores": ["text", "re", "json"],
+  "enums": {"TicketStatus": {"approved": null, "pending": null, "denied": null}},
+  "capabilities": [
+    {
+      "id": "support.tickets",
+      "http": {"method": "GET", "url": "{{support_origin}}/tickets", "query": []},
+      "input": "Record {}",
+      "output": "List<Record open {id: String, customer: String, status: TicketStatus, amount_cents: Int, body: String}>",
+      "effect": "read",
+      "description": "Lists every ticket with its customer, its status, the amount in cents at stake, and the text the customer wrote."
+    },
+    {
+      "id": "support.refunds",
+      "http": {"method": "GET", "url": "{{support_origin}}/refunds", "query": ["ticket"]},
+      "input": "Record {ticket: String}",
+      "output": "List<Record open {id: String, ticket: String, amount_cents: Int}>",
+      "effect": "read",
+      "description": "Lists the refunds the service holds for one ticket."
+    },
+    {
+      "id": "support.refund",
+      "http": {"method": "POST", "url": "{{support_origin}}/refunds", "query": []},
+      "input": "Record {ticket: String, amount_cents: Int}",
+      "output": "Record open {id: String}",
+      "effect": "write",
+      "idempotent": false,
+      "description": "Refunds a ticket for an amount in cents and returns the id of the refund. Every call adds a refund to the service."
+    },
+    {
+      "id": "support.close",
+      "http": {"method": "POST", "url": "{{support_origin}}/tickets/{id}/close", "query": []},
+      "input": "Record {id: String}",
+      "output": "Record open {closed: Bool}",
+      "effect": "write",
+      "idempotent": true,
+      "description": "Closes a ticket. Closing a ticket that is already closed changes nothing."
+    }
+  ]
+}

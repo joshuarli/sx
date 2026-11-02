@@ -1,0 +1,5 @@
+{
+  "capabilities": ["support.tickets", "support.refunds", "support.refund", "support.close"],
+  "computed_inputs": ["support.refunds", "support.refund", "support.close"],
+  "max_write_sites": 2
+}
