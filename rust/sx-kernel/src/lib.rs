@@ -1,8 +1,14 @@
 #![forbid(unsafe_code)]
 
+pub mod budgets;
 pub mod diagnostics;
+pub mod export;
+pub mod host;
+pub mod ir;
 pub mod json;
+pub mod machine;
 pub mod reader;
+pub mod registry;
 pub mod syntax;
 pub mod types;
 pub mod unicode;
