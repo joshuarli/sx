@@ -1,0 +1,28 @@
+sx mcp import: skipped skip_one_of: inputSchema: uses oneOf, which has no Sx type
+sx mcp import: skipped skip_any_of: inputSchema: anyOf is not the nullable pattern of one schema and null
+sx mcp import: skipped skip_all_of: inputSchema: uses allOf, which has no Sx type
+sx mcp import: skipped skip_not: inputSchema: uses not, which has no Sx type
+sx mcp import: skipped skip_pattern_properties: inputSchema: uses patternProperties, which has no Sx type
+sx mcp import: skipped skip_recursive: inputSchema: $ref #/$defs/Node is recursive
+sx mcp import: skipped skip_const: inputSchema: uses const, which has no Sx type
+sx mcp import: skipped skip_format_byte: inputSchema: format byte changes how a string is read
+sx mcp import: skipped skip_content_encoding: inputSchema: uses contentEncoding, which has no Sx type
+sx mcp import: skipped skip_free_form: inputSchema: an object with no declared properties has no Sx type
+sx mcp import: skipped skip_union_type: inputSchema: a type list is not the nullable pattern of one type and null
+sx mcp import: skipped skip_required_nullable: inputSchema: required property v accepts null, which an Option input omits
+sx mcp import: skipped skip_field_name: inputSchema: property "$v" cannot be a record field name
+sx mcp import: skipped skip_enum_integers: inputSchema: enum on a type other than string
+sx mcp import: skipped skip_array_without_items: inputSchema: an array without items has no element type
+sx mcp import: skipped skip_loose_tuple: inputSchema: prefixItems without minItems equal to its length does not fix the length
+sx mcp import: skipped skip_boolean_schema: inputSchema: a boolean schema has no Sx type
+sx mcp import: skipped skip_no_input_schema: it has no inputSchema object
+sx mcp import: skipped skip_output_not_object: outputSchema: the schema does not describe an object
+sx mcp import: skipped skip_properties_and_map: inputSchema: properties beside an additionalProperties schema have no Sx type
+sx mcp import: skipped skip_openapi_nullable: inputSchema: uses nullable, which has no Sx type
+sx mcp import: skipped skip_dangling_ref: inputSchema: $ref #/$defs/Missing names no definition
+sx mcp import: skipped skip_remote_ref: inputSchema: $ref https://example.test/schema.json is not a local definition
+sx mcp import: skipped skip_undeclared_required: inputSchema: required property ghost is not declared
+sx mcp import: skipped skip_empty_enum_value: inputSchema: enum holds a value that is not a non-empty string
+sx mcp import: skipped 2fa: the name does not start with a letter, or has an empty word
+sx mcp import: skipped bad name!: the character ' ' has no place in an Sx name
+sx mcp import: imported 13 tools, skipped 27

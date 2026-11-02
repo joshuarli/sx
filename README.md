@@ -168,6 +168,26 @@ sx run square.sx --declarations decimal.json --input 'price="12.50"'
 [docs/language.md](docs/language.md#scripts) has the rules, and
 [the decimal core](docs/language.md#the-decimal-core) its functions and limits.
 
+## MCP tools
+
+`sx mcp import` turns the tools of an MCP server into declarations, and `sx mcp run` runs a program
+against that server over stdio. Importing describes a tool and never grants it.
+
+```sh
+sx mcp import --name files -- ./notes-server --root /srv/notes > files.json
+sx explain read.sx --declarations files.json
+sx mcp run read.sx --declarations files.json --allow mcp-files.read-file -- ./notes-server --root /srv/notes
+```
+
+A tool `read_file` of the server `files` becomes the capability `mcp-files.read-file`. JSON Schema
+maps to Sx types (objects to records, optional properties to `Option`, string enums to enums, arrays to
+lists, `["string", "null"]` to `Option`), and a tool whose schema has no faithful Sx type is skipped with
+its reason on standard error, never approximated. The `readOnlyHint`, `destructiveHint`, and
+`idempotentHint` annotations set the effect, and a tool without them is a write that is not idempotent.
+`--tools FILE` imports from a saved `tools/list` result instead of a running server. Results decode against
+the `outputSchema`, and the closed table of call errors, the `2025-06-18` protocol subset, and the 60 second
+timeout are in [docs/language.md](docs/language.md#mcp-tools).
+
 ## Verify
 
 ```sh

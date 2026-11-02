@@ -11,17 +11,30 @@ use sx_kernel::machine::{Machine, Outcome, Request, Response};
 use sx_kernel::types::CallErrorKind;
 use sx_kernel::values::{Value, decode, encode};
 use sx_packs::http::Endpoints;
+use sx_packs::mcp::Session;
 use sx_packs::{implemented, perform as perform_capability};
 
-pub fn unimplemented<'p>(program: &'p Program, endpoints: &Endpoints) -> Vec<&'p str> {
-    program.capabilities.iter().map(String::as_str).filter(|id| !implemented(endpoints, id)).collect()
+pub fn unimplemented<'p>(program: &'p Program, endpoints: &Endpoints, mcp: Option<&Session>) -> Vec<&'p str> {
+    program
+        .capabilities
+        .iter()
+        .map(String::as_str)
+        .filter(|id| !implemented(endpoints, id) && !mcp.is_some_and(|session| session.handles(id)))
+        .collect()
 }
 
 fn failed(message: String) -> Response {
     Response::Refusal { kind: CallErrorKind::Failed.name().to_string(), message }
 }
 
-fn perform(program: &Program, grants: &Grants, endpoints: &Endpoints, capability: &str, input: &Json) -> Response {
+fn perform(
+    program: &Program,
+    grants: &Grants,
+    endpoints: &Endpoints,
+    mcp: Option<&Session>,
+    capability: &str,
+    input: &Json,
+) -> Response {
     if let Some(refused) = refusal(program, grants, capability, input) {
         return refused;
     }
@@ -36,20 +49,24 @@ fn perform(program: &Program, grants: &Grants, endpoints: &Endpoints, capability
         Ok(value) => value,
         Err(error) => return failed(format!("{capability} received an input that does not match its type: {error}")),
     };
-    match perform_capability(endpoints, capability, &scope, &value) {
+    let performed = match mcp.filter(|session| session.handles(capability)) {
+        Some(session) => Some(session.call(capability, input)),
+        None => perform_capability(endpoints, capability, &scope, &value),
+    };
+    match performed {
         None => failed(format!("{capability} has no native implementation")),
         Some(Ok(output)) => Response::Output(encode(&output, &signature.output)),
         Some(Err(failure)) => Response::Refusal { kind: failure.kind.name().to_string(), message: failure.message },
     }
 }
 
-fn answer(program: &Program, grants: &Grants, endpoints: &Endpoints, request: &Request) -> Response {
+fn answer(program: &Program, grants: &Grants, endpoints: &Endpoints, mcp: Option<&Session>, request: &Request) -> Response {
     match request {
         Request::Delay { milliseconds, .. } => {
             thread::sleep(Duration::from_millis(u64::try_from(*milliseconds).unwrap_or(0)));
             Response::Output(Json::Null)
         }
-        Request::Call { capability, input, .. } => perform(program, grants, endpoints, capability, input),
+        Request::Call { capability, input, .. } => perform(program, grants, endpoints, mcp, capability, input),
     }
 }
 
@@ -57,6 +74,7 @@ pub fn run<'p>(
     program: &'p Program,
     grants: &Grants,
     endpoints: &Endpoints,
+    mcp: Option<&Session>,
     values: &[(String, Value)],
     budgets: Budgets,
 ) -> (Outcome, Machine<'p>) {
@@ -66,7 +84,7 @@ pub fn run<'p>(
         let responses: Vec<(String, Response)> = thread::scope(|scope| {
             let running: Vec<_> = requests
                 .iter()
-                .map(|request| (request.id().to_string(), scope.spawn(|| answer(program, grants, endpoints, request))))
+                .map(|request| (request.id().to_string(), scope.spawn(|| answer(program, grants, endpoints, mcp, request))))
                 .collect();
             running
                 .into_iter()

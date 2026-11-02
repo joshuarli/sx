@@ -9,6 +9,12 @@ publish.workspace = true
 name = "sx"
 path = "src/main.rs"
 
+[[bin]]
+name = "mcp-fixture"
+path = "tests/support/mcp_fixture.rs"
+test = false
+doc = false
+
 [lints]
 workspace = true
 

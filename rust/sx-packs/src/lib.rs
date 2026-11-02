@@ -3,6 +3,7 @@
 
 pub mod fs;
 pub mod http;
+pub mod mcp;
 pub mod process;
 
 use std::fmt;

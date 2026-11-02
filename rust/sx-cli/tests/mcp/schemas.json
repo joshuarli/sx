@@ -1,0 +1,216 @@
+{
+  "tools": [
+    {
+      "name": "scalars",
+      "description": "Reads scalar values.\nA second line that import ignores.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {"type": "string", "minLength": 1, "description": "who"},
+          "count": {"type": "integer", "minimum": 0},
+          "ratio": {"type": "number"},
+          "flag": {"type": "boolean", "default": false}
+        },
+        "required": ["name", "count"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {"ok": {"type": "boolean"}, "score": {"type": "number"}},
+        "required": ["ok"]
+      },
+      "annotations": {"readOnlyHint": true}
+    },
+    {
+      "name": "enums",
+      "title": "Enumerations",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "mode": {"type": "string", "enum": ["fast", "slow-lane"]},
+          "kind": {"enum": ["a", "b"]}
+        },
+        "required": ["mode"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {"status": {"type": "string", "enum": ["open", "closed"]}},
+        "required": ["status"],
+        "additionalProperties": false
+      },
+      "annotations": {"readOnlyHint": true}
+    },
+    {
+      "name": "collections",
+      "description": "Lists, nested lists, and a tuple.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "tags": {"type": "array", "items": {"type": "string"}},
+          "matrix": {"type": "array", "items": {"type": "array", "items": {"type": "integer"}}},
+          "point": {
+            "type": "array",
+            "prefixItems": [{"type": "number"}, {"type": "number"}],
+            "items": false,
+            "minItems": 2,
+            "maxItems": 2
+          }
+        },
+        "required": ["tags"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "rows": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {"id": {"type": "integer"}, "label": {"type": ["string", "null"]}},
+              "required": ["id", "label"]
+            }
+          }
+        },
+        "required": ["rows"]
+      },
+      "annotations": {"readOnlyHint": true}
+    },
+    {
+      "name": "nullable_forms",
+      "description": "Optional and nullable properties.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "a": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+          "b": {"type": ["null", "integer"]},
+          "c": {"type": "string"}
+        },
+        "required": ["c"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "d": {"type": ["string", "null"]},
+          "e": {"anyOf": [{"type": "null"}, {"type": "integer"}]},
+          "f": {"type": "string"}
+        },
+        "required": ["d", "e"]
+      },
+      "annotations": {"readOnlyHint": true}
+    },
+    {
+      "name": "refs",
+      "description": "Local references.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$defs": {
+          "Address": {
+            "type": "object",
+            "properties": {"street": {"type": "string"}, "zip": {"type": "string"}},
+            "required": ["street"]
+          }
+        },
+        "type": "object",
+        "properties": {
+          "home": {"$ref": "#/$defs/Address"},
+          "work": {"$ref": "#/$defs/Address", "description": "may be absent"}
+        },
+        "required": ["home"]
+      },
+      "outputSchema": {
+        "definitions": {"Point": {"type": "object", "properties": {"x": {"type": "integer"}}, "required": ["x"]}},
+        "type": "object",
+        "properties": {"at": {"$ref": "#/definitions/Point"}},
+        "required": ["at"],
+        "additionalProperties": false
+      },
+      "annotations": {"readOnlyHint": true}
+    },
+    {
+      "name": "maps",
+      "inputSchema": {
+        "type": "object",
+        "properties": {"labels": {"type": "object", "additionalProperties": {"type": "string"}}},
+        "required": ["labels"]
+      },
+      "outputSchema": {"type": "object", "additionalProperties": {"type": "integer"}},
+      "annotations": {"readOnlyHint": true}
+    },
+    {
+      "name": "no_args",
+      "description": "Takes nothing.",
+      "inputSchema": {"type": "object"},
+      "annotations": {"destructiveHint": false, "idempotentHint": true}
+    },
+    {
+      "name": "idem_write",
+      "description": "Idempotent by its hints.",
+      "inputSchema": {"type": "object", "properties": {"key": {"type": "string"}}, "required": ["key"]},
+      "annotations": {"readOnlyHint": false, "destructiveHint": false, "idempotentHint": true}
+    },
+    {
+      "name": "plain_write",
+      "inputSchema": {"type": "object", "properties": {}}
+    },
+    {
+      "name": "half_hinted",
+      "inputSchema": {"type": "object", "properties": {}},
+      "annotations": {"idempotentHint": true}
+    },
+    {
+      "name": "hint_read_wins",
+      "inputSchema": {"type": "object", "properties": {}},
+      "annotations": {"readOnlyHint": true, "destructiveHint": true}
+    },
+    {
+      "name": "listIssues",
+      "description": "Camel case names split into words.",
+      "inputSchema": {"type": "object", "properties": {}},
+      "annotations": {"readOnlyHint": true}
+    },
+    {
+      "name": "get_user.profile",
+      "description": "Underscores and dots become hyphens.",
+      "inputSchema": {"type": "object", "properties": {}},
+      "annotations": {"readOnlyHint": true}
+    },
+    {"name": "skip_one_of", "inputSchema": {"type": "object", "properties": {"v": {"oneOf": [{"type": "string"}, {"type": "integer"}]}}}},
+    {"name": "skip_any_of", "inputSchema": {"type": "object", "properties": {"v": {"anyOf": [{"type": "string"}, {"type": "integer"}]}}}},
+    {"name": "skip_all_of", "inputSchema": {"type": "object", "properties": {"v": {"allOf": [{"type": "string"}]}}}},
+    {"name": "skip_not", "inputSchema": {"type": "object", "properties": {"v": {"type": "string", "not": {"enum": ["x"]}}}}},
+    {"name": "skip_pattern_properties", "inputSchema": {"type": "object", "patternProperties": {"^x-": {"type": "string"}}}},
+    {
+      "name": "skip_recursive",
+      "inputSchema": {
+        "$defs": {"Node": {"type": "object", "properties": {"kids": {"type": "array", "items": {"$ref": "#/$defs/Node"}}}}},
+        "type": "object",
+        "properties": {"root": {"$ref": "#/$defs/Node"}}
+      }
+    },
+    {"name": "skip_const", "inputSchema": {"type": "object", "properties": {"v": {"const": "fixed"}}}},
+    {"name": "skip_format_byte", "inputSchema": {"type": "object", "properties": {"v": {"type": "string", "format": "byte"}}}},
+    {"name": "skip_content_encoding", "inputSchema": {"type": "object", "properties": {"v": {"type": "string", "contentEncoding": "base64"}}}},
+    {"name": "skip_free_form", "inputSchema": {"type": "object", "properties": {"v": {"type": "object"}}}},
+    {"name": "skip_union_type", "inputSchema": {"type": "object", "properties": {"v": {"type": ["string", "integer"]}}}},
+    {"name": "skip_required_nullable", "inputSchema": {"type": "object", "properties": {"v": {"type": ["string", "null"]}}, "required": ["v"]}},
+    {"name": "skip_field_name", "inputSchema": {"type": "object", "properties": {"$v": {"type": "string"}}}},
+    {"name": "skip_enum_integers", "inputSchema": {"type": "object", "properties": {"v": {"type": "integer", "enum": [1, 2]}}}},
+    {"name": "skip_array_without_items", "inputSchema": {"type": "object", "properties": {"v": {"type": "array"}}}},
+    {
+      "name": "skip_loose_tuple",
+      "inputSchema": {"type": "object", "properties": {"v": {"type": "array", "prefixItems": [{"type": "string"}], "items": false}}}
+    },
+    {"name": "skip_boolean_schema", "inputSchema": {"type": "object", "properties": {"v": true}}},
+    {"name": "skip_no_input_schema", "description": "Has none."},
+    {"name": "skip_output_not_object", "inputSchema": {"type": "object"}, "outputSchema": {"type": "array", "items": {"type": "string"}}},
+    {
+      "name": "skip_properties_and_map",
+      "inputSchema": {"type": "object", "properties": {"a": {"type": "string"}}, "additionalProperties": {"type": "string"}}
+    },
+    {"name": "skip_openapi_nullable", "inputSchema": {"type": "object", "properties": {"v": {"type": "string", "nullable": true}}}},
+    {"name": "skip_dangling_ref", "inputSchema": {"type": "object", "properties": {"v": {"$ref": "#/$defs/Missing"}}}},
+    {"name": "skip_remote_ref", "inputSchema": {"type": "object", "properties": {"v": {"$ref": "https://example.test/schema.json"}}}},
+    {"name": "skip_undeclared_required", "inputSchema": {"type": "object", "properties": {}, "required": ["ghost"]}},
+    {"name": "skip_empty_enum_value", "inputSchema": {"type": "object", "properties": {"v": {"type": "string", "enum": [""]}}}},
+    {"name": "2fa", "inputSchema": {"type": "object"}},
+    {"name": "bad name!", "inputSchema": {"type": "object"}}
+  ]
+}

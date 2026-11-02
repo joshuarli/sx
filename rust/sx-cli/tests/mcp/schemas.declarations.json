@@ -1,0 +1,176 @@
+{
+  "enums": {
+    "mcp-demo.EnumsInputMode": {
+      "fast": null,
+      "slow-lane": null
+    },
+    "mcp-demo.EnumsInputKind": {
+      "a": null,
+      "b": null
+    },
+    "mcp-demo.EnumsOutputStatus": {
+      "open": null,
+      "closed": null
+    }
+  },
+  "capabilities": [
+    {
+      "id": "mcp-demo.scalars",
+      "effect": "read",
+      "description": "Reads scalar values.",
+      "input": "Record {name: String, count: Int, ratio: Option<Float>, flag: Option<Bool>}",
+      "output": "Record open {ok: Bool, score: Option<Float>}",
+      "mcp": {
+        "server": "demo",
+        "tool": "scalars",
+        "result": "structured"
+      }
+    },
+    {
+      "id": "mcp-demo.enums",
+      "effect": "read",
+      "description": "Enumerations",
+      "input": "Record {mode: mcp-demo.EnumsInputMode, kind: Option<mcp-demo.EnumsInputKind>}",
+      "output": "Record {status: mcp-demo.EnumsOutputStatus}",
+      "mcp": {
+        "server": "demo",
+        "tool": "enums",
+        "result": "structured"
+      }
+    },
+    {
+      "id": "mcp-demo.collections",
+      "effect": "read",
+      "description": "Lists, nested lists, and a tuple.",
+      "input": "Record {tags: List<String>, matrix: Option<List<List<Int>>>, point: Option<Tuple<Float, Float>>}",
+      "output": "Record open {rows: List<Record open {id: Int, label: Option<String>}>}",
+      "mcp": {
+        "server": "demo",
+        "tool": "collections",
+        "result": "structured"
+      }
+    },
+    {
+      "id": "mcp-demo.nullable-forms",
+      "effect": "read",
+      "description": "Optional and nullable properties.",
+      "input": "Record {a: Option<String>, b: Option<Int>, c: String}",
+      "output": "Record open {d: Option<String>, e: Option<Int>, f: Option<String>}",
+      "mcp": {
+        "server": "demo",
+        "tool": "nullable_forms",
+        "result": "structured"
+      }
+    },
+    {
+      "id": "mcp-demo.refs",
+      "effect": "read",
+      "description": "Local references.",
+      "input": "Record {home: Record {street: String, zip: Option<String>}, work: Option<Record {street: String, zip: Option<String>}>}",
+      "output": "Record {at: Record open {x: Int}}",
+      "mcp": {
+        "server": "demo",
+        "tool": "refs",
+        "result": "structured"
+      }
+    },
+    {
+      "id": "mcp-demo.maps",
+      "effect": "read",
+      "description": "The MCP tool maps of the server demo.",
+      "input": "Record {labels: Map<String, String>}",
+      "output": "Map<String, Int>",
+      "mcp": {
+        "server": "demo",
+        "tool": "maps",
+        "result": "structured"
+      }
+    },
+    {
+      "id": "mcp-demo.no-args",
+      "effect": "write",
+      "idempotent": true,
+      "description": "Takes nothing.",
+      "input": "Record {}",
+      "output": "String",
+      "mcp": {
+        "server": "demo",
+        "tool": "no_args",
+        "result": "text"
+      }
+    },
+    {
+      "id": "mcp-demo.idem-write",
+      "effect": "write",
+      "idempotent": true,
+      "description": "Idempotent by its hints.",
+      "input": "Record {key: String}",
+      "output": "String",
+      "mcp": {
+        "server": "demo",
+        "tool": "idem_write",
+        "result": "text"
+      }
+    },
+    {
+      "id": "mcp-demo.plain-write",
+      "effect": "write",
+      "description": "The MCP tool plain_write of the server demo.",
+      "input": "Record {}",
+      "output": "String",
+      "mcp": {
+        "server": "demo",
+        "tool": "plain_write",
+        "result": "text"
+      }
+    },
+    {
+      "id": "mcp-demo.half-hinted",
+      "effect": "write",
+      "description": "The MCP tool half_hinted of the server demo.",
+      "input": "Record {}",
+      "output": "String",
+      "mcp": {
+        "server": "demo",
+        "tool": "half_hinted",
+        "result": "text"
+      }
+    },
+    {
+      "id": "mcp-demo.hint-read-wins",
+      "effect": "read",
+      "description": "The MCP tool hint_read_wins of the server demo.",
+      "input": "Record {}",
+      "output": "String",
+      "mcp": {
+        "server": "demo",
+        "tool": "hint_read_wins",
+        "result": "text"
+      }
+    },
+    {
+      "id": "mcp-demo.list-issues",
+      "effect": "read",
+      "description": "Camel case names split into words.",
+      "input": "Record {}",
+      "output": "String",
+      "mcp": {
+        "server": "demo",
+        "tool": "listIssues",
+        "result": "text"
+      }
+    },
+    {
+      "id": "mcp-demo.get-user-profile",
+      "effect": "read",
+      "description": "Underscores and dots become hyphens.",
+      "input": "Record {}",
+      "output": "String",
+      "mcp": {
+        "server": "demo",
+        "tool": "get_user.profile",
+        "result": "text"
+      }
+    }
+  ]
+}
