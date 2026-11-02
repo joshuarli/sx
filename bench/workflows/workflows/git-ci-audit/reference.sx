@@ -1,0 +1,35 @@
+(let [names (filter (fn [n] (not= n ""))
+                    (map text.trim (text.split (call fs.read-text {:path "{{root}}/repos.txt"}) "\n")))
+      git (fn [dir args]
+            (call process.run {:program "/usr/bin/git" :args args :cwd dir :stdin none}))
+      observed
+      (map (fn [n]
+             (let [dir (str "{{root}}/repos/" n)]
+               (match (attempt (git dir ["status" "--porcelain"]))
+                 (err _) {:repo n :readable false :clean false :sha "" :branch "" :ahead 0}
+                 (ok s)
+                 (if (not= (get s :status) 0)
+                   {:repo n :readable false :clean false :sha "" :branch "" :ahead 0}
+                   (if (= (get s :stdout) "")
+                     {:repo n
+                      :readable true
+                      :clean true
+                      :sha (text.trim (get (git dir ["rev-parse" "HEAD"]) :stdout))
+                      :branch (text.trim (get (git dir ["branch" "--show-current"]) :stdout))
+                      :ahead (match (text.to-int (text.trim (get (git dir ["rev-list" "--count" "main..HEAD"]) :stdout)))
+                               (some k) k
+                               none 0)}
+                     {:repo n :readable true :clean false :sha "" :branch "" :ahead 0})))))
+           names)
+      clean (filter (fn [o] (get o :clean)) observed)
+      checked (par-map {:limit 8}
+                       (fn [o]
+                         (match (attempt (call ci.checks {:repo (get o :repo) :sha (get o :sha)}))
+                           (ok c) {:o o :state (get c :state)}
+                           (err _) {:o o :state "unknown"}))
+                       clean)
+      failing (map (fn [c] (let [o (get c :o)] {:repo (get o :repo) :branch (get o :branch) :ahead (get o :ahead)}))
+                   (filter (fn [c] (= (get c :state) "failure")) checked))]
+  {:failing (sort-by (fn [f] [(- 0 (get f :ahead)) (get f :repo)]) failing)
+   :unreadable (sort-by identity (map (fn [o] (get o :repo)) (filter (fn [o] (not (get o :readable))) observed)))
+   :unknown (count (filter (fn [c] (= (get c :state) "unknown")) checked))})

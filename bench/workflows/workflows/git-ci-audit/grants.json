@@ -1,0 +1,13 @@
+{
+  "fs.read-text": {"roots": ["{{root}}"]},
+  "process.run": {
+    "commands": [
+      {"program": "/usr/bin/git", "args": [{"tag": "Exact", "value": "status"}, {"tag": "Exact", "value": "--porcelain"}]},
+      {"program": "/usr/bin/git", "args": [{"tag": "Exact", "value": "rev-parse"}, {"tag": "Exact", "value": "HEAD"}]},
+      {"program": "/usr/bin/git", "args": [{"tag": "Exact", "value": "branch"}, {"tag": "Exact", "value": "--show-current"}]},
+      {"program": "/usr/bin/git", "args": [{"tag": "Exact", "value": "rev-list"}, {"tag": "Exact", "value": "--count"}, {"tag": "Exact", "value": "main..HEAD"}]}
+    ],
+    "roots": ["{{root}}/repos"]
+  },
+  "ci.checks": {"origins": ["{{ci_origin}}"], "methods": ["GET"]}
+}

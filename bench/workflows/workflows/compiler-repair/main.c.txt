@@ -1,0 +1,19 @@
+#include <stdio.h>
+
+struct point {
+  int x;
+  int y;
+}
+
+static int area(struct point p) {
+  int w = p.x * 2
+  int h = p.y * 2;
+  return w * h
+}
+
+int main(void) {
+  struct point p = {3, 4};
+  int a = area(p)
+  printf("%d\n", a);
+  return missing_value;
+}

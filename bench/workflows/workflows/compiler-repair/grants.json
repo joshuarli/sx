@@ -1,0 +1,10 @@
+{
+  "fs.read-text": {"roots": ["{{root}}/src"]},
+  "fs.write-text": {"roots": ["{{root}}/src"]},
+  "process.run": {
+    "commands": [
+      {"program": "/usr/bin/cc", "args": [{"tag": "Exact", "value": "-fsyntax-only"}, {"tag": "Exact", "value": "main.c"}]}
+    ],
+    "roots": ["{{root}}/src"]
+  }
+}

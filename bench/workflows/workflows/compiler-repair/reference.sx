@@ -1,0 +1,29 @@
+(let [path "{{root}}/src/main.c"
+      parse (fn [line]
+              (let [halves (text.split line ": error: ")
+                    where (text.split (first halves) ":")]
+                (match (text.to-int (nth where 1))
+                  (some l)
+                  (match (text.to-int (nth where 2))
+                    (some c) (some {:line l :column c :message (text.join ": error: " (rest halves))})
+                    _ none)
+                  _ none)))
+      diagnostics (fn [stderr]
+                    (keep parse (filter (fn [l] (text.contains? l ": error: ")) (text.split stderr "\n"))))
+      append-semicolon (fn [source target]
+                         (text.join "\n"
+                                    (loop {:max 400} [i 1 todo (text.split source "\n") out []]
+                                      (if (= (count todo) 0)
+                                        out
+                                        (recur (+ i 1)
+                                               (rest todo)
+                                               (concat out [(if (= i target) (str (first todo) ";") (first todo))]))))))]
+  (loop {:max 6} [n 1 fixed []]
+    (let [run (call process.run {:program "/usr/bin/cc" :args ["-fsyntax-only" "main.c"] :cwd "{{root}}/src" :stdin none})
+          found (diagnostics (get run :stderr))
+          fixable (filter (fn [d] (text.starts-with? (get d :message) "expected ';'")) found)]
+      (if (or (= (get run :status) 0) (or (= (count fixable) 0) (= n 6)))
+        {:attempts n :fixed fixed :status (get run :status) :diagnostics found}
+        (let [target (get (first fixable) :line)
+              _ (call fs.write-text {:path path :text (append-semicolon (call fs.read-text {:path path}) target)})]
+          (recur (+ n 1) (concat fixed [target])))))))

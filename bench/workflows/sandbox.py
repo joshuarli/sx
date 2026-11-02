@@ -2,6 +2,7 @@ import shutil
 import subprocess
 import tempfile
 import threading
+import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -46,9 +47,13 @@ type Handler = Callable[[Request], Response]
 
 
 class Service:
-    def __init__(self, handler: Handler) -> None:
+    def __init__(self, handler: Handler, latency: float = 0.0) -> None:
         self.requests: list[Request] = []
         self.handler = handler
+        self.latency = latency
+        self.peak = 0
+        self.active = 0
+        self.guard = threading.Lock()
         outer = self
 
         class Dispatch(BaseHTTPRequestHandler):
@@ -59,8 +64,16 @@ class Service:
             def respond(self) -> None:
                 length = int(self.headers.get("content-length") or 0)
                 request = Request(self.command, self.path, dict(self.headers.items()), self.rfile.read(length))
-                outer.requests.append(request)
-                response = outer.handler(request)
+                with outer.guard:
+                    outer.requests.append(request)
+                    outer.active += 1
+                    outer.peak = max(outer.peak, outer.active)
+                try:
+                    time.sleep(outer.latency)
+                    response = outer.handler(request)
+                finally:
+                    with outer.guard:
+                        outer.active -= 1
                 self.send_response(response.status)
                 for name, value in {"content-length": str(len(response.body)), **response.headers}.items():
                     self.send_header(name, value)
@@ -85,6 +98,15 @@ class Service:
         self.thread.join()
 
 
+def run_git(path: Path, home: Path, *arguments: str) -> str:
+    environment = {**GIT_IDENTITY, "PATH": GIT_PATH, "HOME": str(home)}
+    completed = subprocess.run(
+        ["git", *GIT_CONFIG, *arguments],
+        cwd=path, env=environment, stdin=subprocess.DEVNULL, capture_output=True, text=True, check=True,
+    )
+    return completed.stdout
+
+
 class Sandbox:
     def __init__(self, scratch: Path = SCRATCH) -> None:
         scratch.mkdir(parents=True, exist_ok=True)
@@ -102,6 +124,7 @@ class Sandbox:
         self.variables = {"root": str(self.root)}
         for name, service in self.services.items():
             service.requests.clear()
+            service.peak = 0
             self.variables[f"{name}_origin"] = service.origin
 
     def define(self, name: str, value: str) -> None:
@@ -133,20 +156,21 @@ class Sandbox:
         return path
 
     def git(self, path: Path, *arguments: str) -> str:
-        environment = {**GIT_IDENTITY, "PATH": GIT_PATH, "HOME": str(self.root)}
-        completed = subprocess.run(
-            ["git", *GIT_CONFIG, *arguments],
-            cwd=path, env=environment, stdin=subprocess.DEVNULL, capture_output=True, text=True, check=True,
-        )
-        return completed.stdout
+        return run_git(path, self.root, *arguments)
 
-    def serve(self, name: str, handler: Handler) -> Service:
+    def serve(self, name: str, handler: Handler, latency: float = 0.0) -> Service:
         service = self.services.get(name)
         if service is None:
-            service = self.services[name] = Service(handler)
+            service = self.services[name] = Service(handler, latency)
             self.define(f"{name}_origin", service.origin)
         service.handler = handler
+        service.latency = latency
         return service
+
+    def copy_tree(self, source: Path, relative: str) -> Path:
+        target = self.root / relative
+        shutil.copytree(source, target, symlinks=True)
+        return target
 
     def close(self) -> None:
         for service in self.services.values():

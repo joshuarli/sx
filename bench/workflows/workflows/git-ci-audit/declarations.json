@@ -1,0 +1,14 @@
+{
+  "cores": ["text"],
+  "packs": ["fs", "process"],
+  "capabilities": [
+    {
+      "id": "ci.checks",
+      "http": {"method": "GET", "url": "{{ci_origin}}/repos/{repo}/commits/{sha}/checks", "query": []},
+      "input": "Record {repo: String, sha: String}",
+      "output": "Record open {state: String}",
+      "effect": "read",
+      "description": "Returns the CI state of one commit of one repository."
+    }
+  ]
+}
