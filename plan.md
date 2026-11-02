@@ -677,6 +677,68 @@ every accepted fixture, and the repomod parity tests pass on the Rust kernel.
   until Rust passes every gate. Once Rust is ahead, Python is frozen and new features land in
   Rust and Lean.
 
+### Phase 6: Scoped authorization and the `fs`, `http`, and `process` packs
+
+The owner extended the campaign past the port toward the roadmap's six-workflow milestone. New
+work lands in Rust and Lean; Python is frozen.
+
+- **Grants.** An execution's allow-list entry becomes a capability ID plus an optional scope, a
+  typed record the pack declares: file roots for `fs`, origins and methods for `http`, programs
+  and argument patterns for `process`. The host grants. A program never names its own authority.
+- **One scope check, two places.** Each pack supplies a pure function from a scope and a request
+  input to allowed or denied with a reason. `explain` and the checker apply it to inputs that are
+  literal at check time, so an out-of-scope literal request is rejected before anything runs. The
+  host applies it to every request at run time and refuses an out-of-scope one with
+  `PermissionDenied`, a refusal kind, so the operation is never performed.
+- **Packs** in a new `sx-packs` crate. `fs`: read text and bytes, list, stat, and an atomic,
+  idempotent whole-file write. Paths are resolved, symlinks included, before the scope check.
+  `http`: requests through the owner's `h12tiny` blocking client, with status, headers, and body,
+  and a closed mapping from transport and status failures to call error kinds. `process`: run one
+  program with exact arguments, never a shell, with a cleared environment, a working directory
+  inside an `fs` root, a timeout, and captured output and exit status.
+- **Command line.** `sx run` and `sx explain` take grants from a JSON file. `explain` shows, per
+  call site, the literal resource and the scope verdict, or that the check happens per request.
+
+**Gate:** Each pack passes tests against temporary directories, a local `h12tiny` server, and
+fixed commands. Scope-escape tests cover `..`, symlinks, absolute paths, and URL tricks
+(userinfo, ports, case, encoded characters, redirects). A denied request never reaches the
+operating system or the network.
+
+### Phase 7: Script headers and the `decimal` core
+
+- A program may start with `(script {:inputs {:owners "List<String>"}} body)`. The header
+  declares typed inputs in the declaration type language, so Sx keeps one type grammar. It
+  declares no authority. `sx run report.sx --input owners='["acme"]'` then needs no host.
+- A `decimal` core: an exact decimal type that encodes as a JSON string, with arithmetic that
+  states its scale and rounding, comparison, parsing, and display.
+
+**Gate:** Fixtures cover header errors and input decoding, and the Lean reference accepts the
+header's IR.
+
+### Phase 8: MCP import and the MCP host
+
+- `sx mcp import` reads an MCP server's tool list and writes declarations. Tools become
+  namespaced capabilities. JSON Schema maps to Sx types: objects to records, open when the schema
+  allows extra properties; arrays to lists; string enums to enums; nullable or optional to
+  `Option`; integers to `Int`; numbers to `Float`. A tool whose schema has no faithful Sx type is
+  skipped with its reason, never approximated. MCP's read-only, destructive, and idempotent hints
+  set the effect; a tool without hints is a write that is not idempotent. Importing describes a
+  tool. It never grants it.
+- `sx mcp run` executes a program against an MCP server, answering each request with
+  `tools/call`.
+
+**Gate:** Import and execution pass against a local fixture MCP server covering every schema
+mapping, each skipped construct, and every error path.
+
+### Phase 9: The six-workflow milestone
+
+Run the roadmap's six workflows end to end in Sx and in TypeScript on Bun with the same tools,
+exposed to both through MCP so neither side gets a private advantage. Record successful outcomes,
+model attempts, tokens, wall time, and the host code each needed. Packs or cores a workflow needs,
+such as `sqlite` or YAML formats, come in with that workflow.
+
+**Gate:** All six run in both languages, with the comparison recorded in plan.md's Status.
+
 ## repomod safety rules
 
 These rules apply to every phase.
