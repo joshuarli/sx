@@ -1,0 +1,22 @@
+{
+  "description": "json.get gives a string's decoded value, a number as written, and true or false as text, and none for null or an absent path.",
+  "python": false,
+  "program": "(let [doc \"{\\\"name\\\": \\\"demo\\\", \\\"version\\\": \\\"1.40\\\", \\\"count\\\": 12, \\\"ratio\\\": 1.50, \\\"big\\\": 123456789012345678901234567890, \\\"on\\\": true, \\\"off\\\": false, \\\"none\\\": null, \\\"tags\\\": [\\\"a\\\", \\\"b\\\"], \\\"esc\\\": \\\"q\\\\\\\"é\\\\n\\\"}\"] [(json.get doc [\"name\"]) (json.get doc [\"count\"]) (json.get doc [\"ratio\"]) (json.get doc [\"big\"]) (json.get doc [\"on\"]) (json.get doc [\"off\"]) (json.get doc [\"none\"]) (json.get doc [\"gone\"]) (json.get doc [\"tags\" \"1\"]) (json.get doc [\"tags\" \"2\"]) (json.get doc [\"esc\"])])",
+  "declarations": "declarations/json.json",
+  "allow": [],
+  "expect": {
+    "completed": [
+      "demo",
+      "12",
+      "1.50",
+      "123456789012345678901234567890",
+      "true",
+      "false",
+      null,
+      null,
+      "b",
+      null,
+      "q\"é\n"
+    ]
+  }
+}

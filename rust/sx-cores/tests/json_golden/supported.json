@@ -1,0 +1,154 @@
+[
+  {
+    "name": "an object with every scalar kind",
+    "text": "{\"s\": \"text\", \"n\": 12, \"f\": 1.50, \"t\": true, \"b\": false, \"z\": null, \"o\": {}, \"a\": []}",
+    "checks": [
+      {"get": ["s"], "is": "text"},
+      {"get": ["n"], "is": "12"},
+      {"get": ["f"], "is": "1.50"},
+      {"get": ["t"], "is": "true"},
+      {"get": ["b"], "is": "false"},
+      {"get": ["z"], "is": null},
+      {"get": ["missing"], "is": null},
+      {"keys": [], "is": ["s", "n", "f", "t", "b", "z", "o", "a"]},
+      {"keys": ["o"], "is": []},
+      {"keys": ["a"], "is": []},
+      {"keys": ["z"], "is": []},
+      {"keys": ["missing"], "is": []},
+      {"kind": [], "is": "Object"},
+      {"kind": ["s"], "is": "String"},
+      {"kind": ["n"], "is": "Number"},
+      {"kind": ["t"], "is": "Boolean"},
+      {"kind": ["b"], "is": "Boolean"},
+      {"kind": ["z"], "is": "Null"},
+      {"kind": ["o"], "is": "Object"},
+      {"kind": ["a"], "is": "Array"},
+      {"kind": ["missing"], "is": "Absent"}
+    ]
+  },
+  {
+    "name": "an empty array differs from a missing key only through kind",
+    "text": "{\"deps\": [], \"other\": {}}",
+    "checks": [
+      {"keys": ["deps"], "is": []},
+      {"keys": ["nope"], "is": []},
+      {"kind": ["deps"], "is": "Array"},
+      {"kind": ["nope"], "is": "Absent"},
+      {"kind": ["other"], "is": "Object"}
+    ]
+  },
+  {
+    "name": "numbers are returned as written",
+    "text": "[0, -0, 1.0, 1.50, 1e5, 1E+5, 0.1e-2, 123456789012345678901234567890, 1e400, -1.5E-400]",
+    "checks": [
+      {"get": ["0"], "is": "0"},
+      {"get": ["1"], "is": "-0"},
+      {"get": ["2"], "is": "1.0"},
+      {"get": ["3"], "is": "1.50"},
+      {"get": ["4"], "is": "1e5"},
+      {"get": ["5"], "is": "1E+5"},
+      {"get": ["6"], "is": "0.1e-2"},
+      {"get": ["7"], "is": "123456789012345678901234567890"},
+      {"get": ["8"], "is": "1e400"},
+      {"get": ["9"], "is": "-1.5E-400"}
+    ]
+  },
+  {
+    "name": "array indexes are canonical decimal strings",
+    "text": "[\"a\", \"b\", [\"c\", {\"d\": \"e\"}]]",
+    "checks": [
+      {"get": ["0"], "is": "a"},
+      {"get": ["2", "1", "d"], "is": "e"},
+      {"get": ["2", "0"], "is": "c"},
+      {"get": ["3"], "is": null},
+      {"get": ["00"], "is": null},
+      {"get": ["+1"], "is": null},
+      {"get": ["-1"], "is": null},
+      {"get": ["1.0"], "is": null},
+      {"get": [""], "is": null},
+      {"get": ["99999999999999999999999"], "is": null},
+      {"keys": [], "is": ["0", "1", "2"]},
+      {"keys": ["2"], "is": ["0", "1"]},
+      {"keys": ["2", "1"], "is": ["d"]}
+    ]
+  },
+  {
+    "name": "a path through a scalar or null is absent",
+    "text": "{\"a\": \"x\", \"n\": null, \"num\": 3}",
+    "checks": [
+      {"get": ["a", "b"], "is": null},
+      {"keys": ["a", "b"], "is": []},
+      {"kind": ["a", "b"], "is": "Absent"},
+      {"get": ["n", "b"], "is": null},
+      {"kind": ["n", "b"], "is": "Absent"},
+      {"get": ["num", "0"], "is": null}
+    ]
+  },
+  {
+    "name": "a scalar document",
+    "text": "  \"just text\"\n",
+    "checks": [
+      {"get": [], "is": "just text"},
+      {"kind": [], "is": "String"},
+      {"get": ["a"], "is": null}
+    ]
+  },
+  {
+    "name": "a null document",
+    "text": "null",
+    "checks": [
+      {"get": [], "is": null},
+      {"keys": [], "is": []},
+      {"kind": [], "is": "Null"}
+    ]
+  },
+  {
+    "name": "string escapes decode",
+    "text": "{\"q\": \"a\\\"b\\\\c\\/d\\b\\f\\n\\r\\t\", \"u\": \"\\u00e9\\u0041\", \"pair\": \"\\ud83d\\ude00\", \"nul\": \"\\u0000\", \"raw\": \"caf\u00e9 \u2615 \ud83d\ude00\"}",
+    "checks": [
+      {"get": ["q"], "is": "a\"b\\c/d\b\f\n\r\t"},
+      {"get": ["u"], "is": "\u00e9A"},
+      {"get": ["pair"], "is": "\ud83d\ude00"},
+      {"get": ["nul"], "is": "\u0000"},
+      {"get": ["raw"], "is": "caf\u00e9 \u2615 \ud83d\ude00"}
+    ]
+  },
+  {
+    "name": "keys decode and match on their decoded text",
+    "text": "{\"a\\u0062\": 1, \"a b\": 2, \"\": 3, \"x.y\": 4, \"\\u00e9\": 5}",
+    "checks": [
+      {"get": ["ab"], "is": "1"},
+      {"get": ["a b"], "is": "2"},
+      {"get": [""], "is": "3"},
+      {"get": ["x.y"], "is": "4"},
+      {"get": ["\u00e9"], "is": "5"},
+      {"keys": [], "is": ["ab", "a b", "", "x.y", "\u00e9"]}
+    ]
+  },
+  {
+    "name": "keys keep document order, not sorted order",
+    "text": "{\"z\": 1, \"a\": 2, \"m\": {\"y\": 1, \"b\": 2}}",
+    "checks": [
+      {"keys": [], "is": ["z", "a", "m"]},
+      {"keys": ["m"], "is": ["y", "b"]}
+    ]
+  },
+  {
+    "name": "layout does not matter",
+    "text": "\r\n\t{ \r\n \"a\" \t:\n [ 1 ,\r\n 2 ] ,\n\"b\":{\"c\"  :  \"d\"}\n}\r\n",
+    "checks": [
+      {"get": ["a", "1"], "is": "2"},
+      {"get": ["b", "c"], "is": "d"},
+      {"keys": [], "is": ["a", "b"]}
+    ]
+  },
+  {
+    "name": "the same name may appear in different objects",
+    "text": "[{\"a\": 1}, {\"a\": 2}, {\"a\": {\"a\": 3}}]",
+    "checks": [
+      {"get": ["0", "a"], "is": "1"},
+      {"get": ["1", "a"], "is": "2"},
+      {"get": ["2", "a", "a"], "is": "3"}
+    ]
+  }
+]

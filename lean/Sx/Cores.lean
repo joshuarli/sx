@@ -1,4 +1,5 @@
 import Sx.Machine
+import Sx.JsonCore
 
 namespace Sx
 
@@ -86,9 +87,34 @@ def decimalFunctions : List String :=
   ["decimal.parse", "decimal.show", "decimal.format", "decimal.from-int", "decimal.add", "decimal.sub",
    "decimal.mul", "decimal.div", "decimal.round", "decimal.compare", "decimal.to-float"]
 
+def stringsOf : List Val → Option (List String)
+  | [] => some []
+  | .str s :: rest => (stringsOf rest).map (s :: ·)
+  | _ => none
+
+def refusal {α : Type} (r : Except String α) : Except Failure α :=
+  match r with
+  | .ok a => .ok a
+  | .error message => failWith .invalidInput message
+
+def jsonCore (function : String) (args : List Val) : Option (Except Failure Val) :=
+  match function, args with
+  | "json.get", [.str text, .list path] =>
+    (stringsOf path).map fun p =>
+      refusal ((JsonCore.get text p).map fun found => match found with | some s => Val.some (.str s) | none => Val.none)
+  | "json.keys", [.str text, .list path] =>
+    (stringsOf path).map fun p => refusal ((JsonCore.keys text p).map fun ks => Val.list (ks.map Val.str))
+  | "json.kind", [.str text, .list path] =>
+    (stringsOf path).map fun p => refusal ((JsonCore.kind text p).map fun k => Val.variant "json.Kind" k none)
+  | _, _ => none
+
+def jsonFunctions : List String := ["json.get", "json.keys", "json.kind"]
+
 def coreLibrary : Cores := fun function =>
   if decimalFunctions.contains function then
     some fun args => (decimalCore function args).getD (malformed function)
+  else if jsonFunctions.contains function then
+    some fun args => (jsonCore function args).getD (malformed function)
   else none
 
 end Sx

@@ -1,0 +1,10 @@
+{
+  "description": "A duplicate key in one object stops the program as invalid-input.",
+  "python": false,
+  "program": "(json.kind \"{\\\"a\\\": 1, \\\"b\\\": 2, \\\"a\\\": 3}\" [\"b\"])",
+  "declarations": "declarations/json.json",
+  "allow": [],
+  "expect": {
+    "failed": "invalid-input"
+  }
+}

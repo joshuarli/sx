@@ -39,6 +39,61 @@ def checkVector (v : Json) : Except String Bool := do
   | .error f, some _, none => pure (f.kind == .arithmetic)
   | _, _, _ => pure false
 
+def pathOf (j : Json) : Except String (List String) := do
+  (← Sx.asArr j).mapM Sx.asStr
+
+def jsonCheck (text : String) (check : Json) : Except String Bool := do
+  let fields := Sx.objFields check
+  let is ← Sx.field check "is"
+  if (Sx.fieldLookup fields "get").isSome then
+    let path ← pathOf (← Sx.field check "get")
+    let expected : Option String := match is with
+      | .str s => some s
+      | _ => none
+    pure (match Sx.JsonCore.get text path with
+      | .ok found => found == expected
+      | .error _ => false)
+  else if (Sx.fieldLookup fields "keys").isSome then
+    let path ← pathOf (← Sx.field check "keys")
+    let expected ← pathOf is
+    pure (match Sx.JsonCore.keys text path with
+      | .ok found => found == expected
+      | .error _ => false)
+  else
+    let path ← pathOf (← Sx.field check "kind")
+    let expected ← Sx.asStr is
+    pure (match Sx.JsonCore.kind text path with
+      | .ok found => found == expected
+      | .error _ => false)
+
+def jsonSupported (cases : List Json) : Except String (Nat × List String) := do
+  let mut total := 0
+  let mut wrong : List String := []
+  for case in cases do
+    let text ← Sx.asStr (← Sx.field case "text")
+    for check in ← Sx.asArr (← Sx.field case "checks") do
+      total := total + 1
+      unless ← jsonCheck text check do
+        wrong := s!"{check.compress} in {text.quote}" :: wrong
+  pure (total, wrong.reverse)
+
+def jsonRefused (cases : List Json) : Except String (Nat × List String) := do
+  let mut total := 0
+  let mut wrong : List String := []
+  for case in cases do
+    let text ← Sx.asStr (← Sx.field case "text")
+    let expected := (← Sx.asStr (← Sx.field case "at")) ++ ": " ++ (← Sx.asStr (← Sx.field case "reason"))
+    for path in [([] : List String), ["a"]] do
+      total := total + 1
+      let outcomes : List (Except String String) :=
+        [(Sx.JsonCore.get text path).map (fun _ => ""), (Sx.JsonCore.keys text path).map (fun _ => ""),
+         (Sx.JsonCore.kind text path).map (fun _ => "")]
+      for outcome in outcomes do
+        match outcome with
+        | .error message => if message != expected then wrong := s!"{text.quote}: {message} != {expected}" :: wrong
+        | .ok _ => wrong := s!"{text.quote}: accepted" :: wrong
+  pure (total, wrong.reverse)
+
 def main (args : List String) : IO UInt32 := do
   match args with
   | ["decimal-vectors", path] =>
@@ -53,6 +108,15 @@ def main (args : List String) : IO UInt32 := do
     for w in wrong.reverse.take 20 do IO.eprintln s!"disagree {w}"
     IO.println (Lean.Json.mkObj [("vectors", vectors.length), ("disagreements", wrong.length)]).compress
     pure (if wrong.isEmpty then 0 else 1)
+  | ["json-golden", supportedPath, refusedPath] =>
+    let supported ← IO.ofExcept (Sx.asArr (← readJson supportedPath))
+    let refused ← IO.ofExcept (Sx.asArr (← readJson refusedPath))
+    let (readChecks, readWrong) ← IO.ofExcept (jsonSupported supported)
+    let (refusedChecks, refusedWrong) ← IO.ofExcept (jsonRefused refused)
+    for w in (readWrong ++ refusedWrong).take 20 do IO.eprintln s!"disagree {w}"
+    IO.println (Lean.Json.mkObj [("reads", readChecks), ("refusals", refusedChecks),
+      ("disagreements", readWrong.length + refusedWrong.length)]).compress
+    pure (if readWrong.isEmpty && refusedWrong.isEmpty then 0 else 1)
   | ["check", irPath] =>
     match Sx.parseProgram (← readJson irPath) >>= Sx.checkProgram with
     | .ok () =>

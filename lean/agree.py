@@ -115,6 +115,20 @@ def decimal_vectors(binary: Path) -> tuple[int, bool]:
     return summary["vectors"], ran.returncode == 0
 
 
+def json_golden(binary: Path) -> tuple[int, int, bool]:
+    golden = ROOT / "rust" / "sx-cores" / "tests" / "json_golden"
+    ran = subprocess.run(
+        [binary, "json-golden", golden / "supported.json", golden / "refused.json"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if ran.stderr:
+        print(ran.stderr, end="")
+    summary = json.loads(ran.stdout)
+    return summary["reads"], summary["refusals"], ran.returncode == 0
+
+
 def main() -> int:
     subprocess.run([lake(), "build", "sx-ref"], cwd=LEAN, check=True, capture_output=True)
     binary = LEAN / ".lake" / "build" / "bin" / "sx-ref"
@@ -170,9 +184,11 @@ def main() -> int:
     print(f"the Lean checker rejects {twins - len(wrongly_accepted)} of {twins} retry-write twins")
     vectors, vectors_agree = decimal_vectors(binary)
     print(f"the Lean decimal core {'reproduces' if vectors_agree else 'DISAGREES with'} {vectors} decimal vectors")
+    reads, refusals, json_agrees = json_golden(binary)
+    print(f"the Lean json core {'reproduces' if json_agrees else 'DISAGREES with'} {reads} golden reads and {refusals} golden refusals")
     surrogate_refused = lone_surrogate_refused(binary)
     print(f"the Lean reader {'refuses' if surrogate_refused else 'accepts'} a lone surrogate escape in a string")
-    return 1 if disagreements or unchecked or wrongly_accepted or not surrogate_refused or not vectors_agree else 0
+    return 1 if disagreements or unchecked or wrongly_accepted or not surrogate_refused or not vectors_agree or not json_agrees else 0
 
 
 if __name__ == "__main__":

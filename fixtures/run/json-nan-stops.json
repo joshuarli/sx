@@ -1,0 +1,10 @@
+{
+  "description": "NaN is not JSON, so the text stops the program as invalid-input.",
+  "python": false,
+  "program": "(json.get \"{\\\"a\\\": NaN}\" [\"a\"])",
+  "declarations": "declarations/json.json",
+  "allow": [],
+  "expect": {
+    "failed": "invalid-input"
+  }
+}

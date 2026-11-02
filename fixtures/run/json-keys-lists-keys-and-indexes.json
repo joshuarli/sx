@@ -1,0 +1,31 @@
+{
+  "description": "json.keys lists an object's keys in document order, an array's indexes, and nothing for a missing, null, or empty path.",
+  "python": false,
+  "program": "(let [doc \"{\\\"name\\\": \\\"demo\\\", \\\"version\\\": \\\"1.40\\\", \\\"count\\\": 12, \\\"ratio\\\": 1.50, \\\"big\\\": 123456789012345678901234567890, \\\"on\\\": true, \\\"off\\\": false, \\\"none\\\": null, \\\"tags\\\": [\\\"a\\\", \\\"b\\\"], \\\"esc\\\": \\\"q\\\\\\\"é\\\\n\\\"}\"] [(json.keys doc []) (json.keys doc [\"tags\"]) (json.keys doc [\"none\"]) (json.keys doc [\"gone\"]) (json.keys \"{\\\"o\\\": {}, \\\"a\\\": []}\" [\"o\"]) (json.keys \"{\\\"o\\\": {}, \\\"a\\\": []}\" [\"a\"])])",
+  "declarations": "declarations/json.json",
+  "allow": [],
+  "expect": {
+    "completed": [
+      [
+        "name",
+        "version",
+        "count",
+        "ratio",
+        "big",
+        "on",
+        "off",
+        "none",
+        "tags",
+        "esc"
+      ],
+      [
+        "0",
+        "1"
+      ],
+      [],
+      [],
+      [],
+      []
+    ]
+  }
+}

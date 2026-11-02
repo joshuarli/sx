@@ -1,0 +1,14 @@
+{
+  "description": "A program branches on json.kind with match.",
+  "python": false,
+  "program": "(let [doc \"{\\\"author\\\": {\\\"name\\\": \\\"Ada\\\"}, \\\"license\\\": \\\"MIT\\\"}\" shape (fn [field] (match (json.kind doc [field]) String (json.get doc [field]) Object (json.get doc [field \"name\"]) _ none))] [(shape \"author\") (shape \"license\") (shape \"bugs\")])",
+  "declarations": "declarations/json.json",
+  "allow": [],
+  "expect": {
+    "completed": [
+      "Ada",
+      "MIT",
+      null
+    ]
+  }
+}

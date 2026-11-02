@@ -12,6 +12,7 @@ use sx_kernel::values::{RecordValue, Value};
 use crate::decimal::{Decimal, DecimalError, Rounding};
 use crate::git::{self, Checkout, Head};
 use crate::github::{self, Check, CiState, UpstreamState};
+use crate::json;
 use crate::re;
 use crate::semver::{self, Version};
 use crate::text::{self, TextError};
@@ -635,8 +636,64 @@ pub fn re_core() -> Core {
     }
 }
 
+pub fn json_core() -> Core {
+    let document = "\"{\\\"app\\\": {\\\"replicas\\\": 3, \\\"tags\\\": [\\\"a\\\", \\\"b\\\"], \\\"debug\\\": null}}\"";
+    let kinds: Vec<&str> = json::Kind::ALL.iter().map(|kind| kind.variant()).collect();
+    let kind = nullary_enum("json.Kind", &kinds);
+    let functions = vec![
+        function(
+            "json.get",
+            vec![STRING, list(STRING)],
+            option(STRING),
+            "Reads the scalar at a path of object keys and array indexes as text: a string's decoded value, a \
+             number exactly as written, or true or false. Gives none when the path is absent or the value is \
+             null. A path that names an object or array, and text that is not valid JSON, are refusals.",
+            (&format!("(json.get {document} [\"app\" \"replicas\"])"), "(some \"3\")"),
+        ),
+        function(
+            "json.keys",
+            vec![STRING, list(STRING)],
+            list(STRING),
+            "Lists the keys of the object at a path in document order, or the indexes of an array as strings. An \
+             absent or null path has none. A scalar, and text that is not valid JSON, are refusals.",
+            (&format!("(json.keys {document} [\"app\" \"tags\"])"), "[\"0\" \"1\"]"),
+        ),
+        function(
+            "json.kind",
+            vec![STRING, list(STRING)],
+            kind.clone(),
+            "Names the shape of the value at a path: Absent when the path is absent, then Null, Boolean, \
+             Number, String, Array, or Object. Text that is not valid JSON is a refusal.",
+            (&format!("(json.kind {document} [\"app\" \"debug\"])"), "Null"),
+        ),
+    ];
+    Core {
+        id: "json".to_string(),
+        version: "0.1.0".to_string(),
+        functions,
+        types: vec![("json.Kind".to_string(), kind)],
+        evidence: vec![
+            Evidence {
+                level: Assurance::ConformanceTested,
+                references: [
+                    "rust/sx-cores/tests/json_golden.rs::every_supported_golden_case_reads_as_expected",
+                    "rust/sx-cores/tests/json_golden.rs::every_refused_golden_case_fails_with_its_reason",
+                    "rust/sx-cores/tests/json_golden.rs::every_json_example_produces_its_documented_result",
+                    "rust/sx-cores/tests/json_properties.rs::generated_documents_read_back_as_built",
+                ]
+                .map(str::to_string)
+                .to_vec(),
+            },
+            Evidence {
+                level: Assurance::Specified,
+                references: ["lean/Sx/JsonCore.lean", "lean/agree.py::json_golden"].map(str::to_string).to_vec(),
+            },
+        ],
+    }
+}
+
 pub fn cores() -> Vec<Core> {
-    vec![text_core(), semver_core(), git_core(), github_core(), decimal_core(), yaml_core(), re_core()]
+    vec![text_core(), semver_core(), git_core(), github_core(), decimal_core(), yaml_core(), re_core(), json_core()]
 }
 
 pub fn core(id: &str) -> Option<Core> {
@@ -921,6 +978,18 @@ fn optional_groups(found: Option<Vec<String>>) -> Value {
     some_or_none(found.map(string_list))
 }
 
+fn json_call(function: &str, args: &[Value]) -> Option<Result<Value, CoreError>> {
+    let outcome = match (function, args) {
+        ("json.get", [text, path]) => json::get(string_of(text)?, &strings_of(path)?).map(|found| optional_string(found.as_deref())),
+        ("json.keys", [text, path]) => json::keys(string_of(text)?, &strings_of(path)?).map(string_list),
+        ("json.kind", [text, path]) => {
+            json::kind(string_of(text)?, &strings_of(path)?).map(|kind| Value::variant("json.Kind", kind.variant(), None))
+        }
+        _ => return Some(Err(CoreError::Unimplemented)),
+    };
+    Some(outcome.map_err(|error| CoreError::InvalidInput(error.to_string())))
+}
+
 pub struct Cores;
 
 impl Cores {
@@ -973,6 +1042,7 @@ impl Cores {
             }
             (function, args) if function.starts_with("decimal.") => return decimal_call(function, args),
             (function, args) if function.starts_with("yaml.") => return yaml_call(function, args),
+            (function, args) if function.starts_with("json.") => return json_call(function, args),
             (function, args) if function.starts_with("re.") => return re_call(function, args),
             _ => return Some(Err(CoreError::Unimplemented)),
         };

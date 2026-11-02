@@ -1,0 +1,10 @@
+{
+  "description": "json.keys on a scalar stops the program as invalid-input.",
+  "python": false,
+  "program": "(json.keys \"{\\\"a\\\": 1}\" [\"a\"])",
+  "declarations": "declarations/json.json",
+  "allow": [],
+  "expect": {
+    "failed": "invalid-input"
+  }
+}

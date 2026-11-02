@@ -1,0 +1,20 @@
+{
+  "description": "json.kind separates an absent path from a null, an empty array, and every scalar.",
+  "python": false,
+  "program": "(let [doc \"{\\\"name\\\": \\\"demo\\\", \\\"version\\\": \\\"1.40\\\", \\\"count\\\": 12, \\\"ratio\\\": 1.50, \\\"big\\\": 123456789012345678901234567890, \\\"on\\\": true, \\\"off\\\": false, \\\"none\\\": null, \\\"tags\\\": [\\\"a\\\", \\\"b\\\"], \\\"esc\\\": \\\"q\\\\\\\"é\\\\n\\\"}\"] (map (fn [path] (json.kind doc path)) [[] [\"name\"] [\"count\"] [\"on\"] [\"none\"] [\"tags\"] [\"gone\"] [\"tags\" \"0\"] [\"tags\" \"9\"]]))",
+  "declarations": "declarations/json.json",
+  "allow": [],
+  "expect": {
+    "completed": [
+      "Object",
+      "String",
+      "Number",
+      "Boolean",
+      "Null",
+      "Array",
+      "Absent",
+      "String",
+      "Absent"
+    ]
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "description": "Empty text stops the program as invalid-input.",
+  "python": false,
+  "program": "(json.keys \"\" [])",
+  "declarations": "declarations/json.json",
+  "allow": [],
+  "expect": {
+    "failed": "invalid-input"
+  }
+}

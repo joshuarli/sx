@@ -1758,6 +1758,70 @@ matches one emoji.
 `rust/sx-cores/tests/re_core.rs` holds the table of expected results, including non-ASCII input, empty
 matches, and unmatched groups. The Python interpreter and the Lean reference have no `re` core, and Python
 does not read the `#"..."` form.
+## The json core
+
+`json` is a Rust core, registered by listing `"json"` under `cores`. It reads JSON text with the same
+path-based calls as the `yaml` core, so a program learns one shape for both. It reads only; there is no
+`json.set`.
+
+| Function | Type |
+| --- | --- |
+| `json.get` | `String List<String> -> Option<String>`, the scalar at the path as text, or `none` when the path is absent or the value is `null` |
+| `json.keys` | `String List<String> -> List<String>`, an object's keys in document order, or an array's indexes |
+| `json.kind` | `String List<String> -> json.Kind`, the shape of the value at the path |
+
+`json.Kind` is a nullary enum with the variants `Absent`, `Null`, `Boolean`, `Number`, `String`, `Array`,
+and `Object`. `Absent` means the path does not exist, which `json.get` and `json.keys` cannot tell from a
+`null` or an empty array: `json.get` gives `none` for both, and `json.keys` gives `[]` for a missing key, a
+`null`, an empty object, and an empty array. `json.kind` is the one call that separates them, and it is how a
+program branches on a field that may be a string or an object, such as `author` or `repository` in a
+`package.json`. A count is `(count (json.keys text path))`, so there is no `json.count`.
+
+A path lists object keys from the root. Where the node is an array, a component is a decimal index without a
+sign or leading zeros (`"0"`, `"12"`), so `["files" "0"]` reads the first entry of `files`. A key is matched on
+its decoded text, so `"\u0061"` matches `a`. The empty path names the document root. A path that does not
+exist, including one that runs through a scalar, a `null`, or past the end of an array, is absent: `json.get`
+gives `none`, `json.keys` gives `[]`, and `json.kind` gives `Absent`.
+
+`json.get` returns a scalar as text. A string gives its decoded value, with every `\n`, `\"`, `\uXXXX`, and
+surrogate pair resolved. A number gives the characters it was written with, so `1.50` is `"1.50"`, `1E+5` is
+`"1E+5"`, `-0` is `"-0"`, and `123456789012345678901234567890` keeps every digit; `text.to-int` or
+`decimal.parse` turns the text into a number. `true` and `false` give `"true"` and `"false"`. A number beyond
+the range of a double, such as `1e400`, is still just its text: JSON has no infinity or `NaN`, and the core
+reads neither. `json.get` on an object or an array, `json.keys` on a scalar, and any call on text that is not
+JSON are refusals.
+
+**The grammar.** RFC 8259 and nothing else: one value, with the four JSON blanks (space, tab, line feed,
+carriage return) around it. Refused, with the line and column of the first offending character:
+
+| Refused | Reason |
+| --- | --- |
+| Empty text, or only blanks | `expected a value, found the end of the text` |
+| A byte order mark | `a byte order mark is not allowed` |
+| Comments, single quotes, unquoted keys, `NaN`, `Infinity`, `True` | `expected a value`, `expected a string key`, and the like, naming the character or word found |
+| A trailing comma | `a trailing comma is not allowed` |
+| A number with a leading zero, a leading `+` or `.`, a bare `-`, or nothing after `.` or `e` | `a number cannot have leading zeros`, `a number needs digits after the decimal point`, and the like |
+| A control character in a string, an undefined escape, a cut-short or lone surrogate `\u` escape | `a control character in a string must be escaped`, `the escape \x is not defined in JSON`, and the like |
+| Content after the value | `unexpected content after the value` |
+| A duplicate key in one object, after decoding | `the key "a" appears twice in one object` |
+| More than 1000 nested arrays and objects, the kernel's JSON depth limit | `the value nests deeper than 1000 levels` |
+
+A line ends at a line feed, and a column counts characters, not bytes, from 1. The whole text is checked on
+every call, so a refusal anywhere fails even a read of a different key.
+
+A duplicate key is refused, where `JSON.parse` keeps the last one. A reader that silently drops a value
+reads a different document from the one the next tool sees, and a manifest with two `"version"` keys is a
+mistake worth stopping on.
+
+**How a failure reaches the program.** A refusal is `CoreError::InvalidInput`, so the failure kind is
+`invalid-input` and the message is, for example, `json.get: line 2 column 17: a trailing comma is not
+allowed`. The parser is the core's own, not the kernel's: the kernel's reads numbers into a `Float` and so
+loses the text a program needs, and it accepts `NaN` and `Infinity`.
+
+`rust/sx-cores/tests/json_golden/` holds the golden reads and refusals, with the exact messages. The Lean
+reference has its own implementation of the core, `lean/Sx/JsonCore.lean`, and `lean/agree.py` checks that it
+reproduces every golden case, so the agreement check compares two implementations. `fixtures/run/json-*.json`
+run the core through both machines.
 
 ## Budgets
 

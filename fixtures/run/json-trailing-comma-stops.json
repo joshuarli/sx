@@ -1,0 +1,10 @@
+{
+  "description": "Text that is not JSON stops the program as invalid-input, even for a path that is absent.",
+  "python": false,
+  "program": "(json.get \"{\\\"a\\\": [1, 2,]}\" [\"zzz\"])",
+  "declarations": "declarations/json.json",
+  "allow": [],
+  "expect": {
+    "failed": "invalid-input"
+  }
+}

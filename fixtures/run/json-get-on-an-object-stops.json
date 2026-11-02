@@ -1,0 +1,10 @@
+{
+  "description": "json.get on an object path stops the program as invalid-input.",
+  "python": false,
+  "program": "(json.get \"{\\\"a\\\": {\\\"b\\\": 1}}\" [\"a\"])",
+  "declarations": "declarations/json.json",
+  "allow": [],
+  "expect": {
+    "failed": "invalid-input"
+  }
+}
