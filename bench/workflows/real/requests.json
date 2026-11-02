@@ -1,0 +1,10 @@
+[
+  {"id": "pending-work", "text": "Which of my repositories have uncommitted changes or commits that are not pushed yet? List each with what is pending."},
+  {"id": "failing-ci", "text": "Which of my repositories have failing CI according to the cached results? Write a short markdown report to {{scratch}}/ci.md with one line per failing repository, and tell me how many there are."},
+  {"id": "todo-leaders", "text": "How many TODO items does each of my repositories have? Show me the ten with the most."},
+  {"id": "lint-summary", "text": "Summarize the policy lint findings across my repositories: how many findings per rule, and list the fixable ones that are errors."},
+  {"id": "stale-unpushed", "text": "Which repositories have had commits sitting unpushed for more than two weeks? Oldest first, with how many days."},
+  {"id": "forks-behind", "text": "Which of my forks are behind their upstream according to the cached comparison, and by how much?"},
+  {"id": "dirty-snapshots", "text": "For every repository whose checkout has uncommitted changes, write a JSON file into {{scratch}}/dirty/ named after the repository (replace / with _) holding its branch and counts of staged, unstaged, and untracked files."},
+  {"id": "feature-branches", "text": "Which repositories are checked out on a branch other than main or master, and since when have they been on it?"}
+]
