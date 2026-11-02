@@ -91,6 +91,7 @@ type Conversion = ToSome | EachField | EachItem | EachElement | VariantName
 @dataclass(frozen=True, slots=True)
 class Literal:
     value: Value
+    type: Type
     span: Span
 
 
@@ -133,6 +134,8 @@ class Match:
 @dataclass(frozen=True, slots=True)
 class Lambda:
     params: tuple[Binder, ...]
+    param_types: tuple[Type, ...]
+    result: Type
     body: Node
     captured: str | None
     span: Span
@@ -183,6 +186,7 @@ class MakeRecord:
 @dataclass(frozen=True, slots=True)
 class MakeList:
     items: tuple[Node, ...]
+    element: Type
     span: Span
 
 
@@ -209,6 +213,7 @@ class MakeEmptyBrace:
 class Wrap:
     kind: str
     value: Node
+    type: Type
     span: Span
 
 

@@ -7,6 +7,7 @@ from dataclasses import dataclass, field, fields, is_dataclass, replace
 from typing import TypeIs, cast
 
 from sx import ir
+from sx import types as types_module
 from sx.diagnostics import Diagnostic
 from sx.registry import Capability, Effect, Function, Registry
 from sx.syntax import (
@@ -33,6 +34,7 @@ from sx.types import (
     NEVER,
     STRING,
     TRANSIENT_KINDS,
+    UNIT,
     EnumType,
     ListType,
     MapType,
@@ -285,7 +287,7 @@ class _Checker:
         self.diagnostics.append(Diagnostic(code="habit", construct=construct, span=span, message=message, **extra))
 
     def placeholder(self, span: Span) -> tuple[ir.Node, Type]:
-        return ir.Literal(UNIT_VALUE, span), NEVER
+        return ir.Literal(UNIT_VALUE, UNIT, span), NEVER
 
     def check_size(self, program: Node) -> None:
         nodes = 0
@@ -313,13 +315,18 @@ class _Checker:
 
     def settle(self, node: object) -> object:
         if isinstance(node, ir.MakeEmptyBrace):
-            if isinstance(self.resolve(node.shape), MapType):
-                return ir.Literal(MapValue(()), node.span)
+            shape = self.zonk(node.shape)
+            if isinstance(shape, MapType):
+                return ir.Literal(MapValue(()), shape, node.span)
             return ir.MakeRecord((), node.span)
         if isinstance(node, ir.MakeBracket):
-            items = tuple(self.settle(item) for item in node.items)
-            made = ir.MakeTuple if isinstance(self.resolve(node.shape), TupleType) else ir.MakeList
-            return made(cast("tuple[ir.Node, ...]", items), node.span)
+            items = cast("tuple[ir.Node, ...]", tuple(self.settle(item) for item in node.items))
+            shape = self.zonk(node.shape)
+            if isinstance(shape, ListType):
+                return ir.MakeList(items, shape.element, node.span)
+            return ir.MakeTuple(items, node.span)
+        if type(node).__module__ == types_module.__name__:
+            return self.zonk(cast("Type", node))
         if isinstance(node, tuple):
             return tuple(self.settle(item) for item in node)
         if is_dataclass(node) and not isinstance(node, type) and type(node).__module__ == ir.__name__:
@@ -579,14 +586,14 @@ class _Checker:
     def check(self, node: Node, expected: Type | None, scope: Mapping[str, Binding]) -> tuple[ir.Node, Type]:
         match node:
             case IntLiteral(value=value, span=span):
-                return self.coerce(ir.Literal(value, span), INT, expected, span)
+                return self.coerce(ir.Literal(value, INT, span), INT, expected, span)
             case StringLiteral(value=value, span=span):
                 enum = self.expected_enum(expected)
                 if enum is not None:
                     return self.variant_literal(value, enum, expected, span)
-                return self.coerce(ir.Literal(value, span), STRING, expected, span)
+                return self.coerce(ir.Literal(value, STRING, span), STRING, expected, span)
             case BoolLiteral(value=value, span=span):
-                return self.coerce(ir.Literal(value, span), BOOL, expected, span)
+                return self.coerce(ir.Literal(value, BOOL, span), BOOL, expected, span)
             case DurationLiteral(span=span):
                 self.error("bad-literal", span, "A duration only appears in retry and wait-until options.")
                 return self.placeholder(span)
@@ -630,7 +637,7 @@ class _Checker:
         if name == "none":
             inner = self.peel(expected)
             t = OptionType(inner if inner is not None else self.fresh())
-            return self.coerce(ir.Literal(NONE_VALUE, span), t, expected, span)
+            return self.coerce(ir.Literal(NONE_VALUE, t, span), t, expected, span)
         if name == "_":
             self.error("bad-pattern", span, "_ discards a value in a pattern. It is not a value itself.")
             return self.placeholder(span)
@@ -672,7 +679,7 @@ class _Checker:
                 f'{text} carries a value, so only a core function constructs it. Match on it with ({text} x).',
             )
             return self.placeholder(span)
-        return self.coerce(ir.Literal(VariantValue(enum.name, text), span), enum, expected, span)
+        return self.coerce(ir.Literal(VariantValue(enum.name, text), enum, span), enum, expected, span)
 
     def enums(self) -> list[EnumType]:
         found = [t for t in self.registry.types.values() if isinstance(t, EnumType)]
@@ -701,20 +708,21 @@ class _Checker:
                 f"{name} carries a value, so only a core function constructs it. Match on it with ({name} x).",
             )
             return self.placeholder(span)
-        return self.coerce(ir.Literal(VariantValue(enum.name, name), span), enum, expected, span)
+        return self.coerce(ir.Literal(VariantValue(enum.name, name), enum, span), enum, expected, span)
 
     def bracket(self, node: ListLiteral, expected: Type | None, scope: Mapping[str, Binding]) -> tuple[ir.Node, Type]:
         span = node.span
         hint = self.resolve(self.peel(expected) or NEVER)
         if isinstance(hint, ListType):
             items = [self.check(item, hint.element, scope)[0] for item in node.items]
-            return self.coerce(ir.MakeList(tuple(items), span), hint, expected, span)
+            return self.coerce(ir.MakeList(tuple(items), hint.element, span), hint, expected, span)
         if isinstance(hint, TupleType) and len(hint.items) == len(node.items):
             items = [self.check(item, t, scope)[0] for item, t in zip(node.items, hint.items, strict=True)]
             return self.coerce(ir.MakeTuple(tuple(items), span), hint, expected, span)
         checked = [self.check(item, None, scope) for item in node.items]
         if not checked:
-            return self.coerce(ir.MakeList((), span), ListType(self.fresh()), expected, span)
+            element = self.fresh()
+            return self.coerce(ir.MakeList((), element, span), ListType(element), expected, span)
         element = checked[0][1]
         if all(self.trial(t, element) for _, t in checked[1:]):
             shape = self.fresh()
@@ -750,7 +758,7 @@ class _Checker:
                 if name in given:
                     continue
                 if isinstance(self.resolve(field_type), OptionType):
-                    fields.append((name, ir.Literal(NONE_VALUE, span)))
+                    fields.append((name, ir.Literal(NONE_VALUE, field_type, span)))
                     continue
                 where = f"The input to {owner}" if owner is not None else "This record"
                 self.error(
@@ -762,7 +770,7 @@ class _Checker:
             return self.coerce(ir.MakeRecord(tuple(fields), span), hint, expected, span)
         if not node.fields:
             if isinstance(hint, MapType):
-                return self.coerce(ir.Literal(MapValue(()), span), hint, expected, span)
+                return self.coerce(ir.Literal(MapValue(()), hint, span), hint, expected, span)
             shape = self.fresh()
             self.shapes[shape.id] = BraceShape()
             return self.coerce(ir.MakeEmptyBrace(shape, span), shape, expected, span)
@@ -1520,7 +1528,7 @@ class _Checker:
         hint = self.resolve(expected) if expected is not None else None
         inner_expected = hint.inner if isinstance(hint, OptionType) else None
         value, t = self.check(node.items[1], inner_expected, scope)
-        return self.coerce(ir.Wrap("some", value, node.span), OptionType(t), expected, node.span)
+        return self.coerce(ir.Wrap("some", value, OptionType(t), node.span), OptionType(t), expected, node.span)
 
     def form_ok(self, node: Form, expected: Type | None, scope: Mapping[str, Binding]) -> tuple[ir.Node, Type]:
         return self.wrap_result(node, expected, scope, "ok")
@@ -1536,7 +1544,7 @@ class _Checker:
         hint = self.resolve(expected) if expected is not None else None
         result = hint if isinstance(hint, ResultType) else ResultType(self.fresh(), self.fresh())
         value, _ = self.check(node.items[1], result.ok if kind == "ok" else result.err, scope)
-        return self.coerce(ir.Wrap(kind, value, node.span), result, expected, node.span)
+        return self.coerce(ir.Wrap(kind, value, result, node.span), result, expected, node.span)
 
     def form_attempt(self, node: Form, expected: Type | None, scope: Mapping[str, Binding]) -> tuple[ir.Node, Type]:
         if not self.arity(node, 1, 1, "expression"):
@@ -1862,14 +1870,14 @@ class _Checker:
         if is_function_form(node):
             assert isinstance(node, Form)
             if not self.check_fn_shape(node):
-                return ir.Lambda((), ir.Literal(UNIT_VALUE, span), None, span), NEVER
+                return ir.Lambda((), (), NEVER, ir.Literal(UNIT_VALUE, UNIT, span), None, span), NEVER
             return self.instantiate(node, params, expected_return, who, scope, None)
         if isinstance(node, Symbol):
             binding = scope.get(node.name)
             if isinstance(binding, FunctionBinding):
                 if node.name in self.instantiating:
                     self.error("unknown-function", span, f"{node.name} cannot call itself. Sx has no recursion.")
-                    return ir.Lambda((), ir.Literal(UNIT_VALUE, span), None, span), NEVER
+                    return ir.Lambda((), (), NEVER, ir.Literal(UNIT_VALUE, UNIT, span), None, span), NEVER
                 lambda_ir, t = self.instantiate(binding.form, params, expected_return, who, binding.scope, node.name)
                 return lambda_ir, t
             if binding is None and (node.name in PRELUDE or self.registry.function(node.name) is not None):
@@ -1878,13 +1886,13 @@ class _Checker:
             self.habit(
                 "keyword-call", span, "A keyword is not a function.", fix=f"(fn [r] (get r :{node.name}))", help="get",
             )
-            return ir.Lambda((), ir.Literal(UNIT_VALUE, span), None, span), NEVER
+            return ir.Lambda((), (), NEVER, ir.Literal(UNIT_VALUE, UNIT, span), None, span), NEVER
         self.error(
             "type-mismatch", span, f"{who} takes a function here, such as (fn [x] ...), but this is {show(node)}.",
             help=who,
         )
         self.check(node, None, scope)
-        return ir.Lambda((), ir.Literal(UNIT_VALUE, span), None, span), NEVER
+        return ir.Lambda((), (), NEVER, ir.Literal(UNIT_VALUE, UNIT, span), None, span), NEVER
 
     def named_function(
         self, node: Symbol, params: list[Type], expected_return: Type | None, who: str, scope: Mapping[str, Binding],
@@ -1894,7 +1902,7 @@ class _Checker:
         call = Form((node, *(Symbol(name, node.span) for name in names)), node.span)
         with self.outside_tail():
             body, t = self.check(call, expected_return, inner)
-        return ir.Lambda(tuple(ir.BindName(name) for name in names), body, None, node.span), t
+        return ir.Lambda(tuple(ir.BindName(name) for name in names), tuple(params), t, body, None, node.span), t
 
     def instantiate(
         self, form: Form, params: list[Type], expected_return: Type | None, who: str, scope: Mapping[str, Binding],
@@ -1905,7 +1913,7 @@ class _Checker:
         if self.instantiations > self.budgets.instantiations:
             if self.instantiations == self.budgets.instantiations + 1:
                 self.error("too-large", span, "Local functions expand into more instantiations than the budget allows.")
-            return ir.Lambda((), ir.Literal(UNIT_VALUE, span), local, span), NEVER
+            return ir.Lambda((), (), NEVER, ir.Literal(UNIT_VALUE, UNIT, span), local, span), NEVER
         param_nodes = form.items[1]
         assert isinstance(param_nodes, ListLiteral)
         if len(param_nodes.items) != len(params):
@@ -1915,7 +1923,7 @@ class _Checker:
                 f"This function takes {given} parameter{'s' if given != 1 else ''}, but {who} passes {len(params)}.",
                 help=who if local is None else None,
             )
-            return ir.Lambda((), ir.Literal(UNIT_VALUE, span), local, span), NEVER
+            return ir.Lambda((), (), NEVER, ir.Literal(UNIT_VALUE, UNIT, span), local, span), NEVER
         inner: dict[str, Binding] = dict(scope)
         binders = []
         for pattern, t in zip(param_nodes.items, params, strict=True):
@@ -1930,7 +1938,7 @@ class _Checker:
             self.tail = saved
             if local is not None:
                 self.instantiating.pop()
-        return ir.Lambda(tuple(binders), body, local, span), t
+        return ir.Lambda(tuple(binders), tuple(params), t, body, local, span), t
 
     def record_fix(self, pattern: Node, t: Type, body: Node) -> str | None:
         resolved = self.resolve(t)

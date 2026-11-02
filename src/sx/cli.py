@@ -12,6 +12,7 @@ from sx import help as sx_help
 from sx import ir
 from sx.checker import CheckResult, closest
 from sx.diagnostics import Diagnostic, render
+from sx.export import export_program
 from sx.host import FixtureHost, UnexpectedCallError, run
 from sx.machine import Completed, Failed
 from sx.program import compile_source
@@ -48,6 +49,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         command.add_argument("--declarations", type=Path, help="JSON declarations of tools, types, and inputs")
         command.add_argument("--allow", action="append", default=[], metavar="ID", help="Authorize one tool")
         command.add_argument("--format", choices=["text", "json"], default="text")
+        if name == "check":
+            command.add_argument("--emit", choices=["ir"], help="Print the checked semantic IR as JSON")
         if name == "run":
             command.add_argument("--responses", type=Path, help="JSON list of recorded tool responses")
             command.add_argument("--input", action="append", default=[], metavar="NAME=JSON", help="One input value")
@@ -122,6 +125,9 @@ def command_program(args: argparse.Namespace) -> int:
         report_diagnostics(args.format, source, checked)
         return EXIT_REJECTED
     program = checked.program
+    if args.command == "check" and args.emit == "ir":
+        print(json.dumps(export_program(program, inputs)))
+        return EXIT_OK
     if args.command == "check":
         emit(args.format, {"ok": True, "result": show_type(program.result)}, f"ok: {show_type(program.result)}")
         return EXIT_OK
