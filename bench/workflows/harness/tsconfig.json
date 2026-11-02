@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "noEmit": true,
+    "target": "es2023",
+    "lib": ["es2023", "dom"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "noUncheckedIndexedAccess": true,
+    "skipLibCheck": true,
+    "types": []
+  },
+  "files": ["ambient.d.ts", "mcp.ts", "api.ts", "run.ts"]
+}

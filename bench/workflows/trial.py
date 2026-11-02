@@ -1,0 +1,79 @@
+import json
+from collections.abc import Callable
+from dataclasses import asdict
+from pathlib import Path
+from typing import Any
+
+import arms
+from arms import NO_CORES, Arm, ArmRun
+from definition import Workflow
+from pilot import ask as ask_model
+from pilot import extract
+from probe import REPAIRS, Attempt, Trial, js_prompt, repair_prompt
+from sandbox import Sandbox
+
+from sx.help import guide
+
+type Json = dict[str, Any]
+type Ask = Callable[[Path, str, str, Path], tuple[str, dict[str, int], str | None]]
+
+LANGUAGE: dict[str, str] = {"sx": "sx", "js": "ts"}
+
+
+def sx_prompt(workflow: Workflow, sandbox: Sandbox, level: str) -> str:
+    task = workflow.render(workflow.task, sandbox).strip()
+    return "\n".join([
+        guide(level), "", "## Your task", "", task, "", arms.sx_listing(workflow, sandbox),
+        "Reply with one Sx program in a ```sx code block, and nothing else.",
+    ]) + "\n"
+
+
+def js_arm_prompt(workflow: Workflow, sandbox: Sandbox) -> str:
+    task = {"description": workflow.render(workflow.task, sandbox).strip()}
+    return js_prompt({**arms.described_for(workflow, sandbox), **task}, NO_CORES)
+
+
+def verdict_of(workflow: Workflow, sandbox: Sandbox, run: ArmRun) -> tuple[str, str]:
+    if run.status != "completed":
+        return run.status, run.detail
+    verdict = workflow.check(sandbox, run.result)
+    return verdict.status, verdict.detail
+
+
+def reference(workflow: Workflow, arm: Arm) -> tuple[ArmRun, str, str]:
+    with workflow.sandbox() as sandbox:
+        run = arms.run_arm(arm, workflow, sandbox, workflow.render(workflow.reference(arm), sandbox))
+        status, detail = verdict_of(workflow, sandbox, run)
+    return run, status, detail
+
+
+def run_trial(
+    workflow: Workflow, arm: Arm, model: str, thinking: str, level: str, sample: int, out: Path, ask: Ask = ask_model
+) -> Trial:
+    directory = out / workflow.id / f"{arm if arm == 'js' else 'sx-' + level}-{sample}"
+    directory.mkdir(parents=True, exist_ok=True)
+    attempts: list[Attempt] = []
+    with workflow.sandbox() as sandbox:
+        original = sx_prompt(workflow, sandbox, level) if arm == "sx" else js_arm_prompt(workflow, sandbox)
+        prompt = original
+        for index in range(REPAIRS + 1):
+            prompt_file = directory / f"prompt-{index}.md"
+            prompt_file.write_text(prompt)
+            reply, tokens, error = ask(prompt_file, model, thinking, out)
+            code, _ = extract(reply)
+            if not code.strip():
+                attempts.append(Attempt(reply, code, tokens, error, "no-answer", error or "empty reply", None))
+                break
+            sandbox.reset()
+            workflow.setup(sandbox)
+            run = arms.run_arm(arm, workflow, sandbox, code)
+            status, detail = verdict_of(workflow, sandbox, run)
+            attempt = Attempt(reply, code, tokens, error, status, detail, run.feedback, run.labels, len(run.calls))
+            attempts.append(attempt)
+            if status == "correct" or run.feedback is None:
+                break
+            prompt = repair_prompt(original, attempts, LANGUAGE[arm])
+    guide_level = level if arm == "sx" else "none"
+    trial = Trial(workflow.id, arm, model, thinking, guide_level, sample, attempts)
+    (directory / "trial.json").write_text(json.dumps(asdict(trial), indent=2))
+    return trial

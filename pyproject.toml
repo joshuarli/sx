@@ -35,10 +35,10 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "cores"]
-pythonpath = ["bench/codemode"]
+pythonpath = ["bench/codemode", "bench/workflows"]
 
 [tool.ty.environment]
-root = ["src", "tests", "bench", "bench/codemode", "cores/text/src", "cores/semver/src", "cores/git/src", "cores/github/src", "hosts/repomod/src", "hosts/repomod/tests"]
+root = ["src", "tests", "bench", "bench/codemode", "bench/workflows", "cores/text/src", "cores/semver/src", "cores/git/src", "cores/github/src", "hosts/repomod/src", "hosts/repomod/tests"]
 python-version = "3.15"
 python-platform = "darwin"
 

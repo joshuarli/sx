@@ -1,0 +1,11 @@
+(let [dir "{{root}}/data"
+      files (filter (fn [e] (= (get e :kind) File)) (call fs.list {:path dir}))
+      sizes (map (fn [e]
+                   (match (call fs.stat {:path (str dir "/" (get e :name))})
+                     (some s) (get s :size)
+                     none 0))
+                 files)
+      total (reduce + 0 sizes)
+      _ (call fs.write-text {:path "{{root}}/summary.txt"
+                             :text (str "files: " (count files) "\nbytes: " total "\n")})]
+  {:count (count files) :bytes total})
