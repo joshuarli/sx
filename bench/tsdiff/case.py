@@ -69,4 +69,5 @@ class CaseFiles:
     def read(cls, directory: Path) -> CaseFiles:
         about = json.loads((directory / META).read_text())
         grants = directory / "grants.json" if about.get("grants") else None
-        return cls(directory, str(about["name"]), tuple(about.get("allow", [])), grants, about.get("expect_trap"), about)
+        allow = tuple(about.get("allow", []))
+        return cls(directory, str(about["name"]), allow, grants, about.get("expect_trap"), about)

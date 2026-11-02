@@ -6,15 +6,16 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from tsdiff.build import SCRATCH, generated_case, mutant_case  # noqa: E402
-from tsdiff.corpus import build_corpus  # noqa: E402
-from tsdiff.run import case_directories, run_all, summarize  # noqa: E402
+from tsdiff.build import SCRATCH, generated_case, mutant_case
+from tsdiff.corpus import build_corpus
+from tsdiff.run import case_directories, run_all, summarize
 
 
 def command_generate(args: argparse.Namespace) -> int:
     out = Path(args.out)
     for seed in range(args.seed, args.seed + args.count):
-        (mutant_case if args.mutants else generated_case)(seed).write(out / f"{'mut' if args.mutants else 'gen'}-{seed}")
+        made = mutant_case(seed) if args.mutants else generated_case(seed)
+        made.write(out / made.name)
     print(f"wrote {args.count} cases to {out}")
     return 0
 

@@ -75,11 +75,17 @@ def run_all(directories: list[Path], *, shim_only: bool, binary: Path | None, jo
     return report
 
 
+def disagreement_line(result: Result) -> str:
+    reasons = result.verdict.reasons if result.verdict is not None else ()
+    return f"DISAGREE {result.name}: " + "; ".join(reasons)
+
+
 def summarize(report: Report) -> list[str]:
     lines: list[str] = []
     verdicts = Counter(r.verdict.kind for r in report.results if r.verdict is not None)
     lines.append(f"cases {len(report.results)}  verdicts {dict(verdicts.most_common())}")
-    codes = Counter(code for r in report.results if r.verdict is not None and r.verdict.kind == "rejected" for code in r.verdict.reasons)
+    rejected = [r.verdict for r in report.results if r.verdict is not None and r.verdict.kind == "rejected"]
+    codes = Counter(code for verdict in rejected for code in verdict.reasons)
     if codes:
         lines.append(f"rejected by sx, by diagnostic code: {dict(codes.most_common())}")
     shapes = Counter(
@@ -89,16 +95,13 @@ def summarize(report: Report) -> list[str]:
         lines.append(f"js outcomes {dict(shapes.most_common())}")
     mutants = [r for r in report.results if r.mutant is not None]
     if mutants and any(r.caught is not None for r in mutants):
-        caught = sum(1 for r in mutants if r.caught)
-        wrong = [r for r in mutants if r.caught and r.note]
-        lines.append(f"mutants {len(mutants)}  rejected {caught}  accepted {len(report.accepted_mutants())}  other code {len(wrong)}")
-    for r in report.disagreements():
-        lines.append(f"DISAGREE {r.name}: " + "; ".join(r.verdict.reasons if r.verdict else ()))
-    for r in report.accepted_mutants():
-        lines.append(f"MUTANT ACCEPTED {r.name}: {r.mutant} should be {r.expected_code}")
-    for r in report.results:
-        if r.caught and r.note:
-            lines.append(f"mutant {r.name} ({r.mutant}): {r.note}")
+        caught = sum(1 for r in mutants if r.caught is True)
+        wrong = [r for r in mutants if r.caught is True and r.note]
+        accepted = len(report.accepted_mutants())
+        lines.append(f"mutants {len(mutants)}  rejected {caught}  accepted {accepted}  other code {len(wrong)}")
+    lines.extend(disagreement_line(r) for r in report.disagreements())
+    lines.extend(f"MUTANT ACCEPTED {r.name}: {r.mutant} should be {r.expected_code}" for r in report.accepted_mutants())
+    lines.extend(f"mutant {r.name} ({r.mutant}): {r.note}" for r in report.results if r.caught is True and r.note)
     return lines
 
 

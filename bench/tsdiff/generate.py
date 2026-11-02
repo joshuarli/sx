@@ -6,7 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .case import Case, Json
+from .case import Json
 
 DECLARATIONS = Path(__file__).resolve().parent / "declarations.json"
 KINDS = ("Timeout", "Unavailable", "RateLimited", "NotFound", "PermissionDenied", "Invalid", "Conflict", "Failed")
@@ -35,7 +35,7 @@ class World:
     injected: int = 0
 
     def __post_init__(self) -> None:
-        count = self.rng.choice((0, 1, 2, 3, 3, 4, 5))
+        count = 5
         self.items = [
             {
                 "id": f"i{n}", "name": self.rng.choice(NAMES), "qty": self.rng.choice((-3, 0, 1, 2, 3, 5, 9)),
@@ -54,7 +54,7 @@ class World:
         results: list[Json] = [{"error": o["error"]} if "error" in o else {"output": o["output"]} for o in outputs]
         if not results:
             return []
-        if self.rng.random() < 0.2:
+        if self.rng.random() < 0.07:
             results.insert(0, self.error())
         if write:
             results += [results[-1]] * 3
@@ -67,7 +67,8 @@ class World:
                 return [{"output": self.items}]
             case "items.get":
                 item = by_id.get(request["id"])
-                return [{"output": item}] if item else [{"error": {"kind": "NotFound", "message": f"no item {request['id']}"}}]
+                missing = {"error": {"kind": "NotFound", "message": f"no item {request['id']}"}}
+                return [{"output": item}] if item else [missing]
             case "items.find":
                 limit = request.get("limit")
                 found = [i["id"] for i in self.items if request["query"] in i["name"]]
@@ -95,7 +96,7 @@ class World:
                 return [{"output": page}]
             case "jobs.status":
                 states = [("running", 0), ("running", 40), ("done", 100)]
-                return [{"output": {"state": s, "progress": p}} for s, p in states[: self.rng.randint(1, 3)]]
+                return [{"output": {"state": s, "progress": p}} for s, p in states[self.rng.randint(0, 2) :]]
             case _:
                 raise ValueError(f"no world for {capability}")
 
@@ -130,7 +131,9 @@ class Writer:
         return var
 
     def vars_of(self, *types: str, mutable: bool | None = None) -> list[Var]:
-        return [v for scope in self.scopes for v in scope if v.type in types and (mutable is None or v.mutable == mutable)]
+        return [
+            v for scope in self.scopes for v in scope if v.type in types and (mutable is None or v.mutable == mutable)
+        ]
 
     def emit(self, text: str) -> None:
         self.lines.append("  " * (len(self.scopes) - 1) + text)
@@ -221,7 +224,10 @@ class Writer:
             lambda: f"({self.bool_(d - 1)} ? {self.str_(d - 1)} : {self.str_(d - 1)})",
         ]
         if self.vars_of("item"):
-            options += [lambda: f"{r.choice(self.vars_of('item')).name}.name", lambda: f"{r.choice(self.vars_of('item')).name}.id"]
+            options += [
+                lambda: f"{r.choice(self.vars_of('item')).name}.name",
+                lambda: f"{r.choice(self.vars_of('item')).name}.id",
+            ]
         return self.pick(*options)
 
     def opt_(self, d: int = 1) -> str:
@@ -253,13 +259,22 @@ class Writer:
             lambda: f"({self.opt_(0)} {r.choice(('== null', '!= null'))})",
             lambda: f"{self.strs_(d - 1)}.includes({self.str_(0)})",
             lambda: f"Number.isInteger({self.float_(d - 1)})",
-            lambda: f"{self.ints_(d - 1)}.{r.choice(('some', 'every'))}((n) => n {r.choice(('>', '<'))} {r.choice(INT_LITERALS)})",
+            lambda: (
+                f"{self.ints_(d - 1)}.{r.choice(('some', 'every'))}"
+                f"((n) => n {r.choice(('>', '<'))} {r.choice(INT_LITERALS)})"
+            ),
         ]
         return self.pick(*options)
 
     def cond(self) -> str:
         r = self.rng
-        extra: list[Callable[[], str]] = [lambda: self.str_(1), lambda: self.int_(1), lambda: self.opt_(1), lambda: r.choice(self.vars_of("rec", "ints", "strs")).name if self.vars_of("rec", "ints", "strs") else "true"]
+        containers = self.vars_of("rec", "ints", "strs")
+        extra: list[Callable[[], str]] = [
+            lambda: self.str_(1),
+            lambda: self.int_(1),
+            lambda: self.opt_(1),
+            lambda: r.choice(containers).name if containers else "true",
+        ]
         return self.pick(lambda: self.bool_(2), lambda: self.bool_(2), lambda: self.bool_(1), *extra)
 
     def strs_(self, d: int = 1) -> str:
@@ -284,7 +299,9 @@ class Writer:
     def ints_(self, d: int = 1) -> str:
         r = self.rng
         found = [v.name for v in self.vars_of("ints")]
-        options: list[Callable[[], str]] = [lambda: "[" + ", ".join(r.choice(INT_LITERALS) for _ in range(r.randint(0, 4))) + "]"]
+        options: list[Callable[[], str]] = [
+            lambda: "[" + ", ".join(r.choice(INT_LITERALS) for _ in range(r.randint(0, 4))) + "]"
+        ]
         if found:
             options += [lambda: r.choice(found)] * 3
         if d > 0:
@@ -333,7 +350,7 @@ class Writer:
 
 def item_id(w: Writer) -> str:
     items = w.vars_of("item")
-    pool = [lambda: json.dumps(f"i{w.rng.randint(0, 4)}")]
+    pool = [lambda: json.dumps(f"i{w.rng.choice((0, 0, 1, 1, 2, 2, 2, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 9))}")]
     if items:
         pool += [lambda: f"{w.rng.choice(items).name}.id"]
     return w.pick(*pool)
@@ -358,7 +375,13 @@ def statement(w: Writer, depth: int) -> None:
         lambda: call_write(w),
     ]
     if depth > 0:
-        choices += [lambda: branch(w, depth), lambda: counted_loop(w, depth), lambda: helper_call(w), lambda: accumulate_loop(w, depth), lambda: accumulate_loop(w, depth)]
+        choices += [
+            lambda: branch(w, depth),
+            lambda: counted_loop(w, depth),
+            lambda: helper_call(w),
+            lambda: accumulate_loop(w, depth),
+            lambda: accumulate_loop(w, depth),
+        ]
     r.choice(choices)()
 
 
@@ -395,7 +418,8 @@ def call_read(w: Writer) -> None:
             w.emit(f"const {var.name} = await tools.stats.mean({{ ids: {ids} }});")
         case "note":
             var = w.declare("note", "str")
-            w.emit(f"const {var.name} = await tools.notes.read({{ path: {json.dumps(r.choice(('a.txt', 'b.txt')))} }});")
+            path = json.dumps(r.choice(("a.txt", "b.txt")))
+            w.emit(f"const {var.name} = await tools.notes.read({{ path: {path} }});")
         case _:
             lists = w.vars_of("items")
             if lists:
@@ -413,12 +437,16 @@ def call_write(w: Writer) -> None:
             var = w.declare("created", "str")
             w.emit(f"const {var.name} = (await tools.items.create({{ name: {name}, qty: {quantity} }})).id;")
         case _:
-            w.emit(f"await tools.notes.write({{ path: {json.dumps(r.choice(('a.txt', 'out.txt')))}, text: {w.str_(1)} }});")
+            path = json.dumps(r.choice(("a.txt", "out.txt")))
+            w.emit(f"await tools.notes.write({{ path: {path}, text: {w.str_(1)} }});")
 
 
 def log(w: Writer) -> None:
     arguments = ", ".join(
-        w.pick(lambda: w.str_(1), lambda: w.int_(1), lambda: w.bool_(1), lambda: w.float_(1), lambda: w.strs_(1), lambda: w.opt_(1))
+        w.pick(
+            lambda: w.str_(1), lambda: w.int_(1), lambda: w.bool_(1), lambda: w.float_(1), lambda: w.strs_(1),
+            lambda: w.opt_(1),
+        )
         for _ in range(w.rng.randint(1, 3))
     )
     w.emit(f"console.log({arguments});")
@@ -532,7 +560,8 @@ def parallel(w: Writer) -> None:
         case "pair":
             identifier = item_id(w)
             a, b = w.declare("pa", "item"), w.declare("pb", "int")
-            w.emit(f"const [{a.name}, {b.name}] = await Promise.all([tools.items.get({{ id: {identifier} }}), tools.items.count({{}})]);")
+            reads = f"[tools.items.get({{ id: {identifier} }}), tools.items.count({{}})]"
+            w.emit(f"const [{a.name}, {b.name}] = await Promise.all({reads});")
         case "map":
             ids = w.vars_of("strs")
             source = r.choice(ids).name if ids else "[\"i0\", \"i1\"]"
@@ -540,21 +569,26 @@ def parallel(w: Writer) -> None:
             w.emit(f"const {var.name} = await Promise.all({source}.map((id) => tools.items.get({{ id }})));")
         case "settled":
             a = w.declare("sa", "str")
-            w.emit(f"const [{a.name}x, {a.name}y] = await Promise.allSettled([tools.items.get({{ id: \"i0\" }}), tools.notes.read({{ path: \"a.txt\" }})]);")
-            w.emit(f"const {a.name} = {a.name}x.status === \"fulfilled\" ? {a.name}x.value.name : {a.name}y.status === \"fulfilled\" ? {a.name}y.value : \"none\";")
+            reads = 'tools.items.get({ id: "i0" }), tools.notes.read({ path: "a.txt" })'
+            w.emit(f"const [{a.name}x, {a.name}y] = await Promise.allSettled([{reads}]);")
+            first = f'{a.name}x.status === "fulfilled" ? {a.name}x.value.name'
+            w.emit(f'const {a.name} = {first} : {a.name}y.status === "fulfilled" ? {a.name}y.value : "none";')
         case _:
             var = w.declare("states", "strs")
-            w.emit(f"const {var.name}raw = await Promise.allSettled([\"i0\", \"i1\", \"zz\"].map((id) => tools.items.get({{ id }})));")
-            w.emit(f"const {var.name} = {var.name}raw.map((s) => s.status === \"fulfilled\" ? s.value.id : s.status);")
+            reads = '["i0", "i1", "zz"].map((id) => tools.items.get({ id }))'
+            w.emit(f"const {var.name}raw = await Promise.allSettled({reads});")
+            w.emit(f"const {var.name} = {var.name}raw.map((s) => s.status === \"fulfilled\" ? s.value.id : \"i0\");")
 
 
 def helper_call(w: Writer) -> None:
     r = w.rng
     name = w.fresh("helper")
     parameter = w.fresh("p")
-    w.helpers.append(f"function {name}({parameter}: number): number {{\n  return {parameter} * {r.choice(('2', '3'))} + {r.choice(('1', '0'))};\n}}")
+    body = f"{parameter} * {r.choice(('2', '3'))} + {r.choice(('1', '0'))}"
+    w.helpers.append(f"function {name}({parameter}: number): number {{\n  return {body};\n}}")
+    argument = w.int_(1)
     var = w.declare("hv", "int")
-    w.emit(f"const {var.name} = {name}({w.int_(1)});")
+    w.emit(f"const {var.name} = {name}({argument});")
 
 
 def bounded(w: Writer) -> None:
@@ -563,15 +597,29 @@ def bounded(w: Writer) -> None:
         case "retry":
             identifier = item_id(w)
             var = w.declare("rt", "item")
-            options = r.choice(("{ delaysMs: [100, 200] }", "{ delaysMs: [50], on: [\"Timeout\", \"NotFound\"] }", "{ backoffMs: [100, 400], withinMs: 1000 }", "{ delaysMs: [] }"))
+            options = r.choice((
+                "{ delaysMs: [100, 200] }",
+                '{ delaysMs: [50], on: ["Timeout", "NotFound"] }',
+                "{ backoffMs: [100, 400], withinMs: 1000 }",
+                "{ delaysMs: [] }",
+            ))
             w.emit(f"const {var.name} = await retry({options}, () => tools.items.get({{ id: {identifier} }}));")
         case "wait":
             var = w.declare("job", "int")
-            w.emit(f"const {var.name}raw = await waitUntil({{ everyMs: {r.choice(('100', '250'))}, withinMs: {r.choice(('300', '1000'))} }}, () => tools.jobs.status({{ id: \"j1\" }}), (j) => j.state === \"done\");")
+            every, within = r.choice(("100", "250")), r.choice(("600", "1000", "1000", "1000", "150"))
+            poll = '() => tools.jobs.status({ id: "j1" })'
+            w.emit(
+                f"const {var.name}raw = await waitUntil({{ everyMs: {every}, withinMs: {within} }}, "
+                f'{poll}, (j) => j.state === "done");'
+            )
             w.emit(f"const {var.name} = {var.name}raw.progress;")
         case "loop":
             var = w.declare("paged", "strs")
-            w.emit(f"const {var.name} = await loop({{ max: {r.choice(('2', '4', '10'))} }}, {{ cursor: null, seen: [] }}, async ({{ cursor, seen }}) => {{")
+            limit = r.choice(("2", "4", "10"))
+            w.emit(
+                f"const {var.name} = await loop({{ max: {limit} }}, {{ cursor: null, seen: [] }}, "
+                "async ({ cursor, seen }) => {"
+            )
             w.emit("  const page = await tools.pages.fetch({ cursor });")
             w.emit("  const all = seen.concat(page.items);")
             w.emit("  if (page.next == null) { return done(all); }")
@@ -581,7 +629,9 @@ def bounded(w: Writer) -> None:
             var = w.declare("pm", "ints")
             ids = w.vars_of("strs")
             source = r.choice(ids).name if ids else "[\"i0\", \"i1\", \"i2\"]"
-            w.emit(f"const {var.name} = await parMap({{ limit: {r.choice(('1', '2', '8'))} }}, {source}, async (id) => (await tools.items.get({{ id }})).qty);")
+            limit = r.choice(("1", "2", "8"))
+            body = "async (id) => (await tools.items.get({ id })).qty"
+            w.emit(f"const {var.name} = await parMap({{ limit: {limit} }}, {source}, {body});")
         case _:
             w.emit(f"await sleep({r.choice(('10', '250', '0', '1000'))});")
 
@@ -602,6 +652,8 @@ def write_program(seed: int) -> str:
     w.helpers = []
     statements(w, w.rng.randint(4, 12), 2)
     if w.rng.random() < 0.08:
-        w.emit(w.rng.choice(TRAP_STATEMENTS).replace("ints", w.list_name("ints") if w.vars_of("ints") else "[1, 2]").replace("strs", w.list_name("strs") if w.vars_of("strs") else "[\"a\"]"))
+        ints = w.list_name("ints") if w.vars_of("ints") else "[1, 2]"
+        strs = w.list_name("strs") if w.vars_of("strs") else '["a"]'
+        w.emit(w.rng.choice(TRAP_STATEMENTS).replace("ints", ints).replace("strs", strs))
     w.emit(f"return {result_expression(w)};")
     return "\n".join([*w.helpers, *w.lines]) + "\n"

@@ -37,10 +37,14 @@ def learn_responses(program: str, world: World, specs: list[dict[str, str]], dec
         (directory / "tools.json").write_text(json.dumps(specs))
         for _ in range(LEARNING_ROUNDS):
             (directory / "responses.json").write_text(json.dumps(responses))
-            error = shim_raw(directory / "program.ts", directory / "tools.json", directory / "responses.json").get("error")
+            raw = shim_raw(directory / "program.ts", directory / "tools.json", directory / "responses.json")
+            error = raw.get("error")
             if error is None or error["class"] != "unexpected-call":
                 return responses
-            known = any(r["capability"] == error["capability"] and without_nulls(r["input"]) == error["input"] for r in responses)
+            known = any(
+                r["capability"] == error["capability"] and without_nulls(r["input"]) == error["input"]
+                for r in responses
+            )
             if known:
                 return responses
             capability = error["capability"]

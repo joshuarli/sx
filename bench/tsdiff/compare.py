@@ -18,13 +18,14 @@ SX_ENVIRONMENT = "SX_BIN"
 BUN_TIMEOUT = 60
 SX_TIMEOUT = 60
 TRAPS = ("arithmetic", "out-of-range", "loop-limit")
-CALL_FAILED = re.compile(r"failed with (Timeout|Unavailable|RateLimited|NotFound|PermissionDenied|Invalid|Conflict|Failed)\b")
+KINDS = ("Timeout", "Unavailable", "RateLimited", "NotFound", "PermissionDenied", "Invalid", "Conflict", "Failed")
+CALL_FAILED = re.compile(r"failed with (" + "|".join(KINDS) + r")\b")
 
 type Status = Literal["completed", "failed", "rejected"]
 type VerdictKind = Literal["agree", "agree-refined", "rejected", "disagree"]
 
 
-class SxUnsupportedLanguage(RuntimeError):
+class SxUnsupportedLanguageError(RuntimeError):
     pass
 
 
@@ -80,7 +81,7 @@ def same_json(a: Json, b: Json) -> bool:
         return a.keys() == b.keys() and all(same_json(a[k], b[k]) for k in a)
     if isinstance(a, list) and isinstance(b, list):
         return len(a) == len(b) and all(same_json(x, y) for x, y in zip(a, b, strict=True))
-    return type(a) is type(b) and a == b
+    return bool(type(a) is type(b) and a == b)
 
 
 def normalize_js(raw: Json) -> Outcome:
@@ -118,7 +119,8 @@ def normalize_sx(raw: Json) -> Outcome:
         return Outcome("sx", "completed", raw["result"], logs, calls, delays)
     if outcome == "unexpected-call":
         listed = tuple(call_of(c["capability"], c["input"]) for c in raw.get("calls", []))
-        return Outcome("sx", "failed", None, logs, listed, delays, Failure("unexpected-call", None, raw.get("message", "")))
+        failure = Failure("unexpected-call", None, raw.get("message", ""))
+        return Outcome("sx", "failed", None, logs, listed, delays, failure)
     failure = raw["failure"]
     kind = None
     if failure["kind"] == "call-failed":
@@ -153,7 +155,7 @@ def sx_binary() -> Path:
 
 
 def sx_command(files: CaseFiles, binary: Path) -> list[str]:
-    command = [
+    command: list[str] = [
         str(binary), "run", str(files.program), "--language", "ts", "--declarations", str(files.declarations),
         "--responses", str(files.responses), "--format", "json",
     ]
@@ -173,7 +175,7 @@ def run_sx(files: CaseFiles, binary: Path | None = None) -> Outcome:
         refused = "--language" in completed.stderr or "unrecognized" in completed.stderr
         detail = completed.stderr.strip() or completed.stdout.strip()
         if refused:
-            raise SxUnsupportedLanguage(f"this sx does not accept `run --language ts`: {detail}") from None
+            raise SxUnsupportedLanguageError(f"this sx does not accept `run --language ts`: {detail}") from None
         raise SxProtocolError(f"sx exited {completed.returncode} without JSON on {files.directory}: {detail}") from None
     if not isinstance(raw, dict) or not ("outcome" in raw or raw.get("ok") is False):
         raise SxProtocolError(f"sx printed an unrecognized report on {files.directory}: {completed.stdout[:200]}")
@@ -203,7 +205,8 @@ def compare(js: Outcome, sx: Outcome, *, parallel: bool, expect_trap: str | None
     reasons: list[str] = []
     expected = js.trap or expect_trap
     if sx.trap is not None and sx.trap != expected:
-        reasons.append(f"sx trapped ({sx.trap}) where js {'trapped differently: ' + (js.trap or '') if js.trap else 'did not trap'}")
+        seen = f"trapped differently: {js.trap}" if js.trap is not None else "did not trap"
+        reasons.append(f"sx trapped ({sx.trap}) where js {seen}")
     elif sx.trap is not None:
         pass
     elif js.trap is not None:

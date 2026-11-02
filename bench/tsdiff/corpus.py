@@ -63,7 +63,8 @@ def scripts_of(directory: Path, phase: str, run: str, task: str) -> list[Script]
                 str(event["args"].get("code", "")), directory,
             )
         elif parent is not None:
-            nested.setdefault(parent, []).append(Nested(event["toolName"], event.get("args") or {}, ends.get(event["toolCallId"])))
+            call = Nested(event["toolName"], event.get("args") or {}, ends.get(event["toolCallId"]))
+            nested.setdefault(parent, []).append(call)
     for call_id, script in scripts.items():
         script.nested = nested.get(call_id, [])
     return list(scripts.values())
@@ -106,7 +107,11 @@ class Catalogue:
 
 
 def fs_grants(grants: Json) -> Json:
-    return {name: {**scope, "roots": ["/"]} if "roots" in scope else scope for name, scope in (grants or {}).items() if scope is not None}
+    return {
+        name: {**scope, "roots": ["/"]} if "roots" in scope else scope
+        for name, scope in (grants or {}).items()
+        if scope is not None
+    }
 
 
 def describe(declarations: Json, grants: Json) -> Json:
@@ -115,7 +120,10 @@ def describe(declarations: Json, grants: Json) -> Json:
         (files / "declarations.json").write_text(json.dumps(declarations))
         (files / "grants.json").write_text(json.dumps(grants))
         completed = subprocess.run(
-            [str(sx_binary()), "mcp", "describe", "--declarations", str(files / "declarations.json"), "--grants", str(files / "grants.json")],
+            [
+                str(sx_binary()), "mcp", "describe", "--declarations", str(files / "declarations.json"),
+                "--grants", str(files / "grants.json"),
+            ],
             capture_output=True, text=True, check=False,
         )
     if completed.returncode != 0:
@@ -167,30 +175,42 @@ def catalogue_17(directory: Path, repomod: Json) -> Catalogue:
     )
 
 
+def is_envelope(value: Json) -> bool:
+    return isinstance(value, dict) and "content" in value and "isError" in value
+
+
+def text_of(result: Json) -> str:
+    texts: list[str] = [b.get("text", "") for b in result.get("content", []) if b.get("type") == "text"]
+    return "".join(texts)
+
+
 def decode_result(result: Json, output_type: str, mode: str, types: dict[str, str]) -> tuple[str, Json]:
     if result is None:
         return "missing", None
-    while isinstance(result.get("structuredContent"), dict) and "content" in result["structuredContent"] and "isError" in result["structuredContent"]:
+    while is_envelope(result.get("structuredContent")):
         result = result["structuredContent"]
     if result.get("isError"):
         found = result
         for _ in range(4):
             structured = found.get("structuredContent")
-            if isinstance(structured, dict) and isinstance(structured.get("kind"), str) and isinstance(structured.get("message"), str):
-                return "error", {"kind": structured["kind"], "message": structured["message"]}
+            kind = structured.get("kind") if isinstance(structured, dict) else None
+            message = structured.get("message") if isinstance(structured, dict) else None
+            if isinstance(kind, str) and isinstance(message, str):
+                return "error", {"kind": kind, "message": message}
             if not isinstance(structured, dict):
                 break
             found = structured
-        text = "".join(block.get("text", "") for block in result.get("content", []) if block.get("type") == "text")
-        return "error", {"kind": "Failed", "message": text}
+        return "error", {"kind": "Failed", "message": text_of(result)}
     structured = result.get("structuredContent")
     if mode == "text" or (mode == "" and structured is None):
-        return "ok", "".join(block.get("text", "") for block in result.get("content", []) if block.get("type") == "text")
+        return "ok", text_of(result)
     if structured is None:
         return "missing", None
     if mode == "structured" or (mode != "wrapped" and resolve(output_type, types).startswith("Record")):
         return "ok", structured
-    return "ok", structured.get("result") if isinstance(structured, dict) and set(structured) == {"result"} else structured
+    if isinstance(structured, dict) and set(structured) == {"result"}:
+        return "ok", structured["result"]
+    return "ok", structured
 
 
 def responses_of(script: Script, catalogue: Catalogue) -> tuple[list[Json] | None, str]:
@@ -232,7 +252,9 @@ def build_corpus(effects: Path, real: Path, out: Path) -> list[str]:
             continue
         if script.directory not in catalogues:
             catalogues[script.directory] = (
-                catalogue_16(script.directory) if script.phase == "16" else catalogue_17(script.directory, repomod_declarations)
+                catalogue_16(script.directory)
+                if script.phase == "16"
+                else catalogue_17(script.directory, repomod_declarations)
             )
         catalogue = catalogues[script.directory]
         responses, why = responses_of(script, catalogue)
