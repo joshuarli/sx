@@ -1,0 +1,13 @@
+#![forbid(unsafe_code)]
+#![deny(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::indexing_slicing
+)]
+
+pub mod git;
+pub mod github;
+pub mod semver;
+mod tables;
+pub mod text;
