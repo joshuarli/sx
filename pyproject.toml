@@ -43,7 +43,7 @@ python-version = "3.15"
 python-platform = "darwin"
 
 [tool.ty.src]
-include = ["src", "tests", "bench", "cores", "hosts"]
+include = ["src", "tests", "bench", "cores", "hosts", "rust/sx-cores/scripts"]
 
 [tool.ty.analysis]
 allowed-unresolved-imports = ["repomod.**", "git_helpers", "fix_helpers"]
