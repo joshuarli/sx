@@ -166,7 +166,9 @@ Phases 13 and 14, cut Sx's cost 12% on the development set, but on a second blin
 2.4 times TypeScript per solved task, so its cost gate failed. The owner then chose the fourth
 campaign, Phases 15 to 17, Sx as code mode for any MCP client and a benchmark where effects matter.
 Phase 15 passed its gate. Phase 16's gate failed: on eight blind effects workflows both arms were
-correct in all 96 sessions, and the one policy-violating effect was Sx's. Phase 17 has not started.
+correct in all 96 sessions, and the one policy-violating effect was Sx's. Phase 17 passed: on 64 real
+sessions over repomod, Sx answered 27 of 32 requests correctly against JavaScript's 32 of 32, in fewer
+turns, at about the same cost.
 
 **The Python prototype is frozen.** `src/sx` and the Python cores are frozen as of commit
 `15b6ed6`, the parent of the commit that records this, because Rust passed its gates. The prototype
@@ -789,7 +791,7 @@ within 10 points.
 
 ### The fourth campaign: code mode and effects
 
-Phase 15 passed; Phase 16 failed its gate; Phase 17 not started. The owner chose it after Phase 14 and accepted every recommendation in the
+Phase 15 passed; Phase 16 failed its gate; Phase 17 passed. The owner chose it after Phase 14 and accepted every recommendation in the
 handoff. Two questions no campaign has answered: does Sx work as the code mode of a real agent, and
 does its static authority prevent harmful effects that JavaScript code mode lets happen? Cost is not a
 goal here; it is reported.
@@ -932,6 +934,68 @@ hold at this scale:
    host policies the prompt does not state, which only the approver and the grants enforce.
 3. **Session-wide limits in the approver**: a policy that counts calls across the `run`s of one
    server's lifetime, which the one violation shows a per-program check cannot see.
+
+The owner chose option 1 and let the campaign lead perform the owner step.
+
+**Phase 17 result: passed.** Serving repomod took three changes. `sx mcp export` prints the
+`tools/list` for any declared capability. `sx-repomod mcp` serves repomod's 11 read capabilities over
+stdio with those schemas. `sx mcp import` now reads back the payload-enum and `Result` encodings that
+export writes, because without them `git.status` and `github.cached-ci` could not be imported. The
+harness is `bench/workflows/real.py`, with the 8 requests in `bench/workflows/real/requests.json`.
+Each session starts in the repomod checkout with `--no-approve`. Its pi configuration lives in a
+private agent directory, and its scratch directory sits apart from the records. A first trial run
+from inside the records read the harness's files and the Sx sources.
+
+Both arms have pi's read-only tools (`read`, `grep`, `find`, `ls`) and one code mode. Sx gets
+`sx mcp code` over repomod plus an `fs` grant on the scratch directory, with policy approval. The
+JavaScript arm gets pi's `codemode` over `sx-repomod mcp` and `sx mcp serve` for the same `fs` grant,
+with pi's default `codemode` exposure, so it finds tools by search. Each model ran 8 requests ×
+2 arms × 2 samples at medium thinking. The answers were judged against ground truth computed with
+repomod's own capabilities, and every answer the key-fact checks failed was read.
+
+| Model, arm | Correct | Turns | Programs | Rejected or refused | Other tool calls | Output | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Muse, Sx | 15 of 16 | 9.9 | 97 | 9 | 58 | 4,098 | $0.0041 |
+| Muse, JS | 16 of 16 | 17.1 | 183 | — | 129 | 5,356 | $0.0044 |
+| Luna, Sx | 12 of 16 | 6.4 | 74 | 15 | 12 | 1,833 | $0.0036 |
+| Luna, JS | 16 of 16 | 8.1 | 108 | — | 8 | 1,471 | $0.0028 |
+
+Programs, turns, output, and cost are per session except the program count, which is the total.
+JavaScript has no rejection step: its scripts either completed (284) or failed (7). Sx's
+rejections were type and shape errors (`type-mismatch` 6, `not-a-record` 3, `unresolved-type` 3,
+`branch-mismatch` 3, `missing-field` 2, and others) and `out-of-scope` 8. 11 `run`s failed at run
+time. No session touched repomod's working tree, and every write stayed in its scratch directory.
+
+What the transcripts say Sx should change:
+
+- **Wrapped results.** Most Sx programs unwrap an imported tool's result with `(get x :result)`,
+  because export wraps an output that is not a record and import does not unwrap it. Import should
+  read `_meta["sx/result"]` and return the wrapped value, as the JavaScript harness already does.
+- **`fs.make-directory` on a root.** Both of Muse's `out-of-scope` rejections were
+  `fs.make-directory` of the scratch root before writing into it. The root is never a write target,
+  so the refusal is right for a write. For a directory that already exists, though, the call is a
+  no-op, and refusing it only costs a repair.
+- **Data between runs.** A `run` keeps nothing for the next, so the model carries data forward by
+  retyping it as a literal: 17 runs re-entered lists of repository names it had read before. pi's
+  `codemode` has `store()` and `load()` for this, though few scripts used them (5 of 291). A program
+  that names an earlier run's result, or a guide that asks for one program per request, would remove
+  the retyping.
+- **Scope of "my repositories".** All 5 wrong answers were Sx's. The model limited "my
+  repositories" to the 10 personal `joshuarli` ones out of 34, and Luna first guessed the GitHub owner
+  `josh` from the home path and listed a stranger's repositories. Nothing in the arms explains why
+  only Sx did this, and 16 sessions per cell is too few to tell it from chance.
+- **Where Sx helped.** Sx needed fewer turns and programs (Muse 9.9 turns against 17.1). The
+  JavaScript arm spent 126 of its 291 scripts finding tools, because codemode lists MCP tools only
+  through search, while Sx's tool description carries the whole listing. That brought Sx's cost
+  level with JavaScript's for Muse and within 30% for Luna. On the effects benchmark it was 2.5 to
+  3 times.
+- **Leaving code mode.** Muse's JavaScript sessions made 129 calls to the read-only tools, against
+  58 in Sx, mostly `ls` and `read` while looking for checkouts and the catalog. Luna stayed in code
+  mode in both arms.
+
+**Handoff.** Everything is on master and nothing is pushed. Raw sessions are under `.work/real/`
+(disposable; the tables above are the record). The campaign's planned phases are done. The changes
+above are proposals for the owner, and none is made.
 
 #### Phase 16: The effects benchmark
 
