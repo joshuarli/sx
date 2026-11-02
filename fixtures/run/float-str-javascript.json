@@ -1,0 +1,11 @@
+{
+  "description": "str writes a Float as JavaScript's String does: shortest round trip, no trailing .0.",
+  "program": "(str 1.0 \" \" 2.5 \" \" -0.0 \" \" 1e21 \" \" 1e20 \" \" 1e-6 \" \" 1e-7 \" \" 0.1 \" \" (+ 0.1 0.2) \" \" 123456789012345680000.0)",
+  "declarations": "declarations.json",
+  "allow": [],
+  "responses": [],
+  "expect": {
+    "completed": "1 2.5 0 1e+21 100000000000000000000 0.000001 1e-7 0.1 0.30000000000000004 123456789012345680000"
+  },
+  "trace": []
+}

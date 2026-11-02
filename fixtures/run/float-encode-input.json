@@ -1,0 +1,39 @@
+{
+  "description": "A Float field encodes as a JSON number.",
+  "program": "(call sensor.put {:name \"a\" :celsius (* 0.5 5.0)})",
+  "declarations": "declarations.json",
+  "allow": [
+    "sensor.put"
+  ],
+  "responses": [
+    {
+      "capability": "sensor.put",
+      "input": {
+        "name": "a",
+        "celsius": 2.5
+      },
+      "results": [
+        {
+          "output": null
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": null
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "sensor.put",
+      "input": {
+        "name": "a",
+        "celsius": 2.5
+      }
+    },
+    {
+      "response": "r:1",
+      "output": null
+    }
+  ]
+}

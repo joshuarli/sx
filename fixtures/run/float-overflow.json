@@ -1,0 +1,11 @@
+{
+  "description": "A Float result beyond the finite range is an arithmetic failure.",
+  "program": "(* 1e200 1e200)",
+  "declarations": "declarations.json",
+  "allow": [],
+  "responses": [],
+  "expect": {
+    "failed": "arithmetic"
+  },
+  "trace": []
+}

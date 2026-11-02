@@ -1,0 +1,39 @@
+{
+  "description": "An integer-valued JSON number decodes into a Float field.",
+  "program": "(/ (get (call sensor.get {}) :celsius) 2.0)",
+  "declarations": "declarations.json",
+  "allow": [
+    "sensor.get"
+  ],
+  "responses": [
+    {
+      "capability": "sensor.get",
+      "input": {},
+      "results": [
+        {
+          "output": {
+            "name": "a",
+            "celsius": 21
+          }
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": 10.5
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "sensor.get",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": {
+        "name": "a",
+        "celsius": 21
+      }
+    }
+  ]
+}

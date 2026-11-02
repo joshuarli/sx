@@ -1,0 +1,2 @@
+; task: dev-failing-ci
+(nth [1 2 3] 1.0)

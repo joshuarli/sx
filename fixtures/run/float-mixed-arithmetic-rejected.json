@@ -1,0 +1,12 @@
+{
+  "description": "An Int and a Float never mix in arithmetic.",
+  "program": "(+ 1 1.5)",
+  "declarations": "declarations.json",
+  "allow": [],
+  "expect": {
+    "rejected": [
+      "type-mismatch"
+    ]
+  },
+  "responses": []
+}

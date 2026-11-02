@@ -1,0 +1,14 @@
+{
+  "description": "An Int literal is not a Float field.",
+  "program": "(call sensor.put {:name \"a\" :celsius 21})",
+  "declarations": "declarations.json",
+  "allow": [
+    "sensor.put"
+  ],
+  "expect": {
+    "rejected": [
+      "type-mismatch"
+    ]
+  },
+  "responses": []
+}

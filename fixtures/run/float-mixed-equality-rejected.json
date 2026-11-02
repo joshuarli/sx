@@ -1,0 +1,12 @@
+{
+  "description": "An Int and a Float are never equal.",
+  "program": "(= 2 2.0)",
+  "declarations": "declarations.json",
+  "allow": [],
+  "expect": {
+    "rejected": [
+      "type-mismatch"
+    ]
+  },
+  "responses": []
+}

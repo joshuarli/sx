@@ -35,13 +35,13 @@ def test_canonical_form_reads_back_to_itself(program: Path) -> None:
 
 
 def test_reports_more_errors_than_the_limit_as_a_count() -> None:
-    source = " ".join(["1.5"] * 23)
+    source = " ".join(["1."] * 23)
     text = render(source, read(f"[{source}]").diagnostics)
     assert text.count("error[bad-literal]") == 20
     assert text.endswith("3 more errors not shown.\n")
 
 
 def test_error_after_an_unclosed_bracket_is_still_reported() -> None:
-    result = read('(let [x 1.5]\n  (f "a\\q"')
+    result = read('(let [x 1.]\n  (f "a\\q"')
     codes = [diagnostic.code for diagnostic in result.diagnostics]
     assert codes == ["bad-literal", "bad-escape", "unclosed", "unclosed"]

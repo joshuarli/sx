@@ -1,0 +1,11 @@
+{
+  "description": "ceil beyond the Int range is an out-of-range failure.",
+  "program": "(ceil 1e19)",
+  "declarations": "declarations.json",
+  "allow": [],
+  "responses": [],
+  "expect": {
+    "failed": "out-of-range"
+  },
+  "trace": []
+}

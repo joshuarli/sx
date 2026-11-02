@@ -12,6 +12,7 @@ from sx.registry import Capability, Effect, Function, Registry
 from sx.syntax import (
     BoolLiteral,
     DurationLiteral,
+    FloatLiteral,
     Form,
     IntLiteral,
     Keyword,
@@ -29,6 +30,7 @@ from sx.types import (
     CALL_ERROR,
     CALL_ERROR_KIND,
     CALL_ERROR_KINDS,
+    FLOAT,
     INT,
     NEVER,
     REFUSAL_KINDS,
@@ -63,12 +65,13 @@ RESERVED_SUGGESTIONS = {
 }
 HIGHER_ORDER = frozenset({"map", "filter", "keep", "any?", "all?", "reduce", "sort-by", "distinct-by", "group-by"})
 PRELUDE = frozenset({
-    "+", "-", "*", "quot", "rem", "=", "not=", "<", "<=", ">", ">=", "not", "and", "or", "str", "count", "first",
-    "rest", "nth", "take", "concat", "flatten", "contains?", "identity", "assoc", "dissoc", "keys", "vals", "entries",
-    "into-map",
+    "+", "-", "*", "/", "quot", "rem", "float", "round", "floor", "ceil", "=", "not=", "<", "<=", ">", ">=", "not",
+    "and", "or", "str", "count", "first", "rest", "nth", "take", "concat", "flatten", "contains?", "identity", "assoc",
+    "dissoc", "keys", "vals", "entries", "into-map",
 }) | HIGHER_ORDER
 FIXED_ARITY = {
-    "+": 2, "*": 2, "quot": 2, "rem": 2, "=": 2, "not=": 2, "<": 2, "<=": 2, ">": 2, ">=": 2, "not": 1, "and": 2,
+    "+": 2, "*": 2, "/": 2, "quot": 2, "rem": 2, "float": 1, "round": 1, "floor": 1, "ceil": 1, "=": 2, "not=": 2,
+    "<": 2, "<=": 2, ">": 2, ">=": 2, "not": 1, "and": 2,
     "identity": 1, "or": 2, "count": 1, "first": 1, "rest": 1, "nth": 2, "take": 2, "concat": 2, "flatten": 1,
     "contains?": 2, "map": 2, "filter": 2, "keep": 2, "any?": 2, "all?": 2, "reduce": 3, "sort-by": 2, "distinct-by": 2,
     "group-by": 2, "assoc": 3, "dissoc": 2, "keys": 1, "vals": 1, "entries": 1, "into-map": 1,
@@ -114,8 +117,16 @@ MISSING_FUNCTIONS = {
 }
 DEFAULT_BINDER = "#present"
 TEST_SUBJECT = {"if": "An if condition", "cond": "A cond test"}
+INT_TO_FLOAT_HINT = "Sx does not convert between number types. (float n) turns an Int into a Float."
+FLOAT_TO_INT_HINT = (
+    "Sx does not convert between number types. (round x), (floor x), and (ceil x) turn a Float into an Int."
+)
 OPTIONAL_HINT = "This value is optional. Take it apart first: (match x (some v) ... none ...)."
-BINARY_SIGNATURE = {"+": "Int Int", "*": "Int Int", "quot": "Int Int", "rem": "Int Int"}
+BINARY_SIGNATURE = {
+    "+": "a b", "*": "a b", "/": "a b", "quot": "Int Int", "rem": "Int Int", "float": "n", "round": "x", "floor": "x",
+    "ceil": "x",
+}
+NUMBERS = (INT, FLOAT)
 
 
 @dataclass(frozen=True, slots=True)
@@ -191,6 +202,12 @@ class EffectCall:
 @dataclass(slots=True)
 class Effects:
     calls: list[EffectCall] = field(default_factory=list)
+
+
+def float_fix(source: Node | None) -> str | None:
+    if source is None or (isinstance(source, Symbol) and source.name.startswith("#")):
+        return None
+    return f"(float {show(source)})"
 
 
 def article(text: str) -> str:
@@ -541,6 +558,7 @@ class _Checker:
     def coerce(
         self, node: ir.Node, actual: Type, expected: Type | None, span: Span, message: str | None = None,
         detail_hint: str | None = None, help_name: str | None = None, joining: bool = False,
+        source: Node | None = None,
     ) -> tuple[ir.Node, Type]:
         if expected is None:
             return node, actual
@@ -549,14 +567,22 @@ class _Checker:
             return (node if conversion is None else ir.Coerce(node, conversion, span)), expected
         found, wanted = self.zonk(actual), self.zonk(expected)
         detail = f"Expected: {show_type(wanted)}\nFound: {show_type(found)}"
+        fix = None
         if detail_hint is None and isinstance(found, OptionType) and self.trial(found.inner, wanted):
             detail_hint = OPTIONAL_HINT
+        if (found, wanted) == (INT, FLOAT):
+            detail_hint = detail_hint or INT_TO_FLOAT_HINT
+            fix = float_fix(source)
+            help_name = help_name or "float"
+        elif (found, wanted) == (FLOAT, INT):
+            detail_hint = detail_hint or FLOAT_TO_INT_HINT
+            help_name = help_name or "round"
         if detail_hint is not None:
             detail += f"\n{detail_hint}"
         self.error(
             "type-mismatch", span,
             message or f"This is {describe(found)}, but {describe(wanted)} is needed here.",
-            detail=detail, help=help_name,
+            detail=detail, fix=fix, help=help_name,
         )
         return node, expected
 
@@ -650,7 +676,7 @@ class _Checker:
         t = self.resolve(t)
         match t:
             case Primitive():
-                return t in {INT, STRING, BOOL}
+                return t in {INT, FLOAT, STRING, BOOL}
             case TupleType(items=items):
                 return all(self.is_sort_key(item) for item in items)
             case ListType(element=element):
@@ -694,7 +720,9 @@ class _Checker:
     def check(self, node: Node, expected: Type | None, scope: Mapping[str, Binding]) -> tuple[ir.Node, Type]:
         match node:
             case IntLiteral(value=value, span=span):
-                return self.coerce(ir.Literal(value, span), INT, expected, span)
+                return self.coerce(ir.Literal(value, span), INT, expected, span, source=node)
+            case FloatLiteral(value=value, span=span):
+                return self.coerce(ir.Literal(value, span), FLOAT, expected, span, source=node)
             case StringLiteral(value=value, span=span):
                 enum = self.expected_enum(expected)
                 if enum is not None:
@@ -1376,6 +1404,12 @@ class _Checker:
         resolved = self.resolve(t)
         if isinstance(node, Symbol) and node.name == "_":
             return ir.MatchAny(ir.Discard()), dict(scope), set(), True
+        if isinstance(node, FloatLiteral):
+            self.error(
+                "bad-pattern", node.span, f"{show(node)} cannot be a match pattern, because Floats are rarely equal.",
+                detail="Compare with (= x 1.5), (< x 1.5), or (>= x 1.5) in an if or cond.", help="match",
+            )
+            return ir.MatchAny(ir.Discard()), dict(scope), set(), False
         if isinstance(node, IntLiteral | StringLiteral | BoolLiteral):
             return self.literal_pattern(node, t, scope)
         if isinstance(node, Symbol) and node.name == "none":
@@ -2192,7 +2226,7 @@ class _Checker:
         for arg, param in zip(node.items[1:], function.params, strict=True):
             value, t = self.check(arg, None, scope)
             value, _ = self.coerce(
-                value, t, param, arg.span,
+                value, t, param, arg.span, source=arg,
                 message=f"{function.name} takes {describe(param)} here, but this is {describe(self.zonk(t))}.",
                 help_name=function.name,
             )
@@ -2218,10 +2252,10 @@ class _Checker:
             )
             return self.placeholder(span)
         if op == "-":
-            if not self.arity(node, 1, 2, "Int Int"):
+            if not self.arity(node, 1, 2, "a b"):
                 return self.placeholder(span)
-            checked = [self.check(arg, INT, scope)[0] for arg in args]
-            return self.coerce(ir.Prelude(op, tuple(checked), span), INT, expected, span)
+            operands, number = self.number_operands(op, args, scope)
+            return self.coerce(ir.Prelude(op, operands, span), number, expected, span)
         if op == "str":
             if not self.arity(node, 1, None, "String ..."):
                 return self.placeholder(span)
@@ -2231,26 +2265,48 @@ class _Checker:
         if op in FIXED_ARITY and not self.arity(node, FIXED_ARITY[op], FIXED_ARITY[op], self.signature(op)):
             return self.placeholder(span)
         match op:
-            case "+" | "*" | "quot" | "rem":
-                checked = [self.check(arg, INT, scope)[0] for arg in args]
-                return self.coerce(ir.Prelude(op, tuple(checked), span), INT, expected, span)
+            case "+" | "*" | "/" | "quot" | "rem":
+                if op in {"quot", "rem"}:
+                    checked = [self.check(arg, INT, scope)[0] for arg in args]
+                    return self.coerce(ir.Prelude(op, tuple(checked), span), INT, expected, span)
+                operands, number = self.number_operands(op, args, scope)
+                if op == "/" and number == INT:
+                    self.error(
+                        "type-mismatch", span, "/ divides Floats. Int division is quot, which truncates toward zero.",
+                        detail="For a Float quotient of Ints, convert first: (/ (float a) (float b)).",
+                        fix=f"(quot {show(args[0])} {show(args[1])})", help="quot",
+                    )
+                return self.coerce(ir.Prelude(op, operands, span), number, expected, span)
+            case "float":
+                value, _ = self.check(args[0], INT, scope)
+                return self.coerce(ir.Prelude(op, (value,), span), FLOAT, expected, span)
+            case "round" | "floor" | "ceil":
+                value, _ = self.check(args[0], FLOAT, scope)
+                return self.coerce(ir.Prelude(op, (value,), span), INT, expected, span)
             case "=" | "not=":
                 variant_first = isinstance(args[0], Symbol) and args[0].name[:1].isupper()
                 string_first = isinstance(args[0], StringLiteral) and not isinstance(args[1], StringLiteral)
                 order = [1, 0] if variant_first or string_first else [0, 1]
                 first, first_type = self.check(args[order[0]], None, scope)
+                if self.resolve(first_type) in NUMBERS:
+                    pair, _ = self.number_operands(op, [args[order[0]], args[order[1]]], scope, [(first, first_type)])
+                    pair = pair if order == [0, 1] else (pair[1], pair[0])
+                    return self.coerce(ir.Prelude(op, pair, span), BOOL, expected, span)
                 second, _ = self.check(args[order[1]], first_type, scope)
                 pair = (first, second) if order == [0, 1] else (second, first)
                 return self.coerce(ir.Prelude(op, pair, span), BOOL, expected, span)
             case "<" | "<=" | ">" | ">=":
                 first, first_type = self.check(args[0], None, scope)
+                if self.resolve(first_type) in NUMBERS:
+                    pair, _ = self.number_operands(op, args, scope, [(first, first_type)])
+                    return self.coerce(ir.Prelude(op, pair, span), BOOL, expected, span)
                 second, _ = self.check(args[1], first_type, scope)
                 resolved = self.resolve(first_type)
-                if not isinstance(resolved, Never) and not self.is_open(resolved) and resolved not in {INT, STRING}:
+                if not isinstance(resolved, Never) and not self.is_open(resolved) and resolved != STRING:
                     hint = OPTIONAL_HINT if isinstance(resolved, OptionType) else None
                     self.error(
                         "type-mismatch", args[0].span,
-                        f"{op} compares integers or strings, but this is {describe(self.zonk(resolved))}.",
+                        f"{op} compares integers, floats, or strings, but this is {describe(self.zonk(resolved))}.",
                         detail=hint, help=op,
                     )
                 return self.coerce(ir.Prelude(op, (first, second), span), BOOL, expected, span)
@@ -2360,6 +2416,25 @@ class _Checker:
                 return self.coerce(ir.Prelude(op, (function, initial, items), span), accumulator, expected, span)
         return self.higher_order(node, op, expected, scope)
 
+    def number_operands(
+        self, op: str, args: Sequence[Node], scope: Mapping[str, Binding],
+        checked: Sequence[tuple[ir.Node, Type]] = (),
+    ) -> tuple[tuple[ir.Node, ...], Type]:
+        done = [*checked, *(self.check(arg, None, scope) for arg in args[len(checked) :])]
+        number = FLOAT if any(self.resolve(t) == FLOAT for _, t in done) else INT
+        operands: list[ir.Node] = []
+        for arg, (value, t) in zip(args, done, strict=True):
+            if number == FLOAT and self.resolve(t) == INT:
+                self.error(
+                    "type-mismatch", arg.span,
+                    f"{op} takes two Ints or two Floats, but this is an Int and the other operand is a Float.",
+                    detail=f"Expected: Float\nFound: Int\n{INT_TO_FLOAT_HINT}", fix=float_fix(arg), help="float",
+                )
+                operands.append(value)
+                continue
+            operands.append(self.coerce(value, t, number, arg.span, source=arg)[0])
+        return tuple(operands), number
+
     def is_map(self, t: Type) -> bool:
         return isinstance(self.resolve(t), MapType) or self.is_brace(t)
 
@@ -2422,7 +2497,7 @@ class _Checker:
                         )
                     self.error(
                         "type-mismatch", function_node.span,
-                        "sort-by needs a key that is an Int, String, Bool, or a tuple of them.",
+                        "sort-by needs a key that is an Int, Float, String, Bool, or a tuple of them.",
                         detail=f"Expected: a sort key\nFound: {show_type(self.zonk(key))}"
                         + (f"\n{hint}" if hint is not None else ""),
                         help="keep" if hint is not None else "sort-by",
@@ -2455,14 +2530,15 @@ class _Checker:
             value, t = self.check(arg, None, scope)
             resolved = self.resolve(t)
             if hint is None and (
-                resolved in {INT, BOOL} or (isinstance(resolved, EnumType) and self.nullary(resolved))
+                resolved in {INT, FLOAT, BOOL} or (isinstance(resolved, EnumType) and self.nullary(resolved))
             ):
                 checked.append(value)
                 continue
             message = (
                 f"A sort key built with str joins strings only, but this argument is {describe(self.zonk(t))}."
                 if hint is not None
-                else f"str joins strings, integers, booleans, and enum values, but this is {describe(self.zonk(t))}."
+                else "str joins strings, integers, floats, booleans, and enum values, "
+                f"but this is {describe(self.zonk(t))}."
             )
             value, _ = self.coerce(
                 value, t, STRING, arg.span, message=message, detail_hint=hint,

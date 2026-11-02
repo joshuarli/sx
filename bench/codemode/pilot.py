@@ -24,7 +24,7 @@ FORMS = frozenset({
 PRELUDE = frozenset({
     "+", "-", "*", "quot", "rem", "=", "not=", "<", "<=", ">", ">=", "not", "and", "or", "str", "count", "take",
     "concat", "flatten", "contains?", "map", "filter", "any?", "all?", "reduce", "sort-by", "distinct-by", "group-by",
-    "some", "ok", "err", "first", "rest", "nth", "keep",
+    "some", "ok", "err", "first", "rest", "nth", "keep", "/", "float", "round", "floor", "ceil",
 })
 
 BENCH = Path(__file__).parent

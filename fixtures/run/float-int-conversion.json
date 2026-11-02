@@ -1,0 +1,15 @@
+{
+  "description": "float converts an Int to the nearest Float, and nothing converts on its own.",
+  "program": "[(float 3) (float -7) (float 9007199254740993)]",
+  "declarations": "declarations.json",
+  "allow": [],
+  "responses": [],
+  "expect": {
+    "completed": [
+      3.0,
+      -7.0,
+      9007199254740992.0
+    ]
+  },
+  "trace": []
+}

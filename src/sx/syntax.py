@@ -39,6 +39,12 @@ class IntLiteral:
 
 
 @dataclass(frozen=True, slots=True)
+class FloatLiteral:
+    value: float
+    span: Span
+
+
+@dataclass(frozen=True, slots=True)
 class DurationLiteral:
     milliseconds: int
     span: Span
@@ -81,7 +87,8 @@ class Form:
 
 
 type Node = (
-    Symbol | Keyword | IntLiteral | DurationLiteral | StringLiteral | BoolLiteral | ListLiteral | RecordLiteral | Form
+    Symbol | Keyword | IntLiteral | FloatLiteral | DurationLiteral | StringLiteral | BoolLiteral | ListLiteral
+    | RecordLiteral | Form
 )
 
 
@@ -93,6 +100,8 @@ def show(node: Node) -> str:
             return f":{name}"
         case IntLiteral(value=value):
             return str(value)
+        case FloatLiteral(value=value):
+            return repr(value)
         case DurationLiteral(milliseconds=milliseconds):
             return show_duration(milliseconds)
         case BoolLiteral(value=value):

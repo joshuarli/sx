@@ -1,0 +1,13 @@
+{
+  "description": "quot and rem take Ints only.",
+  "program": "(quot 7.0 2.0)",
+  "declarations": "declarations.json",
+  "allow": [],
+  "expect": {
+    "rejected": [
+      "type-mismatch",
+      "type-mismatch"
+    ]
+  },
+  "responses": []
+}

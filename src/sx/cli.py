@@ -202,7 +202,7 @@ def literal_calls(node: ir.Node) -> list[tuple[str, object | None]]:
 
 def literal(node: ir.Node) -> object | None:
     match node:
-        case ir.Literal(value=value) if isinstance(value, bool | int | str):
+        case ir.Literal(value=value) if isinstance(value, bool | int | float | str):
             return value
         case ir.MakeRecord(fields=parts):
             values = {name: literal(part) for name, part in parts}

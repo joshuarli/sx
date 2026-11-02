@@ -84,25 +84,37 @@ FORMS = (
 )
 
 PRELUDE = (
-    entry("+", "(+ a b) -> Int", "Adds two integers. Overflow stops the program.", "(+ 2 3)", "5"),
-    entry("-", "(- a b) -> Int, (- x) -> Int", "Subtracts, or negates one integer.", "(- 10 4)", "6"),
-    entry("*", "(* a b) -> Int", "Multiplies two integers.", "(* 6 7)", "42"),
+    entry("+", "(+ a b) -> Int or Float", "Adds two Ints or two Floats, never one of each. Overflow stops the "
+          "program.", "(+ 2 3)", "5"),
+    entry("-", "(- a b) -> Int or Float, (- x)", "Subtracts, or negates one number. Two Ints or two Floats.",
+          "(- 10 4)", "6"),
+    entry("*", "(* a b) -> Int or Float", "Multiplies two Ints or two Floats.", "(* 6 7)", "42"),
+    entry("/", "(/ a b) -> Float", "Divides two Floats. Dividing by zero stops the program, because JSON has no "
+          "infinity. Int division is quot.", "(/ 1.0 4.0)", "0.25"),
     entry("quot", "(quot a b) -> Int", "Divides, truncating toward zero. Division by zero stops the program.",
           "(quot -7 2)", "-3"),
     entry("rem", "(rem a b) -> Int", "The remainder of quot.", "(rem -7 2)", "-1"),
+    entry("float", "(float n) -> Float", "The Float nearest an Int. Sx never converts between Int and Float on its "
+          "own, so mixing them in arithmetic, a comparison, or = is rejected.", "(+ (float 2) 0.5)", "2.5"),
+    entry("round", "(round x) -> Int", "The nearest Int, with halves going away from zero. Outside the Int range "
+          "stops the program.", "[(round 2.5) (round -2.5) (round 2.4)]", "[3 -3 2]"),
+    entry("floor", "(floor x) -> Int", "The largest Int not above x. Outside the Int range stops the program.",
+          "[(floor 2.7) (floor -2.1)]", "[2 -3]"),
+    entry("ceil", "(ceil x) -> Int", "The smallest Int not below x. Outside the Int range stops the program.",
+          "[(ceil 2.1) (ceil -2.7)]", "[3 -2]"),
     entry("=", "(= a b) -> Bool", "True when two values of one type are equal.", "(= [1 2] [1 2])", "true"),
     entry("not=", "(not= a b) -> Bool", "True when two values differ.", '(not= "a" "b")', "true"),
-    entry("<", "(< a b) -> Bool", "Compares integers, or strings by code point.", "(< 1 2)", "true"),
-    entry("<=", "(<= a b) -> Bool", "Compares integers or strings.", "(<= 2 2)", "true"),
-    entry(">", "(> a b) -> Bool", "Compares integers or strings.", '(> "b" "a")', "true"),
-    entry(">=", "(>= a b) -> Bool", "Compares integers or strings.", "(>= 1 2)", "false"),
+    entry("<", "(< a b) -> Bool", "Compares two Ints, two Floats, or two strings by code point.", "(< 1 2)", "true"),
+    entry("<=", "(<= a b) -> Bool", "Compares Ints, Floats, or strings.", "(<= 2 2)", "true"),
+    entry(">", "(> a b) -> Bool", "Compares Ints, Floats, or strings.", '(> "b" "a")', "true"),
+    entry(">=", "(>= a b) -> Bool", "Compares Ints, Floats, or strings.", "(>= 1.5 2.5)", "false"),
     entry("not", "(not b) -> Bool", "Negates a boolean.", "(not false)", "true"),
     entry("and", "(and a b) -> Bool", "True when both are true. Both arguments always evaluate.",
           "(and true false)", "false"),
     entry("or", "(or a b) -> Bool", "True when either is true. Both arguments always evaluate.",
           "(or true false)", "true"),
-    entry("str", "(str x ...) -> String", "Joins strings, integers, booleans, and enum values.",
-          '(str "a" 1 true)', '"a1true"'),
+    entry("str", "(str x ...) -> String", "Joins strings, integers, floats, booleans, and enum values. A Float is "
+          'written as JavaScript writes it: 1.0 is 1.', '(str "a" 1 true 2.50)', '"a1true2.5"'),
     entry("count", "(count xs) -> Int", "The number of elements, or of map entries.", "(count [1 2 3])", "3"),
     entry("first", "(first xs) -> T", "The first element. An empty list stops the program.", "(first [1 2 3])", "1"),
     entry("rest", "(rest xs) -> List<T>", "Every element after the first.", "(rest [1 2 3])", "[2 3]"),
@@ -142,7 +154,7 @@ PRELUDE = (
           "(all? (fn [x] (> x 2)) [1 2 3])", "false"),
     entry("reduce", "(reduce f init xs) -> A", "Combines the elements into one value, left to right.",
           "(reduce + 0 [1 2 3])", "6"),
-    entry("sort-by", "(sort-by f xs) -> List<T>", "Sorts ascending by a key: an integer, a string, a boolean, "
+    entry("sort-by", "(sort-by f xs) -> List<T>", "Sorts ascending by a key: an integer, a float, a string, a boolean, "
           "or a tuple of keys compared in order. Negate an integer key to sort descending.",
           '(sort-by (fn [p] [(- (get p :n)) (get p :name)]) [{:name "b" :n 1} {:name "a" :n 2}])',
           '[{:name "a" :n 2} {:name "b" :n 1}]'),
@@ -161,6 +173,9 @@ TYPES = (
           + ", ".join(CALL_ERROR_KINDS) + ". Branch on the kind, never the message.",
           '(match (attempt (call metrics.uptime {:host "gone"})) (ok m) "up" (err e) (match (get e :kind) '
           'NotFound "missing" _ "other"))', '"missing"'),
+    entry("Float", "Float: 1.5, -0.25, 2e3", "A 64-bit IEEE float. A literal has a fraction or an exponent: 1 is an "
+          "Int. A JSON number decodes as a Float where a Float is expected. A result that is infinite or not a "
+          "number stops the program.", "(* 1.5 (float 2))", "3.0"),
     entry("Map", "Map<String, V>: (into-map [[key value] ...])", "A JSON object with string keys and values of "
           "one type V, listed in key order. Keys are strings, never keywords: keywords only name record fields.",
           '(get (assoc {} "pen" 3) "pen" 0)', "3"),
@@ -228,10 +243,10 @@ MINIMAL_HEADER = """# Sx
 Sx calls tools and combines their results. A program is one expression; its value is the result.
 It looks like Clojure, but only the forms and functions below exist.
 
-Values: true false, integers (no fractions), "strings", [lists], {:field value} records (keywords
-only name fields), [1 "a"] tuples (mixed types), (some x) and none (no nil; a plain value works
-where an optional is expected), (ok x) and (err e). Durations such as 250ms 5s 2m 1h appear only in
-retry and wait-until options and as the argument of sleep. Names may be kebab-case, camelCase, or
+Values: true false, integers, floats (1.5, never mixed with integers), "strings", [lists],
+{:field value} records (keywords only name fields), [1 "a"] tuples (mixed types), (some x) and none (no nil;
+a plain value works where an optional is expected), (ok x) and (err e). Durations such as 250ms 5s 2m 1h
+appear only in retry and wait-until options and as the argument of sleep. Names may be kebab-case, camelCase, or
 snake_case. Comments start with ;.
 """
 

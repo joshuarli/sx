@@ -1,0 +1,12 @@
+{
+  "description": "A Float literal is not a match pattern.",
+  "program": "(match 1.5 1.5 \"a\" _ \"b\")",
+  "declarations": "declarations.json",
+  "allow": [],
+  "expect": {
+    "rejected": [
+      "bad-pattern"
+    ]
+  },
+  "responses": []
+}

@@ -1,0 +1,7 @@
+error[type-mismatch] 2:1-2:9
+  (/ 10 4)
+  ^^^^^^^^
+  / divides Floats. Int division is quot, which truncates toward zero.
+  For a Float quotient of Ints, convert first: (/ (float a) (float b)).
+  Fix: (quot 10 4)
+  Help: sx help quot

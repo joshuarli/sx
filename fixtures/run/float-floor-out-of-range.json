@@ -1,0 +1,11 @@
+{
+  "description": "floor beyond the Int range is an out-of-range failure.",
+  "program": "(floor -1e30)",
+  "declarations": "declarations.json",
+  "allow": [],
+  "responses": [],
+  "expect": {
+    "failed": "out-of-range"
+  },
+  "trace": []
+}

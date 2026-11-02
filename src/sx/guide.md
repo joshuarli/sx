@@ -7,7 +7,8 @@ only the forms and functions below exist.
 ## Values
 
 - `true`, `false`
-- Integers: `42`, `-7`. There are no fractions.
+- Integers: `42`, `-7`. Floats: `1.5`, `2e3`; never mixed with integers: `(float n)` converts,
+  `(round x)` `(floor x)` `(ceil x)` give an Int, and `(/ a b)` divides Floats.
 - Strings: `"text"`, with escapes `\"`, `\\`, `\n`, `\r`, `\t`.
 - Lists: `[1 2 3]`
 - Records: `{:name "ada" :age 36}`. Field names are keywords. Commas are optional. Keywords

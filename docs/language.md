@@ -22,11 +22,12 @@ program runs. There is no general recursion and no unbounded loop.
 | Whitespace | space, tab, newline, `,` | Commas are whitespace, as in Clojure. |
 | Boolean | `true`, `false` | |
 | Integer | `-?[0-9]+` | Signed 64-bit. A literal outside that range is rejected. |
+| Float | `1.5`, `-0.25`, `2e3`, `1.5E-7` | Digits with a fraction, an exponent, or both. `1` is an Int. A literal beyond the finite 64-bit range, such as `1e999`, is rejected. |
 | Duration | `250ms`, `5s`, `2m`, `1h` | Only in `retry` and `wait-until` options and as the argument of `sleep`. |
 | String | `"..."` | UTF-8. Escapes: `\"`, `\\`, `\n`, `\r`, `\t`, `\u{HEX}`. |
 | Keyword | `:name` | Record field names only. Same characters as a symbol. |
 | Symbol | `name`, `repo-id`, `repoId`, `ahead_count`, `ok?`, `acc'` | A lowercase letter, then letters, digits, `-`, and `_`, then optionally `?` or primes. |
-| Operator | `+ - * = not= < <= > >=` | Prelude functions |
+| Operator | `+ - * / = not= < <= > >=` | Prelude functions |
 | Wildcard | `_` | Any pattern position: discards the value |
 | Variant | `OnBranch` | A capital letter, then letters and digits. Enum variants in patterns. |
 | Qualified symbol | `core.name`, `core.Type` | A core function, core type, or capability. Core IDs are one segment. |
@@ -40,6 +41,7 @@ program runs. There is no general recursion and no unbounded loop.
 | --- | --- |
 | `Bool` | `true`, `false` |
 | `Int` | Signed 64-bit integers |
+| `Float` | IEEE-754 binary64, finite values only. JSON cannot carry an infinity or NaN, so an operation that would produce one stops the program. |
 | `String` | UTF-8 strings |
 | `Unit` | One value, returned by capabilities with no result and by `sleep` |
 | `List<T>` | Ordered, finite |
@@ -51,7 +53,10 @@ program runs. There is no general recursion and no unbounded loop.
 | Core enum | Nominal, declared by a core, for example `git.Checkout` |
 | Core nominal | Nominal wrapper over a base type, declared by a core, for example `git.RepoId` |
 
-There is no `Any`, no subtyping, and no user-declared type. Core functions construct core enum
+There is no `Any`, no subtyping, and no user-declared type. `Int` and `Float` never convert into
+each other: `(+ 1 1.5)`, `(< 1 1.5)`, and `(= 2 2.0)` are each a `type-mismatch` whose fix is
+`(float n)` on the `Int` side. `(float n)` turns an `Int` into a `Float`, and `(round x)`,
+`(floor x)`, and `(ceil x)` turn a `Float` into an `Int`. Core functions construct core enum
 and core nominal values. A program may also write a variant that carries no value by name, such
 as `Failing`, where the expected type is the enum, for example `(= state Failing)`. Each enum
 variant carries zero or one value. A variant that needs several values carries a record.
@@ -120,9 +125,10 @@ checker rejects an expression whose type it cannot resolve where the operation n
 a field, comparing, or sorting. A type left unresolved in the program's result, such as the
 element type of an empty list, is harmless and allowed.
 
-Equality is structural on every type. Ordering with `<`, `<=`, `>`, and `>=` is defined on `Int`
-and on `String`, where strings compare lexicographically by Unicode code point. Sort keys, used by
-`sort-by`, may also be `Bool` (`false` first) and tuples or lists of sort keys, compared element
+Equality is structural on every type, and on `Float` it is IEEE equality, so `0.0` equals `-0.0` and
+`(= (+ 0.1 0.2) 0.3)` is `false`. Ordering with `<`, `<=`, `>`, and `>=` is defined on `Int`, on
+`Float`, and on `String`, where strings compare lexicographically by Unicode code point. Both
+operands have the same type. Sort keys, used by `sort-by`, may also be `Float`, `Bool` (`false` first) and tuples or lists of sort keys, compared element
 by element. A map is not a sort key.
 
 ## Special forms
@@ -222,7 +228,8 @@ itself, so it has type `Option<T>` in a match on an optional. Only a final `_` a
 narrows.
 
 An integer (including a negative one), string, or boolean literal is a pattern that matches when
-the scrutinee equals it: `(match n 1 "one" 2 "two" _ "many")`. The scrutinee's type must be the
+the scrutinee equals it. A `Float` literal is never a pattern, because computed floats are rarely
+equal: it is a `bad-pattern` that points to `=` and `<`. `(match n 1 "one" 2 "two" _ "many")`. The scrutinee's type must be the
 literal's type, `Int`, `String`, or `Bool`. Any other scrutinee, such as an `Option<Int>` or an
 enum, makes the literal a `bad-pattern`, and for a string that names a variant of the enum the fix
 is the variant name. `true` and `false` together cover `Bool`, so a `match` with both needs no `_`.
@@ -361,13 +368,17 @@ as in Clojure.
 
 | Function | Type |
 | --- | --- |
-| `+ - *` | `Int Int -> Int`. `(- x)` negates. |
+| `+ - *` | `Int Int -> Int` or `Float Float -> Float`, never one of each. `(- x)` negates. |
+| `/` | `Float Float -> Float`. On two `Int` arguments it is a `type-mismatch` whose fix is `quot`. |
 | `quot rem` | `Int Int -> Int`, truncating toward zero |
+| `float` | `Int -> Float`, the nearest `Float`. Integers beyond 2^53 may round. |
+| `round` | `Float -> Int`, the nearest integer, with halves going away from zero: `(round 2.5)` is `3` and `(round -2.5)` is `-3` |
+| `floor ceil` | `Float -> Int`, the largest integer not above, and the smallest not below |
 | `= not=` | `T T -> Bool` |
-| `< <= > >=` | `T T -> Bool` for `Int` or `String` |
+| `< <= > >=` | `T T -> Bool` for `Int`, `Float`, or `String` |
 | `not` | `Bool -> Bool` |
 | `and or` | `Bool Bool -> Bool`. Both arguments always evaluate. Use `if` to make a call conditional. |
-| `str` | `T ... -> String`, one or more arguments joined in order. Each is a `String`, an `Int` written in decimal, a `Bool` written `true` or `false`, or a value of an enum with no payloads written as its variant name. In a `sort-by` key every argument must be a `String`, because joining numbers into a string key sorts them as text. |
+| `str` | `T ... -> String`, one or more arguments joined in order. Each is a `String`, an `Int` written in decimal, a `Float` written as JavaScript's `String(x)` writes a number, a `Bool` written `true` or `false`, or a value of an enum with no payloads written as its variant name. In a `sort-by` key every argument must be a `String`, because joining numbers into a string key sorts them as text. |
 | `count` | `List<T> -> Int`, or `Map<String, V> -> Int` for the number of entries |
 | `first` | `List<T> -> T`. An empty list is an `out-of-range` error. On a tuple it is the first element, with that element's type. |
 | `rest` | `List<T> -> List<T>`, every element after the first. Empty for an empty list. |
@@ -393,7 +404,14 @@ as in Clojure.
 | `group-by` | `(T -> K) List<T> -> List<Tuple<K, List<T>>>`, groups in first-occurrence order |
 
 Integer overflow, `quot` or `rem` by zero, and a negative `take` count end evaluation with an
-`arithmetic` error. Nothing wraps or saturates.
+`arithmetic` error. So does a `Float` operation whose result is infinite or not a number: `/` by
+zero (`0.0` divided by `0.0` included) and an overflowing `+`, `-`, `*`, or `/`. `round`, `floor`, and
+`ceil` of a value outside the `Int` range are `out-of-range` errors. Nothing wraps or saturates.
+
+`str` writes a `Float` as JavaScript's `String(x)` does: the shortest digits that read back to the
+same value, with no trailing `.0`, so `1.0` is `1`. It uses plain notation for magnitudes from
+`1e-6` up to below `1e21` and an exponent outside that range, as in `1e+21` and `1e-7`. Negative
+zero is `0`.
 
 Text operations other than `str`, `=`, and ordering live in the `text` core, for example
 `text.casefold` and `text.from-int`.
@@ -459,8 +477,8 @@ compare traces sorted by request ID.
 | `invalid-host-response` | See [Execution](#execution) | No |
 | `loop-limit` | A `loop` reached its `:max` and its body asked to `recur` again | No |
 | `budget-exhausted` | A budget ran out. The error names the budget. | No |
-| `arithmetic` | Overflow, division by zero, negative `take` count | No |
-| `out-of-range` | `first` of an empty list, or `nth` past the end | No |
+| `arithmetic` | Overflow, division by zero, a `Float` result that is infinite or not a number, negative `take` count | No |
+| `out-of-range` | `first` of an empty list, `nth` past the end, or `round`, `floor`, or `ceil` beyond the `Int` range | No |
 | `internal` | Interpreter bug | No |
 
 ### Call errors
@@ -516,6 +534,7 @@ always knows the expected type, so every encoding below is unambiguous.
 | --- | --- |
 | `Bool` | `true` or `false` |
 | `Int` | An integer in the signed 64-bit range. A fraction, an exponent, or `true` is rejected. |
+| `Float` | A JSON number, with or without a fraction or exponent: `21` and `21.5` both decode. A number outside the finite 64-bit range is a mismatch. Encoding writes a finite number. |
 | `String` | A string |
 | `Unit` | `null` |
 | `List<T>` | An array |
@@ -604,7 +623,7 @@ The checker's codes are:
 
 | Group | Codes |
 | --- | --- |
-| Reading | `unclosed`, `unexpected-close`, `bad-literal`, `bad-symbol`, `int-range`, `bad-escape`, `record-key`, `record-missing-value`, `duplicate-field`, `empty-program`, `multiple-expressions` |
+| Reading | `unclosed`, `unexpected-close`, `bad-literal`, `bad-symbol`, `int-range`, `float-range`, `bad-escape`, `record-key`, `record-missing-value`, `duplicate-field`, `empty-program`, `multiple-expressions` |
 | Names | `unknown-name`, `unknown-function`, `unknown-capability`, `unknown-field`, `missing-field`, `unknown-variant`, `reserved-name` |
 | Calls | `arity`, `type-mismatch`, `unresolved-type`, `not-a-record`, `no-encoding` |
 | Forms | `condition-not-bool`, `missing-else`, `branch-mismatch`, `fn-position`, `bad-pattern`, `bad-option`, `recur-position`, `recur-arity` |

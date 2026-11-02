@@ -12,6 +12,7 @@ class Primitive:
 
 BOOL = Primitive("Bool")
 INT = Primitive("Int")
+FLOAT = Primitive("Float")
 STRING = Primitive("String")
 UNIT = Primitive("Unit")
 
@@ -144,7 +145,6 @@ class TypeSyntaxError(ValueError):
 
 
 UNSUPPORTED = {
-    "Float": "Sx v0 has no Float type",
     "Bytes": "Sx v0 has no Bytes type",
 }
 _TOKEN = re.compile(r"\s*(?:([A-Za-z][A-Za-z0-9_.-]*)|(.))")
@@ -198,6 +198,8 @@ class _TypeParser:
                 return BOOL
             case "Int":
                 return INT
+            case "Float":
+                return FLOAT
             case "String":
                 return STRING
             case "Unit":
