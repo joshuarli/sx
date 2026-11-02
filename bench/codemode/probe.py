@@ -31,6 +31,9 @@ TSCONFIG = {
     "files": ["api.d.ts", "solution.mts"],
 }
 REPAIRS = 2
+QUICK_TASKS = (
+    "dev-retry-ci", "dev-wait-for-job", "dev-events-pages", "dev-ci-partial", "dev-tag-counts", "dev-csv-summary",
+)
 FEEDBACK_LINES = 40
 type Json = dict[str, Any]
 
@@ -365,6 +368,7 @@ def main() -> None:
     parser.add_argument("--task", action="append")
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--guide", action="append", choices=list(GUIDE_LEVELS), help="Sx guide levels to run")
+    parser.add_argument("--quick", action="store_true", help="One sample of six development tasks, for iterating")
     parser.add_argument("--report", action="store_true", help="Report on saved trials without calling a model")
     parser.add_argument("--measure-guides", action="store_true", help="Measure each guide level's token cost")
     args = parser.parse_args()
@@ -379,6 +383,8 @@ def main() -> None:
         print(measure_guides(args.model, args.thinking, args.out))
         return
     cores = json.loads((BENCH / "cores.json").read_text())
+    if args.quick:
+        args.split, args.samples, args.task = "development", 1, args.task or list(QUICK_TASKS)
     tasks = load_tasks(args.split, args.task)
     arms = args.arm or ["sx", "js"]
     levels = args.guide or ["standard"]
