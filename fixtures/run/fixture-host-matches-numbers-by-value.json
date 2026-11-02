@@ -1,0 +1,63 @@
+{
+  "description": "The fixture host matches a request input to an entry by value, so 1.0 and -0.0 match however the fixture writes them.",
+  "program": "(let [_ (call sensor.put {:name \"a\" :celsius (* 2.0 0.5)}) _ (call sensor.put {:name \"b\" :celsius -0.0})] 1)",
+  "declarations": "declarations.json",
+  "allow": [
+    "sensor.put"
+  ],
+  "responses": [
+    {
+      "capability": "sensor.put",
+      "input": {
+        "name": "a",
+        "celsius": 1.0
+      },
+      "results": [
+        {
+          "output": null
+        }
+      ]
+    },
+    {
+      "capability": "sensor.put",
+      "input": {
+        "name": "b",
+        "celsius": -0.0
+      },
+      "results": [
+        {
+          "output": null
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": 1
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "sensor.put",
+      "input": {
+        "name": "a",
+        "celsius": 1.0
+      }
+    },
+    {
+      "response": "r:1",
+      "output": null
+    },
+    {
+      "request": "r:2",
+      "capability": "sensor.put",
+      "input": {
+        "name": "b",
+        "celsius": -0.0
+      }
+    },
+    {
+      "response": "r:2",
+      "output": null
+    }
+  ]
+}

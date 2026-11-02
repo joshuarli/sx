@@ -207,6 +207,20 @@ class Effects:
     calls: list[EffectCall] = field(default_factory=list)
 
 
+def always_recurs(node: ir.Node) -> bool:
+    match node:
+        case ir.Recur():
+            return True
+        case ir.Let(body=body) | ir.LocalFunction(body=body) | ir.Coerce(value=body):
+            return always_recurs(body)
+        case ir.If(then=then, otherwise=otherwise):
+            return always_recurs(then) and always_recurs(otherwise)
+        case ir.Match(clauses=clauses):
+            return all(always_recurs(body) for _, body in clauses)
+        case _:
+            return False
+
+
 def float_fix(source: Node | None) -> str | None:
     if source is None or (isinstance(source, Symbol) and source.name.startswith("#")):
         return None
@@ -291,6 +305,7 @@ def check(
     scope: dict[str, Binding] = {name: ValueBinding(t) for name, t in declared_inputs.items()}
     body, result = checker.check(program, None, scope)
     checker.check_presence_tests()
+    checker.check_late_sort_keys()
     checker.check_size(program)
     body = cast("ir.Node", checker.settle(body))
     final = checker.zonk(result)
@@ -319,6 +334,7 @@ class _Checker:
         self.substitution: dict[int, Type] = {}
         self.shapes: dict[int, BracketShape | BraceShape] = {}
         self.presence_tests: list[tuple[Type, Node, str]] = []
+        self.late_sort_keys: list[tuple[Type, Span]] = []
         self.counter = itertools.count()
         self.diagnostics: list[Diagnostic] = []
         self.effects: list[Effects] = []
@@ -478,6 +494,8 @@ class _Checker:
                 self.substitution[variable.id] = other
                 return True
             if other_shape is None:
+                if self.occurs(other, variable):
+                    return False
                 self.substitution[other.id] = variable
                 return True
             if isinstance(shape, BraceShape) or isinstance(other_shape, BraceShape):
@@ -1241,6 +1259,16 @@ class _Checker:
                 detail=hint, help=who,
             )
         return Test(condition, False, None, None)
+
+    def check_late_sort_keys(self) -> None:
+        for key, span in self.late_sort_keys:
+            if not self.is_sort_key(key):
+                self.error(
+                    "type-mismatch", span,
+                    "sort-by needs a key that is an Int, Float, String, Bool, or a tuple of them.",
+                    detail=f"Expected: a sort key\nFound: {show_type(self.zonk(key))}",
+                    help="sort-by",
+                )
 
     def check_presence_tests(self) -> None:
         for inner, condition_node, who in self.presence_tests:
@@ -2006,6 +2034,13 @@ class _Checker:
                 body, t = self.check(node.items[3], expected, inner)
         finally:
             self.tail = saved
+        if always_recurs(body):
+            self.error(
+                "loop-no-result", node.items[3].span,
+                "This loop body always ends in recur, so the loop has no result and can only fail with loop-limit.",
+                detail="Give the body a branch that does not recur, such as (if done? result (recur ...)).",
+                help="loop",
+            )
         return ir.Loop(maximum, tuple(binders), tuple(initial), body, span), t
 
     def form_recur(self, node: Form, scope: Mapping[str, Binding]) -> tuple[ir.Node, Type]:
@@ -2183,8 +2218,9 @@ class _Checker:
             if self.instantiations == self.budgets.instantiations + 1:
                 self.error("too-large", span, "Local functions expand into more instantiations than the budget allows.")
             return ir.Lambda((), (), NEVER, ir.Literal(UNIT_VALUE, UNIT, span), local, span), NEVER
-        param_nodes = form.items[1]
-        assert isinstance(param_nodes, ListLiteral)
+        param_nodes = form.items[1] if len(form.items) > 1 else None
+        if not isinstance(param_nodes, ListLiteral) or len(form.items) < 3:
+            return ir.Lambda((), (), NEVER, ir.Literal(UNIT_VALUE, UNIT, span), local, span), NEVER
         if len(param_nodes.items) != len(params):
             given = len(param_nodes.items)
             self.error(
@@ -2498,6 +2534,8 @@ class _Checker:
                     function, key = self.function_argument(function_node, [element], None, op, scope)
                 finally:
                     self.sort_key_owner = None
+                if self.is_open(key):
+                    self.late_sort_keys.append((key, function_node.span))
                 if not self.is_sort_key(key):
                     hint = None
                     if (

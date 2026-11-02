@@ -1,0 +1,2 @@
+; declarations: fixtures/run/declarations.json
+(let [f (fn (ok 1) [x] x)] (map f [1]))

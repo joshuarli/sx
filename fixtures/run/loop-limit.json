@@ -1,6 +1,6 @@
 {
   "description": "A loop that asks to recur past :max fails with loop-limit.",
-  "program": "(loop {:max 3} [n 0] (recur (+ n 1)))",
+  "program": "(loop {:max 3} [n 0] (if (> n 10) n (recur (+ n 1))))",
   "declarations": "declarations.json",
   "allow": [
     "store.get",

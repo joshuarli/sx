@@ -180,6 +180,10 @@ def _json_kind(value: object) -> str:
             return type(value).__name__
 
 
+def _is_unicode(text: str) -> bool:
+    return not any(0xD800 <= ord(char) <= 0xDFFF for char in text)
+
+
 def _json_object(value: object) -> dict[str, object] | None:
     if not isinstance(value, dict):
         return None
@@ -216,6 +220,8 @@ def decode(value: object, t: Type, path: str = "$") -> Value:
         case _ if t == STRING:
             if not isinstance(value, str):
                 raise fail("String")
+            if not _is_unicode(value):
+                raise DecodeError(path, "String", "a string with a lone surrogate")
             return value
         case _ if t == BYTES:
             if not isinstance(value, str):
@@ -254,6 +260,9 @@ def decode(value: object, t: Type, path: str = "$") -> Value:
             obj = _json_object(value)
             if obj is None:
                 raise fail(show_type(t))
+            lone = next((key for key in sorted(obj) if not _is_unicode(key)), None)
+            if lone is not None:
+                raise DecodeError(f"{path}[{json.dumps(lone)}]", "a key that is Unicode text", "a lone surrogate")
             return MapValue(
                 tuple((key, decode(obj[key], value_type, f"{path}[{json.dumps(key)}]")) for key in sorted(obj)),
             )

@@ -1,0 +1,7 @@
+error[type-mismatch] 2:26-2:31
+  (if true [[{}]] (sort-by first []))
+                           ^^^^^
+  sort-by needs a key that is an Int, Float, String, Bool, or a tuple of them.
+  Expected: a sort key
+  Found: Record {}
+  Help: sx help sort-by

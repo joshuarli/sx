@@ -5,7 +5,7 @@ import Sx.Eval
 open Lean (Json)
 
 def readJson (path : String) : IO Json := do
-  match Json.parse (← IO.FS.readFile path) with
+  match Sx.parseJsonText (← IO.FS.readFile path) with
   | .ok j => pure j
   | .error e => throw (IO.userError s!"{path}: {e}")
 

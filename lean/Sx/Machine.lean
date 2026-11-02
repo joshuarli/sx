@@ -179,7 +179,7 @@ def seqChildren : Expr → Except Failure (List Expr)
   | .recur args => pure args
   | .call _ arg => pure [arg]
   | .get r _ => pure [r]
-  | .tupleItem e _ => pure [e]
+  | .tupleItem e i => pure [e, .lit (.int i) .int]
   | .mkRecord fs => pure (fs.map Prod.snd)
   | .mkList es _ => pure es
   | .mkTuple es => pure es
@@ -289,7 +289,7 @@ def finishSeq (ctx : Ctx) (g : Glob) (f : Fiber) (stack : List Frame) (origin : 
     | _ => internal "get reads a field from something that is not a record."
   | .tupleItem _ i =>
     match done with
-    | [.val (.tuple vs)] =>
+    | [.val (.tuple vs), .val (.int _)] =>
       match vs[i]? with
       | some v => ret v
       | none => internal "tuple-item is past the end of the tuple."

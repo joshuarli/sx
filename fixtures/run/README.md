@@ -17,3 +17,7 @@ and types the cases share.
 | `trace` | The logical trace: each request, delay, and response, in the order the machine produced them |
 
 A rejected case has no trace, because a rejected program never runs.
+
+`lean/agree.py` also takes each case rejected with `retry-write`, checks its program against the same
+declarations with every write marked idempotent, flips the flags back in the exported IR, and requires
+the Lean checker to reject that IR, because no program that Python accepts exercises the Lean rule.

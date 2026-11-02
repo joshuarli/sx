@@ -1,0 +1,24 @@
+{
+  "types": {
+    "Pair": "Record {left: Int, right: Option<String>}"
+  },
+  "enums": {"Shape": {"Circle": "Float", "Box": "Record {w: Int, h: Int}", "Tagged": "String", "Empty": null}},
+  "capabilities": [
+    {"id": "shapes.get", "effect": "read", "input": "Record {}", "output": "Shape", "description": "Reads one shape."},
+    {"id": "shapes.list", "effect": "read", "input": "Record {}", "output": "List<Shape>", "description": "Lists shapes."},
+    {"id": "shapes.put", "effect": "write", "idempotent": true, "input": "Record {shape: Shape}", "output": "Unit", "description": "Stores a shape."},
+    {"id": "misc.pair", "effect": "read", "input": "Record {}", "output": "Tuple<Int, String>", "description": "Reads a pair."},
+    {"id": "misc.opt", "effect": "read", "input": "Record {n: Int}", "output": "Option<Int>", "description": "Reads an optional number."},
+    {"id": "misc.res", "effect": "read", "input": "Record {n: Int}", "output": "Result<Int, String>", "description": "Reads a result."},
+    {"id": "misc.nested", "effect": "read", "input": "Record {}", "output": "Map<String, List<Int>>", "description": "Reads nested data."},
+    {"id": "misc.grid", "effect": "read", "input": "Record {}", "output": "List<List<Int>>", "description": "Reads a grid."},
+    {"id": "misc.floats", "effect": "read", "input": "Record {}", "output": "List<Float>", "description": "Reads floats."},
+    {"id": "misc.flag", "effect": "read", "input": "Record {n: Int}", "output": "Bool", "description": "Reads a flag."},
+    {"id": "misc.num", "effect": "read", "input": "Record {n: Int}", "output": "Int", "description": "Reads a number."},
+    {"id": "misc.word", "effect": "read", "input": "Record {s: String}", "output": "String", "description": "Reads a word."},
+    {"id": "misc.pairs", "effect": "read", "input": "Record {}", "output": "List<Pair>", "description": "Lists pairs."},
+    {"id": "misc.log", "effect": "write", "idempotent": false, "input": "Record {msg: String}", "output": "Unit", "description": "Logs once."},
+    {"id": "misc.touch", "effect": "write", "idempotent": true, "input": "Record {n: Int}", "output": "Int", "description": "Touches and counts."},
+    {"id": "misc.mark", "effect": "write", "idempotent": false, "input": "Record {n: Int}", "output": "Option<String>", "description": "Marks once."}
+  ]
+}

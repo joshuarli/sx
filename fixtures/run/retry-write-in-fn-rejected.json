@@ -1,0 +1,15 @@
+{
+  "description": "A retry on refusal kinds rejects a non-idempotent write inside a fn, which can run more than once.",
+  "program": "(retry {:delays [1s] :on [RateLimited]} (map (fn [t] (call mail.send {:to t})) [\"a\" \"b\"]))",
+  "declarations": "declarations.json",
+  "allow": [
+    "mail.send"
+  ],
+  "responses": [],
+  "expect": {
+    "rejected": [
+      "retry-write"
+    ]
+  },
+  "trace": []
+}

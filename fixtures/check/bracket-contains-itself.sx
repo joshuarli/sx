@@ -1,0 +1,2 @@
+; declarations: fixtures/run/declarations.json
+(entries (into-map (map (fn [s] [s [s]]) [])))

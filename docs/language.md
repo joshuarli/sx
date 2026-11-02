@@ -361,6 +361,8 @@ arguments, rebinds the names to them in order, and evaluates `body` again. Any o
   rejects it with `recur-arity` or `type-mismatch`.
 - A binding's type comes from its initial value and from the matching `recur` arguments, so
   `none` and `[]` work as initial values.
+- Some path through `body` must end without `recur`. A body that always ends in `recur` has no
+  result type and can only fail with `loop-limit`, so the checker rejects it with `loop-no-result`.
 - `:max` is an integer literal of at least 1 and counts evaluations of `body`. If evaluation
   number `:max` ends in `recur`, the loop fails with `loop-limit`. Choose `:max` as the largest
   count the task can need, not as a timeout.
@@ -548,7 +550,7 @@ always knows the expected type, so every encoding below is unambiguous.
 | `Bool` | `true` or `false` |
 | `Int` | An integer in the signed 64-bit range. A fraction, an exponent, or `true` is rejected. |
 | `Float` | A JSON number, with or without a fraction or exponent: `21` and `21.5` both decode. A number outside the finite 64-bit range is a mismatch. Encoding writes a finite number. |
-| `String` | A string |
+| `String` | A string. A lone surrogate, which is not a Unicode scalar value, makes it a mismatch, as a map key does. |
 | `Bytes` | A string of standard base64 (RFC 4648 alphabet, `+` and `/`) with `=` padding, canonical: the padding bits are zero. The URL-safe alphabet, missing padding, whitespace, and any other character are mismatches. |
 | `Unit` | `null` |
 | `List<T>` | An array |
@@ -647,7 +649,7 @@ The checker's codes are:
 | Reading | `unclosed`, `unexpected-close`, `bad-literal`, `bad-symbol`, `int-range`, `float-range`, `bad-escape`, `record-key`, `record-missing-value`, `duplicate-field`, `empty-program`, `multiple-expressions` |
 | Names | `unknown-name`, `unknown-function`, `unknown-capability`, `unknown-field`, `missing-field`, `unknown-variant`, `reserved-name` |
 | Calls | `arity`, `type-mismatch`, `unresolved-type`, `not-a-record`, `no-encoding` |
-| Forms | `condition-not-bool`, `missing-else`, `branch-mismatch`, `fn-position`, `bad-pattern`, `bad-option`, `recur-position`, `recur-arity` |
+| Forms | `condition-not-bool`, `missing-else`, `branch-mismatch`, `fn-position`, `bad-pattern`, `bad-option`, `recur-position`, `recur-arity`, `loop-no-result` |
 | Match | `non-exhaustive`, `unreachable-clause` |
 | Effects | `unauthorized`, `parallel-write`, `par-map-limit`, `retry-write`, `wait-write` |
 | Size | `too-large`, naming the `source-bytes`, `nodes`, or `depth` budget |

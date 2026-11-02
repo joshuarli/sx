@@ -43,4 +43,45 @@ def callsOfFields : List (String × Expr) → List String
   | (_, e) :: fs => callsOf e ++ callsOfFields fs
 end
 
+mutual
+def callsIn (rep : Bool) : Expr → List (String × Bool)
+  | .lit .. => []
+  | .var _ => []
+  | .let_ _ v body => callsIn rep v ++ callsIn rep body
+  | .localFn _ body => callsIn rep body
+  | .if_ c t e => callsIn rep c ++ callsIn rep t ++ callsIn rep e
+  | .match_ s cs => callsIn rep s ++ callsInClauses rep cs
+  | .lam _ _ _ body _ => callsIn true body
+  | .applyLocal _ f args => callsInList rep args ++ callsIn rep f
+  | .prelude _ args => callsInList rep args
+  | .core _ args => callsInList rep args
+  | .call c arg => callsIn rep arg ++ [(c, rep)]
+  | .get r _ => callsIn rep r
+  | .tupleItem e _ => callsIn rep e
+  | .mkRecord fs => callsInFields rep fs
+  | .mkList es _ => callsInList rep es
+  | .mkTuple es => callsInList rep es
+  | .wrap _ e _ => callsIn rep e
+  | .mkVariant _ _ none => []
+  | .mkVariant _ _ (some e) => callsIn rep e
+  | .coerce e _ => callsIn rep e
+  | .attempt e => callsIn rep e
+  | .retry _ _ e => callsIn rep e
+  | .waitUntil _ p e => callsIn rep e ++ callsIn rep p
+  | .sleep _ => []
+  | .loop _ _ init body => callsInList rep init ++ callsIn true body
+  | .recur args => callsInList rep args
+  | .par bs => callsInList rep bs
+  | .parMap _ f xs => callsIn rep xs ++ callsIn rep f
+def callsInList (rep : Bool) : List Expr → List (String × Bool)
+  | [] => []
+  | e :: es => callsIn rep e ++ callsInList rep es
+def callsInClauses (rep : Bool) : List (Pat × Expr) → List (String × Bool)
+  | [] => []
+  | (_, e) :: cs => callsIn rep e ++ callsInClauses rep cs
+def callsInFields (rep : Bool) : List (String × Expr) → List (String × Bool)
+  | [] => []
+  | (_, e) :: fs => callsIn rep e ++ callsInFields rep fs
+end
+
 end Sx

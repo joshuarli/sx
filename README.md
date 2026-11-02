@@ -112,6 +112,33 @@ uv run python lean/agree.py
 lean/axioms.sh
 ```
 
+## Differential fuzzing
+
+`tests/fuzz` generates random Sx programs from a typed grammar over the declarations in
+`fixtures/run/declarations.json` plus a few more in `tests/fuzz/declarations.json`, and keeps the ones
+the Python checker accepts. It scripts random host responses, including every call-error kind and
+malformed outputs, and runs each program on Python's machine and on Lean's `sx-ref` with the same
+responses. Python's exit status, outcome, and trace must equal Lean's, and the Lean checker must accept
+the exported IR. A Python exception, a disagreement, or a Lean rejection is a finding. A tenth of the
+programs are mutated into mostly invalid source, to prove that no input crashes the reader or checker.
+
+Runs are seeded: `--seed S --count N --start K` always produces the same programs, whatever `--jobs` is.
+Findings land in `.work/tmp/fuzz/findings/SEED-INDEX/`. The run prints how many accepted programs contain
+and execute each IR class. `CoreCall` stays at zero because Lean has no cores, and the checker settles
+`MakeBracket` and `MakeEmptyBrace` away and never builds `MakeVariant`. The run needs the Lean build
+and `lake` on `PATH`.
+
+```sh
+(cd lean && lake build)
+uv run python -m tests.fuzz --fast
+uv run python -m tests.fuzz --seed 7 --count 5000 --jobs 6
+uv run python -m tests.fuzz --seed 7 --show 123
+uv run python -m tests.fuzz --seed 7 --minimize 123
+```
+
+`--fast` is the quick slice: 300 programs with a fixed seed, a few seconds, exit status 0 when nothing
+disagrees. `--triage N` also minimizes up to N findings per kind.
+
 ## Run the syntax pilot
 
 The pilot sends the development tasks to a model through the `pi` CLI, then checks and runs every
