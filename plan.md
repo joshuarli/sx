@@ -170,7 +170,9 @@ correct in all 96 sessions, and the one policy-violating effect was Sx's. Phase 
 sessions over repomod, Sx answered 27 of 32 requests correctly against JavaScript's 32 of 32, in fewer
 turns, at about the same cost. A checkable-subset test then found that 91% of the JavaScript models wrote
 lowers into Sx's forms, and the owner chose the fifth campaign, Phases 18 to 22, a checkable
-TypeScript front end over the same kernel, which is planned and not started.
+TypeScript front end over the same kernel. The owner authorized every phase unattended and delegated the
+spec review to the lead. Phase 18 missed its coverage gate and the lead ruled to continue; Phase 19 is
+next.
 
 **The Python prototype is frozen.** `src/sx` and the Python cores are frozen as of commit
 `15b6ed6`, the parent of the commit that records this, because Rust passed its gates. The prototype
@@ -1161,6 +1163,22 @@ the corpus, after a mechanical rewrite of codemode's API (`tools.mcp__ns__name` 
 
 **Gate:** the owner approves the spec, and at least 85% of the corpus's tool-calling scripts are inside
 it under its exact rules.
+
+**Phase 18 result: the coverage gate was missed, and the lead ruled to continue.** The specification is
+`docs/checkable-typescript.md`. The owner delegated its review to the lead, who approved it. Under its
+exact rules, `bench/subset` accepts 419 of the 512 tool-calling scripts (81.8%). Net of 10 scripts that
+only codemode's `store` and `load` or the API rewrite's leftovers reject, it accepts 83.8%. The
+classifier cannot see types, so both are upper bounds. The largest single cost is `?.` used as a value,
+which the spec allows only where `null` and `undefined` behave alike; relaxing it would reach 83.8%
+gross, and the lead kept it.
+
+The lead continued because the gate stood in for the question Phase 21 answers directly, under a gate
+fixed before any model runs. The corpus was written for codemode by models that had never seen the
+subset, its guide, or its diagnostics. The lead did not relax fidelity to pass the gate.
+
+The parser is hand-written. `oxc_parser` kept the release binary within 10% (+9.6%), but raised the
+clean build from 19.8 s to 27.6 s wall time (+39%) and added about 70 crates; `perf-gate-ready` passed
+around every timed build.
 
 #### Phase 19: The front end
 
