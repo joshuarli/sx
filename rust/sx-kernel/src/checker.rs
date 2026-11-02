@@ -2,10 +2,11 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::rc::Rc;
 use std::sync::Arc;
 
+use crate::authority::{Authority, Grant, Screen, Verdict};
 use crate::budgets::Budgets;
 use crate::diagnostics::Diagnostic;
 use crate::ir::{
-    self, Binder, Conversion, HigherOrder, Lambda, MatchPattern, NodeKind as Ir, PreludeOp, WidenedField, WrapKind,
+    self, Binder, Literal, Conversion, HigherOrder, Lambda, MatchPattern, NodeKind as Ir, PreludeOp, WidenedField, WrapKind,
 };
 use crate::registry::{Capability, Effect, Function, Registry};
 use crate::syntax::{Items, Node, NodeKind, Span, show};
@@ -530,7 +531,7 @@ type Checked = (ir::Node, Type);
 
 struct Checker<'r> {
     registry: &'r Registry,
-    allowed: &'r BTreeSet<String>,
+    authority: Authority<'r>,
     budgets: Budgets,
     substitution: Vec<Option<Type>>,
     trail: Vec<usize>,
@@ -2449,8 +2450,10 @@ impl<'r> Checker<'r> {
             );
             return self.placeholder(span);
         }
-        if !self.allowed.contains(&capability.id) {
-            let allowed: Vec<&str> = self.allowed.iter().map(String::as_str).collect();
+        if let Authority::Granted(grants) = self.authority
+            && !grants.contains(&capability.id)
+        {
+            let allowed: Vec<&str> = grants.ids().collect();
             let allowed = if allowed.is_empty() { "nothing".to_string() } else { allowed.join(", ") };
             self.report(
                 Diagnostic::new("unauthorized", name_node.span, format!("This program may not call {}.", capability.id))
@@ -2463,6 +2466,7 @@ impl<'r> Checker<'r> {
         } else {
             self.check(argument_node, Some(&capability.input), scope)
         };
+        self.check_scope(capability, &argument, argument_node.span);
         let depth = self.repeat_depth;
         for effects in &mut self.effects {
             effects.calls.push(EffectCall { capability, span, depth });
@@ -2470,6 +2474,31 @@ impl<'r> Checker<'r> {
         self.capabilities_used.insert(capability.id.clone());
         let call = node(Ir::Call { capability: capability.id.clone(), argument: Box::new(argument) }, span);
         self.coerce(call, &capability.output, expected, span)
+    }
+
+    fn check_scope(&mut self, capability: &Capability, argument: &ir::Node, span: Span) {
+        let Authority::Granted(grants) = self.authority else {
+            return;
+        };
+        let Some(input) = Literal::of(argument) else {
+            return;
+        };
+        let Screen::Verdict(Verdict::Denied(reason)) = grants.screen(&capability.id, &input.value()) else {
+            return;
+        };
+        let granted = match grants.get(&capability.id) {
+            Some(Grant::Scoped { scope, .. }) => Some(format!("Granted scope: {}", show_value(scope))),
+            _ => None,
+        };
+        self.report(
+            Diagnostic::new(
+                "out-of-scope",
+                span,
+                format!("The host's grant for {} does not cover this input: {reason}.", capability.id),
+            )
+            .maybe_detail(granted)
+            .help(capability.id.clone()),
+        );
     }
 
     fn form_some<'a>(&mut self, span: Span, items: &'a [Node], expected: Option<&Type>, scope: &Scope<'a>) -> Checked {
@@ -3940,11 +3969,11 @@ const DEPTH_LIMIT: usize = 1000;
 pub fn check(
     program: &Node,
     registry: &Registry,
-    allowed: &BTreeSet<String>,
+    authority: Authority<'_>,
     inputs: &BTreeMap<String, Type>,
     budgets: Budgets,
 ) -> CheckResult {
-    match crate::stack::on_sized_stack(|| elaborate(program, registry, allowed, inputs, budgets)) {
+    match crate::stack::on_sized_stack(|| elaborate(program, registry, authority, inputs, budgets)) {
         Ok(result) => result,
         Err(error) => {
             let message = format!("The checker could not start a thread for this program: {error}.");
@@ -3956,13 +3985,13 @@ pub fn check(
 fn elaborate(
     program: &Node,
     registry: &Registry,
-    allowed: &BTreeSet<String>,
+    authority: Authority<'_>,
     inputs: &BTreeMap<String, Type>,
     budgets: Budgets,
 ) -> CheckResult {
     let mut checker = Checker {
         registry,
-        allowed,
+        authority,
         budgets,
         substitution: Vec::new(),
         trail: Vec::new(),
@@ -4063,7 +4092,7 @@ fn elaborate(
 pub fn compile_source(
     source: &str,
     registry: &Registry,
-    allowed: &BTreeSet<String>,
+    authority: Authority<'_>,
     inputs: &BTreeMap<String, Type>,
     budgets: Budgets,
 ) -> CheckResult {
@@ -4077,6 +4106,6 @@ pub fn compile_source(
     let read = crate::reader::read(source);
     match read.program {
         None => CheckResult { program: None, diagnostics: read.diagnostics },
-        Some(program) => check(&program, registry, allowed, inputs, budgets),
+        Some(program) => check(&program, registry, authority, inputs, budgets),
     }
 }

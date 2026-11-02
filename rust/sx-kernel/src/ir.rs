@@ -1,10 +1,11 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use crate::json::Json;
 use crate::registry::Effect;
 use crate::syntax::Span;
 use crate::types::{CallErrorKind, EnumType, Type};
-use crate::values::Value;
+use crate::values::{RecordValue, Value};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Binder {
@@ -324,4 +325,115 @@ pub struct Program {
     pub inputs: BTreeMap<String, Type>,
     pub enums: BTreeMap<String, Arc<EnumType>>,
     pub signatures: Signatures,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Literal {
+    Bool(bool),
+    Int(i64),
+    Float(f64),
+    Text(Arc<str>),
+    Record(Vec<(String, Literal)>),
+    List(Vec<Literal>),
+}
+
+impl Literal {
+    pub fn of(node: &Node) -> Option<Literal> {
+        match &node.kind {
+            NodeKind::Literal { value, .. } => match value {
+                Value::Bool(b) => Some(Literal::Bool(*b)),
+                Value::Int(n) => Some(Literal::Int(*n)),
+                Value::Float(f) => Some(Literal::Float(f.0)),
+                Value::String(s) => Some(Literal::Text(s.clone())),
+                _ => None,
+            },
+            NodeKind::MakeRecord { fields } => fields
+                .iter()
+                .map(|(name, part)| Literal::of(part).map(|l| (name.clone(), l)))
+                .collect::<Option<Vec<_>>>()
+                .map(Literal::Record),
+            NodeKind::MakeList { items, .. } => items.iter().map(Literal::of).collect::<Option<Vec<_>>>().map(Literal::List),
+            _ => None,
+        }
+    }
+
+    pub fn json(&self) -> Json {
+        match self {
+            Literal::Bool(b) => Json::Bool(*b),
+            Literal::Int(n) => Json::Int(*n),
+            Literal::Float(f) => Json::Float(*f),
+            Literal::Text(s) => Json::string(&**s),
+            Literal::Record(fields) => Json::Object(fields.iter().map(|(n, v)| (n.clone(), v.json())).collect()),
+            Literal::List(items) => Json::Array(items.iter().map(Literal::json).collect()),
+        }
+    }
+
+    pub fn value(&self) -> Value {
+        match self {
+            Literal::Bool(b) => Value::Bool(*b),
+            Literal::Int(n) => Value::Int(*n),
+            Literal::Float(f) => Value::float(*f),
+            Literal::Text(s) => Value::String(s.clone()),
+            Literal::Record(fields) => {
+                Value::Record(RecordValue::new(fields.iter().map(|(n, v)| (Arc::from(n.as_str()), v.value())).collect()))
+            }
+            Literal::List(items) => Value::list(items.iter().map(Literal::value).collect()),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CallSite<'p> {
+    pub capability: &'p str,
+    pub span: Span,
+    pub input: Option<Literal>,
+}
+
+fn children(node: &Node) -> Vec<&Node> {
+    let mut out: Vec<&Node> = Vec::new();
+    match &node.kind {
+        NodeKind::Literal { .. } | NodeKind::Variable { .. } | NodeKind::Sleep { .. } | NodeKind::MakeEmptyBrace { .. } => {}
+        NodeKind::Let(binding) => out.extend([&*binding.value, &*binding.body]),
+        NodeKind::LocalFunction { body, .. } | NodeKind::Attempt { body } => out.push(body),
+        NodeKind::If(branch) => out.extend([&*branch.condition, &*branch.then, &*branch.otherwise]),
+        NodeKind::Match(arms) => {
+            out.push(&arms.scrutinee);
+            out.extend(arms.clauses.iter().map(|(_, body)| body));
+        }
+        NodeKind::Lambda(lambda) => out.push(&lambda.body),
+        NodeKind::ApplyLocal { function, args, .. } => {
+            out.push(&function.body);
+            out.extend(args);
+        }
+        NodeKind::Prelude { args, .. } | NodeKind::CoreCall { args, .. } | NodeKind::Recur { args } => out.extend(args),
+        NodeKind::Call { argument, .. } => out.push(argument),
+        NodeKind::Get { record, .. } => out.push(record),
+        NodeKind::MakeRecord { fields } => out.extend(fields.iter().map(|(_, part)| part)),
+        NodeKind::MakeList { items, .. } | NodeKind::MakeTuple { items } | NodeKind::MakeBracket { items, .. } => {
+            out.extend(items);
+        }
+        NodeKind::Wrap { value, .. } | NodeKind::Coerce { value, .. } => out.push(value),
+        NodeKind::MakeVariant { payload, .. } => out.extend(payload.as_deref()),
+        NodeKind::Retry(retry) => out.push(&retry.body),
+        NodeKind::WaitUntil(wait) => out.extend([&*wait.predicate.body, &*wait.body]),
+        NodeKind::Loop(repeat) => {
+            out.extend(&repeat.initial);
+            out.push(&repeat.body);
+        }
+        NodeKind::Par { branches } => out.extend(branches),
+        NodeKind::ParMap { function, items, .. } => out.extend([&*function.body, &**items]),
+    }
+    out
+}
+
+pub fn call_sites(root: &Node) -> Vec<CallSite<'_>> {
+    let mut found = Vec::new();
+    let mut stack = vec![root];
+    while let Some(node) = stack.pop() {
+        if let NodeKind::Call { capability, argument } = &node.kind {
+            found.push(CallSite { capability, span: node.span, input: Literal::of(argument) });
+        }
+        stack.extend(children(node).into_iter().rev());
+    }
+    found
 }

@@ -4,13 +4,17 @@ use std::process::ExitCode;
 use sx_cores::kernel::{Cores, core};
 use sx_kernel::machine::CoreImplementations;
 use sx_kernel::protocol::{CoreLibrary, Ending, serve};
-use sx_kernel::registry::Core;
+use sx_kernel::registry::{Core, Pack};
 
 struct Library;
 
 impl CoreLibrary for Library {
     fn core(&self, id: &str) -> Option<Core> {
         core(id)
+    }
+
+    fn pack(&self, id: &str) -> Option<Pack> {
+        sx_packs::pack(id)
     }
 
     fn implementations(&self) -> &dyn CoreImplementations {

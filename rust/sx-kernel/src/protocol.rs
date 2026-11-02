@@ -1,25 +1,27 @@
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, HashSet};
 use std::fmt;
 use std::io::{self, BufRead, Read, Write};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
+use crate::authority::{Authority, GrantError, Grants, Screen, Verdict};
 use crate::budgets::Budgets;
 use crate::checker::compile_source;
+use crate::explain::explain_tools;
 use crate::diagnostics::{Diagnostic, render};
-use crate::ir::{Node, NodeKind, Program};
+use crate::ir::Program;
 use crate::json::{Json, Layout, dumps, parse, repr_str};
 use crate::machine::{CoreImplementations, Failure, Machine, Outcome, Request, Response};
-use crate::registry::{Core, Effect, Registry, load_declarations};
+use crate::registry::{Core, Pack, Registry, load_declarations};
 use crate::syntax::Span;
 use crate::types::{Type, show_type};
 use crate::values::{Value, decode};
 
 pub const VERSION: i64 = 1;
 pub const MAX_LINE_BYTES: usize = 16 * 1024 * 1024;
-pub const RUNTIME_INPUT: &str = "computed at run time";
 
 pub trait CoreLibrary {
     fn core(&self, id: &str) -> Option<Core>;
+    fn pack(&self, id: &str) -> Option<Pack>;
     fn implementations(&self) -> &dyn CoreImplementations;
 }
 
@@ -32,6 +34,7 @@ pub enum ErrorCode {
     UnexpectedMessage,
     InvalidDeclarations,
     UnknownCapability,
+    InvalidGrants,
     InvalidInput,
     InvalidBudget,
     EndOfInput,
@@ -48,6 +51,7 @@ impl ErrorCode {
             ErrorCode::UnexpectedMessage => "unexpected-message",
             ErrorCode::InvalidDeclarations => "invalid-declarations",
             ErrorCode::UnknownCapability => "unknown-capability",
+            ErrorCode::InvalidGrants => "invalid-grants",
             ErrorCode::InvalidInput => "invalid-input",
             ErrorCode::InvalidBudget => "invalid-budget",
             ErrorCode::EndOfInput => "end-of-input",
@@ -92,7 +96,8 @@ impl std::error::Error for ProtocolError {}
 struct Source {
     text: String,
     declarations: Json,
-    allow: Option<Vec<String>>,
+    allow: Vec<String>,
+    grants: Option<Json>,
 }
 
 #[derive(Debug)]
@@ -107,6 +112,7 @@ enum Message {
     Start(Start),
     Explain(Source),
     Respond(Vec<(String, Response)>),
+    CheckScope(String),
     Cancel,
 }
 
@@ -146,15 +152,18 @@ fn string_list(json: &Json, what: &str, key: &str) -> Result<Vec<String>, Protoc
         .collect()
 }
 
-fn source_of(json: &Json, what: &str, allow_required: bool) -> Result<Source, ProtocolError> {
+fn source_of(json: &Json, what: &str, authority_required: bool) -> Result<Source, ProtocolError> {
     let text = string_of(json, what, "program")?.to_string();
     let declarations = json.get("declarations").cloned().unwrap_or_else(|| Json::Object(Vec::new()));
-    let allow = match (json.get("allow"), allow_required) {
-        (Some(_), _) => Some(string_list(json, what, "allow")?),
-        (None, true) => return Err(ProtocolError::invalid(format!("{what} needs an \"allow\" field"))),
-        (None, false) => None,
+    let grants = json.get("grants").cloned();
+    let allow = match json.get("allow") {
+        Some(_) => string_list(json, what, "allow")?,
+        None if authority_required && grants.is_none() => {
+            return Err(ProtocolError::invalid(format!("{what} needs an \"allow\" or a \"grants\" field")));
+        }
+        None => Vec::new(),
     };
-    Ok(Source { text, declarations, allow })
+    Ok(Source { text, declarations, allow, grants })
 }
 
 fn budgets_of(json: Option<&Json>) -> Result<Budgets, ProtocolError> {
@@ -207,7 +216,7 @@ fn message_of(json: &Json) -> Result<Message, ProtocolError> {
         .ok_or_else(|| ProtocolError::invalid("a message's \"type\" must be a string"))?;
     match kind {
         "start" => {
-            object(json, "start", &["type", "version", "program", "declarations", "allow", "inputs", "budgets"])?;
+            object(json, "start", &["type", "version", "program", "declarations", "allow", "grants", "inputs", "budgets"])?;
             let source = source_of(json, "start", true)?;
             let inputs = match json.get("inputs") {
                 None => Vec::new(),
@@ -217,7 +226,7 @@ fn message_of(json: &Json) -> Result<Message, ProtocolError> {
             Ok(Message::Start(Start { source, inputs, budgets: budgets_of(json.get("budgets"))? }))
         }
         "explain" => {
-            object(json, "explain", &["type", "version", "program", "declarations", "allow"])?;
+            object(json, "explain", &["type", "version", "program", "declarations", "allow", "grants"])?;
             Ok(Message::Explain(source_of(json, "explain", false)?))
         }
         "respond" => {
@@ -226,6 +235,10 @@ fn message_of(json: &Json) -> Result<Message, ProtocolError> {
                 .as_array()
                 .ok_or_else(|| ProtocolError::invalid("respond: \"responses\" must be a list"))?;
             Ok(Message::Respond(listed.iter().map(response_of).collect::<Result<_, _>>()?))
+        }
+        "check-scope" => {
+            object(json, "check-scope", &["type", "version", "id"])?;
+            Ok(Message::CheckScope(string_of(json, "check-scope", "id")?.to_string()))
         }
         "cancel" => {
             object(json, "cancel", &["type", "version"])?;
@@ -287,110 +300,14 @@ fn request_json(request: &Request) -> Json {
     }
 }
 
-fn literal_json(node: &Node) -> Option<Json> {
-    match &node.kind {
-        NodeKind::Literal { value, .. } => match value {
-            Value::Bool(b) => Some(Json::Bool(*b)),
-            Value::Int(n) => Some(Json::Int(*n)),
-            Value::Float(f) => Some(Json::Float(f.0)),
-            Value::String(s) => Some(Json::string(&**s)),
-            _ => None,
-        },
-        NodeKind::MakeRecord { fields } => {
-            let parts: Option<Vec<(String, Json)>> =
-                fields.iter().map(|(name, part)| literal_json(part).map(|j| (name.clone(), j))).collect();
-            parts.map(Json::Object)
-        }
-        NodeKind::MakeList { items, .. } => items.iter().map(literal_json).collect::<Option<Vec<_>>>().map(Json::Array),
-        _ => None,
-    }
-}
-
-fn children<'a>(node: &'a Node) -> Vec<&'a Node> {
-    let mut out: Vec<&'a Node> = Vec::new();
-    match &node.kind {
-        NodeKind::Literal { .. } | NodeKind::Variable { .. } | NodeKind::Sleep { .. } | NodeKind::MakeEmptyBrace { .. } => {}
-        NodeKind::Let(binding) => out.extend([&*binding.value, &*binding.body]),
-        NodeKind::LocalFunction { body, .. } => out.push(body),
-        NodeKind::If(branch) => out.extend([&*branch.condition, &*branch.then, &*branch.otherwise]),
-        NodeKind::Match(arms) => {
-            out.push(&arms.scrutinee);
-            out.extend(arms.clauses.iter().map(|(_, body)| body));
-        }
-        NodeKind::Lambda(lambda) => out.push(&lambda.body),
-        NodeKind::ApplyLocal { function, args, .. } => {
-            out.push(&function.body);
-            out.extend(args);
-        }
-        NodeKind::Prelude { args, .. } | NodeKind::CoreCall { args, .. } | NodeKind::Recur { args } => out.extend(args),
-        NodeKind::Call { argument, .. } => out.push(argument),
-        NodeKind::Get { record, .. } => out.push(record),
-        NodeKind::MakeRecord { fields } => out.extend(fields.iter().map(|(_, part)| part)),
-        NodeKind::MakeList { items, .. } | NodeKind::MakeTuple { items } | NodeKind::MakeBracket { items, .. } => {
-            out.extend(items);
-        }
-        NodeKind::Wrap { value, .. } | NodeKind::Coerce { value, .. } => out.push(value),
-        NodeKind::MakeVariant { payload, .. } => out.extend(payload.as_deref()),
-        NodeKind::Attempt { body } => out.push(body),
-        NodeKind::Retry(retry) => out.push(&retry.body),
-        NodeKind::WaitUntil(wait) => {
-            out.push(&wait.predicate.body);
-            out.push(&wait.body);
-        }
-        NodeKind::Loop(repeat) => {
-            out.extend(&repeat.initial);
-            out.push(&repeat.body);
-        }
-        NodeKind::Par { branches } => out.extend(branches),
-        NodeKind::ParMap { function, items, .. } => {
-            out.push(&function.body);
-            out.push(items);
-        }
-    }
-    out
-}
-
-fn literal_calls(root: &Node) -> Vec<(&str, Option<Json>)> {
-    let mut found = Vec::new();
-    let mut stack = vec![root];
-    while let Some(node) = stack.pop() {
-        if let NodeKind::Call { capability, argument } = &node.kind {
-            found.push((capability.as_str(), literal_json(argument)));
-        }
-        stack.extend(children(node).into_iter().rev());
-    }
-    found
-}
-
-pub fn explain_report(program: &Program, allowed: &BTreeSet<String>) -> Json {
-    let calls = literal_calls(&program.body);
-    let mut tools = Vec::new();
-    for id in &program.capabilities {
-        let effect = match program.signatures.capabilities.get(id) {
-            Some(signature) if signature.effect == Effect::Write => {
-                format!("write, {}", if signature.idempotent { "idempotent" } else { "not idempotent" })
-            }
-            Some(signature) => signature.effect.name().to_string(),
-            None => String::new(),
-        };
-        let inputs: Vec<Json> = calls
-            .iter()
-            .filter(|(call, _)| call == id)
-            .map(|(_, input)| input.clone().unwrap_or_else(|| Json::string(RUNTIME_INPUT)))
-            .collect();
-        tools.push(Json::object([
-            ("id", Json::string(id.as_str())),
-            ("effect", Json::string(effect)),
-            ("allowed", Json::Bool(allowed.contains(id))),
-            ("inputs", Json::Array(inputs)),
-        ]));
-    }
-    Json::object([
+pub fn explain_report(program: &Program, registry: &Registry, grants: &Grants) -> Result<Json, String> {
+    let tools = explain_tools(program, registry, grants)?;
+    Ok(Json::object([
         ("type", Json::string("explained")),
-        ("tools", Json::Array(tools)),
+        ("tools", Json::Array(tools.iter().map(|tool| tool.json()).collect())),
         ("inputs", Json::Array(program.inputs.keys().map(|name| Json::string(name.as_str())).collect())),
         ("result", Json::string(show_type(&program.result))),
-    ])
+    ]))
 }
 
 pub struct Declared {
@@ -415,6 +332,17 @@ pub fn declare(declarations: &Json, library: &dyn CoreLibrary) -> Result<Declare
         }
         Some(_) => return Err(invalid_declarations("declarations: cores must be a list of ids")),
     }
+    match declarations.get("packs") {
+        None => {}
+        Some(Json::Array(ids)) => {
+            for id in ids {
+                let id = id.as_str().ok_or_else(|| invalid_declarations("declarations: packs must be a list of ids"))?;
+                let pack = library.pack(id).ok_or_else(|| invalid_declarations(format!("no pack is named {id:?}")))?;
+                registry.add_pack(pack).map_err(|e| invalid_declarations(e.0))?;
+            }
+        }
+        Some(_) => return Err(invalid_declarations("declarations: packs must be a list of ids")),
+    }
     load_declarations(&mut registry, declarations).map_err(|e| invalid_declarations(e.to_string()))?;
     let mut inputs = BTreeMap::new();
     match declarations.get("inputs") {
@@ -435,13 +363,35 @@ pub fn declare(declarations: &Json, library: &dyn CoreLibrary) -> Result<Declare
 
 enum Compiled {
     Rejected(Json),
-    Ready { program: Box<Program>, declared: BTreeMap<String, Type> },
+    Ready { program: Box<Program>, declared: BTreeMap<String, Type>, registry: Box<Registry>, grants: Box<Grants> },
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Purpose {
     Run,
     Explain,
+}
+
+fn grants_of(source: &Source, registry: &Registry) -> Result<Grants, ProtocolError> {
+    let refused = |error: GrantError| match error {
+        GrantError::UnknownCapability(id) => ProtocolError::new(
+            ErrorCode::UnknownCapability,
+            format!("allow or grants name a capability the declarations do not define: {id}"),
+        ),
+        other => ProtocolError::new(ErrorCode::InvalidGrants, other.to_string()),
+    };
+    let mut grants = match &source.grants {
+        Some(json) => Grants::load(registry, json).map_err(refused)?,
+        None => Grants::new(),
+    };
+    for id in &source.allow {
+        if registry.capability(id).is_none() {
+            let message = format!("allow names a capability the declarations do not define: {id}");
+            return Err(ProtocolError::new(ErrorCode::UnknownCapability, message));
+        }
+        grants.grant_unscoped(registry, id).map_err(refused)?;
+    }
+    Ok(grants)
 }
 
 fn compile(
@@ -451,18 +401,19 @@ fn compile(
     library: &dyn CoreLibrary,
 ) -> Result<Compiled, ProtocolError> {
     let Declared { registry, inputs } = declare(&source.declarations, library)?;
-    let allow: BTreeSet<String> = source.allow.iter().flatten().cloned().collect();
-    if let Some(unknown) = allow.iter().find(|id| registry.capability(id).is_none()) {
-        let message = format!("allow names a capability the declarations do not define: {unknown}");
-        return Err(ProtocolError::new(ErrorCode::UnknownCapability, message));
-    }
-    let checking: BTreeSet<String> = match purpose {
-        Purpose::Run => allow.clone(),
-        Purpose::Explain => registry.capabilities().map(|c| c.id.clone()).collect(),
+    let grants = grants_of(source, &registry)?;
+    let authority = match purpose {
+        Purpose::Run => Authority::Granted(&grants),
+        Purpose::Explain => Authority::Unrestricted,
     };
-    let checked = compile_source(&source.text, &registry, &checking, &inputs, budgets);
+    let checked = compile_source(&source.text, &registry, authority, &inputs, budgets);
     match checked.program {
-        Some(program) => Ok(Compiled::Ready { program: Box::new(program), declared: inputs }),
+        Some(program) => Ok(Compiled::Ready {
+            program: Box::new(program),
+            declared: inputs,
+            registry: Box::new(registry),
+            grants: Box::new(grants),
+        }),
         None => Ok(Compiled::Rejected(Json::object([
             ("type", Json::string("rejected")),
             ("diagnostics", Json::Array(checked.diagnostics.iter().map(diagnostic_json).collect())),
@@ -625,7 +576,7 @@ impl<R: BufRead, W: Write> Session<'_, R, W> {
                     }
                 }
                 Incoming::Message(Message::Explain(source)) => self.explain(&source)?,
-                Incoming::Message(Message::Respond(_) | Message::Cancel) => {
+                Incoming::Message(Message::Respond(_) | Message::Cancel | Message::CheckScope(_)) => {
                     let error = ProtocolError::new(ErrorCode::UnexpectedMessage, "no execution is waiting for responses");
                     self.reject(&error)?;
                 }
@@ -637,10 +588,8 @@ impl<R: BufRead, W: Write> Session<'_, R, W> {
         let library = self.library;
         let reply = guarded(|| match compile(source, Purpose::Explain, Budgets::default(), library)? {
             Compiled::Rejected(rejection) => Ok(rejection),
-            Compiled::Ready { program, .. } => {
-                let allowed: BTreeSet<String> = source.allow.iter().flatten().cloned().collect();
-                Ok(explain_report(&program, &allowed))
-            }
+            Compiled::Ready { program, registry, grants, .. } => explain_report(&program, &registry, &grants)
+                .map_err(|message| ProtocolError::new(ErrorCode::Internal, message)),
         });
         match reply.and_then(|inner| inner) {
             Ok(reply) => self.send(&reply),
@@ -654,14 +603,14 @@ impl<R: BufRead, W: Write> Session<'_, R, W> {
             let compiled = compile(&start.source, Purpose::Run, start.budgets, library)?;
             match compiled {
                 Compiled::Rejected(rejection) => Ok(Err(rejection)),
-                Compiled::Ready { program, declared } => {
+                Compiled::Ready { program, declared, grants, .. } => {
                     let values = values_of(&declared, &start.inputs)?;
-                    Ok(Ok((program, values)))
+                    Ok(Ok((program, values, grants)))
                 }
             }
         })
         .and_then(|inner| inner);
-        let (program, values) = match compiled {
+        let (program, values, grants) = match compiled {
             Err(error) => {
                 self.reject(&error)?;
                 return Ok(Ending::Idle);
@@ -705,14 +654,49 @@ impl<R: BufRead, W: Write> Session<'_, R, W> {
                 ("requests", Json::Array(requests.iter().map(request_json).collect())),
             ]);
             self.send(&listed)?;
-            match self.collect(&requests)? {
+            match self.collect(&requests, &program, &grants)? {
                 Collected::Abandoned => return Ok(Ending::Abandoned),
                 Collected::Resume(responses) => outcome = guarded(|| machine.resume(responses)),
             }
         }
     }
 
-    fn collect(&mut self, requests: &[Request]) -> io::Result<Collected> {
+    fn check_scope(&mut self, id: &str, requests: &[Request], program: &Program, grants: &Grants) -> io::Result<()> {
+        let found = requests.iter().find_map(|request| match request {
+            Request::Call { id: held, capability, input } if held == id => Some((capability, input)),
+            _ => None,
+        });
+        let Some((capability, input)) = found else {
+            let message = format!("check-scope names {}, which is not an outstanding call", repr_str(id));
+            return self.reject(&ProtocolError::new(ErrorCode::UnexpectedMessage, message));
+        };
+        let decoded = program
+            .signatures
+            .capabilities
+            .get(capability)
+            .ok_or_else(|| format!("the program calls {capability} without a signature"))
+            .and_then(|signature| decode(input, &signature.input, "$").map_err(|e| e.to_string()));
+        let value = match decoded {
+            Ok(value) => value,
+            Err(message) => return self.reject(&ProtocolError::new(ErrorCode::Internal, message)),
+        };
+        let mut reply = vec![("type", Json::string("scope-verdict")), ("id", Json::string(id))];
+        match grants.screen(capability, &value) {
+            Screen::Verdict(Verdict::Allowed) | Screen::Unscoped => reply.push(("verdict", Json::string("allowed"))),
+            Screen::Verdict(Verdict::Denied(reason)) => {
+                reply.push(("verdict", Json::string("denied")));
+                reply.push(("reason", Json::string(reason)));
+            }
+            Screen::Unchecked => reply.push(("verdict", Json::string("unchecked"))),
+            Screen::NotGranted => {
+                reply.push(("verdict", Json::string("denied")));
+                reply.push(("reason", Json::string(format!("{capability} is not granted"))));
+            }
+        }
+        self.send(&Json::object(reply))
+    }
+
+    fn collect(&mut self, requests: &[Request], program: &Program, grants: &Grants) -> io::Result<Collected> {
         let outstanding: HashSet<&str> = requests.iter().map(Request::id).collect();
         let mut answered: Vec<(String, Response)> = Vec::new();
         let mut seen: HashSet<String> = HashSet::new();
@@ -735,6 +719,7 @@ impl<R: BufRead, W: Write> Session<'_, R, W> {
                     }
                 }
                 Incoming::Message(Message::Cancel) => return Ok(Collected::Resume(answered)),
+                Incoming::Message(Message::CheckScope(id)) => self.check_scope(&id, requests, program, grants)?,
                 Incoming::Message(Message::Explain(source)) => self.explain(&source)?,
                 Incoming::Message(Message::Start(_)) => {
                     let message = "an execution is waiting for responses; answer or cancel it before starting another";

@@ -1,4 +1,3 @@
-use std::collections::BTreeSet;
 use std::fs;
 use std::hint::black_box;
 use std::process::ExitCode;
@@ -12,7 +11,8 @@ use sx_kernel::json::{Json, parse};
 use sx_kernel::machine::{CoreImplementations, Machine, Outcome, Response};
 use sx_kernel::protocol::{CoreLibrary, declare};
 use sx_kernel::reader::read;
-use sx_kernel::registry::{Core, Registry};
+use sx_kernel::authority::{Authority, Grants};
+use sx_kernel::registry::{Core, Pack, Registry};
 use sx_kernel::types::Type;
 use sx_kernel::values::{Value, decode};
 
@@ -25,6 +25,10 @@ impl CoreLibrary for Library {
         core(id)
     }
 
+    fn pack(&self, id: &str) -> Option<Pack> {
+        sx_packs::pack(id)
+    }
+
     fn implementations(&self) -> &dyn CoreImplementations {
         &Cores
     }
@@ -34,7 +38,7 @@ struct Case {
     source: String,
     registry: Registry,
     declared: BTreeMap<String, Type>,
-    allow: BTreeSet<String>,
+    grants: Grants,
     budgets: Budgets,
     inputs: Vec<(String, Value)>,
     responses: Json,
@@ -51,7 +55,8 @@ fn case_of(json: &Json) -> Case {
     for (name, value) in field(json, "budgets").as_object().expect("budgets object") {
         budgets.set(name, u64::try_from(value.as_i64().expect("budget count")).expect("budget count")).expect("budget");
     }
-    let allow = field(json, "allow").as_array().expect("allow").iter().filter_map(Json::as_str).map(str::to_string).collect();
+    let allow: Vec<&str> = field(json, "allow").as_array().expect("allow").iter().filter_map(Json::as_str).collect();
+    let grants = Grants::unscoped(&declared.registry, &allow).expect("the allow list grants");
     let inputs = field(json, "inputs")
         .as_object()
         .expect("inputs object")
@@ -65,7 +70,7 @@ fn case_of(json: &Json) -> Case {
         source: field(json, "source").as_str().expect("source").to_string(),
         registry: declared.registry,
         declared: declared.inputs,
-        allow,
+        grants,
         budgets,
         inputs,
         responses: field(json, "responses").clone(),
@@ -82,7 +87,7 @@ fn cases(bundle: &Json, group: &str) -> Vec<Case> {
 }
 
 fn compiled(case: &Case) -> Program {
-    let result = compile_source(&case.source, &case.registry, &case.allow, &case.declared, case.budgets);
+    let result = compile_source(&case.source, &case.registry, Authority::Granted(&case.grants), &case.declared, case.budgets);
     result.program.unwrap_or_else(|| panic!("a benchmark program was rejected: {}", case.source))
 }
 
@@ -126,7 +131,7 @@ fn main() -> ExitCode {
             let parsed: Vec<_> = cases.iter().map(|c| read(&c.source).program.expect("parses")).collect();
             for _ in 0..iterations {
                 for (case, node) in cases.iter().zip(&parsed) {
-                    black_box(check(black_box(node), &case.registry, &case.allow, &case.declared, case.budgets));
+                    black_box(check(black_box(node), &case.registry, Authority::Granted(&case.grants), &case.declared, case.budgets));
                 }
             }
         }
@@ -145,7 +150,7 @@ fn main() -> ExitCode {
                         }
                         host.delays.clear();
                         host.calls.clear();
-                        black_box(run(program, host, &case.inputs, case.budgets, &Cores).expect("fixture answers"));
+                        black_box(run(program, &case.grants, host, &case.inputs, case.budgets, &Cores).expect("fixture answers"));
                     }
                 }
             } else {

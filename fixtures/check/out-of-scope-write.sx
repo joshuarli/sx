@@ -1,0 +1,4 @@
+; declarations: fixtures/check/fs-declarations.json
+; grants: fixtures/check/fs-grants.json
+; python: no
+(call fs.write-text {:path "/usr/share" :text "x"})

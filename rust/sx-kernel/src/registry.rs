@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::Arc;
 
+use crate::authority::ScopeCheck;
 use crate::json::{Json, python_repr, repr_str};
 use crate::types::{EnumType, TYPE_NESTING_LIMIT, Type, TypeSyntaxError, parse_type, type_depth};
 
@@ -51,6 +52,20 @@ pub struct Capability {
     pub output: Type,
     pub description: String,
     pub idempotent: bool,
+    pub scope: Option<Type>,
+}
+
+#[derive(Clone, Debug)]
+pub struct PackCapability {
+    pub capability: Capability,
+    pub check: Option<ScopeCheck>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Pack {
+    pub id: String,
+    pub types: Vec<(String, Type)>,
+    pub capabilities: Vec<PackCapability>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -154,6 +169,8 @@ pub struct Registry {
     capabilities: Ordered<Capability>,
     types: Ordered<Type>,
     cores: Ordered<Core>,
+    packs: Vec<String>,
+    scope_checks: BTreeMap<String, ScopeCheck>,
 }
 
 fn is_word(text: &str) -> bool {
@@ -200,7 +217,7 @@ impl Registry {
         }
         check_evidence(&core)?;
         for (name, t) in &core.types {
-            self.add_owned_type(name, t.clone(), Some(&core.id))?;
+            self.add_owned_type(name, t.clone(), Some(("core", &core.id)))?;
         }
         for function in &core.functions {
             let (namespace, member) = partition(&function.name);
@@ -239,21 +256,64 @@ impl Registry {
         if capability.effect == Effect::Read && capability.idempotent {
             return Err(RegistryError(format!("capability {id} is a read, so idempotent does not apply")));
         }
+        if let Some(scope) = &capability.scope
+            && !matches!(scope, Type::Record(_))
+        {
+            return Err(RegistryError(format!("capability {id} declares a scope that is not a record type")));
+        }
         let key = capability.id.clone();
         self.capabilities.insert(&key, capability);
         Ok(())
+    }
+
+    pub fn add_pack(&mut self, pack: Pack) -> Result<(), RegistryError> {
+        let id = repr_str(&pack.id);
+        if !is_core_id(&pack.id) {
+            return Err(RegistryError(format!("pack id {id} is not lowercase words joined by -")));
+        }
+        if self.packs.contains(&pack.id) || self.cores.get(&pack.id).is_some() {
+            return Err(RegistryError(format!("{id} is already registered")));
+        }
+        for (name, t) in &pack.types {
+            self.add_owned_type(name, t.clone(), Some(("pack", &pack.id)))?;
+        }
+        for entry in &pack.capabilities {
+            let capability_id = repr_str(&entry.capability.id);
+            if partition(&entry.capability.id).0 != pack.id {
+                return Err(RegistryError(format!("capability {capability_id} of pack {id} must be named {}.NAME", pack.id)));
+            }
+            if entry.capability.scope.is_some() != entry.check.is_some() {
+                return Err(RegistryError(format!(
+                    "capability {capability_id} of pack {id} must declare a scope type exactly when it registers a scope check"
+                )));
+            }
+            self.add_capability(entry.capability.clone())?;
+            if let Some(check) = entry.check {
+                self.scope_checks.insert(entry.capability.id.clone(), check);
+            }
+        }
+        self.packs.push(pack.id);
+        Ok(())
+    }
+
+    pub fn pack_ids(&self) -> &[String] {
+        &self.packs
+    }
+
+    pub fn scope_check(&self, id: &str) -> Option<ScopeCheck> {
+        self.scope_checks.get(id).copied()
     }
 
     pub fn add_type(&mut self, name: &str, t: Type) -> Result<(), RegistryError> {
         self.add_owned_type(name, t, None)
     }
 
-    fn add_owned_type(&mut self, name: &str, t: Type, owner: Option<&str>) -> Result<(), RegistryError> {
-        if let Some(owner) = owner
+    fn add_owned_type(&mut self, name: &str, t: Type, owner: Option<(&str, &str)>) -> Result<(), RegistryError> {
+        if let Some((kind, owner)) = owner
             && !name.starts_with(&format!("{owner}."))
         {
             return Err(RegistryError(format!(
-                "type {} of core {} must be named {owner}.NAME",
+                "type {} of {kind} {} must be named {owner}.NAME",
                 repr_str(name),
                 repr_str(owner)
             )));
@@ -480,7 +540,11 @@ pub fn load_declarations(registry: &mut Registry, declarations: &Json) -> Result
         let output = registry.parse(text(required(entry, "output")?, "a capability output")?)?;
         let description = text(required(entry, "description")?, "a capability description")?.to_string();
         let idempotent = entry.get("idempotent").is_some_and(truthy);
-        registry.add_capability(Capability { id, effect, input, output, description, idempotent })?;
+        let scope = match entry.get("scope") {
+            None | Some(Json::Null) => None,
+            Some(written) => Some(registry.parse(text(written, "a capability scope")?)?),
+        };
+        registry.add_capability(Capability { id, effect, input, output, description, idempotent, scope })?;
     }
     Ok(())
 }

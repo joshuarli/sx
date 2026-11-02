@@ -1,0 +1,20 @@
+error[out-of-scope] 4:21-4:40
+  [(call fs.read-text {:path "notes.txt"})
+                      ^^^^^^^^^^^^^^^^^^^
+  The host's grant for fs.read-text does not cover this input: "notes.txt" is not an absolute path.
+  Granted scope: {:roots ["/usr/share"]}
+  Help: sx help fs.read-text
+
+error[out-of-scope] 5:21-5:54
+   (call fs.read-text {:path "/usr/lib/sx-fixture.txt"})
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  The host's grant for fs.read-text does not cover this input: "/usr/lib/sx-fixture.txt" is outside every granted root.
+  Granted scope: {:roots ["/usr/share"]}
+  Help: sx help fs.read-text
+
+error[out-of-scope] 6:23-6:71
+   (count (call fs.list {:path "/usr/share/sx-fixture-absent/../../lib"}))]
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  The host's grant for fs.list does not cover this input: "/usr/share/sx-fixture-absent/../../lib" has . or .. in a part that does not exist.
+  Granted scope: {:roots ["/usr/share"]}
+  Help: sx help fs.list

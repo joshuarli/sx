@@ -10,6 +10,159 @@ use sx_kernel::registry::Registry;
 mod common;
 use common::{json_case_runs_in_python, source_runs_in_python};
 
+const HELP_CHANGES: &[(&str, &str)] = &[
+    (
+        r#"usage: sx [-h] {help,cores,check,explain,run} ...
+
+Check, explain, and run Sx programs.
+
+positional arguments:
+  {help,cores,check,explain,run}
+    help                Print the guide, or the entry for one name.
+    cores               List the registered cores and the evidence for each.
+    check               Check a program and print its diagnostics.
+    explain             Print the tools, effects, inputs, and result type of a
+                        program.
+    run                 Run a program against recorded tool responses.
+
+options:
+  -h, --help            show this help message and exit
+"#,
+        r#"usage: sx [-h] {help,cores,check,explain,run} ...
+
+Check, explain, and run Sx programs.
+
+positional arguments:
+  {help,cores,check,explain,run}
+    help                Print the guide, or the entry for one name.
+    cores               List the registered cores and the evidence for each.
+    check               Check a program and print its diagnostics.
+    explain             Print the tools, effects, inputs, and result type of a
+                        program.
+    run                 Run a program against recorded responses or packs.
+
+options:
+  -h, --help            show this help message and exit
+"#,
+    ),
+    (
+        r#"usage: sx check [-h] [--declarations DECLARATIONS] [--allow ID]
+                [--format {text,json}] [--emit {ir}]
+                file
+
+positional arguments:
+  file
+
+options:
+  -h, --help            show this help message and exit
+  --declarations DECLARATIONS
+                        JSON declarations of tools, types, and inputs
+  --allow ID            Authorize one tool
+  --format {text,json}
+  --emit {ir}           Print the checked semantic IR as JSON
+"#,
+        r#"usage: sx check [-h] [--declarations DECLARATIONS] [--allow ID]
+                [--grants GRANTS] [--format {text,json}] [--emit {ir}]
+                file
+
+positional arguments:
+  file
+
+options:
+  -h, --help            show this help message and exit
+  --declarations DECLARATIONS
+                        JSON declarations of tools, types, and inputs
+  --allow ID            Authorize one tool that declares no scope
+  --grants GRANTS       JSON object granting tools, with their scopes
+  --format {text,json}
+  --emit {ir}           Print the checked semantic IR as JSON
+"#,
+    ),
+    (
+        r#"usage: sx explain [-h] [--declarations DECLARATIONS] [--allow ID]
+                  [--format {text,json}]
+                  file
+
+positional arguments:
+  file
+
+options:
+  -h, --help            show this help message and exit
+  --declarations DECLARATIONS
+                        JSON declarations of tools, types, and inputs
+  --allow ID            Authorize one tool
+  --format {text,json}
+"#,
+        r#"usage: sx explain [-h] [--declarations DECLARATIONS] [--allow ID]
+                  [--grants GRANTS] [--format {text,json}]
+                  file
+
+positional arguments:
+  file
+
+options:
+  -h, --help            show this help message and exit
+  --declarations DECLARATIONS
+                        JSON declarations of tools, types, and inputs
+  --allow ID            Authorize one tool that declares no scope
+  --grants GRANTS       JSON object granting tools, with their scopes
+  --format {text,json}
+"#,
+    ),
+    (
+        r#"usage: sx run [-h] [--declarations DECLARATIONS] [--allow ID]
+              [--format {text,json}] [--responses RESPONSES]
+              [--input NAME=JSON]
+              file
+
+positional arguments:
+  file
+
+options:
+  -h, --help            show this help message and exit
+  --declarations DECLARATIONS
+                        JSON declarations of tools, types, and inputs
+  --allow ID            Authorize one tool
+  --format {text,json}
+  --responses RESPONSES
+                        JSON list of recorded tool responses
+  --input NAME=JSON     One input value
+"#,
+        r#"usage: sx run [-h] [--declarations DECLARATIONS] [--allow ID]
+              [--grants GRANTS] [--format {text,json}]
+              [--responses RESPONSES] [--input NAME=JSON]
+              file
+
+positional arguments:
+  file
+
+options:
+  -h, --help            show this help message and exit
+  --declarations DECLARATIONS
+                        JSON declarations of tools, types, and inputs
+  --allow ID            Authorize one tool that declares no scope
+  --grants GRANTS       JSON object granting tools, with their scopes
+  --format {text,json}
+  --responses RESPONSES
+                        JSON list of recorded tool responses; without it,
+                        --grants runs pack tools for real
+  --input NAME=JSON     One input value
+"#,
+    ),
+];
+
+fn usage_of(help: &str) -> &str {
+    help.find("\n\n").and_then(|end| help.get(..end + 1)).unwrap_or(help)
+}
+
+fn with_rust_help(text: &str) -> String {
+    let mut text = text.to_string();
+    for (python, rust) in HELP_CHANGES {
+        text = text.replace(python, rust).replace(usage_of(python), usage_of(rust));
+    }
+    text
+}
+
 const CORE_IDS: [&str; 4] = ["text", "semver", "git", "github"];
 
 fn root() -> PathBuf {
@@ -129,6 +282,7 @@ fn compare(label: &str, cases: &[Case]) {
             crashes.push(case.name.clone());
             continue;
         };
+        let python = &Seen { stdout: with_rust_help(&python.stdout), stderr: with_rust_help(&python.stderr), code: python.code };
         let rust = rust_result(case);
         if &rust != python {
             failures.push(format!("{}: {:?}\n--- rust\n{rust:?}\n--- python\n{python:?}", case.name, case.argv));

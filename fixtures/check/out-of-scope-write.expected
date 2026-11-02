@@ -1,0 +1,6 @@
+error[out-of-scope] 4:21-4:51
+  (call fs.write-text {:path "/usr/share" :text "x"})
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  The host's grant for fs.write-text does not cover this input: "/usr/share" is in /usr, outside every granted root.
+  Granted scope: {:roots ["/usr/share"]}
+  Help: sx help fs.write-text

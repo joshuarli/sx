@@ -1,12 +1,14 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
+use crate::authority::{Grants, Screen, Verdict};
 use crate::budgets::Budgets;
 use crate::ir::{CapabilitySignature, Program};
 use crate::json::{Json, python_equal, python_repr};
 use crate::machine::{CoreImplementations, Machine, Outcome, Request, Response};
 use crate::registry::Effect;
-use crate::values::Value;
+use crate::types::CallErrorKind;
+use crate::values::{Value, decode};
 
 #[derive(Clone, Debug)]
 pub enum FixtureResult {
@@ -160,6 +162,22 @@ impl<'p> FixtureHost<'p> {
     }
 }
 
+pub fn refusal(program: &Program, grants: &Grants, capability: &str, input: &Json) -> Option<Response> {
+    let refuse = |message: String| Response::Refusal { kind: CallErrorKind::PermissionDenied.name().to_string(), message };
+    let Some(signature) = program.signatures.capabilities.get(capability) else {
+        return Some(refuse(format!("{capability} has no signature in the program")));
+    };
+    let value = match decode(input, &signature.input, "$") {
+        Ok(value) => value,
+        Err(error) => return Some(refuse(format!("{capability} received an input that does not match its type: {error}"))),
+    };
+    match grants.screen(capability, &value) {
+        Screen::NotGranted => Some(refuse(format!("{capability} is not granted"))),
+        Screen::Verdict(Verdict::Denied(reason)) => Some(refuse(reason)),
+        Screen::Unscoped | Screen::Unchecked | Screen::Verdict(Verdict::Allowed) => None,
+    }
+}
+
 pub struct Run<'p> {
     pub outcome: Outcome,
     pub machine: Machine<'p>,
@@ -167,6 +185,7 @@ pub struct Run<'p> {
 
 pub fn run<'p>(
     program: &'p Program,
+    grants: &Grants,
     host: &mut FixtureHost<'_>,
     inputs: &[(String, Value)],
     budgets: Budgets,
@@ -177,7 +196,15 @@ pub fn run<'p>(
     while let Outcome::Suspended(requests) = &outcome {
         let mut responses = Vec::with_capacity(requests.len());
         for request in requests {
-            responses.push((request.id().to_string(), host.answer(request)?));
+            let refused = match request {
+                Request::Call { capability, input, .. } => refusal(program, grants, capability, input),
+                Request::Delay { .. } => None,
+            };
+            let response = match refused {
+                Some(response) => response,
+                None => host.answer(request)?,
+            };
+            responses.push((request.id().to_string(), response));
         }
         outcome = machine.resume(responses);
     }

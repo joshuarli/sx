@@ -270,6 +270,9 @@ pub fn capability_signature(capability: &Capability) -> String {
 
 pub fn render_capability(capability: &Capability, registry: &Registry) -> String {
     let mut lines = vec![capability_signature(capability), capability.description.clone()];
+    if let Some(scope) = &capability.scope {
+        lines.push(format!("Scope: {}, granted by the host; the program never names it.", show_type(scope)));
+    }
     lines.extend(named_types(&[&capability.input, &capability.output], registry).into_iter().map(|line| format!("  {line}")));
     lines.join("\n") + "\n"
 }

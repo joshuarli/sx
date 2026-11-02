@@ -1,23 +1,24 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use sx_cores::kernel::{Cores, core as builtin_core};
+use sx_kernel::authority::{Authority, GrantError, Grants};
 use sx_kernel::budgets::Budgets;
 use sx_kernel::checker::{closest, compile_source};
 use sx_kernel::diagnostics::{Diagnostic, render};
+use sx_kernel::explain::{RUNTIME_INPUT, explain_tools};
 use sx_kernel::export::export_program;
-use sx_kernel::help::{effect_label, guide, lookup, names, render_cores};
+use sx_kernel::help::{guide, lookup, names, render_cores};
 use sx_kernel::host::{FixtureHost, run};
 use sx_kernel::ir::Program;
 use sx_kernel::json::{Json, Layout, dumps, python_repr, repr_str};
-use sx_kernel::machine::Outcome;
+use sx_kernel::machine::{Machine, Outcome};
 use sx_kernel::registry::{Registry, load_declarations};
 use sx_kernel::syntax::Span;
 use sx_kernel::types::{Type, show_type};
 use sx_kernel::values::{Value, decode, show_value};
 
 use crate::argparse::{CoresArgs, Format, HelpArgs, Invocation, ProgramArgs, ProgramKind};
-use crate::explain::{RUNTIME, literal_calls};
 use crate::pyfile::{path_text, read_text};
 use crate::{EXIT_FAILED, EXIT_OK, EXIT_REJECTED, EXIT_USAGE, Exit, pyjson};
 
@@ -86,13 +87,13 @@ fn read_json(path: &str, what: &str) -> Result<Json, Stop> {
     pyjson::parse(&text).map_err(|e| Stop::usage(format!("cannot read {what} {shown}: {e}")))
 }
 
-fn core_ids(declarations: &Json, shown: &str) -> Result<Vec<String>, Stop> {
-    let listed = match declarations.get("cores") {
+fn listed_ids(declarations: &Json, shown: &str, key: &str, what: &str) -> Result<Vec<String>, Stop> {
+    let listed = match declarations.get(key) {
         None | Some(Json::Null) => return Ok(Vec::new()),
         Some(Json::Array(items)) => items,
         Some(other) => {
             return Err(Stop::usage(format!(
-                "invalid declarations {shown}: cores must be a list of core names, not {}",
+                "invalid declarations {shown}: {key} must be a list of {what} names, not {}",
                 python_repr(other)
             )));
         }
@@ -101,7 +102,7 @@ fn core_ids(declarations: &Json, shown: &str) -> Result<Vec<String>, Stop> {
         .iter()
         .map(|item| {
             item.as_str().map(str::to_string).ok_or_else(|| {
-                Stop::usage(format!("invalid declarations {shown}: core names must be strings, not {}", python_repr(item)))
+                Stop::usage(format!("invalid declarations {shown}: {what} names must be strings, not {}", python_repr(item)))
             })
         })
         .collect()
@@ -116,7 +117,7 @@ fn load_registry(path: Option<&str>, mut registry: Registry) -> Result<(Registry
     if !matches!(declarations, Json::Object(_)) {
         return Err(Stop::usage(format!("declarations {shown} must be a JSON object")));
     }
-    for id in core_ids(&declarations, &shown)? {
+    for id in listed_ids(&declarations, &shown, "cores", "core")? {
         if registry.core(&id).is_some() {
             continue;
         }
@@ -124,6 +125,15 @@ fn load_registry(path: Option<&str>, mut registry: Registry) -> Result<(Registry
             Stop::usage(format!("invalid declarations {shown}: no built-in core is named {}", repr_str(&id)))
         })?;
         registry.add_core(core).map_err(|e| Stop::usage(format!("invalid declarations {shown}: {e}")))?;
+    }
+    for id in listed_ids(&declarations, &shown, "packs", "pack")? {
+        if registry.pack_ids().contains(&id) {
+            continue;
+        }
+        let pack = sx_packs::pack(&id).ok_or_else(|| {
+            Stop::usage(format!("invalid declarations {shown}: no built-in pack is named {}", repr_str(&id)))
+        })?;
+        registry.add_pack(pack).map_err(|e| Stop::usage(format!("invalid declarations {shown}: {e}")))?;
     }
     load_declarations(&mut registry, &declarations)
         .map_err(|e| Stop::usage(format!("invalid declarations {shown}: {e}")))?;
@@ -219,16 +229,18 @@ fn command_program(args: &ProgramArgs, base: Registry, output: &mut Output) -> R
     let (registry, declarations) = load_registry(args.declarations.as_deref(), base)?;
     let shown = path_text(&args.file);
     let source = read_text(Path::new(&args.file)).map_err(|e| Stop::usage(format!("cannot read {shown}: {e}")))?;
-    let allowed: BTreeSet<String> = args.allow.iter().cloned().collect();
+    let mut allowed: Vec<&String> = args.allow.iter().collect();
+    allowed.sort();
     if let Some(unknown) = allowed.iter().find(|id| registry.capability(id).is_none()) {
         return Err(Stop::usage(format!("--allow names a tool the declarations do not define: {unknown}")));
     }
+    let grants = load_grants(args, &registry)?;
     let inputs = declared_inputs(&registry, &declarations)?;
-    let checking: BTreeSet<String> = match args.kind {
-        ProgramKind::Explain => registry.capabilities().map(|c| c.id.clone()).collect(),
-        _ => allowed.clone(),
+    let authority = match args.kind {
+        ProgramKind::Explain => Authority::Unrestricted,
+        _ => Authority::Granted(&grants),
     };
-    let checked = compile_source(&source, &registry, &checking, &inputs, Budgets::default());
+    let checked = compile_source(&source, &registry, authority, &inputs, Budgets::default());
     let Some(program) = checked.program else {
         let payload = Json::object([
             ("ok", Json::Bool(false)),
@@ -249,53 +261,59 @@ fn command_program(args: &ProgramArgs, base: Registry, output: &mut Output) -> R
             output.emit(args.format, payload, &format!("ok: {result}"))?;
             Ok(EXIT_OK)
         }
-        ProgramKind::Explain => command_explain(args, &program, &allowed, output),
+        ProgramKind::Explain => command_explain(args, &program, &registry, &grants, output),
         ProgramKind::Run { responses, inputs: pairs } => {
             let values = input_values(pairs, &inputs)?;
-            let responses = load_responses(responses.as_deref())?;
-            command_run(args.format, &program, &responses, &values, output)
+            match (responses.as_deref(), &args.grants) {
+                (None, Some(_)) => command_run_native(args.format, &program, &grants, &values, output),
+                (responses, _) => {
+                    let responses = load_responses(responses)?;
+                    command_run(args.format, &program, &grants, &responses, &values, output)
+                }
+            }
         }
     }
+}
+
+fn load_grants(args: &ProgramArgs, registry: &Registry) -> Result<Grants, Stop> {
+    let mut grants = match &args.grants {
+        None => Grants::new(),
+        Some(path) => {
+            let json = read_json(path, "grants")?;
+            Grants::load(registry, &json)
+                .map_err(|e| Stop::usage(format!("invalid grants {}: {e}", path_text(path))))?
+        }
+    };
+    for id in &args.allow {
+        grants.grant_unscoped(registry, id).map_err(|e| match e {
+            GrantError::MissingScope { .. } => Stop::usage(format!("--allow {id}: {e}; grant it with --grants")),
+            other => Stop::usage(format!("--allow {id}: {other}")),
+        })?;
+    }
+    Ok(grants)
 }
 
 fn command_explain(
     args: &ProgramArgs,
     program: &Program,
-    allowed: &BTreeSet<String>,
+    registry: &Registry,
+    grants: &Grants,
     output: &mut Output,
 ) -> Result<i32, Stop> {
-    let calls = literal_calls(&program.body);
-    let mut capabilities = Vec::new();
+    let tools = explain_tools(program, registry, grants).map_err(Stop::Internal)?;
     let mut lines = vec!["tools:".to_string()];
-    let mut ids = program.capabilities.clone();
-    ids.sort();
-    for id in &ids {
-        let signature = program
-            .signatures
-            .capabilities
-            .get(id)
-            .ok_or_else(|| Stop::Internal(format!("the program calls {id} without a signature")))?;
-        let effect = effect_label(signature.effect, signature.idempotent);
-        let known: Vec<Json> = calls
-            .iter()
-            .filter(|(called, _)| called == id)
-            .map(|(_, input)| input.clone().unwrap_or_else(|| Json::string(RUNTIME)))
-            .collect();
-        let granted = allowed.contains(id);
-        lines.push(format!("  {id}  [{effect}]  {}", if granted { "allowed" } else { "not allowed" }));
-        for input in &known {
-            let text = match input {
-                Json::String(s) if s == RUNTIME => RUNTIME.to_string(),
-                other => dumps(other, Layout::Spaced).map_err(|e| Stop::Internal(e.to_string()))?,
+    for tool in &tools {
+        lines.push(format!("  {}  [{}]  {}", tool.id, tool.effect, if tool.allowed { "allowed" } else { "not allowed" }));
+        for call in &tool.calls {
+            let text = match &call.input {
+                None => RUNTIME_INPUT.to_string(),
+                Some(literal) => dumps(&literal.json(), Layout::Spaced).map_err(|e| Stop::Internal(e.to_string()))?,
             };
-            lines.push(format!("    input: {text}"));
+            match &call.scope {
+                None => lines.push(format!("    input: {text}")),
+                Some(scope) => lines.push(format!("    input: {text}  scope: {}", scope.text())),
+            }
         }
-        capabilities.push(Json::object([
-            ("id", Json::string(id.as_str())),
-            ("effect", Json::string(effect)),
-            ("allowed", Json::Bool(granted)),
-            ("inputs", Json::Array(known)),
-        ]));
     }
     let names: Vec<&str> = program.inputs.keys().map(String::as_str).collect();
     let listed = if names.is_empty() { "none".to_string() } else { names.join(", ") };
@@ -303,7 +321,7 @@ fn command_explain(
     lines.push(format!("inputs: {listed}"));
     lines.push(format!("result: {result}"));
     let payload = Json::object([
-        ("tools", Json::Array(capabilities)),
+        ("tools", Json::Array(tools.iter().map(|tool| tool.json()).collect())),
         ("inputs", Json::Array(names.iter().map(|n| Json::string(*n)).collect())),
         ("result", Json::string(result.as_str())),
     ]);
@@ -345,16 +363,35 @@ fn load_responses(path: Option<&str>) -> Result<Json, Stop> {
     Ok(responses)
 }
 
+fn command_run_native(
+    format: Format,
+    program: &Program,
+    grants: &Grants,
+    values: &[(String, Value)],
+    output: &mut Output,
+) -> Result<i32, Stop> {
+    let missing = crate::native::unimplemented(program);
+    if !missing.is_empty() {
+        return Err(Stop::usage(format!(
+            "no pack implements {}, so the program cannot run without --responses",
+            missing.join(", ")
+        )));
+    }
+    let (outcome, machine) = crate::native::run(program, grants, values, Budgets::default());
+    report_run(format, outcome, &machine, output)
+}
+
 fn command_run(
     format: Format,
     program: &Program,
+    grants: &Grants,
     responses: &Json,
     values: &[(String, Value)],
     output: &mut Output,
 ) -> Result<i32, Stop> {
     let mut host = FixtureHost::from_responses(&program.signatures.capabilities, responses)
         .map_err(|e| Stop::usage(e.to_string()))?;
-    let finished = match run(program, &mut host, values, Budgets::default(), &Cores) {
+    let finished = match run(program, grants, &mut host, values, Budgets::default(), &Cores) {
         Ok(finished) => finished,
         Err(error) => {
             let calls = Json::Array(host.calls.clone());
@@ -367,8 +404,12 @@ fn command_run(
             return Ok(EXIT_FAILED);
         }
     };
-    let trace = Json::Array(finished.machine.trace().to_vec());
-    match finished.outcome {
+    report_run(format, finished.outcome, &finished.machine, output)
+}
+
+fn report_run(format: Format, outcome: Outcome, machine: &Machine<'_>, output: &mut Output) -> Result<i32, Stop> {
+    let trace = Json::Array(machine.trace().to_vec());
+    match outcome {
         Outcome::Completed { value, json } => {
             let payload =
                 Json::object([("outcome", Json::string("completed")), ("result", json), ("trace", trace)]);
