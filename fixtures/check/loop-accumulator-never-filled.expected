@@ -1,0 +1,5 @@
+error[unresolved-type] 6:23-6:24
+      (map (fn [r] (get r :size)) acc)
+                        ^
+  The checker cannot tell which record this is, so it cannot read a field from it.
+  A loop binding that starts as [], {}, or none gets its type from the values that recur gives it, and no recur here does. Give recur a value of the right shape, or start the binding with one.

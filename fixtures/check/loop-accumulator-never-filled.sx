@@ -1,0 +1,7 @@
+; declarations: fixtures/run/declarations.json
+; python: no
+(loop {:max 5} [acc []
+                n 0]
+  (if (> n 3)
+    (map (fn [r] (get r :size)) acc)
+    (recur acc (+ n 1))))

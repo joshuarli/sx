@@ -1,0 +1,7 @@
+; declarations: fixtures/run/declarations.json
+; python: no
+(loop {:max 5} [best none
+                ids ["a" "b"]]
+  (if (= (count ids) 0)
+    (match best (some item) (get item :size) none 0)
+    (recur (some (call store.get {:id (first ids)})) (rest ids))))

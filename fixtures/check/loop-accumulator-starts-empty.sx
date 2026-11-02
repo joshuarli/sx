@@ -1,0 +1,10 @@
+; declarations: fixtures/run/declarations.json
+; python: no
+(loop {:max 20} [todo ["a" "b" "c"]
+                 reserved []]
+  (if (= (count todo) 0)
+    {:total (reduce (fn [s r] (+ s (get r :size))) 0 reserved)
+     :ids (map (fn [r] (get r :id)) reserved)}
+    (recur (rest todo)
+           (concat reserved [{:id (first todo)
+                              :size (get (call store.get {:id (first todo)}) :size)}]))))

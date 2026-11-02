@@ -1,0 +1,30 @@
+{
+  "description": "A loop binding that starts as [] gets its element type from recur, so a field read before the recur in source order checks and runs.",
+  "python": false,
+  "program": "(loop {:max 5} [todo [\"a\" \"b\"] reserved []] (if (= (count todo) 0) {:total (reduce (fn [s r] (+ s (get r :size))) 0 reserved) :ids (map (fn [r] (get r :id)) reserved)} (recur (rest todo) (concat reserved [{:id (first todo) :size (get (call store.get {:id (first todo)}) :size)}]))))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get"
+  ],
+  "responses": [
+    {
+      "capability": "store.get",
+      "input": {"id": "a"},
+      "results": [{"output": {"id": "a", "size": 7}}]
+    },
+    {
+      "capability": "store.get",
+      "input": {"id": "b"},
+      "results": [{"output": {"id": "b", "size": 5}}]
+    }
+  ],
+  "expect": {
+    "completed": {"total": 12, "ids": ["a", "b"]}
+  },
+  "trace": [
+    {"request": "r:1", "capability": "store.get", "input": {"id": "a"}},
+    {"response": "r:1", "output": {"id": "a", "size": 7}},
+    {"request": "r:2", "capability": "store.get", "input": {"id": "b"}},
+    {"response": "r:2", "output": {"id": "b", "size": 5}}
+  ]
+}

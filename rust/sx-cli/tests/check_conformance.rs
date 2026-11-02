@@ -557,6 +557,10 @@ fn is_frozen_refusal(codes: &[String], rendered: &str) -> bool {
     codes == ["multiple-expressions"] || rendered.contains("is always present, so get takes no default for it")
 }
 
+fn is_unfilled_accumulator(codes: &[String], source: &str) -> bool {
+    source.contains("(loop") && codes.iter().any(|code| code == "unresolved-type")
+}
+
 fn compare(label: &str, cases: &[Case]) -> (Tally, Vec<String>) {
     let python = python_checks(label, cases);
     let mut failures = Vec::new();
@@ -571,6 +575,9 @@ fn compare(label: &str, cases: &[Case]) -> (Tally, Vec<String>) {
                 tally.python_crashes.push(format!("{}: Python {crash}: {}", case.name, case.source));
             }
             (_, Checked::Rejected { codes, rendered }) if is_frozen_refusal(codes, rendered) => tally.widened += 1,
+            (_, Checked::Rejected { codes, .. }) if &rust != python && is_unfilled_accumulator(codes, &case.source) => {
+                tally.widened += 1;
+            }
             _ if &rust != python => {
                 failures.push(format!("{}:\n{}\n--- rust\n{rust:?}\n--- python\n{python:?}", case.name, case.source));
             }

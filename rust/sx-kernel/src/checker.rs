@@ -147,6 +147,7 @@ const FLOAT_TO_INT_HINT: &str =
     "Sx does not convert between number types. (round x), (floor x), and (ceil x) turn a Float into an Int.";
 const BYTES_HINT: &str = "Bytes come from tools. No Sx function builds them from a string or a list.";
 const OPTIONAL_HINT: &str = "This value is optional. Take it apart first: (match x (some v) ... none ...).";
+const UNFILLED_LOOP_HINT: &str = "A loop binding that starts as [], {}, or none gets its type from the values that recur gives it, and no recur here does. Give recur a value of the right shape, or start the binding with one.";
 const MAX_REPEATS: usize = 10_000;
 
 fn is_special_form(name: &str) -> bool {
@@ -533,6 +534,41 @@ struct PresenceTest {
     who: &'static str,
 }
 
+struct Speculation {
+    substitution: usize,
+    diagnostics: usize,
+    presence_tests: usize,
+    late_sort_keys: usize,
+    record_literals: usize,
+    instantiations: u64,
+}
+
+impl Speculation {
+    fn start(checker: &Checker<'_>) -> Speculation {
+        Speculation {
+            substitution: checker.snapshot(),
+            diagnostics: checker.diagnostics.len(),
+            presence_tests: checker.presence_tests.len(),
+            late_sort_keys: checker.late_sort_keys.len(),
+            record_literals: checker.record_literals.len(),
+            instantiations: checker.instantiations,
+        }
+    }
+
+    fn forget(&self, checker: &mut Checker<'_>) {
+        checker.diagnostics.truncate(self.diagnostics);
+        checker.presence_tests.truncate(self.presence_tests);
+        checker.late_sort_keys.truncate(self.late_sort_keys);
+        checker.record_literals.truncate(self.record_literals);
+        checker.instantiations = self.instantiations;
+    }
+
+    fn undo(&self, checker: &mut Checker<'_>) {
+        checker.rollback(self.substitution);
+        self.forget(checker);
+    }
+}
+
 struct SortKeyOwner {
     body: *const Node,
     params: String,
@@ -560,6 +596,7 @@ struct Checker<'r> {
     presence_tests: Vec<PresenceTest>,
     late_sort_keys: Vec<(Type, Span)>,
     record_literals: Vec<(Span, Vec<String>)>,
+    unfilled_loops: usize,
     diagnostics: Vec<Diagnostic>,
     effects: Vec<Effects<'r>>,
     capabilities_used: BTreeSet<String>,
@@ -2366,11 +2403,12 @@ impl<'r> Checker<'r> {
             }
             Type::Never => return self.placeholder(span),
             other if self.is_open(other) => {
-                self.report(Diagnostic::new(
+                let diagnostic = Diagnostic::new(
                     "unresolved-type",
                     record_node.span,
                     "The checker cannot tell which record this is, so it cannot read a field from it.",
-                ));
+                );
+                self.report(if self.unfilled_loops > 0 { diagnostic.detail(UNFILLED_LOOP_HINT) } else { diagnostic });
                 return self.placeholder(span);
             }
             Type::Record(record) => record.clone(),
@@ -3064,9 +3102,11 @@ impl<'r> Checker<'r> {
                 types.push(value_type);
             }
         });
-        let saved = self.tail.replace(LoopContext { types });
-        let (body, t) = self.repeated(|c| c.check(&items[3], expected, &inner));
-        self.tail = saved;
+        let (body, t) = if types.iter().any(|t| self.unsettled(t)) {
+            self.check_accumulating_loop(&items[3], expected, &inner, types)
+        } else {
+            self.check_loop_body(&items[3], expected, &inner, types)
+        };
         if always_recurs(&body) {
             self.report(
                 Diagnostic::new(
@@ -3079,6 +3119,52 @@ impl<'r> Checker<'r> {
             );
         }
         (node(Ir::Loop(ir::Loop { maximum, binders, initial, body: Box::new(body) }), span), t)
+    }
+
+    fn unsettled(&self, t: &Type) -> bool {
+        match self.resolve(t) {
+            Type::Variable(id) => match self.shape(id) {
+                Some(Shape::Bracket { element, .. }) => self.unsettled(element),
+                Some(Shape::Brace) | None => true,
+            },
+            Type::List(inner) | Type::Map(inner) | Type::Option(inner) => self.unsettled(&inner),
+            Type::Tuple(items) => items.iter().any(|item| self.unsettled(item)),
+            Type::Result(ok, err) => self.unsettled(&ok) || self.unsettled(&err),
+            Type::Record(record) => record.fields.iter().any(|(_, field_type)| self.unsettled(field_type)),
+            _ => false,
+        }
+    }
+
+    fn check_loop_body<'a>(&mut self, body: &'a Node, expected: Option<&Type>, scope: &Scope<'a>, types: Vec<Type>) -> Checked {
+        let saved = self.tail.replace(LoopContext { types });
+        let checked = self.repeated(|c| c.check(body, expected, scope));
+        self.tail = saved;
+        checked
+    }
+
+    fn check_accumulating_loop<'a>(
+        &mut self,
+        body: &'a Node,
+        expected: Option<&Type>,
+        scope: &Scope<'a>,
+        types: Vec<Type>,
+    ) -> Checked {
+        let before = Speculation::start(self);
+        let (checked, effects) = self.collecting(|c| c.check_loop_body(body, expected, scope, types.clone()));
+        if !self.diagnostics[before.diagnostics..].iter().any(|d| d.code == "unresolved-type") {
+            if let Some(outer) = self.effects.last_mut() {
+                outer.calls.extend(effects.calls);
+            }
+            return checked;
+        }
+        before.undo(self);
+        self.collecting(|c| c.check_loop_body(body, expected, scope, types.clone()));
+        before.forget(self);
+        let unfilled = types.iter().any(|t| self.unsettled(t));
+        self.unfilled_loops += usize::from(unfilled);
+        let checked = self.check_loop_body(body, expected, scope, types);
+        self.unfilled_loops -= usize::from(unfilled);
+        checked
     }
 
     fn form_recur<'a>(&mut self, span: Span, items: &'a [Node], scope: &Scope<'a>) -> Checked {
@@ -4164,6 +4250,7 @@ fn elaborate(
         presence_tests: Vec::new(),
         late_sort_keys: Vec::new(),
         record_literals: Vec::new(),
+        unfilled_loops: 0,
         diagnostics: Vec::new(),
         effects: Vec::new(),
         capabilities_used: BTreeSet::new(),

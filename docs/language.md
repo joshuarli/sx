@@ -399,7 +399,13 @@ arguments, rebinds the names to them in order, and evaluates `body` again. Any o
 - `recur` takes exactly one argument per binding, with that binding's type, or the checker
   rejects it with `recur-arity` or `type-mismatch`.
 - A binding's type comes from its initial value and from the matching `recur` arguments, so
-  `none` and `[]` work as initial values.
+  `none` and `[]` work as initial values. The type is the same wherever the body uses the binding,
+  before or after the `recur` in source order: `[]` that `recur` fills with `{:sku sku :cents c}`
+  records behaves as if the loop had started with a list of those records, so
+  `(reduce (fn [s r] (+ s (get r :cents))) 0 reserved)` in the branch that ends the loop checks. When
+  no `recur` gives the binding a type, a field read from it is an `unresolved-type` error, and the
+  diagnostic says that the loop binding is never given a type: give `recur` a value of the right shape,
+  or start the binding with one.
 - Some path through `body` must end without `recur`. A body that always ends in `recur` has no
   result type and can only fail with `loop-limit`, so the checker rejects it with `loop-no-result`.
 - `:max` is an integer literal of at least 1 and counts evaluations of `body`. If evaluation
