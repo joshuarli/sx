@@ -97,7 +97,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run workflows in Sx and in TypeScript on Bun.")
     parser.add_argument("mode", choices=["reference", "trials", "report", "sessions", "effects-report"])
     parser.add_argument(
-        "--set", choices=list(definition.SETS), default="dev", help="The development, blind, blind2, or effects set"
+        "--set", choices=list(definition.SETS), default="dev", help="The development, blind, blind2, effects, or effects-blind set"
     )
     parser.add_argument("--workflow", action="append", help="Workflow ids; every workflow of the set by default")
     parser.add_argument("--arm", action="append", choices=[*ARMS, "both"])
@@ -112,11 +112,11 @@ def main() -> None:
     root = definition.SETS[args.set]
     ids = args.workflow or definition.available(root)
     arm_names = ARMS if not args.arm or "both" in args.arm else tuple(arm for arm in ARMS if arm in args.arm)
-    effects_set = args.set == definition.EFFECTS_SET
+    effects_set = args.set in definition.EFFECTS_SETS
     if args.mode in ("sessions", "effects-report") and not effects_set:
-        parser.error(f"{args.mode} reads the {definition.EFFECTS_SET!r} set; pass --set {definition.EFFECTS_SET}")
+        parser.error(f"{args.mode} reads an effects set; pass --set {' or --set '.join(definition.EFFECTS_SETS)}")
     if args.mode in ("trials", "report") and effects_set:
-        parser.error(f"the {definition.EFFECTS_SET!r} set runs with sessions and effects-report")
+        parser.error(f"the {args.set!r} set runs with sessions and effects-report")
     if args.mode == "effects-report":
         if args.out is None:
             parser.error("effects-report needs --out")

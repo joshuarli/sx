@@ -14,8 +14,10 @@ HERE = Path(__file__).resolve().parent
 WORKFLOWS = HERE / "workflows"
 SETS: dict[str, Path] = {
     "dev": WORKFLOWS, "blind": HERE / "blind", "blind2": HERE / "blind2", "effects": HERE / "effects",
+    "effects-blind": HERE / "effects-blind",
 }
 EFFECTS_SET = "effects"
+EFFECTS_SETS = (EFFECTS_SET, "effects-blind")
 PLACEHOLDER = re.compile(r"\{\{([a-z][a-z0-9_]*)\}\}")
 REFERENCES: dict[str, str] = {"sx": "reference.sx", "js": "reference.mts"}
 EFFECT_REFERENCES: dict[str, str] = {"sx": "reference.sx", "js": "reference.js"}
