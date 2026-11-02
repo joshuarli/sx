@@ -26,7 +26,7 @@ use crate::mcp::Host;
 use crate::pyfile::{path_text, read_text};
 use crate::{EXIT_FAILED, EXIT_OK, EXIT_REJECTED, EXIT_USAGE, Exit, pyjson};
 
-enum Stop {
+pub(crate) enum Stop {
     Usage(String),
     Internal(String),
 }
@@ -96,7 +96,7 @@ fn dispatch(invocation: Invocation, registry: Registry, output: &mut Output) -> 
     }
 }
 
-fn read_json(path: &str, what: &str) -> Result<Json, Stop> {
+pub(crate) fn read_json(path: &str, what: &str) -> Result<Json, Stop> {
     let shown = path_text(path);
     let text = read_text(Path::new(path)).map_err(|e| Stop::usage(format!("cannot read {what} {shown}: {e}")))?;
     pyjson::parse(&text).map_err(|e| Stop::usage(format!("cannot read {what} {shown}: {e}")))
@@ -123,7 +123,7 @@ fn listed_ids(declarations: &Json, shown: &str, key: &str, what: &str) -> Result
         .collect()
 }
 
-fn load_registry(path: Option<&str>, mut registry: Registry) -> Result<(Registry, Json, Endpoints), Stop> {
+pub(crate) fn load_registry(path: Option<&str>, mut registry: Registry) -> Result<(Registry, Json, Endpoints), Stop> {
     let Some(path) = path else {
         return Ok((registry, Json::Object(Vec::new()), Endpoints::default()));
     };

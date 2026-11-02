@@ -14,9 +14,11 @@ const MCP_HELP: &str = r#"usage: sx mcp import --name NAME (--tools FILE | -- CO
        sx mcp run FILE --declarations FILE [--allow ID ...] [--grants FILE]
                   [--input NAME=JSON ...] [--format {text,json}] [--name NAME]
                   [--timeout-ms MS] -- COMMAND [ARG ...]
+       sx mcp serve --declarations FILE [--grants FILE] [--allow ID ...]
 
-Import the tools of an MCP server as Sx declarations, and run a program
-against that server over stdio.
+Import the tools of an MCP server as Sx declarations, run a program
+against that server over stdio, and serve granted capabilities as an MCP
+server on standard input and output.
 
 import options:
   --name NAME       Server name; its tools become capabilities mcp-NAME.TOOL
@@ -32,6 +34,11 @@ run options:
   --name NAME          Serve the tools of this server when the declarations
                        hold several
   --timeout-ms MS      Per-call and startup timeout, 60000 by default
+
+serve options:
+  --declarations FILE  Declarations of the capabilities and packs
+  --grants FILE        JSON object granting capabilities, with their scopes
+  --allow ID           Grant one capability that declares no scope
 "#;
 
 const SAVED_RESULT_TOOLS: &str = "tools";
@@ -43,17 +50,17 @@ pub(crate) struct Host {
     pub limits: Limits,
 }
 
-struct Options {
+pub(crate) struct Options {
     values: Vec<(String, String)>,
-    positional: Vec<String>,
-    command: Option<Vec<String>>,
+    pub positional: Vec<String>,
+    pub command: Option<Vec<String>>,
 }
 
-fn usage(message: &str) -> Exit {
+pub(crate) fn usage(message: &str) -> Exit {
     Exit { code: EXIT_USAGE, stdout: String::new(), stderr: format!("sx mcp: {message}\n") }
 }
 
-fn scan(args: &[String], flags: &[&str]) -> Result<Options, String> {
+pub(crate) fn scan(args: &[String], flags: &[&str]) -> Result<Options, String> {
     let (own, command) = match args.iter().position(|arg| arg == "--") {
         Some(at) => (args.get(..at).unwrap_or_default(), Some(args.get(at + 1..).unwrap_or_default().to_vec())),
         None => (args, None),
@@ -88,11 +95,11 @@ fn scan(args: &[String], flags: &[&str]) -> Result<Options, String> {
 }
 
 impl Options {
-    fn last(&self, flag: &str) -> Option<&str> {
+    pub fn last(&self, flag: &str) -> Option<&str> {
         self.values.iter().rev().find(|(name, _)| name == flag).map(|(_, value)| value.as_str())
     }
 
-    fn all(&self, flag: &str) -> Vec<String> {
+    pub fn all(&self, flag: &str) -> Vec<String> {
         self.values.iter().filter(|(name, _)| name == flag).map(|(_, value)| value.clone()).collect()
     }
 
@@ -121,8 +128,9 @@ pub fn run(args: &[String], new_registry: &dyn Fn() -> Registry) -> Exit {
         }
         Some((word, rest)) if word == "import" => import(rest),
         Some((word, rest)) if word == "run" => run_program(rest, new_registry),
-        Some((word, _)) => usage(&format!("{word:?} is not a subcommand; choose import or run")),
-        None => usage("choose a subcommand: import or run"),
+        Some((word, rest)) if word == "serve" => crate::mcp_serve::serve(rest, new_registry),
+        Some((word, _)) => usage(&format!("{word:?} is not a subcommand; choose import, run, or serve")),
+        None => usage("choose a subcommand: import, run, or serve"),
     }
 }
 

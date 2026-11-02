@@ -4,6 +4,7 @@ mod argparse;
 mod commands;
 mod helptext;
 mod mcp;
+mod mcp_serve;
 mod native;
 mod pyfile;
 mod pyjson;

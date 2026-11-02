@@ -82,7 +82,7 @@ impl Shared {
     }
 }
 
-fn read_line(reader: &mut impl BufRead) -> io::Result<Option<Vec<u8>>> {
+pub(super) fn read_line(reader: &mut impl BufRead) -> io::Result<Option<Vec<u8>>> {
     let mut line = Vec::new();
     loop {
         let available = reader.fill_buf()?;
