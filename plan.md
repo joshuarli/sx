@@ -563,7 +563,11 @@ hoisted functions allow, and one indexed past the end of a short line (`out-of-r
 name such as `attempt`, `err`, or `ok` name a value (head position and patterns keep the form), and let
 top-level `defn`s use definitions written later, as TypeScript hoists functions; the reader also infers
 missing or extra closers at the ends of lines from indentation when brackets do not balance, choosing
-the fewest edits, and reports every inferred closer to the host. The guide froze at `d701604`. On the
+the fewest edits, and reports every inferred closer to the host. The owner left whether inference
+should be opt-in to the campaign lead, who kept it always on with no switch: on the workflow
+corpus it turned 13 of 19 bracket failures into correct runs and none into a wrong one, the program
+it produces passes every check that any program must, and a strict host can refuse any report
+that carries `inferred_closers` before an effect happens. The guide froze at `d701604`. On the
 twelve development workflows with that binary: first attempt 33 of 36 (92%), final 35 of 36, prompt
 7,431, output 7,297 per trial. The gate (within 10 points of TypeScript on the development set) passed
 from iteration 2 on. The development probe tasks showed no first-attempt regression (33 of 34 against

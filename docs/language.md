@@ -135,6 +135,12 @@ Diagnostics of an inferred program that the checker then rejects, their spans, a
 excerpts refer to the inferred text, which has the same lines as the program as written. Only the
 columns after an edited run differ.
 
+Inference is always on, and there is no switch for it. A host that runs only programs exactly as
+written refuses one whose report carries `inferred_closers`, and it can always do so before any
+effect: `sx check` and `sx explain` report the inference before anything runs, and over the host
+protocol the first reply about a program carries the list before the host performs any request.
+`sx run` with the native packs performs requests itself, so such a host checks the program first.
+
 ## Types
 
 | Type | Values |
