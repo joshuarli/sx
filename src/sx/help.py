@@ -24,7 +24,8 @@ def entry(name: str, signature: str, description: str, example: str, result: str
 
 FORMS = (
     entry("let", "(let [name value ...] body)", "Binds names, each visible to later bindings and the body. "
-          "A fn value binds a local function, and _ runs a value for its effect.",
+          "A fn value binds a local function, and _ runs a value for its effect. A form name such as attempt "
+          "cannot be a binding name: write attempts.",
           "(let [a 1 b (+ a 1) double (fn [x] (* 2 x))] (double b))", "4"),
     entry("if", "(if condition then else)", "Chooses a branch. The condition is true or false, or an "
           "optional, which tests that a value is present. When the condition is an optional name, the "
@@ -35,8 +36,9 @@ FORMS = (
           '(cond (> 1 2) "big" (> 3 2) "medium" :else "small")', '"medium"'),
     entry("match", "(match value pattern result ...)", "Chooses the first clause whose pattern matches. "
           "Patterns: (some x) none (ok x) (err e) Variant (Variant x) _, or a name that binds the "
-          "whole value like _.",
-          "(match (some 3) (some n) (+ n 1) none 0)", "4"),
+          "whole value like _. An integer, string, or boolean literal matches an equal value; true and false "
+          "together cover Bool, and other literals need a final _.",
+          '[(match (some 3) (some n) (+ n 1) none 0) (match 2 1 "one" 2 "two" _ "many")]', '[4 "two"]'),
     entry("fn", "(fn [param ...] body)", "A function, as an argument to map, filter, and the like, "
           "or as the value of a let binding.", "(map (fn [x] (+ x 1)) [1 2])", "[2 3]"),
     entry("get", "(get record :field [default]) or (get map \"key\" [default])", "Reads a record field, or a map "
@@ -50,12 +52,18 @@ FORMS = (
           '(attempt (call metrics.uptime {:host "gone"}))', '(err {:kind NotFound :message "no such host"})'),
     entry("retry", "(retry {:delays [1s 2s]} expression)", "Evaluates the expression again after each delay "
           "while it fails with a transient kind: Timeout, Unavailable, or RateLimited. :on [Kind ...] chooses "
-          "the kinds, and {:backoff [100ms 5s] :within 30s} computes doubling delays.",
-          '(get (retry {:delays [1s 2s]} (call metrics.uptime {:host "flaky"})) :seconds)', "60"),
+          "the kinds, and {:backoff [100ms 5s] :within 30s} computes doubling delays. A write that is not "
+          "idempotent may be retried only when :on names refusal kinds alone: RateLimited, NotFound, "
+          "PermissionDenied, Invalid, Conflict.",
+          '(let [up (retry {:delays [1s 2s]} (call metrics.uptime {:host "flaky"})) '
+          '_ (retry {:delays [1s] :on [RateLimited]} (call chat.post {:text "hi"}))] (get up :seconds))', "60"),
     entry("wait-until", "(wait-until {:within 2m :every 5s} (fn [v] done?) expression)",
           "Evaluates the expression until the function returns true for its value, and returns that value. "
           "It fails with kind Timeout after :within.",
           '(wait-until {:within 1m :every 5s} (fn [s] (= s "done")) (call job.state {:id "j1"}))', '"done"'),
+    entry("sleep", "(sleep 10s)", "Waits the literal duration and returns Unit, as one delay request. Bind it to _ "
+          "to run it as a step. A duration of 0ms waits for nothing.",
+          '(let [_ (sleep 10s)] "rested")', '"rested"'),
     entry("loop", "(loop {:max 20} [name value ...] body)", "Binds like let and evaluates the body. "
           "(recur value ...) as its last step runs the body again with new values, at most :max times.",
           "(loop {:max 10} [n 0 total 0] (if (= n 4) total (recur (+ n 1) (+ total n))))", "6"),
@@ -156,6 +164,10 @@ TYPES = (
     entry("Map", "Map<String, V>: (into-map [[key value] ...])", "A JSON object with string keys and values of "
           "one type V, listed in key order. Keys are strings, never keywords: keywords only name record fields.",
           '(get (assoc {} "pen" 3) "pen" 0)', "3"),
+    entry("Record", "Record {k: T, ...}: {:k value ...}", "A group of named fields. Branches that return records "
+          "with different fields join to the union of the fields; a field only some branches write is optional, "
+          "and none in the others.",
+          "(map (fn [n] (if (> n 1) {:n n :big true} {:n n})) [1 2])", "[{:n 1 :big none} {:n 2 :big (some true)}]"),
     entry("Tuple", "Tuple<A, B, ...>: [a b ...]", "A fixed-size group of values of different types, from par, "
           "group-by, and bracket literals of mixed types or that a tuple pattern takes apart.",
           '(let [[n s] [1 "a"]] s)', '"a"'),
@@ -174,6 +186,8 @@ EXAMPLE_DECLARATIONS: Mapping[str, Any] = {
          "output": "Record {files: List<File>, last: Bool}", "description": "Reads one page of files."},
         {"id": "job.state", "effect": "read", "input": "Record {id: String}", "output": "String",
          "description": "Reads a job's state."},
+        {"id": "chat.post", "effect": "write", "idempotent": False, "input": "Record {text: String}",
+         "output": "Unit", "description": "Posts one chat message."},
     ],
 }
 
@@ -195,6 +209,8 @@ EXAMPLE_RESPONSES: tuple[Mapping[str, Any], ...] = (
         "files": [{"bytes": 10}, {"bytes": 20}], "last": False}}]},
     {"capability": "storage.files", "input": {"page": 2}, "results": [{"output": {
         "files": [{"bytes": 5}], "last": True}}]},
+    {"capability": "chat.post", "input": {"text": "hi"}, "results": [
+        {"error": {"kind": "RateLimited", "message": "slow down"}}, {"output": None}]},
     {"capability": "job.state", "input": {"id": "j1"}, "results": [{"output": "running"}, {"output": "done"}]},
 )
 
@@ -215,8 +231,8 @@ It looks like Clojure, but only the forms and functions below exist.
 Values: true false, integers (no fractions), "strings", [lists], {:field value} records (keywords
 only name fields), [1 "a"] tuples (mixed types), (some x) and none (no nil; a plain value works
 where an optional is expected), (ok x) and (err e). Durations such as 250ms 5s 2m 1h appear only in
-retry and wait-until options. Names may be kebab-case, camelCase, or snake_case. Comments start
-with ;.
+retry and wait-until options and as the argument of sleep. Names may be kebab-case, camelCase, or
+snake_case. Comments start with ;.
 """
 
 

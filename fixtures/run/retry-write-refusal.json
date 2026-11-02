@@ -1,0 +1,69 @@
+{
+  "description": "retry around a write that is not idempotent is allowed when :on names only refusal kinds, because the service did not perform the refused write.",
+  "program": "(retry {:delays [250ms] :on [RateLimited]} (call mail.send {:to \"ops\"}))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state"
+  ],
+  "responses": [
+    {
+      "capability": "mail.send",
+      "input": {
+        "to": "ops"
+      },
+      "results": [
+        {
+          "error": {
+            "kind": "RateLimited",
+            "message": "slow down"
+          }
+        },
+        {
+          "output": null
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": null
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "mail.send",
+      "input": {
+        "to": "ops"
+      }
+    },
+    {
+      "response": "r:1",
+      "error": {
+        "kind": "RateLimited",
+        "message": "slow down"
+      }
+    },
+    {
+      "delay": "r:2",
+      "milliseconds": 250
+    },
+    {
+      "response": "r:2",
+      "output": null
+    },
+    {
+      "request": "r:3",
+      "capability": "mail.send",
+      "input": {
+        "to": "ops"
+      }
+    },
+    {
+      "response": "r:3",
+      "output": null
+    }
+  ]
+}

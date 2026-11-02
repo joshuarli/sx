@@ -1,0 +1,2 @@
+; task: dev-failing-ci
+(let [_ (sleep 10s)] 1)

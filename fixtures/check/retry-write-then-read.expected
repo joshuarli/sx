@@ -1,0 +1,6 @@
+error[retry-write] 3:14-3:67
+    (let [sent (call mail.send {:to "ops@example.com" :subject "x"})]
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  retry may repeat mail.send, which is a write that is not idempotent, because a call after it can be refused once the write has taken effect.
+  Retry the write alone, or make it the last call in the retried expression.
+  Help: sx help retry

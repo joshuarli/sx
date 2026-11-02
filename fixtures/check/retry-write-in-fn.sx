@@ -1,0 +1,3 @@
+; task: dev-low-stock-alerts
+(retry {:delays [1s] :on [RateLimited]}
+  (map (fn [to] (call mail.send {:to to :subject "x"})) ["a@example.com" "b@example.com"]))

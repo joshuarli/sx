@@ -31,8 +31,10 @@ from sx.types import (
     CALL_ERROR_KINDS,
     INT,
     NEVER,
+    REFUSAL_KINDS,
     STRING,
     TRANSIENT_KINDS,
+    UNIT,
     EnumType,
     ListType,
     MapType,
@@ -48,12 +50,17 @@ from sx.types import (
     encodable_problem,
     show_type,
 )
-from sx.values import NONE_VALUE, UNIT_VALUE, MapValue, VariantValue
+from sx.values import NONE_VALUE, UNIT_VALUE, MapValue, VariantValue, show_value
 
 SPECIAL_FORMS = frozenset({
     "let", "if", "cond", "match", "fn", "get", "call", "attempt", "retry", "wait-until", "loop", "recur", "par",
-    "par-map", "some", "ok", "err",
+    "par-map", "some", "ok", "err", "sleep",
 })
+RESERVED_NAMES = SPECIAL_FORMS | {"none"}
+RESERVED_SUGGESTIONS = {
+    "ok": "ok?", "err": "error", "some": "found", "none": "missing", "fn": "f", "if": "test", "get": "fetched",
+    "call": "called", "match": "matched", "retry": "retries", "let": "bound", "cond": "cases", "sleep": "slept",
+}
 HIGHER_ORDER = frozenset({"map", "filter", "keep", "any?", "all?", "reduce", "sort-by", "distinct-by", "group-by"})
 PRELUDE = frozenset({
     "+", "-", "*", "quot", "rem", "=", "not=", "<", "<=", ">", ">=", "not", "and", "or", "str", "count", "first",
@@ -174,9 +181,16 @@ class LoopContext:
     count: int
 
 
+@dataclass(frozen=True, slots=True)
+class EffectCall:
+    capability: Capability
+    span: Span
+    depth: int
+
+
 @dataclass(slots=True)
 class Effects:
-    calls: list[tuple[Capability, Span]] = field(default_factory=list)
+    calls: list[EffectCall] = field(default_factory=list)
 
 
 def article(text: str) -> str:
@@ -202,6 +216,18 @@ def edit_distance(a: str, b: str) -> int:
 def closest(name: str, candidates: Sequence[str]) -> str | None:
     scored = sorted((edit_distance(name, c), c) for c in candidates if c != name)
     return scored[0][1] if scored and scored[0][0] <= 2 else None
+
+
+def name_list(names: Sequence[str]) -> str:
+    if len(names) <= 2:
+        return " and ".join(names)
+    return ", ".join(names[:-1]) + ", and " + names[-1]
+
+
+def suggested_name(name: str) -> str:
+    if name in RESERVED_SUGGESTIONS:
+        return RESERVED_SUGGESTIONS[name]
+    return f"{name}es" if name.endswith(("s", "x", "ch", "sh")) else f"{name}s"
 
 
 def head_name(node: Node) -> str | None:
@@ -253,7 +279,10 @@ def check(
             "no-encoding", program.span,
             f"The program's result is {describe(final)}, which has no JSON encoding{reason}.",
         )
-    diagnostics = tuple(sorted(checker.diagnostics, key=lambda d: (d.span.start.line, d.span.start.column)))
+    distinct: dict[tuple[str, Span, str], Diagnostic] = {}
+    for diagnostic in checker.diagnostics:
+        distinct.setdefault((diagnostic.code, diagnostic.span, diagnostic.message), diagnostic)
+    diagnostics = tuple(sorted(distinct.values(), key=lambda d: (d.span.start.line, d.span.start.column)))
     if diagnostics:
         return CheckResult(None, diagnostics)
     used_inputs = frozenset(name for name in declared_inputs if name in checker.inputs_used)
@@ -277,6 +306,7 @@ class _Checker:
         self.instantiating: list[str] = []
         self.instantiations = 0
         self.sort_key_owner: Form | None = None
+        self.repeat_depth = 0
 
     def error(self, code: str, span: Span, message: str, **extra: str | None) -> None:
         self.diagnostics.append(Diagnostic(code=code, span=span, message=message, **extra))
@@ -478,6 +508,25 @@ class _Checker:
                 conversions.append((name, conversion))
             else:
                 return True, ir.EachField(tuple(conversions))
+        elif (
+            joining
+            and isinstance(a, RecordType)
+            and isinstance(e, RecordType)
+            and a.names < e.names
+            and all(isinstance(self.resolve(ft), OptionType) for name, ft in e.fields if name not in a.names)
+        ):
+            widened: list[ir.WidenedField] = []
+            for name, ft in e.fields:
+                source = a.field(name)
+                if source is None:
+                    widened.append(ir.WidenedField(name, False, None))
+                    continue
+                ok, conversion = self.convert(source, ft, joining)
+                if not ok:
+                    break
+                widened.append(ir.WidenedField(name, True, conversion))
+            else:
+                return True, ir.WidenRecord(tuple(widened))
         elif isinstance(a, ListType) and isinstance(e, ListType):
             ok, conversion = self.convert(a.element, e.element, joining)
             if ok and conversion is not None:
@@ -550,11 +599,20 @@ class _Checker:
             case _, OptionType() if not self.is_open(ra):
                 inner = self.least_upper_bound(ra, rb.inner)
                 return None if inner is None else OptionType(inner)
-            case RecordType(), RecordType() if ra.names == rb.names:
+            case RecordType(), RecordType():
                 fields: list[tuple[str, Type]] = []
                 for name, field_type in ra.fields:
                     other = rb.field(name)
-                    joined = None if other is None else self.least_upper_bound(field_type, other)
+                    joined = (
+                        self.optional_field(field_type) if other is None else self.least_upper_bound(field_type, other)
+                    )
+                    if joined is None:
+                        return None
+                    fields.append((name, joined))
+                for name, field_type in rb.fields:
+                    if name in ra.names:
+                        continue
+                    joined = self.optional_field(field_type)
                     if joined is None:
                         return None
                     fields.append((name, joined))
@@ -578,6 +636,12 @@ class _Checker:
             case Primitive(), EnumType() if ra == STRING and self.nullary(rb):
                 return STRING
         return None
+
+    def optional_field(self, t: Type) -> Type | None:
+        resolved = self.resolve(t)
+        if isinstance(resolved, OptionType):
+            return t
+        return None if self.is_open(resolved) else OptionType(t)
 
     def nullary(self, t: EnumType) -> bool:
         return all(payload is None for _, payload in t.variants)
@@ -611,6 +675,14 @@ class _Checker:
             self.effects.pop()
 
     @contextmanager
+    def repeated(self) -> Generator[None]:
+        self.repeat_depth += 1
+        try:
+            yield
+        finally:
+            self.repeat_depth -= 1
+
+    @contextmanager
     def outside_tail(self) -> Generator[None]:
         saved, self.tail = self.tail, None
         try:
@@ -631,7 +703,10 @@ class _Checker:
             case BoolLiteral(value=value, span=span):
                 return self.coerce(ir.Literal(value, span), BOOL, expected, span)
             case DurationLiteral(span=span):
-                self.error("bad-literal", span, "A duration only appears in retry and wait-until options.")
+                self.error(
+                    "bad-literal", span,
+                    "A duration only appears in retry and wait-until options, and as the argument of sleep.",
+                )
                 return self.placeholder(span)
             case Keyword(name=name, span=span):
                 self.habit(
@@ -844,16 +919,25 @@ class _Checker:
         if name == "recur":
             return self.form_recur(node, scope)
         with self.outside_tail():
+            if name in SPECIAL_FORMS:
+                return self.special_form(name, node, expected, scope)
             binding = scope.get(name)
             if isinstance(binding, FunctionBinding):
                 return self.apply_local(node, binding, expected, scope)
             if isinstance(binding, ValueBinding):
-                self.error(
-                    "type-mismatch", head.span, f"{name} is {describe(self.zonk(binding.type))}, not a function.",
-                )
+                found = describe(self.zonk(binding.type))
+                if name in PRELUDE:
+                    self.error(
+                        "type-mismatch", head.span, f"{name} is {found} here, which hides the function {name}.",
+                        detail=(
+                            "A name bound by let, loop, fn, or match hides the function of that name in the rest "
+                            "of its scope. Rename the local."
+                        ),
+                        help=name,
+                    )
+                else:
+                    self.error("type-mismatch", head.span, f"{name} is {found}, not a function.")
                 return self.placeholder(span)
-            if name in SPECIAL_FORMS:
-                return self.special_form(name, node, expected, scope)
             if name in PRELUDE:
                 return self.prelude(node, expected, scope)
             function = self.registry.function(name)
@@ -929,6 +1013,8 @@ class _Checker:
                 return self.form_retry(node, expected, scope)
             case "wait-until":
                 return self.form_wait_until(node, expected, scope)
+            case "sleep":
+                return self.form_sleep(node, expected, scope)
             case "par":
                 return self.form_par(node, expected, scope)
             case "par-map":
@@ -960,6 +1046,7 @@ class _Checker:
                 if not isinstance(pattern, Symbol) or pattern.name == "_":
                     self.error("bad-pattern", pattern.span, "A local function needs a name.")
                     continue
+                self.reserved(pattern.name, pattern.span)
                 self.check_fn_shape(value)
                 function_binding: Binding = FunctionBinding(value, dict(inner), pattern.name)
                 inner = dict(inner)
@@ -1003,6 +1090,15 @@ class _Checker:
             return False
         return True
 
+    def reserved(self, name: str, span: Span) -> bool:
+        if name not in RESERVED_NAMES:
+            return False
+        self.error(
+            "reserved-name", span, f"{name} is the name of a form, so it cannot name a value.",
+            fix=suggested_name(name), help=name,
+        )
+        return True
+
     def bind(
         self, pattern: Node, t: Type, scope: Mapping[str, Binding], role: str, fix: str | None = None
     ) -> tuple[ir.Binder, dict[str, Binding]]:
@@ -1010,7 +1106,9 @@ class _Checker:
         match pattern:
             case Symbol(name="_"):
                 return ir.Discard(), inner
-            case Symbol(name=name, span=span) if not name[0].isupper() and name != "none":
+            case Symbol(name=name, span=span) if not name[0].isupper():
+                if self.reserved(name, span) and name == "none":
+                    return ir.Discard(), inner
                 inner[name] = ValueBinding(t)
                 return ir.BindName(name), inner
             case ListLiteral(items=items, span=span):
@@ -1267,6 +1365,8 @@ class _Checker:
                 return [name if payload is None else f"({name} x)" for name, payload in variants if name not in covered]
             case Never():
                 return []
+            case _ if resolved == BOOL:
+                return [name for name in ("true", "false") if f"Bool:{name}" not in covered]
             case _:
                 return ["every other value; end with _"]
 
@@ -1276,6 +1376,8 @@ class _Checker:
         resolved = self.resolve(t)
         if isinstance(node, Symbol) and node.name == "_":
             return ir.MatchAny(ir.Discard()), dict(scope), set(), True
+        if isinstance(node, IntLiteral | StringLiteral | BoolLiteral):
+            return self.literal_pattern(node, t, scope)
         if isinstance(node, Symbol) and node.name == "none":
             if self.is_open(resolved):
                 resolved = OptionType(self.fresh())
@@ -1301,6 +1403,7 @@ class _Checker:
                 )
             return ir.MatchVariant(node.name, None), dict(scope), {node.name}, True
         if isinstance(node, Symbol) and node.name[0].islower():
+            self.reserved(node.name, node.span)
             return ir.MatchAny(ir.BindName(node.name)), {**scope, node.name: ValueBinding(t)}, set(), True
         if isinstance(node, Symbol):
             self.error(
@@ -1352,7 +1455,24 @@ class _Checker:
                 return self.pattern_mismatch(node, t, scope)
         self.error(
             "bad-pattern", node.span, f"{show(node)} is not a match pattern.",
-            detail="Patterns: (some x) none (ok x) (err e) Variant (Variant x) _", help="match",
+            detail="Patterns: (some x) none (ok x) (err e) Variant (Variant x) 1 \"text\" true _", help="match",
+        )
+        return ir.MatchAny(ir.Discard()), dict(scope), set(), False
+
+    def literal_pattern(
+        self, node: IntLiteral | StringLiteral | BoolLiteral, t: Type, scope: Mapping[str, Binding],
+    ) -> tuple[ir.MatchPattern, dict[str, Binding], set[str], bool]:
+        literal_type = INT if isinstance(node, IntLiteral) else STRING if isinstance(node, StringLiteral) else BOOL
+        key = f"{literal_type.name}:{show_value(node.value)}"
+        if isinstance(self.resolve(t), Never) or self.trial(t, literal_type):
+            return ir.MatchLiteral(node.value), dict(scope), {key}, True
+        resolved = self.resolve(t)
+        fix = None
+        if isinstance(node, StringLiteral) and isinstance(resolved, EnumType) and resolved.has(node.value):
+            fix = node.value
+        self.error(
+            "bad-pattern", node.span, f"{show(node)} cannot match {describe(self.zonk(t))}.",
+            detail=f"The value is {show_type(self.zonk(t))}.", fix=fix, help="match",
         )
         return ir.MatchAny(ir.Discard()), dict(scope), set(), False
 
@@ -1553,7 +1673,7 @@ class _Checker:
         else:
             argument, _ = self.check(argument_node, capability.input, scope)
         for effects in self.effects:
-            effects.calls.append((capability, span))
+            effects.calls.append(EffectCall(capability, span, self.repeat_depth))
         self.capabilities_used.add(capability.id)
         return self.coerce(ir.Call(capability, argument, span), capability.output, expected, span)
 
@@ -1678,16 +1798,46 @@ class _Checker:
                         delays = self.backoff(pair[0], pair[1], within)
             if "on" in options:
                 kinds = self.kinds(options["on"]) or kinds
+        depth = self.repeat_depth
         with self.collecting() as effects:
             body, t = self.check(node.items[2], expected, scope)
-        for capability, call_span in effects.calls:
-            if capability.effect is Effect.WRITE and not capability.idempotent:
-                self.error(
-                    "retry-write", call_span,
-                    f"retry may repeat {capability.id}, which is a write that is not idempotent.",
-                    detail="Retry only reads and idempotent writes.", help="retry",
-                )
+        self.check_retried_writes(effects, kinds, depth)
         return ir.Retry(delays, frozenset(kinds), body, span), t
+
+    def check_retried_writes(self, effects: Effects, kinds: frozenset[str], depth: int) -> None:
+        unknown = [kind for kind in CALL_ERROR_KINDS if kind in kinds and kind not in REFUSAL_KINDS]
+        for index, call in enumerate(effects.calls):
+            capability = call.capability
+            if capability.effect is not Effect.WRITE or capability.idempotent:
+                continue
+            owner = f"retry may repeat {capability.id}, which is a write that is not idempotent"
+            if unknown:
+                allowed = [kind for kind in CALL_ERROR_KINDS if kind in kinds and kind in REFUSAL_KINDS]
+                detail = (
+                    f"Only the kinds {name_list(REFUSAL_KINDS)} mean the service did not perform the operation."
+                )
+                fix = None
+                if allowed:
+                    fix = f":on [{' '.join(allowed)}]"
+                    detail += f"\nHere {fix} alone would be allowed."
+                self.error(
+                    "retry-write", call.span,
+                    f"{owner}, and {name_list(unknown)} leave{'s' if len(unknown) == 1 else ''} it unknown "
+                    "whether the write happened.",
+                    detail=detail, fix=fix, help="retry",
+                )
+            elif call.depth > depth:
+                self.error(
+                    "retry-write", call.span,
+                    f"{owner}, because it can run more than once inside this retry.",
+                    detail="Put the retry inside the fn, around the single write.", help="retry",
+                )
+            elif index < len(effects.calls) - 1:
+                self.error(
+                    "retry-write", call.span,
+                    f"{owner}, because a call after it can be refused once the write has taken effect.",
+                    detail="Retry the write alone, or make it the last call in the retried expression.", help="retry",
+                )
 
     def kinds(self, node: Node) -> frozenset[str] | None:
         if (
@@ -1740,7 +1890,8 @@ class _Checker:
                     intervals = self.backoff(pair[0], pair[1], within)
         with self.collecting() as effects:
             body, t = self.check(node.items[3], expected, scope)
-        for capability, call_span in effects.calls:
+        for call in effects.calls:
+            capability, call_span = call.capability, call.span
             if capability.effect is Effect.WRITE:
                 self.error(
                     "wait-write", call_span,
@@ -1749,6 +1900,19 @@ class _Checker:
                 )
         predicate, _ = self.function_argument(node.items[2], [t], BOOL, "wait-until", scope)
         return ir.WaitUntil(intervals, predicate, body, span), t
+
+    def form_sleep(self, node: Form, expected: Type | None, scope: Mapping[str, Binding]) -> tuple[ir.Node, Type]:
+        span = node.span
+        if not self.arity(node, 1, 1, "duration"):
+            return self.placeholder(span)
+        duration = node.items[1]
+        if not isinstance(duration, DurationLiteral):
+            self.error(
+                "bad-option", duration.span, "sleep takes a duration literal such as 10s.",
+                detail="A duration is written with a unit: 250ms, 5s, 2m, or 1h.", help="sleep",
+            )
+            return self.placeholder(span)
+        return self.coerce(ir.Sleep(duration.milliseconds, span), UNIT, expected, span)
 
     def form_loop(self, node: Form, expected: Type | None, scope: Mapping[str, Binding]) -> tuple[ir.Node, Type]:
         span = node.span
@@ -1791,7 +1955,8 @@ class _Checker:
                 types.append(value_type)
         saved, self.tail = self.tail, LoopContext(types, len(types))
         try:
-            body, t = self.check(node.items[3], expected, inner)
+            with self.repeated():
+                body, t = self.check(node.items[3], expected, inner)
         finally:
             self.tail = saved
         return ir.Loop(maximum, tuple(binders), tuple(initial), body, span), t
@@ -1843,7 +2008,8 @@ class _Checker:
         return self.coerce(ir.Par(tuple(branches), node.span), TupleType(tuple(types)), expected, node.span)
 
     def read_only(self, effects: Effects, form: str) -> None:
-        for capability, call_span in effects.calls:
+        for call in effects.calls:
+            capability, call_span = call.capability, call.span
             if capability.effect is Effect.WRITE:
                 self.error(
                     "parallel-write", call_span,
@@ -1906,14 +2072,18 @@ class _Checker:
             assert isinstance(node, Form)
             if not self.check_fn_shape(node):
                 return ir.Lambda((), ir.Literal(UNIT_VALUE, span), None, span), NEVER
-            return self.instantiate(node, params, expected_return, who, scope, None)
+            with self.repeated():
+                return self.instantiate(node, params, expected_return, who, scope, None)
         if isinstance(node, Symbol):
             binding = scope.get(node.name)
             if isinstance(binding, FunctionBinding):
                 if node.name in self.instantiating:
                     self.error("unknown-function", span, f"{node.name} cannot call itself. Sx has no recursion.")
                     return ir.Lambda((), ir.Literal(UNIT_VALUE, span), None, span), NEVER
-                lambda_ir, t = self.instantiate(binding.form, params, expected_return, who, binding.scope, node.name)
+                with self.repeated():
+                    lambda_ir, t = self.instantiate(
+                        binding.form, params, expected_return, who, binding.scope, node.name,
+                    )
                 return lambda_ir, t
             if binding is None and (node.name in PRELUDE or self.registry.function(node.name) is not None):
                 return self.named_function(node, params, expected_return, who, scope)

@@ -22,7 +22,7 @@ program runs. There is no general recursion and no unbounded loop.
 | Whitespace | space, tab, newline, `,` | Commas are whitespace, as in Clojure. |
 | Boolean | `true`, `false` | |
 | Integer | `-?[0-9]+` | Signed 64-bit. A literal outside that range is rejected. |
-| Duration | `250ms`, `5s`, `2m`, `1h` | Only in `retry` and `wait-until` options. |
+| Duration | `250ms`, `5s`, `2m`, `1h` | Only in `retry` and `wait-until` options and as the argument of `sleep`. |
 | String | `"..."` | UTF-8. Escapes: `\"`, `\\`, `\n`, `\r`, `\t`, `\u{HEX}`. |
 | Keyword | `:name` | Record field names only. Same characters as a symbol. |
 | Symbol | `name`, `repo-id`, `repoId`, `ahead_count`, `ok?`, `acc'` | A lowercase letter, then letters, digits, `-`, and `_`, then optionally `?` or primes. |
@@ -41,7 +41,7 @@ program runs. There is no general recursion and no unbounded loop.
 | `Bool` | `true`, `false` |
 | `Int` | Signed 64-bit integers |
 | `String` | UTF-8 strings |
-| `Unit` | One value, returned by capabilities with no result |
+| `Unit` | One value, returned by capabilities with no result and by `sleep` |
 | `List<T>` | Ordered, finite |
 | `Tuple<T1, ..., Tn>` | Produced by `par`, `group-by`, and bracket literals of mixed types or used as tuples |
 | `Option<T>` | `(some x)`, `none` |
@@ -62,6 +62,14 @@ value of type `T` is accepted and becomes `(some value)`. So `(if empty? none na
 `Option<String>`. Branch results join field by field, so a branch returning
 `{:branch name}` and one returning `{:branch none}` join to `Record {branch: Option<String>}`.
 Promotion never applies when `T` is itself an `Option`.
+
+Branches that return records with different fields join to the union of the fields. A field in
+both joins as above. A field in only one record becomes `Option<T>`, or stays `Option<T>`, and the
+other branch's record has `none` for it. The fields keep the first branch's order, then the new
+fields in order of first appearance. So `{:number n :ok true}` and `{:number n :ok false :kind "x"}`
+join to `Record {number: Int, ok: Bool, kind: Option<String>}`, and `(get r :kind)` reads the
+result. This holds wherever branches join: `if`, `match`, `cond`, and inside lists and tuples.
+Records whose shared fields have types that do not join are still a `branch-mismatch`.
 
 A record literal checked against a known record type, such as a capability's input or a
 record field of that type, may omit any field whose type is `Option<T>`. The omitted field is `none`, so
@@ -134,6 +142,7 @@ by element. A map is not a sort key.
 | `(attempt e)` | `Result<T, CallError>`, where `e` has type `T`. See [Recovery and repetition](#recovery-and-repetition). |
 | `(retry {options} e)` | `T`. Re-evaluates `e` after a failure. |
 | `(wait-until {options} f e)` | `T`. Re-evaluates `e` until `f` returns `true` for its value. |
+| `(sleep d)` | `Unit`. `d` is a duration literal. Waits that long. See [sleep](#sleep). |
 | `(loop {:max n} [p1 e1 ...] body)` | The type of `body`'s non-`recur` results. `(recur ...)` repeats `body`. |
 | `(par e1 ... en)` | `Tuple<T1, ..., Tn>`. Every branch has only `read` effects. |
 | `(par-map {:limit n} f xs)` | `List<U>`. `n` is an integer literal. `f` has only `read` effects. |
@@ -141,6 +150,16 @@ by element. A map is not a sort key.
 A pattern `p` is a symbol, `_`, or a tuple pattern `[p1 ... pn]`. Patterns appear in `let`,
 `loop`, and `fn` parameters. `_` evaluates the value and discards it, so
 `(let [_ (map send items)] (count items))` runs every send.
+
+The names of the special forms are reserved: `let`, `if`, `cond`, `match`, `fn`, `get`, `call`,
+`attempt`, `retry`, `wait-until`, `sleep`, `loop`, `recur`, `par`, `par-map`, `some`, `ok`, and
+`err`, and `none`. Binding one of them in `let`, `loop`, `fn` parameters, or a `match` pattern, or
+naming a local function with one, is a `reserved-name` error at the binding, with a fix that
+suggests another name, such as `attempts` for `attempt`. Without the rule a form that follows the
+binding, such as `(attempt ...)` after `[attempt 1]`, would call the local instead of the form.
+Prelude and core function names are not reserved, so a local may be named `count`. Inside its
+scope the local hides the function: using it in head position, as in `(count xs)`, is a
+`type-mismatch` that says the local hides the function.
 
 ### Conditions
 
@@ -202,6 +221,16 @@ toward the type of the `match`. Any other clause that can never match is rejecte
 itself, so it has type `Option<T>` in a match on an optional. Only a final `_` after `none`
 narrows.
 
+An integer (including a negative one), string, or boolean literal is a pattern that matches when
+the scrutinee equals it: `(match n 1 "one" 2 "two" _ "many")`. The scrutinee's type must be the
+literal's type, `Int`, `String`, or `Bool`. Any other scrutinee, such as an `Option<Int>` or an
+enum, makes the literal a `bad-pattern`, and for a string that names a variant of the enum the fix
+is the variant name. `true` and `false` together cover `Bool`, so a `match` with both needs no `_`.
+No other set of literals covers its type, so a `match` on an `Int` or `String` needs a final `_` or
+name, or it is `non-exhaustive`. A literal repeated in a later clause is `unreachable-clause`. A
+literal is also allowed inside `(some ...)`, `(ok ...)`, `(err ...)`, and `(Variant ...)`, where it
+never covers the case, so `(some 1)` needs a `(some x)` or `_` clause after it.
+
 When the scrutinee is a bare name of type `Option<T>` and a `none` clause comes before a final `_`
 clause, the `_` clause sees that name as the inner value, of type `T`:
 
@@ -245,7 +274,19 @@ delay, not wall-clock time. The host enforces wall-clock time separately.
 
 `e` may contain several calls, and each attempt evaluates all of `e` again. A `write` capability
 inside `e` must be declared `idempotent`, because a retry may repeat it. The checker rejects
-`retry` around a non-idempotent write with `retry-write`.
+`retry` around a non-idempotent write with `retry-write`, with one exception: a non-idempotent
+write may be retried when `:on` is given and every kind in it is a refusal kind, `RateLimited`,
+`NotFound`, `PermissionDenied`, `Invalid`, or `Conflict`, because a refusal means the service did
+not perform the operation. `Timeout`, `Unavailable`, and `Failed` leave the outcome unknown, so a
+retry that includes any of them, including the default kinds, stays `retry-write`. The message
+names those kinds, and when refusal kinds are among those retried it shows the `:on` list that
+would be allowed, such as `:on [RateLimited]`.
+
+A repeat after a refusal is safe only if the write has not already taken effect in an earlier
+attempt. So the exception holds only when the write is the last call in `e` in source order and
+does not sit inside a `fn` or `loop` body within `e`. Otherwise a later call, or a later run of the
+same call, could be refused after the write took effect, and the retry would repeat it. That is
+also `retry-write`. Put the `retry` around the single write, inside the `fn` if there is one.
 
 ### wait-until
 
@@ -262,6 +303,21 @@ the total waiting time. When the next wait would exceed it, the form fails with 
 kind `Timeout`, which `attempt` can capture and `retry` can retry. A failed call inside `e` fails
 the form at once. Wrap `e` in `retry` to tolerate it. `e` must have only `read` effects. Intervals
 must be at least `1ms`.
+
+### sleep
+
+```
+(let [_ (sleep 10s)
+      job (call jobs.status {:id id})]
+  job)
+```
+
+`(sleep d)` waits for `d` and returns `Unit`. `d` must be a duration literal, like every other
+duration, so `sx explain` can show it. Bind the result to `_` to run it as a step. `sleep` issues
+the same [delay request](#delays) as a `retry` delay or a `wait-until` interval, adds its duration
+to the `delay` budget, and works inside `par` branches and `par-map` functions, where each fiber
+waits on its own. A `sleep` of `0ms` issues no request. To poll until a condition holds, use
+`wait-until`; `sleep` waits once.
 
 ### loop
 
@@ -293,7 +349,7 @@ arguments, rebinds the names to them in order, and evaluates `body` again. Any o
 
 ### Delays
 
-A delay is a request like a capability call. The machine suspends with a delay request carrying
+A delay is a request like a capability call, issued for a `retry` delay, a `wait-until` interval, or a `sleep`. The machine suspends with a delay request carrying
 its ID and duration, and the host resumes it after waiting. The machine never reads a clock.
 Fixture hosts resume at once, so tests run in no time and stay deterministic. The trace records
 each delay.
@@ -425,6 +481,12 @@ never on the message. `CallErrorKind` is a closed kernel enum:
 
 The host maps each failure to exactly one kind. A failure that fits no other kind is `Failed`.
 
+`RateLimited`, `NotFound`, `PermissionDenied`, `Invalid`, and `Conflict` are the refusal kinds.
+A host reports a refusal kind only when the operation did not take effect. A host that cannot be
+sure, such as after a dropped connection or a response it could not read, reports `Timeout`,
+`Unavailable`, or `Failed`. The checker relies on this to allow `retry` of a write that is not
+idempotent on refusal kinds only. See [retry](#retry).
+
 When a branch of `par` or `par-map` fails, the form fails with the failure of the lowest-numbered
 failed branch, once every fiber has run as far as it can without new responses. Its other branches
 stop. The host still answers their outstanding requests, and the machine discards those answers.
@@ -480,7 +542,9 @@ in parity tests, ignore object key order.
 
 ## Diagnostics
 
-The checker reports every error it finds, up to 20, followed by a count of the rest. The reader
+The checker reports every error it finds, up to 20, followed by a count of the rest. A local
+function is checked at each call, so one mistake in its body can be found many times: diagnostics
+with the same code, span, and message are reported once, the first. The reader
 recovers at the next balanced form, so one unclosed bracket does not hide later errors. Nothing
 runs while any error remains.
 
@@ -537,7 +601,7 @@ The checker's codes are:
 | Group | Codes |
 | --- | --- |
 | Reading | `unclosed`, `unexpected-close`, `bad-literal`, `bad-symbol`, `int-range`, `bad-escape`, `record-key`, `record-missing-value`, `duplicate-field`, `empty-program`, `multiple-expressions` |
-| Names | `unknown-name`, `unknown-function`, `unknown-capability`, `unknown-field`, `missing-field`, `unknown-variant` |
+| Names | `unknown-name`, `unknown-function`, `unknown-capability`, `unknown-field`, `missing-field`, `unknown-variant`, `reserved-name` |
 | Calls | `arity`, `type-mismatch`, `unresolved-type`, `not-a-record`, `no-encoding` |
 | Forms | `condition-not-bool`, `missing-else`, `branch-mismatch`, `fn-position`, `bad-pattern`, `bad-option`, `recur-position`, `recur-arity` |
 | Match | `non-exhaustive`, `unreachable-clause` |

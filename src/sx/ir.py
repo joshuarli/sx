@@ -53,11 +53,16 @@ class MatchVariant:
 
 
 @dataclass(frozen=True, slots=True)
+class MatchLiteral:
+    value: Value
+
+
+@dataclass(frozen=True, slots=True)
 class MatchAny:
     binder: Binder
 
 
-type MatchPattern = MatchSome | MatchNone | MatchOk | MatchErr | MatchVariant | MatchAny
+type MatchPattern = MatchSome | MatchNone | MatchOk | MatchErr | MatchVariant | MatchLiteral | MatchAny
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,6 +73,18 @@ class ToSome:
 @dataclass(frozen=True, slots=True)
 class EachField:
     fields: tuple[tuple[str, Conversion | None], ...]
+
+
+@dataclass(frozen=True, slots=True)
+class WidenedField:
+    name: str
+    present: bool
+    conversion: Conversion | None
+
+
+@dataclass(frozen=True, slots=True)
+class WidenRecord:
+    fields: tuple[WidenedField, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,7 +102,7 @@ class VariantName:
     pass
 
 
-type Conversion = ToSome | EachField | EachItem | EachElement | VariantName
+type Conversion = ToSome | EachField | WidenRecord | EachItem | EachElement | VariantName
 
 
 @dataclass(frozen=True, slots=True)
@@ -250,6 +267,12 @@ class WaitUntil:
 
 
 @dataclass(frozen=True, slots=True)
+class Sleep:
+    milliseconds: int
+    span: Span
+
+
+@dataclass(frozen=True, slots=True)
 class Loop:
     maximum: int
     binders: tuple[Binder, ...]
@@ -281,7 +304,7 @@ class ParMap:
 type Node = (
     Literal | Variable | Let | LocalFunction | If | Match | Lambda | ApplyLocal | Prelude | CoreCall | Call | Get
     | MakeRecord | MakeList | MakeTuple | MakeBracket | MakeEmptyBrace | Wrap | MakeVariant | Coerce | Attempt | Retry
-    | WaitUntil | Loop | Recur | Par | ParMap
+    | WaitUntil | Sleep | Loop | Recur | Par | ParMap
 )
 
 

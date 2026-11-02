@@ -1,0 +1,4 @@
+; task: dev-low-stock-alerts
+(retry {:delays [1s] :on [RateLimited]}
+  (let [sent (call mail.send {:to "ops@example.com" :subject "x"})]
+    (call inventory.items {})))

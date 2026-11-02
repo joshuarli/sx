@@ -1,0 +1,6 @@
+error[non-exhaustive] 2:1-2:26
+  (match 3 1 "one" 2 "two")
+  ^^^^^^^^^^^^^^^^^^^^^^^^^
+  This match does not handle every other value; end with _.
+  Add a clause for each missing case, or end with _ to match anything else.
+  Help: sx help match
