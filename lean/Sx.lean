@@ -11,3 +11,5 @@ import Sx.Eval
 import Sx.Proofs.Safety
 import Sx.Proofs.Effect
 import Sx.Proofs.Order
+import Sx.Proofs.Lawful
+import Sx.Proofs.CheckSound

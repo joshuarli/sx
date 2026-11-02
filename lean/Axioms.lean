@@ -1,6 +1,9 @@
 import Sx
 
 #print axioms Sx.pure_type_safety
+#print axioms Sx.check_sound
+#print axioms Sx.checkProgram_typed
+#print axioms Sx.checked_program_type_safety
 #print axioms Sx.effect_soundness
 #print axioms Sx.effect_soundness_calls
 #print axioms Sx.core_application_no_request
