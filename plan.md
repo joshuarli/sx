@@ -158,7 +158,10 @@ prototype is frozen as an executable specification, and the Lean reference check
 fixture. The six-workflow comparison in Phase 9c is the campaign's main finding: on real workflows,
 TypeScript on Bun beat Sx on first-attempt correctness and on tokens, and Sx led only where a core
 did the work. The owner then started the second campaign, Phases 10 to 12, to close that gap with
-the guide, and opened repomod to the changes Phase 3 proposed.
+the guide, and opened repomod to the changes Phase 3 proposed. Every phase of the second campaign has
+passed. On eight workflows written blind, Sx and TypeScript were both correct on 24 of 24 first
+attempts. Sx still spends 1.8 times TypeScript's output tokens and 5 times its prompt tokens, and 3 of
+its 24 answers ran only because the reader inferred closers from indentation.
 
 **The Python prototype is frozen.** `src/sx` and the Python cores are frozen as of commit
 `15b6ed6`, the parent of the commit that records this, because Rust passed its gates. The prototype
@@ -555,6 +558,41 @@ workflows: first attempt 31 of 36 (86%), final 36 of 36, prompt 7,637, output 6,
 times TypeScript's. Three misses were names a TypeScript habit produces (`_stored`, a loop variable
 named `attempt`, a binding named `err`), one called a `defn` defined further down, as TypeScript's
 hoisted functions allow, and one indexed past the end of a short line (`out-of-range`), a logic error.
+
+**Phase 11, the final language and the gate.** A last lane let a name start with `_`, let a form
+name such as `attempt`, `err`, or `ok` name a value (head position and patterns keep the form), and let
+top-level `defn`s use definitions written later, as TypeScript hoists functions; the reader also infers
+missing or extra closers at the ends of lines from indentation when brackets do not balance, choosing
+the fewest edits, and reports every inferred closer to the host. The guide froze at `d701604`. On the
+twelve development workflows with that binary: first attempt 33 of 36 (92%), final 35 of 36, prompt
+7,431, output 7,297 per trial. The gate (within 10 points of TypeScript on the development set) passed
+from iteration 2 on. The development probe tasks showed no first-attempt regression (33 of 34 against
+34 of 34, one bracket error), with output 34% above the standard guide's on those short tasks.
+
+**Phase 12: the blind workflows (the second campaign's result).** A subagent that read neither the
+guide, this plan, nor any result wrote eight workflows in `bench/workflows/blind/`: `canary-rollout`,
+`directory-sync`, `export-jobs`, `package-report`, `release-notes`, `report-archive`, `task-triage`,
+and `usage-invoices`, using the `fs`, `process`, typed `http`, and `sqlite` packs, a stdio MCP server,
+and the `semver`, `text`, `re`, and `json` cores. It tried 38 wrong variants, and every check rejected
+them; the campaign lead read only the reference verdicts, all correct in both arms on the frozen
+binary. Muse Spark, medium thinking, 3 samples, both arms once, TypeScript with the tool notes:
+
+| Arm | First attempt | Final | Prompt per trial | Output per trial | Model seconds per trial |
+| --- | --- | --- | --- | --- | --- |
+| Sx, tailored guide | 24 of 24 | 24 of 24 | 6,894 | 11,227 | 100 |
+| TypeScript, tool notes | 24 of 24 | 24 of 24 | 1,352 | 6,254 | 54 |
+
+Sx caught up on correctness by the gate's rule: within 10 points at first attempt and 5 at final, here
+level. It did not catch up on cost. Output tokens were 1.8 times TypeScript's on every one of the eight
+workflows (1.6 to 2.1), against 1.15 to 1.24 times on the development set, so a quarter of the
+development gain was tuning that did not transfer, and total tokens per trial are 2.4 times
+TypeScript's, as in Phase 9c, because the guide adds 5,500 prompt tokens that buy the correctness. Three
+of the 24 Sx answers had unbalanced brackets and ran correct only through closer inference; without it
+Sx would have been 21 of 24 at first attempt, 12.5 points behind, outside the gate. No answer in either
+arm performed an effect and was then wrong, since every first attempt was correct. The author recorded
+three needs Sx could not meet and designed around: writing JSON text (the `json` core only reads),
+creating, moving, or deleting files (`fs` has none of these, so one workflow grants `/bin/mkdir`,
+`/bin/mv`, and `/bin/rm`), and date arithmetic. The sample is one model, 3 samples, 8 workflows.
 
 **The repomod track passed.** repomod gained `default_catalog`, `select_repositories`, `print_json`,
 `discover_owner`, `checkout_status`, `todo_item_count`, `status_text`, and `render_discover`, and
