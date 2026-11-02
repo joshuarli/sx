@@ -1,0 +1,50 @@
+{
+  "description": "Extra fields beside a closed record inside an open record are dropped.",
+  "program": "(call profile.get {})",
+  "declarations": "declarations.json",
+  "allow": [
+    "profile.get"
+  ],
+  "responses": [
+    {
+      "capability": "profile.get",
+      "input": {},
+      "results": [
+        {
+          "output": {
+            "id": "p1",
+            "address": {
+              "city": "Oslo"
+            },
+            "tz": "CET"
+          }
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": {
+      "id": "p1",
+      "address": {
+        "city": "Oslo"
+      }
+    }
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "profile.get",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": {
+        "id": "p1",
+        "address": {
+          "city": "Oslo"
+        },
+        "tz": "CET"
+      }
+    }
+  ]
+}

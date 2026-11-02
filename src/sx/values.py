@@ -257,7 +257,7 @@ def decode(value: object, t: Type, path: str = "$") -> Value:
             return MapValue(
                 tuple((key, decode(obj[key], value_type, f"{path}[{json.dumps(key)}]")) for key in sorted(obj)),
             )
-        case RecordType(fields=fields):
+        case RecordType(fields=fields, open=open_record):
             obj = _json_object(value)
             if obj is None:
                 raise fail(show_type(t))
@@ -266,7 +266,7 @@ def decode(value: object, t: Type, path: str = "$") -> Value:
             if missing:
                 raise DecodeError(f"{path}.{missing[0]}", show_type(dict(fields)[missing[0]]), "no field")
             extra = sorted(set(obj) - set(names))
-            if extra:
+            if extra and not open_record:
                 raise DecodeError(
                     f"{path}.{extra[0]}", "no field, because the record type does not declare it", "a field",
                 )

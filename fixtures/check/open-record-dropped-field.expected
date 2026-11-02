@@ -1,0 +1,6 @@
+error[unknown-field] 2:29-2:34
+  (get (call accounts.get {}) :plan)
+                              ^^^^^
+  This record has no field :plan.
+  Fields: :id, :name
+  Help: sx help get

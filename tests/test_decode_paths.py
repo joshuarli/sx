@@ -6,7 +6,7 @@ import pytest
 from sx.host import FixtureHost, run
 from sx.machine import Failed, FailureKind
 from sx.program import compile_source
-from sx.registry import Registry, load_declarations
+from sx.registry import Registry, RegistryError, load_declarations
 
 DECLARATIONS = Path(__file__).parent.parent / "fixtures" / "run" / "declarations.json"
 
@@ -38,3 +38,35 @@ BAD_BASE64 = "expected Bytes (standard base64 with padding), found a string that
 )
 def test_bytes_decode_error_names_the_path_and_the_problem(output: object, problem: str) -> None:
     assert failure_message("(call blob.list {})", "blob.list", output).endswith(problem)
+
+
+@pytest.mark.parametrize(
+    ("capability", "output", "problem"),
+    [
+        (
+            "profile.get",
+            {"id": "p1", "address": {"city": "Oslo", "zip": "0150"}},
+            "$.address.zip: expected no field, because the record type does not declare it, found a field",
+        ),
+        ("accounts.get", {"id": "a1", "plan": "pro"}, "$.name: expected String, found no field"),
+        ("accounts.get", {"id": "a1", "name": 7}, "$.name: expected String, found an integer"),
+        (
+            "listing.get",
+            {"owner": {"id": "o1"}, "count": 2, "page": 1},
+            "$.page: expected no field, because the record type does not declare it, found a field",
+        ),
+    ],
+    ids=["closed-inside-open", "open-missing-field", "open-wrong-type", "closed-around-open"],
+)
+def test_open_record_still_checks_what_it_names(capability: str, output: object, problem: str) -> None:
+    program = f"(call {capability} {{}})"
+    assert failure_message(program, capability, output).endswith(problem)
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["Record open", "Record open String", "open Record {id: String}", "Record open open {id: String}"],
+)
+def test_open_is_declared_between_record_and_its_fields(text: str) -> None:
+    with pytest.raises(RegistryError):
+        Registry().parse(text)

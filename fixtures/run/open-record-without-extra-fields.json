@@ -1,0 +1,42 @@
+{
+  "description": "An open record with nothing extra decodes as a closed one would.",
+  "program": "(call accounts.get {})",
+  "declarations": "declarations.json",
+  "allow": [
+    "accounts.get"
+  ],
+  "responses": [
+    {
+      "capability": "accounts.get",
+      "input": {},
+      "results": [
+        {
+          "output": {
+            "id": "a1",
+            "name": "Ada"
+          }
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": {
+      "id": "a1",
+      "name": "Ada"
+    }
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "accounts.get",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": {
+        "id": "a1",
+        "name": "Ada"
+      }
+    }
+  ]
+}

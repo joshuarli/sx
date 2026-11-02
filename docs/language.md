@@ -50,6 +50,7 @@ program runs. There is no general recursion and no unbounded loop.
 | `Option<T>` | `(some x)`, `none` |
 | `Result<T, E>` | `(ok x)`, `(err e)` |
 | `Record {k: T, ...}` | Structural, with exactly the declared fields |
+| `Record open {k: T, ...}` | Declared by a tool, never written in a program. It has the named fields, and decoding drops any other field a tool returns. |
 | `Map<String, V>` | Any number of string keys, each with a value of type `V`. Keys are always strings, because JSON object keys are strings, so `Map<Int, V>` and every other key type are rejected. |
 | Core enum | Nominal, declared by a core, for example `git.Checkout` |
 | Core nominal | Nominal wrapper over a base type, declared by a core, for example `git.RepoId` |
@@ -117,6 +118,17 @@ first use settles it: `(assoc {} "a" 1)` and `(reduce (fn [acc x] (assoc acc ...
 an empty `Map<String, V>`, and a record use such as `(get {} :a)` or a result that nothing else
 constrains keeps it an empty record. A map value that is `Option<T>` cannot be encoded, because a
 `null` value and a missing key would collide. See [Values and JSON](#values-and-json).
+
+A declaration marks a record type open by writing `open` between `Record` and its fields:
+`Record open {id: String, name: String}`, as the output of a capability or as a named type. An open
+record is for a tool that returns many fields a program does not use. Decoding drops the fields the
+type does not name, at that record only, so a plain record inside an open one still rejects extra
+fields, and an open record inside a plain one drops only its own. The named fields are required and
+checked as for any record. The program sees the open record as an ordinary record with the named
+fields: `(get r :other)` is an `unknown-field` error, and a value read through an open type encodes
+with the named fields only. Only a declaration can be open. A record literal always has exactly the
+fields it writes, so `{:id "a" :name "b" :plan "pro"}` is rejected where an open record with `id` and
+`name` is expected, and `open` is not program syntax.
 
 Programs have no type annotations. The checker infers types bidirectionally from literals,
 bindings, prelude and core signatures, capability signatures, and the expected type of each
@@ -544,6 +556,7 @@ always knows the expected type, so every encoding below is unambiguous.
 | `Option<T>` | `null` for `none`, the encoding of `x` for `(some x)` |
 | `Result<T, E>` | `{"ok": x}` or `{"err": e}` |
 | `Record {k: T, ...}` | An object with exactly the declared fields, named without the colon |
+| `Record open {k: T, ...}` | An object with at least the declared fields. Decoding drops the others. Encoding writes the declared fields only. |
 | `Map<String, V>` | An object with any keys, each value encoded as `V` |
 | Core enum, variant without a value | The variant name as a string, for example `"Missing"` |
 | Core enum, variant with a value | `{"tag": "OnBranch", "value": x}` |
@@ -556,7 +569,7 @@ input or output, a program input, or a program result whose type contains such a
 
 Decoding a capability response fails with `invalid-host-response` when a value does not match
 the expected type. A missing field, an extra field, and `null` for a non-`Option` type are all
-mismatches. Nothing is dropped, defaulted, or converted. The error gives the path to the bad
+mismatches, except that an open record accepts extra fields. Nothing is dropped, defaulted, or converted. The error gives the path to the bad
 value, the expected type, and what was found, for example
 `$.repos[3].name: expected String, found number`. A map value's path names its key as a JSON
 string, for example `$.totals["c-ada"]: expected Int, found a string`. A map decodes its entries in

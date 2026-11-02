@@ -1,0 +1,50 @@
+{
+  "description": "A capability result decoded into an open record drops the fields the type does not name.",
+  "program": "(call accounts.get {})",
+  "declarations": "declarations.json",
+  "allow": [
+    "accounts.get"
+  ],
+  "responses": [
+    {
+      "capability": "accounts.get",
+      "input": {},
+      "results": [
+        {
+          "output": {
+            "id": "a1",
+            "name": "Ada",
+            "plan": "pro",
+            "meta": {
+              "seats": 3
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": {
+      "id": "a1",
+      "name": "Ada"
+    }
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "accounts.get",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": {
+        "id": "a1",
+        "name": "Ada",
+        "plan": "pro",
+        "meta": {
+          "seats": 3
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "description": "An open record still requires the fields it names.",
+  "program": "(call accounts.get {})",
+  "declarations": "declarations.json",
+  "allow": [
+    "accounts.get"
+  ],
+  "responses": [
+    {
+      "capability": "accounts.get",
+      "input": {},
+      "results": [
+        {
+          "output": {
+            "id": "a1",
+            "plan": "pro"
+          }
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "failed": "invalid-host-response"
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "accounts.get",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": {
+        "id": "a1",
+        "plan": "pro"
+      }
+    }
+  ]
+}

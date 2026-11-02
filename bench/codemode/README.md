@@ -38,6 +38,7 @@ Types are written in Sx type notation:
 | `List<T>` | array |
 | `Option<T>` | `null`, or the value. `T` must not be `Unit` or another `Option`. |
 | `Record {name: String, open-prs: Int}` | object with exactly these keys |
+| `Record open {name: String}` | object with at least these keys. Sx drops the others, and TypeScript sees the same type as for a plain record. |
 | a name from `types` | its record |
 | `ns.Name` from `enums` | a variant without a value is its name as a string, `"Passing"`. A variant with a value is `{"tag": "Failed", "value": ...}`. |
 | `Map<String, T>` | object with arbitrary string keys and values of type `T`. The key type is always `String`. |

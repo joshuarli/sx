@@ -406,7 +406,7 @@ class _Checker:
             case ResultType(ok=ok, err=err):
                 return ResultType(self.zonk(ok), self.zonk(err))
             case RecordType(fields=fields):
-                return RecordType(tuple((name, self.zonk(ft)) for name, ft in fields), t.name)
+                return RecordType(tuple((name, self.zonk(ft)) for name, ft in fields), t.name, t.open)
             case _:
                 return t
 

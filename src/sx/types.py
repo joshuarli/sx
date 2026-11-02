@@ -48,6 +48,7 @@ class ResultType:
 class RecordType:
     fields: tuple[tuple[str, Type], ...]
     name: str | None = field(default=None, compare=False)
+    open: bool = False
 
     def field(self, name: str) -> Type | None:
         for field_name, field_type in self.fields:
@@ -137,7 +138,8 @@ def show_type(t: Type) -> str:
 
 def show_definition(t: Type) -> str:
     if isinstance(t, RecordType):
-        return "Record {" + ", ".join(f"{name}: {show_type(ft)}" for name, ft in t.fields) + "}"
+        marker = "open " if t.open else ""
+        return "Record " + marker + "{" + ", ".join(f"{name}: {show_type(ft)}" for name, ft in t.fields) + "}"
     return show_type(t)
 
 
@@ -227,6 +229,9 @@ class _TypeParser:
         raise TypeSyntaxError(f"unknown type {name!r} in {self.text!r}")
 
     def record(self) -> RecordType:
+        open_record = self.peek() == "open"
+        if open_record:
+            self.take("open")
         self.take("{")
         fields: list[tuple[str, Type]] = []
         while self.peek() != "}":
@@ -238,7 +243,7 @@ class _TypeParser:
             if self.peek() == ",":
                 self.take(",")
         self.take("}")
-        return RecordType(tuple(fields))
+        return RecordType(tuple(fields), open=open_record)
 
 
 def encodable_problem(t: Type) -> str | None:

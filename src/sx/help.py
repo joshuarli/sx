@@ -188,6 +188,10 @@ TYPES = (
           "with different fields join to the union of the fields; a field only some branches write is optional, "
           "and none in the others.",
           "(map (fn [n] (if (> n 1) {:n n :big true} {:n n})) [1 2])", "[{:n 1 :big none} {:n 2 :big (some true)}]"),
+    entry("open", "Record open {k: T, ...}", "A record type a tool declares open: when a result is decoded into "
+          "it, the fields the type does not name are dropped, so a program sees only the named ones. A plain "
+          "Record rejects extra fields, and a record literal is always plain.",
+          '(call contacts.get {:id "c1"})', '{:name "ada"}'),
     entry("Tuple", "Tuple<A, B, ...>: [a b ...]", "A fixed-size group of values of different types, from par, "
           "group-by, and bracket literals of mixed types or that a tuple pattern takes apart.",
           '(let [[n s] [1 "a"]] s)', '"a"'),
@@ -196,7 +200,11 @@ TYPES = (
 ENTRIES: Mapping[str, Entry] = {e.name: e for e in (*FORMS, *PRELUDE, *TYPES)}
 
 EXAMPLE_DECLARATIONS: Mapping[str, Any] = {
-    "types": {"User": "Record {name: String, active: Bool}", "File": "Record {bytes: Int}"},
+    "types": {
+        "User": "Record {name: String, active: Bool}",
+        "File": "Record {bytes: Int}",
+        "Contact": "Record open {name: String}",
+    },
     "capabilities": [
         {"id": "people.list", "effect": "read", "input": "Record {team: String}", "output": "List<User>",
          "description": "Lists the people on a team."},
@@ -206,6 +214,8 @@ EXAMPLE_DECLARATIONS: Mapping[str, Any] = {
          "output": "Record {files: List<File>, last: Bool}", "description": "Reads one page of files."},
         {"id": "blob.read", "effect": "read", "input": "Record {name: String}", "output": "Bytes",
          "description": "Reads one stored blob."},
+        {"id": "contacts.get", "effect": "read", "input": "Record {id: String}", "output": "Contact",
+         "description": "Reads one contact."},
         {"id": "job.state", "effect": "read", "input": "Record {id: String}", "output": "String",
          "description": "Reads a job's state."},
         {"id": "chat.post", "effect": "write", "idempotent": False, "input": "Record {text: String}",
@@ -235,6 +245,8 @@ EXAMPLE_RESPONSES: tuple[Mapping[str, Any], ...] = (
         {"error": {"kind": "RateLimited", "message": "slow down"}}, {"output": None}]},
     {"capability": "blob.read", "input": {"name": "greeting"}, "results": [{"output": "aGVsbG8="}]},
     {"capability": "blob.read", "input": {"name": "again"}, "results": [{"output": "aGVsbG8="}]},
+    {"capability": "contacts.get", "input": {"id": "c1"},
+     "results": [{"output": {"name": "ada", "email": "ada@example.com"}}]},
     {"capability": "job.state", "input": {"id": "j1"}, "results": [{"output": "running"}, {"output": "done"}]},
 )
 
