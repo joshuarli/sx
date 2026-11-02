@@ -545,6 +545,17 @@ TypeScript's. The three misses: two `calendar-mcp` trials called a helper with `
 call types (`unresolved-type`), and one bound a name `ok`, which is reserved (`reserved-name`). The
 `json` core and an `attempt` that catches core refusals landed after this run.
 
+**Phase 11, iteration 3.** Master then gained the `json` core (read by path, like `yaml`, with
+a strict RFC 8259 reader of its own and a Lean model checked against its golden cases), an `attempt`
+that catches a core's refusal as kind `Invalid` (`arithmetic` and `out-of-range` stay uncatchable;
+Lean has 18 axiom-clean theorems), an empty argument to a local function typed from the function's
+other calls, `concat` joining record element types, `when` (an `Option`) and `do`, capitalized local
+names, and a guide that teaches them. The runner gives every workflow `json` too. Same twelve
+workflows: first attempt 31 of 36 (86%), final 36 of 36, prompt 7,637, output 6,822 per trial, 1.15
+times TypeScript's. Three misses were names a TypeScript habit produces (`_stored`, a loop variable
+named `attempt`, a binding named `err`), one called a `defn` defined further down, as TypeScript's
+hoisted functions allow, and one indexed past the end of a short line (`out-of-range`), a logic error.
+
 **The repomod track passed.** repomod gained `default_catalog`, `select_repositories`, `print_json`,
 `discover_owner`, `checkout_status`, `todo_item_count`, `status_text`, and `render_discover`, and
 `sx-repomod` calls them. repomod's suite gives 595 passed and 1 skipped, ruff and ty pass, and the 36
