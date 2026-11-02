@@ -208,6 +208,7 @@ CORE = Core(
             (
                 "cores/github/tests/test_github_core.py::test_aggregation_cases_from_repomod",
                 "cores/github/tests/test_github_core.py::test_every_example_produces_its_documented_result",
+                "tests/test_core_vectors.py::test_committed_vectors_match_the_python_core",
                 "hosts/repomod/tests/test_github_parity.py::test_ci_state_matches_repomod_for_generated_check_sets",
                 "hosts/repomod/tests/test_status_parity.py::test_status_offline_json_matches_python_on_every_fixture",
             ),

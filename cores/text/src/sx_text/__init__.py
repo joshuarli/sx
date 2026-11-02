@@ -104,6 +104,7 @@ CORE = Core(
             (
                 "cores/text/tests/test_text_core.py::test_casefold_matches_python_for_every_code_point",
                 "cores/text/tests/test_text_core.py::test_every_example_produces_its_documented_result",
+                "tests/test_core_vectors.py::test_committed_vectors_match_the_python_core",
             ),
         ),
     ),

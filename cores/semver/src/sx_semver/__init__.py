@@ -63,6 +63,7 @@ CORE = Core(
             (
                 "cores/semver/tests/test_semver_core.py::test_compare_orders_versions_by_number_not_by_text",
                 "cores/semver/tests/test_semver_core.py::test_every_example_produces_its_documented_result",
+                "tests/test_core_vectors.py::test_committed_vectors_match_the_python_core",
             ),
         ),
     ),

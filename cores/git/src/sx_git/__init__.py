@@ -196,6 +196,7 @@ CORE = Core(
             (
                 "cores/git/tests/test_git_core.py::test_a_missing_observation_is_never_read_as_clean",
                 "cores/git/tests/test_git_core.py::test_every_example_produces_its_documented_result",
+                "tests/test_core_vectors.py::test_committed_vectors_match_the_python_core",
                 "hosts/repomod/tests/test_git_parity.py::test_local_label_matches_repomod_for_every_status_shape",
                 "hosts/repomod/tests/test_status_parity.py::test_status_offline_json_matches_python_on_every_fixture",
             ),
