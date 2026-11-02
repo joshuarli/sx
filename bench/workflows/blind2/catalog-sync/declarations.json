@@ -1,0 +1,58 @@
+{
+  "capabilities": [
+    {
+      "id": "changes.page",
+      "http": {"method": "GET", "url": "{{supplier_origin}}/changes", "query": ["since", "limit"]},
+      "input": "Record {since: Int, limit: Int}",
+      "output": "Record open {version: Int, more: Bool, changes: List<Record open {seq: Int, op: String, sku: String, name: Option<String>, price_cents: Option<Int>, stock: Option<Int>}>}",
+      "effect": "read",
+      "description": "Returns the next changes of the supplier's catalog log after a sequence number."
+    },
+    {
+      "id": "sync.get-version",
+      "sqlite": {"database": "{{root}}/catalog.db", "statement": "SELECT version FROM sync_state"},
+      "input": "Record {}",
+      "output": "List<Record {version: Int}>",
+      "effect": "read",
+      "description": "Returns the number of the last applied change, as one row."
+    },
+    {
+      "id": "sync.set-version",
+      "sqlite": {"database": "{{root}}/catalog.db", "statement": "UPDATE sync_state SET version = :version"},
+      "input": "Record {version: Int}",
+      "output": "Int",
+      "effect": "write",
+      "idempotent": true,
+      "description": "Stores the number of the last applied change."
+    },
+    {
+      "id": "products.upsert",
+      "sqlite": {
+        "database": "{{root}}/catalog.db",
+        "statement": "INSERT INTO products(sku, name, price_cents, stock, active) VALUES (:sku, :name, :price_cents, :stock, 1) ON CONFLICT(sku) DO UPDATE SET name = excluded.name, price_cents = excluded.price_cents, stock = excluded.stock, active = 1"
+      },
+      "input": "Record {sku: String, name: String, price_cents: Int, stock: Int}",
+      "output": "Int",
+      "effect": "write",
+      "idempotent": true,
+      "description": "Creates a product or replaces its fields, and marks it active."
+    },
+    {
+      "id": "products.discontinue",
+      "sqlite": {"database": "{{root}}/catalog.db", "statement": "UPDATE products SET active = 0 WHERE sku = :sku"},
+      "input": "Record {sku: String}",
+      "output": "Int",
+      "effect": "write",
+      "idempotent": true,
+      "description": "Marks a product inactive. Does nothing for an unknown sku."
+    },
+    {
+      "id": "products.active-count",
+      "sqlite": {"database": "{{root}}/catalog.db", "statement": "SELECT count(*) AS n FROM products WHERE active = 1"},
+      "input": "Record {}",
+      "output": "List<Record {n: Int}>",
+      "effect": "read",
+      "description": "Counts the active products, as one row."
+    }
+  ]
+}

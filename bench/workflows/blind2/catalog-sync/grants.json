@@ -1,0 +1,8 @@
+{
+  "changes.page": {"origins": ["{{supplier_origin}}"], "methods": ["GET"]},
+  "sync.get-version": {"roots": ["{{root}}"]},
+  "sync.set-version": {"roots": ["{{root}}"]},
+  "products.upsert": {"roots": ["{{root}}"]},
+  "products.discontinue": {"roots": ["{{root}}"]},
+  "products.active-count": {"roots": ["{{root}}"]}
+}

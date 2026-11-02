@@ -1,0 +1,33 @@
+(let [start (get (first (call sync.get-version {})) :version)
+      fetch (fn [since]
+              (attempt (retry {:delays [40ms 80ms] :on [Unavailable RateLimited]}
+                         (call changes.page {:since since :limit 10}))))
+      keep-last (fn [changes]
+                  (filter (fn [c]
+                            (not (any? (fn [d] (and (= (get d :sku) (get c :sku)) (> (get d :seq) (get c :seq)))) changes)))
+                          changes))
+      upsert? (fn [c] (= (get c :op) "upsert"))
+      synced (loop {:max 10} [since start pages 0 upserted 0 discontinued 0]
+               (match (fetch since)
+                 (err _) {:pages pages :upserted upserted :discontinued discontinued :completed false}
+                 (ok page)
+                 (let [kept (keep-last (get page :changes))
+                       _ (map (fn [c]
+                                (if (upsert? c)
+                                  (call products.upsert {:sku (get c :sku) :name (get c :name "") :price_cents (get c :price_cents 0) :stock (get c :stock 0)})
+                                  (call products.discontinue {:sku (get c :sku)})))
+                              kept)
+                       _ (call sync.set-version {:version (get page :version)})
+                       ups (+ upserted (count (filter upsert? kept)))
+                       dels (+ discontinued (count (filter (fn [c] (not (upsert? c))) kept)))]
+                   (if (get page :more)
+                     (recur (get page :version) (+ pages 1) ups dels)
+                     {:pages (+ pages 1) :upserted ups :discontinued dels :completed true}))))]
+  {:since start
+   :pages (get synced :pages)
+   :applied (+ (get synced :upserted) (get synced :discontinued))
+   :upserted (get synced :upserted)
+   :discontinued (get synced :discontinued)
+   :version (get (first (call sync.get-version {})) :version)
+   :active (get (first (call products.active-count {})) :n)
+   :completed (get synced :completed)})
