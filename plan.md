@@ -283,6 +283,44 @@ and the judge's reason line for each final failure. No held-out task or model an
 The bracket-diagnostic change (item 8) matches the held-out `unclosed` repair rate as well as the
 development evidence.
 
+**Phase 4.** The gate passes. By the campaign lead's scope decision, the Lean reference in `lean/`
+covers the semantic IR, where the semantics live, and the surface elaborator stays untrusted, the
+way a proof assistant's kernel checks elaborator output. `sx check FILE --emit ir` exports the
+checked IR with the types the elaborator inferred. The Lean side defines the IR, values, the JSON
+boundary, an inductive typing relation `HasType` with an executable checker, a fiber machine written
+from `docs/language.md`, and `sx-ref`, which replays a fixture. On all 67 accepted fixtures in
+`fixtures/run`, `sx-ref` reproduces the outcome and the exact trace, and the Lean checker accepts
+the exported program. The 5 rejected fixtures test the elaborator and are not compared.
+`lean/axioms.sh` builds every theorem below and requires each to use only `propext`,
+`Classical.choice`, and `Quot.sound`:
+
+1. `checked_program_type_safety` (from `pure_type_safety` and `check_sound`): a program the Lean
+   checker accepts, with no call form, effect form, `loop`, or `recur`, run in a well-typed
+   environment by the fuel-indexed evaluator, returns a value of its result type or stops with
+   `arithmetic`, `out-of-range`, or `budget-exhausted`, never `internal`. This covers let, local
+   functions, if, exhaustive match, records, lists, tuples, options, results, variants,
+   conversions, the whole prelude through its signature table, and core calls whose
+   implementations respect their signatures. The evaluator is not the machine. They share values,
+   binding, matching, conversions, and the prelude, and `agree.py` checks the evaluator on the 13
+   call-free fixtures.
+2. `effect_soundness`: in every machine state reachable by running and resuming with any host
+   responses, every request in the trace names a capability in the program's effect set.
+3. `core_application_no_request`: applying a core function leaves the fiber returning a value and
+   starts no fiber. `pure_program_no_request`: a program with no call form never requests a
+   capability.
+4. `budgets_respected`: the step, call, application, and delay counters never exceed their budgets.
+5. `par_order_independent` and `par_results_by_index`: par results are assembled by branch index,
+   whatever order the branches finish in.
+
+Not covered: the elaborator, `loop` and `recur` in theorem 1, real core implementations, and
+the `git` and `github` decision functions. The Lean typing relation compares record fields in
+order, while Python unifies them in any order; no fixture depends on the difference. Lean's JSON
+parser reads `1.0` as `1`. The machine counts steps its own way, and no fixture exercises the steps
+budget. The reference also found two Python deviations from the specification, outside the
+fixture corpus. A second `par` or `par-map` on the same fiber path reuses request IDs (`r.0:1`
+twice). A `wait-until` predicate named by a local function sees the bindings at the call site, not
+at its definition. Reproduce with `uv run python lean/agree.py` and `lean/axioms.sh`.
+
 Decided at the Phase 0 checkpoint:
 
 - Keywords used as values, such as `{:kind :unknown}`, appeared in both rounds despite the guide.

@@ -36,6 +36,22 @@ uv run ty check
 node bench/codemode/check_references.mjs
 ```
 
+## Lean reference
+
+`lean/` holds the Lean 4 reference semantics, pinned to `leanprover/lean4:v4.35.0`. It checks and
+runs the semantic IR that `sx check FILE --emit ir` exports. The agreement check exports every
+accepted run fixture, replays it with `sx-ref`, and compares outcome and trace with the fixture.
+The axioms check builds the proofs and fails unless each theorem uses only Lean's standard axioms.
+
+```sh
+uv run sx check FILE --declarations DECLARATIONS --allow ID --emit ir > program.ir.json
+(cd lean && lake build)
+lean/.lake/build/bin/sx-ref check program.ir.json
+lean/.lake/build/bin/sx-ref program.ir.json FIXTURE.json
+uv run python lean/agree.py
+lean/axioms.sh
+```
+
 ## Run the syntax pilot
 
 The pilot sends the development tasks to a model through the `pi` CLI, then checks and runs every
