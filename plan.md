@@ -685,6 +685,32 @@ without the gate, Phase 12 runs anyway and the result says so.
 **Gate:** the result is recorded in Status. Sx has caught up if its first-attempt correctness is
 within 10 points of TypeScript's and its final correctness within 5.
 
+### The third campaign: cost
+
+The owner set the goal after Phase 12: reduce what an Sx answer costs, expecting that it will not
+match TypeScript. On the blind set an Sx trial cost $0.0029 against $0.0014 at the provider's prices
+(input $0.10 and output $0.20 per million tokens, no prompt caching): the programs are smaller than
+TypeScript's, the reasoning is twice as long (9,968 tokens against 4,857), and the guide makes the
+prompt five times larger.
+
+#### Phase 13: Where the cost goes, and what removes it
+
+On the twelve development workflows, 3 samples, each against the frozen Phase 12 baseline (iteration
+4 for Sx, the tool-noted TypeScript run): a slimmer guide (no TypeScript table, cores as function lists),
+an instruction that the host checks the program before running anything so the model may write
+directly, and low thinking, run for TypeScript too so the comparison stays at equal settings. Combine
+what lowers cost without costing correctness, then make it the guide `sx guide` prints.
+
+**Gate:** a combination that lowers Sx's dollar cost per solved task by at least a quarter on the
+development set with first-attempt correctness within 5 points of the baseline.
+
+#### Phase 14: A second blind set
+
+A subagent writes eight more blind workflows under `bench/workflows/blind2/` under Phase 12's rules.
+Both arms run once at the same model settings. **Gate:** the result is recorded. The cost target is
+Sx at most 1.6 times TypeScript's dollar cost per solved task, from 2.1, with first-attempt correctness
+within 10 points.
+
 #### The repomod track
 
 Runs beside the phases. repomod gains a public API for what `sx-repomod` imports today through

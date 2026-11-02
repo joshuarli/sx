@@ -22,11 +22,12 @@ uv run python bench/workflows/runner.py report --out .work/workflows/run1
 uv run pytest -q tests/test_workflows.py
 ```
 
-`--set blind` reads the workflows under `blind/` instead of `workflows/`. `--guide` picks the Sx
+`--set blind` and `--set blind2` read the workflows under `blind/` or `blind2/` instead of `workflows/`. `--guide` picks the Sx
 prompt: `standard` (the standard guide and a listing of the tools), `tailored` (the output of
-`sx guide` for the workflow's declarations and grants), or `corpus` (`tailored` followed by the task
-and reference program of every development workflow except the one being solved and
-`example-summary`). `--ts-notes` adds the behavior notes of `sx guide --notes` to the TypeScript prompt,
+`sx guide` for the workflow's declarations and grants), `slim` (`tailored` without the TypeScript table
+and with each core cut to its function list), or `direct` (`tailored` and a sentence that tells the
+model the host checks the program before running anything, so it may write directly). `--ts-notes`
+adds the behavior notes of `sx guide --notes` to the TypeScript prompt,
 so both arms see the same facts about the tools.
 
 Every workflow's Sx declarations also list the pure cores `text`, `re`, and `json`, the standard library
