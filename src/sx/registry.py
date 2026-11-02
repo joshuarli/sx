@@ -173,6 +173,14 @@ def with_name(name: str, t: Type) -> Type:
     return replace(t, name=name) if isinstance(t, RecordType) else t
 
 
+def required(entry: Mapping[str, Any], key: str) -> Any:
+    if key in entry:
+        return entry[key]
+    if "id" in entry:
+        raise RegistryError(f"capability {entry['id']!r} needs the key {key!r}")
+    raise RegistryError(f"a capability needs the key {key!r}")
+
+
 def load_declarations(registry: Registry, declarations: Mapping[str, Any]) -> None:
     enums = cast(Mapping[str, Mapping[str, str | None]], declarations.get("enums", {}))
     for name, variants in enums.items():
@@ -202,11 +210,11 @@ def load_declarations(registry: Registry, declarations: Mapping[str, Any]) -> No
     for entry in declarations.get("capabilities", []):
         registry.add_capability(
             Capability(
-                id=entry["id"],
-                effect=Effect(entry["effect"]),
-                input=registry.parse(entry["input"]),
-                output=registry.parse(entry["output"]),
-                description=entry["description"],
+                id=required(entry, "id"),
+                effect=Effect(required(entry, "effect")),
+                input=registry.parse(required(entry, "input")),
+                output=registry.parse(required(entry, "output")),
+                description=required(entry, "description"),
                 idempotent=bool(entry.get("idempotent", False)),
             )
         )

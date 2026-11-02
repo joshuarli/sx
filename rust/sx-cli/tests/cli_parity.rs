@@ -552,6 +552,7 @@ fn file_cases() -> Vec<Case> {
         ("empty-declarations", "{}"),
         ("bad-effect", "{\"capabilities\": [{\"id\": \"a.b\", \"effect\": \"destroy\", \"input\": \"Record {}\", \"output\": \"Unit\", \"description\": \"d\"}]}"),
         ("missing-key", "{\"capabilities\": [{\"id\": \"a.b\", \"effect\": \"read\", \"input\": \"Record {}\", \"description\": \"d\"}]}"),
+        ("missing-id", "{\"capabilities\": [{\"effect\": \"read\", \"input\": \"Record {}\", \"description\": \"d\"}]}"),
         ("bad-type", "{\"types\": {\"A\": \"Recrd {}\"}}"),
         ("bad-capability-type", "{\"capabilities\": [{\"id\": \"a.b\", \"effect\": \"read\", \"input\": \"Wat\", \"output\": \"Unit\", \"description\": \"d\"}]}"),
         ("bad-capability-id", "{\"capabilities\": [{\"id\": \"ab\", \"effect\": \"read\", \"input\": \"Record {}\", \"output\": \"Unit\", \"description\": \"d\"}]}"),

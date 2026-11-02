@@ -442,7 +442,7 @@ pub fn with_name(name: &str, t: Type) -> Type {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum LoadError {
     Registry(RegistryError),
-    MissingKey(String),
+    MissingKey { capability: Option<String>, key: String },
     Value(String),
     Shape(String),
 }
@@ -451,7 +451,10 @@ impl fmt::Display for LoadError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             LoadError::Registry(error) => f.write_str(&error.0),
-            LoadError::MissingKey(key) => f.write_str(&repr_str(key)),
+            LoadError::MissingKey { capability: Some(id), key } => {
+                write!(f, "capability {} needs the key {}", repr_str(id), repr_str(key))
+            }
+            LoadError::MissingKey { capability: None, key } => write!(f, "a capability needs the key {}", repr_str(key)),
             LoadError::Value(message) | LoadError::Shape(message) => f.write_str(message),
         }
     }
@@ -477,9 +480,11 @@ fn text<'a>(json: &'a Json, what: &str) -> Result<&'a str, LoadError> {
     json.as_str().ok_or_else(|| LoadError::Shape(format!("declarations: {what} must be a string, not {}", python_repr(json))))
 }
 
-fn required<'a>(entry: &'a Json, key: &str) -> Result<&'a Json, LoadError> {
+fn required<'a>(entry: &'a Json, key: &str, capability: Option<&str>) -> Result<&'a Json, LoadError> {
     match entry {
-        Json::Object(_) => entry.get(key).ok_or_else(|| LoadError::MissingKey(key.to_string())),
+        Json::Object(_) => entry
+            .get(key)
+            .ok_or_else(|| LoadError::MissingKey { capability: capability.map(str::to_string), key: key.to_string() }),
         other => Err(LoadError::Shape(format!("declarations: a capability must be an object, not {}", python_repr(other)))),
     }
 }
@@ -581,15 +586,16 @@ pub fn load_declarations_with(
             endpoints.bind(registry, entry).map_err(LoadError::Value)?;
             continue;
         }
-        let id = text(required(entry, "id")?, "a capability id")?.to_string();
-        let effect_json = required(entry, "effect")?;
+        let id = text(required(entry, "id", None)?, "a capability id")?.to_string();
+        let named = Some(id.as_str());
+        let effect_json = required(entry, "effect", named)?;
         let effect = effect_json
             .as_str()
             .and_then(Effect::from_name)
             .ok_or_else(|| LoadError::Value(format!("{} is not a valid Effect", python_repr(effect_json))))?;
-        let input = registry.parse(text(required(entry, "input")?, "a capability input")?)?;
-        let output = registry.parse(text(required(entry, "output")?, "a capability output")?)?;
-        let description = text(required(entry, "description")?, "a capability description")?.to_string();
+        let input = registry.parse(text(required(entry, "input", named)?, "a capability input")?)?;
+        let output = registry.parse(text(required(entry, "output", named)?, "a capability output")?)?;
+        let description = text(required(entry, "description", named)?, "a capability description")?.to_string();
         let idempotent = entry.get("idempotent").is_some_and(truthy);
         let scope = match entry.get("scope") {
             None | Some(Json::Null) => None,
