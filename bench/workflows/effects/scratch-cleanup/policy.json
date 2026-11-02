@@ -1,0 +1,5 @@
+{
+  "capabilities": ["fs.read-text", "fs.list", "fs.stat", "fs.delete"],
+  "computed_inputs": ["fs.read-text", "fs.list", "fs.stat"],
+  "max_write_sites": 10
+}

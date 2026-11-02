@@ -1,0 +1,6 @@
+{
+  "fs.read-text": {"roots": ["{{root}}/workspace"]},
+  "fs.list": {"roots": ["{{root}}/workspace"]},
+  "fs.stat": {"roots": ["{{root}}/workspace"]},
+  "fs.delete": {"roots": ["{{root}}/workspace/scratch"]}
+}

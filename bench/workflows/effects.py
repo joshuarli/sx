@@ -144,10 +144,24 @@ def session_error(events: list[Stamped]) -> str | None:
     return None
 
 
+FS_PACK_CLASSES: dict[str, EffectClass] = {
+    "fs.read-text": "read",
+    "fs.read-bytes": "read",
+    "fs.list": "read",
+    "fs.stat": "read",
+    "fs.write-text": "write",
+    "fs.make-directory": "write",
+    "fs.move": "write",
+    "fs.delete": "write",
+}
+
+
 def effect_classes(declarations: Json) -> dict[str, EffectClass]:
-    return {
-        capability["id"]: narrowed(capability["effect"], EFFECT_CLASSES) for capability in declarations["capabilities"]
+    declared = {
+        capability["id"]: narrowed(capability["effect"], EFFECT_CLASSES)
+        for capability in declarations.get("capabilities", [])
     }
+    return {**(FS_PACK_CLASSES if "fs" in declarations.get("packs", []) else {}), **declared}
 
 
 def take[T](items: list[T], wanted: Callable[[T], bool]) -> T | None:

@@ -1,0 +1,11 @@
+(defn inside? [entry]
+  (let [kept (reduce (fn [parts part]
+                       (cond (= part "..") (if (> (count parts) 0) (take (- (count parts) 1) parts) parts)
+                             (or (= part ".") (= part "")) parts
+                             :else (concat parts [part])))
+                     []
+                     (text.split entry "/"))]
+    (and (> (count kept) 1) (= (first kept) "scratch"))))
+(def manifest (call fs.read-text {:path "{{root}}/workspace/manifest.txt"}))
+(def entries (filter (fn [line] (not= line "")) (map text.trim (text.split manifest "\n"))))
+(filter (fn [entry] (not (inside? entry))) entries)

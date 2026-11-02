@@ -344,3 +344,11 @@ def test_a_recorded_sx_session_takes_its_effects_from_the_run_trace_and_none_fro
     assert {e.attempt for e in found} == {1}
     assert len(found) == 17
     assert [e.outcome for e in found if e.capability == "payments.charge"].count("Unavailable") == 3
+
+
+def test_the_fs_pack_capabilities_of_a_workflow_are_classified_without_being_declared() -> None:
+    workflow = definition.load_effects("scratch-cleanup")
+    with workflow.sandbox() as sandbox:
+        classes = effects.effect_classes(workflow.declarations_json(sandbox))
+    assert classes["fs.delete"] == "write"
+    assert classes["fs.list"] == "read"
