@@ -529,6 +529,22 @@ accumulator starting as `[]`) and three bracket errors. On the development probe
 17), the tailored guide scored 33 of 34 first attempts against 34 of 34 for the standard guide, one
 bracket error, with output 3,093 tokens per trial against 2,309.
 
+**Phase 11, iteration 2: definitions, regex, and the checker fixes.** Between the iterations, master
+gained top-level `def` and `defn`, defaults on fields that are always present, a diagnostic that says
+why a joined field is optional, loop accumulators that start as `[]` typed from their `recur`, the `re`
+core with `#"..."` patterns, and a tailored guide rewritten as one short definition per step. The
+runner now gives every workflow the `text` and `re` cores. Same twelve workflows and samples:
+
+| Condition | First attempt | Final | Prompt | Output | Output per solved task |
+| --- | --- | --- | --- | --- | --- |
+| Sx, tailored guide, iteration 2 | 33 of 36 (92%) | 36 of 36 | 7,113 | 7,352 | 7,352 |
+| TypeScript, tool notes | 36 of 36 | 36 of 36 | 1,078 | 5,952 | 5,952 |
+
+Output per solved task fell from 14,126 (standard) and 10,790 (iteration 1) to 7,352, 1.24 times
+TypeScript's. The three misses: two `calendar-mcp` trials called a helper with `[]` that only another
+call types (`unresolved-type`), and one bound a name `ok`, which is reserved (`reserved-name`). The
+`json` core and an `attempt` that catches core refusals landed after this run.
+
 **The repomod track passed.** repomod gained `default_catalog`, `select_repositories`, `print_json`,
 `discover_owner`, `checkout_status`, `todo_item_count`, `status_text`, and `render_discover`, and
 `sx-repomod` calls them. repomod's suite gives 595 passed and 1 skipped, ruff and ty pass, and the 36
