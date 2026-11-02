@@ -1,0 +1,5 @@
+{
+  "carrier.rate": {"origins": ["{{carrier_origin}}"], "methods": ["GET"]},
+  "fs.read-text": {"roots": ["{{root}}/shipping"]},
+  "fs.write-text": {"roots": ["{{root}}/shipping"]}
+}

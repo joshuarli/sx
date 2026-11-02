@@ -1,0 +1,14 @@
+{
+  "packs": ["fs"],
+  "cores": ["text", "re", "json"],
+  "capabilities": [
+    {
+      "id": "carrier.rate",
+      "http": {"method": "GET", "url": "{{carrier_origin}}/rates", "query": ["to_zip", "weight_kg"]},
+      "input": "Record {to_zip: String, weight_kg: Int}",
+      "output": "Record open {price_cents: Int}",
+      "effect": "read",
+      "description": "Quotes the price in cents of sending a parcel of a whole number of kilograms to a ZIP code. The carrier bills every request, including a failed one."
+    }
+  ]
+}

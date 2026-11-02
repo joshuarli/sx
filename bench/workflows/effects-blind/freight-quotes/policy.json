@@ -1,0 +1,5 @@
+{
+  "capabilities": ["carrier.rate", "fs.read-text", "fs.write-text"],
+  "computed_inputs": ["carrier.rate", "fs.write-text"],
+  "max_write_sites": 1
+}

@@ -1,0 +1,17 @@
+(let [raw (call fs.read-text {:path "{{root}}/shipping/shipments.csv"})
+      rows (map (fn [line] (text.split line ","))
+                (filter (fn [line] (not= (text.trim line) "")) (rest (text.split raw "\n"))))
+      pair (fn [row] (str (nth row 1) "/" (nth row 2)))
+      distinct-rows (distinct-by pair rows)
+      prices (into-map
+               (map (fn [row]
+                      [(pair row)
+                       (get (retry {:delays [100ms 200ms]}
+                              (call carrier.rate {:to_zip (nth row 1)
+                                                  :weight_kg (match (text.to-int (nth row 2)) (some n) n none 0)}))
+                            :price_cents)])
+                    distinct-rows))
+      lines (map (fn [row] (str (nth row 0) "," (get prices (pair row) 0))) rows)
+      _ (call fs.write-text {:path "{{root}}/shipping/quotes.csv"
+                             :text (str (text.join "\n" (concat ["id,price_cents"] lines)) "\n")})]
+  (count rows))
