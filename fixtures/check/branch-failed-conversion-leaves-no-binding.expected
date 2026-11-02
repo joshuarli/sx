@@ -1,0 +1,6 @@
+error[type-mismatch] 2:29-2:32
+  (keep (fn [_] (if true [[]] [0])) [1])
+                              ^^^
+  This is a List<Int>, but an Option<List<List<?>>> is needed here.
+  Expected: Option<List<List<?>>>
+  Found: List<Int>

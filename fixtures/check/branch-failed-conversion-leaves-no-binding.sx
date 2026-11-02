@@ -1,0 +1,2 @@
+; task: dev-stale-branches
+(keep (fn [_] (if true [[]] [0])) [1])

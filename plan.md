@@ -439,10 +439,6 @@ Decided at the Phase 0 checkpoint:
 
 Open:
 
-- The Rust-led fuzzer found one disagreement with Python in 4,000 programs (seed 7, index 3829): in a
-  `type-mismatch` message for `(keep (fn [_] (match 0 0 (let [w5 [[]]] w5) 0 [0])) 0)`, Python writes
-  `Found: List<List<?>>` where Rust writes `Found: List<Int>`. Which message is right is undecided. The fix
-  lands in Rust and Python together, with a fixture.
 - Watch items from one answer each: omitting an `Option` field from a record literal, a bare
   symbol as a catch-all `match` pattern, and branches returning records with different fields.
 - The six held-out tasks that declare `Map`, `Float`, or `Bytes` cannot load into the registry.

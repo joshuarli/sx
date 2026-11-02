@@ -536,7 +536,7 @@ class _Checker:
         snapshot = dict(self.substitution)
         if self.unify(actual, expected):
             return True, None
-        self.substitution = snapshot
+        self.substitution = dict(snapshot)
         a, e = self.resolve(actual), self.resolve(expected)
         if joining and e == STRING and isinstance(a, EnumType) and all(payload is None for _, payload in a.variants):
             return True, ir.VariantName()
