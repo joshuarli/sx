@@ -34,7 +34,8 @@ class FixtureEntry:
 class FixtureHost:
     registry: Registry
     entries: list[FixtureEntry] = field(default_factory=list)
-    waited_ms: int = 0
+    delays: list[int] = field(default_factory=list)
+    calls: list[dict[str, object]] = field(default_factory=list)
 
     @classmethod
     def from_responses(cls, registry: Registry, responses: Sequence[Mapping[str, Any]]) -> FixtureHost:
@@ -43,8 +44,9 @@ class FixtureHost:
 
     def answer(self, request: CallRequest | DelayRequest) -> Response:
         if isinstance(request, DelayRequest):
-            self.waited_ms += request.milliseconds
+            self.delays.append(request.milliseconds)
             return Output(None)
+        self.calls.append({"capability": request.capability, "input": request.input})
         entry = next((e for e in self.entries if e.capability == request.capability and e.input == request.input), None)
         if entry is None:
             raise UnexpectedCallError(request.capability, request.input)
