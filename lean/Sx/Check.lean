@@ -332,13 +332,13 @@ end
 
 def Program.inputEnv (p : Program) : TyEnv := p.inputs.map fun (n, t) => (n, .val t)
 
-def checkProgram (p : Program) : Except String Unit := do
-  let S := p.sig
-  unless check S p.inputEnv none p.body p.result do
-    throw "the program is not well typed"
-  unless effectsOk S p.body do
-    throw "a par branch, par-map function, or wait-until body writes, or a retry repeats a write that is not idempotent"
-  unless (callsOf p.body).all p.caps.contains do
-    throw "the program calls a capability outside its effect set"
+def checkProgram (p : Program) : Except String Unit :=
+  if !check p.sig p.inputEnv none p.body p.result then
+    .error "the program is not well typed"
+  else if !effectsOk p.sig p.body then
+    .error "a par branch, par-map function, or wait-until body writes, or a retry repeats a write that is not idempotent"
+  else if !(callsOf p.body).all p.caps.contains then
+    .error "the program calls a capability outside its effect set"
+  else .ok ()
 
 end Sx
