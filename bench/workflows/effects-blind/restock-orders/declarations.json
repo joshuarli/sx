@@ -1,0 +1,30 @@
+{
+  "cores": ["text", "re", "json"],
+  "capabilities": [
+    {
+      "id": "warehouse.stock",
+      "http": {"method": "GET", "url": "{{wh_origin}}/stock", "query": []},
+      "input": "Record {}",
+      "output": "List<Record open {sku: String, name: String, on_hand: Int, reorder_below: Int, target: Int}>",
+      "effect": "read",
+      "description": "Lists every stocked SKU with its units on hand, its reorder level, and its target level."
+    },
+    {
+      "id": "warehouse.orders",
+      "http": {"method": "GET", "url": "{{wh_origin}}/purchase-orders", "query": ["sku"]},
+      "input": "Record {sku: String}",
+      "output": "List<Record open {id: String, sku: String, quantity: Int, status: String}>",
+      "effect": "read",
+      "description": "Lists the purchase orders the warehouse holds for one SKU, each with a status of open or received."
+    },
+    {
+      "id": "warehouse.order",
+      "http": {"method": "POST", "url": "{{wh_origin}}/purchase-orders", "query": []},
+      "input": "Record {sku: String, quantity: Int}",
+      "output": "Record open {id: String}",
+      "effect": "write",
+      "idempotent": false,
+      "description": "Places an open purchase order for a quantity of one SKU and returns its id. Every successful call adds a purchase order."
+    }
+  ]
+}

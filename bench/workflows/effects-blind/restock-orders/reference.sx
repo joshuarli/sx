@@ -1,0 +1,13 @@
+(let [stock (call warehouse.stock {})
+      open-orders (fn [sku] (filter (fn [o] (= (get o :status) "open")) (call warehouse.orders {:sku sku})))
+      needed (filter (fn [s] (and (< (get s :on_hand) (get s :reorder_below))
+                                  (= (count (open-orders (get s :sku))) 0)))
+                     stock)
+      place (fn [s]
+              (let [sku (get s :sku)
+                    request {:sku sku :quantity (- (get s :target) (get s :on_hand))}]
+                (match (attempt (call warehouse.order request))
+                  (ok _) sku
+                  (err _) (let [_ (when (= (count (open-orders sku)) 0) (call warehouse.order request))]
+                            sku))))]
+  (map place needed))

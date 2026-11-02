@@ -1,0 +1,5 @@
+{
+  "warehouse.stock": {"origins": ["{{wh_origin}}"], "methods": ["GET"]},
+  "warehouse.orders": {"origins": ["{{wh_origin}}"], "methods": ["GET"]},
+  "warehouse.order": {"origins": ["{{wh_origin}}"], "methods": ["POST"]}
+}

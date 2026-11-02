@@ -1,0 +1,5 @@
+{
+  "capabilities": ["warehouse.stock", "warehouse.orders", "warehouse.order"],
+  "computed_inputs": ["warehouse.orders", "warehouse.order"],
+  "max_write_sites": 2
+}
