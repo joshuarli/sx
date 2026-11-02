@@ -1,0 +1,7 @@
+error[type-mismatch] 2:10-2:44
+  (sort-by (fn [n] (call blob.get {:name n})) ["a"])
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  sort-by needs a key that is an Int, Float, String, Bool, or a tuple of them.
+  Expected: a sort key
+  Found: Bytes
+  Help: sx help sort-by

@@ -1,0 +1,7 @@
+error[type-mismatch] 2:8-2:35
+  (first (call blob.get {:name "a"}))
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  first takes a list here, but this is Bytes.
+  Expected: List<...>
+  Found: Bytes
+  Help: sx help first

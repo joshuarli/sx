@@ -1077,6 +1077,8 @@ def pure_prelude(op: str, args: list[Value], span: Span, machine: Machine) -> Va
         case "count":
             if isinstance(args[0], MapValue):
                 return len(args[0].entries)
+            if isinstance(args[0], bytes):
+                return len(args[0])
             return len(list_arg(args[0]))
         case "first":
             items = list_arg(args[0])

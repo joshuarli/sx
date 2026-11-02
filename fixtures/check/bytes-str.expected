@@ -1,0 +1,7 @@
+error[type-mismatch] 2:15-2:42
+  (str "data: " (call blob.get {:name "a"}))
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  str joins strings, integers, floats, booleans, and enum values, but this is Bytes.
+  Expected: String
+  Found: Bytes
+  Help: sx help str

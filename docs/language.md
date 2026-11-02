@@ -43,6 +43,7 @@ program runs. There is no general recursion and no unbounded loop.
 | `Int` | Signed 64-bit integers |
 | `Float` | IEEE-754 binary64, finite values only. JSON cannot carry an infinity or NaN, so an operation that would produce one stops the program. |
 | `String` | UTF-8 strings |
+| `Bytes` | An opaque byte string from a tool. It has no literal, and the prelude only measures and compares it. |
 | `Unit` | One value, returned by capabilities with no result and by `sleep` |
 | `List<T>` | Ordered, finite |
 | `Tuple<T1, ..., Tn>` | Produced by `par`, `group-by`, and bracket literals of mixed types or used as tuples |
@@ -379,7 +380,7 @@ as in Clojure.
 | `not` | `Bool -> Bool` |
 | `and or` | `Bool Bool -> Bool`. Both arguments always evaluate. Use `if` to make a call conditional. |
 | `str` | `T ... -> String`, one or more arguments joined in order. Each is a `String`, an `Int` written in decimal, a `Float` written as JavaScript's `String(x)` writes a number, a `Bool` written `true` or `false`, or a value of an enum with no payloads written as its variant name. In a `sort-by` key every argument must be a `String`, because joining numbers into a string key sorts them as text. |
-| `count` | `List<T> -> Int`, or `Map<String, V> -> Int` for the number of entries |
+| `count` | `List<T> -> Int`, `Map<String, V> -> Int` for the number of entries, or `Bytes -> Int` for the number of bytes |
 | `first` | `List<T> -> T`. An empty list is an `out-of-range` error. On a tuple it is the first element, with that element's type. |
 | `rest` | `List<T> -> List<T>`, every element after the first. Empty for an empty list. |
 | `nth` | `List<T> Int -> T`, counting from 0. A missing index is an `out-of-range` error. On a tuple the index must be an integer literal within the tuple, checked statically, and the result has that element's type. |
@@ -536,6 +537,7 @@ always knows the expected type, so every encoding below is unambiguous.
 | `Int` | An integer in the signed 64-bit range. A fraction, an exponent, or `true` is rejected. |
 | `Float` | A JSON number, with or without a fraction or exponent: `21` and `21.5` both decode. A number outside the finite 64-bit range is a mismatch. Encoding writes a finite number. |
 | `String` | A string |
+| `Bytes` | A string of standard base64 (RFC 4648 alphabet, `+` and `/`) with `=` padding, canonical: the padding bits are zero. The URL-safe alphabet, missing padding, whitespace, and any other character are mismatches. |
 | `Unit` | `null` |
 | `List<T>` | An array |
 | `Tuple<T1, ..., Tn>` | An array of exactly `n` elements |
@@ -559,6 +561,12 @@ value, the expected type, and what was found, for example
 `$.repos[3].name: expected String, found number`. A map value's path names its key as a JSON
 string, for example `$.totals["c-ada"]: expected Int, found a string`. A map decodes its entries in
 ascending key order, so the first error is the same every time.
+
+A `Bytes` mismatch names the path like any other, for example
+`$.avatar: expected Bytes (standard base64 with padding), found a string that is not valid base64`.
+Encoding writes `Bytes` as canonical base64, so a value read from one tool and sent to another is
+unchanged. `Bytes` compare with `=` and `not=` byte by byte. They are not a sort key, and `str` does not
+write them. Functions that build, slice, or convert `Bytes` belong in a later codec core.
 
 Encoding writes record fields in declaration order and map keys in ascending order. Comparisons of JSON values, in fixtures and
 in parity tests, ignore object key order.

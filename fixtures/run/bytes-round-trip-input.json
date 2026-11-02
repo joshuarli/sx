@@ -1,0 +1,62 @@
+{
+  "description": "Bytes read from one tool encode unchanged as input to another.",
+  "program": "(call blob.put {:name \"copy\" :data (call blob.get {:name \"a\"})})",
+  "declarations": "declarations.json",
+  "allow": [
+    "blob.get",
+    "blob.put"
+  ],
+  "responses": [
+    {
+      "capability": "blob.get",
+      "input": {
+        "name": "a"
+      },
+      "results": [
+        {
+          "output": "/+8="
+        }
+      ]
+    },
+    {
+      "capability": "blob.put",
+      "input": {
+        "name": "copy",
+        "data": "/+8="
+      },
+      "results": [
+        {
+          "output": null
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": null
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "blob.get",
+      "input": {
+        "name": "a"
+      }
+    },
+    {
+      "response": "r:1",
+      "output": "/+8="
+    },
+    {
+      "request": "r:2",
+      "capability": "blob.put",
+      "input": {
+        "name": "copy",
+        "data": "/+8="
+      }
+    },
+    {
+      "response": "r:2",
+      "output": null
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "description": "A Bytes result encodes as standard base64 with padding.",
+  "program": "(call blob.get {:name \"a\"})",
+  "declarations": "declarations.json",
+  "allow": [
+    "blob.get"
+  ],
+  "responses": [
+    {
+      "capability": "blob.get",
+      "input": {
+        "name": "a"
+      },
+      "results": [
+        {
+          "output": "/+8="
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": "/+8="
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "blob.get",
+      "input": {
+        "name": "a"
+      }
+    },
+    {
+      "response": "r:1",
+      "output": "/+8="
+    }
+  ]
+}

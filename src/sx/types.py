@@ -13,6 +13,7 @@ class Primitive:
 BOOL = Primitive("Bool")
 INT = Primitive("Int")
 FLOAT = Primitive("Float")
+BYTES = Primitive("Bytes")
 STRING = Primitive("String")
 UNIT = Primitive("Unit")
 
@@ -144,9 +145,6 @@ class TypeSyntaxError(ValueError):
     pass
 
 
-UNSUPPORTED = {
-    "Bytes": "Sx v0 has no Bytes type",
-}
 _TOKEN = re.compile(r"\s*(?:([A-Za-z][A-Za-z0-9_.-]*)|(.))")
 
 
@@ -191,8 +189,6 @@ class _TypeParser:
 
     def type(self) -> Type:
         name = self.take()
-        if name in UNSUPPORTED:
-            raise TypeSyntaxError(f"{UNSUPPORTED[name]}: {self.text!r}")
         match name:
             case "Bool":
                 return BOOL
@@ -200,6 +196,8 @@ class _TypeParser:
                 return INT
             case "Float":
                 return FLOAT
+            case "Bytes":
+                return BYTES
             case "String":
                 return STRING
             case "Unit":

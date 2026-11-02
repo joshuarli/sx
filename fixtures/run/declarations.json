@@ -22,6 +22,9 @@
     {"id": "sensor.get", "effect": "read", "input": "Record {}", "output": "Reading", "description": "Reads one sensor."},
     {"id": "sensor.list", "effect": "read", "input": "Record {}", "output": "List<Reading>", "description": "Lists sensors."},
     {"id": "sensor.put", "effect": "write", "idempotent": true, "input": "Reading", "output": "Unit", "description": "Stores a sensor reading."},
+    {"id": "blob.get", "effect": "read", "input": "Record {name: String}", "output": "Bytes", "description": "Reads one stored blob."},
+    {"id": "blob.put", "effect": "write", "idempotent": true, "input": "Record {name: String, data: Bytes}", "output": "Unit", "description": "Stores one blob."},
+    {"id": "blob.list", "effect": "read", "input": "Record {}", "output": "Map<String, Bytes>", "description": "Reads every blob by name."},
     {"id": "job.state", "effect": "read", "input": "Record {id: String}", "output": "String", "description": "Reads a job's state."}
   ]
 }

@@ -9,13 +9,14 @@ from cores import task_registry as declared_registry
 from sx.checker import check
 from sx.diagnostics import render
 from sx.reader import read
-from sx.registry import Registry
+from sx.registry import Registry, load_declarations
 
 ROOT = Path(__file__).parent.parent
 FIXTURES = ROOT / "fixtures" / "check"
 BENCH = ROOT / "bench" / "codemode"
 PROGRAMS = sorted(FIXTURES.glob("*.sx"))
 TASK_HEADER = "; task: "
+RUN_DECLARATIONS_HEADER = "; declarations: fixtures/run/declarations.json"
 ALLOW_HEADER = "; allow: "
 LANGUAGE = ROOT / "docs" / "language.md"
 
@@ -26,12 +27,24 @@ def task_registry(task_id: str) -> tuple[Registry, frozenset[str]]:
     return declared_registry(task), capability_ids
 
 
+def run_declarations_registry() -> tuple[Registry, frozenset[str]]:
+    registry = Registry()
+    load_declarations(registry, json.loads((ROOT / "fixtures" / "run" / "declarations.json").read_text()))
+    return registry, frozenset(registry.capabilities)
+
+
+def fixture_registry(first_line: str) -> tuple[Registry, frozenset[str]]:
+    if first_line == RUN_DECLARATIONS_HEADER:
+        return run_declarations_registry()
+    assert first_line.startswith(TASK_HEADER), f"a checker fixture starts with {TASK_HEADER!r}"
+    return task_registry(first_line.removeprefix(TASK_HEADER))
+
+
 @pytest.mark.parametrize("program", PROGRAMS, ids=[path.stem for path in PROGRAMS])
 def test_checker_fixture(program: Path) -> None:
     source = program.read_text()
     first_line = source.split("\n", 1)[0]
-    assert first_line.startswith(TASK_HEADER), f"a checker fixture starts with {TASK_HEADER!r}"
-    registry, allowed = task_registry(first_line.removeprefix(TASK_HEADER))
+    registry, allowed = fixture_registry(first_line)
     second_line = source.split("\n", 2)[1]
     if second_line.startswith(ALLOW_HEADER):
         allowed = frozenset(second_line.removeprefix(ALLOW_HEADER).split())

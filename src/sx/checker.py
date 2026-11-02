@@ -27,6 +27,7 @@ from sx.syntax import (
 )
 from sx.types import (
     BOOL,
+    BYTES,
     CALL_ERROR,
     CALL_ERROR_KIND,
     CALL_ERROR_KINDS,
@@ -121,6 +122,7 @@ INT_TO_FLOAT_HINT = "Sx does not convert between number types. (float n) turns a
 FLOAT_TO_INT_HINT = (
     "Sx does not convert between number types. (round x), (floor x), and (ceil x) turn a Float into an Int."
 )
+BYTES_HINT = "Bytes come from tools. No Sx function builds them from a string or a list."
 OPTIONAL_HINT = "This value is optional. Take it apart first: (match x (some v) ... none ...)."
 BINARY_SIGNATURE = {
     "+": "a b", "*": "a b", "/": "a b", "quot": "Int Int", "rem": "Int Int", "float": "n", "round": "x", "floor": "x",
@@ -217,6 +219,8 @@ def article(text: str) -> str:
 def describe(t: Type) -> str:
     if isinstance(t, RecordType) and t != CALL_ERROR:
         return "a record"
+    if t == BYTES:
+        return "Bytes"
     return article(show_type(t))
 
 
@@ -577,6 +581,8 @@ class _Checker:
         elif (found, wanted) == (FLOAT, INT):
             detail_hint = detail_hint or FLOAT_TO_INT_HINT
             help_name = help_name or "round"
+        if wanted == BYTES:
+            detail_hint = detail_hint or BYTES_HINT
         if detail_hint is not None:
             detail += f"\n{detail_hint}"
         self.error(
@@ -2319,6 +2325,8 @@ class _Checker:
                 return self.check(args[0], expected, scope)
             case "count":
                 items, t = self.check(args[0], None, scope)
+                if self.resolve(t) == BYTES:
+                    return self.coerce(ir.Prelude(op, (items,), span), INT, expected, span)
                 if self.is_map(t):
                     self.map_value(t, args[0], "count")
                 else:

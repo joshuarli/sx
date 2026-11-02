@@ -1,0 +1,2 @@
+; declarations: fixtures/run/declarations.json
+(str "data: " (call blob.get {:name "a"}))

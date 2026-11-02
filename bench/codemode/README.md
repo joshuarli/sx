@@ -42,7 +42,7 @@ Types are written in Sx type notation:
 | `ns.Name` from `enums` | a variant without a value is its name as a string, `"Passing"`. A variant with a value is `{"tag": "Failed", "value": ...}`. |
 | `Map<String, T>` | object with arbitrary string keys and values of type `T`. The key type is always `String`. |
 | `Float` | a JSON number. Sx decodes an integer-valued number into a `Float` too. |
-| `Bytes` | base64 string. Sx v0 lacks it. |
+| `Bytes` | standard base64 string with padding |
 
 Use the type that fits the data. Do not avoid `Float` or `Bytes` because Sx handles them
 poorly. Set `sx-expressible` to `false` when Sx cannot express the task.

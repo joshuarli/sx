@@ -115,7 +115,8 @@ PRELUDE = (
           "(or true false)", "true"),
     entry("str", "(str x ...) -> String", "Joins strings, integers, floats, booleans, and enum values. A Float is "
           'written as JavaScript writes it: 1.0 is 1.', '(str "a" 1 true 2.50)', '"a1true2.5"'),
-    entry("count", "(count xs) -> Int", "The number of elements, or of map entries.", "(count [1 2 3])", "3"),
+    entry("count", "(count xs) -> Int", "The number of elements, of map entries, or of bytes.", "(count [1 2 3])",
+          "3"),
     entry("first", "(first xs) -> T", "The first element. An empty list stops the program.", "(first [1 2 3])", "1"),
     entry("rest", "(rest xs) -> List<T>", "Every element after the first.", "(rest [1 2 3])", "[2 3]"),
     entry("nth", "(nth xs i) -> T", "The element at index i, from 0. A missing index stops the program.",
@@ -176,6 +177,10 @@ TYPES = (
     entry("Float", "Float: 1.5, -0.25, 2e3", "A 64-bit IEEE float. A literal has a fraction or an exponent: 1 is an "
           "Int. A JSON number decodes as a Float where a Float is expected. A result that is infinite or not a "
           "number stops the program.", "(* 1.5 (float 2))", "3.0"),
+    entry("Bytes", "Bytes", "Opaque binary data from a tool. Only count and = take it; there is no literal. JSON "
+          "carries it as standard base64 with padding, and a string that is not that is an invalid host response.",
+          '[(count (call blob.read {:name "greeting"})) (= (call blob.read {:name "greeting"}) '
+          '(call blob.read {:name "again"}))]', "[5 true]"),
     entry("Map", "Map<String, V>: (into-map [[key value] ...])", "A JSON object with string keys and values of "
           "one type V, listed in key order. Keys are strings, never keywords: keywords only name record fields.",
           '(get (assoc {} "pen" 3) "pen" 0)', "3"),
@@ -199,6 +204,8 @@ EXAMPLE_DECLARATIONS: Mapping[str, Any] = {
          "output": "Record {seconds: Int}", "description": "Reads a host's uptime."},
         {"id": "storage.files", "effect": "read", "input": "Record {page: Int}",
          "output": "Record {files: List<File>, last: Bool}", "description": "Reads one page of files."},
+        {"id": "blob.read", "effect": "read", "input": "Record {name: String}", "output": "Bytes",
+         "description": "Reads one stored blob."},
         {"id": "job.state", "effect": "read", "input": "Record {id: String}", "output": "String",
          "description": "Reads a job's state."},
         {"id": "chat.post", "effect": "write", "idempotent": False, "input": "Record {text: String}",
@@ -226,6 +233,8 @@ EXAMPLE_RESPONSES: tuple[Mapping[str, Any], ...] = (
         "files": [{"bytes": 5}], "last": True}}]},
     {"capability": "chat.post", "input": {"text": "hi"}, "results": [
         {"error": {"kind": "RateLimited", "message": "slow down"}}, {"output": None}]},
+    {"capability": "blob.read", "input": {"name": "greeting"}, "results": [{"output": "aGVsbG8="}]},
+    {"capability": "blob.read", "input": {"name": "again"}, "results": [{"output": "aGVsbG8="}]},
     {"capability": "job.state", "input": {"id": "j1"}, "results": [{"output": "running"}, {"output": "done"}]},
 )
 

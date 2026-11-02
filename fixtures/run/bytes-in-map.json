@@ -1,0 +1,42 @@
+{
+  "description": "Bytes decode as map values and encode in key order.",
+  "program": "(call blob.list {})",
+  "declarations": "declarations.json",
+  "allow": [
+    "blob.list"
+  ],
+  "responses": [
+    {
+      "capability": "blob.list",
+      "input": {},
+      "results": [
+        {
+          "output": {
+            "b": "AA==",
+            "a": "AAE="
+          }
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": {
+      "a": "AAE=",
+      "b": "AA=="
+    }
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "blob.list",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": {
+        "b": "AA==",
+        "a": "AAE="
+      }
+    }
+  ]
+}

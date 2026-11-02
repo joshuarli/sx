@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import binascii
 import json
 import math
 from collections.abc import Iterable, Iterator
@@ -9,6 +11,7 @@ from typing import override
 
 from sx.types import (
     BOOL,
+    BYTES,
     CALL_ERROR,
     FLOAT,
     INT,
@@ -119,8 +122,8 @@ class VariantValue:
 
 
 type Value = (
-    bool | int | float | str | UnitValue | ListValue | TupleValue | RecordValue | MapValue | SomeValue | NoneValue
-    | OkValue | ErrValue | VariantValue
+    bool | int | float | str | bytes | UnitValue | ListValue | TupleValue | RecordValue | MapValue | SomeValue
+    | NoneValue | OkValue | ErrValue | VariantValue
 )
 
 
@@ -130,7 +133,7 @@ def call_error(kind: str, message: str) -> RecordValue:
 
 def size(value: Value) -> int:
     match value:
-        case str():
+        case str() | bytes():
             return 1 + len(value) // 32
         case ListValue(items=items) | TupleValue(items=items):
             return 1 + sum(size(item) for item in items)
@@ -214,6 +217,16 @@ def decode(value: object, t: Type, path: str = "$") -> Value:
             if not isinstance(value, str):
                 raise fail("String")
             return value
+        case _ if t == BYTES:
+            if not isinstance(value, str):
+                raise fail("Bytes (a base64 string)")
+            try:
+                raw = base64.b64decode(value, validate=True)
+            except (binascii.Error, ValueError):
+                raw = None
+            if raw is None or base64.b64encode(raw).decode("ascii") != value:
+                raise DecodeError(path, "Bytes (standard base64 with padding)", "a string that is not valid base64")
+            return raw
         case _ if t == UNIT:
             if value is not None:
                 raise fail("Unit (null)")
@@ -282,6 +295,8 @@ def encode(value: Value, t: Type) -> object:
     match value:
         case bool() | int() | float() | str():
             return value
+        case bytes():
+            return base64.b64encode(value).decode("ascii")
         case UnitValue() | NoneValue():
             return None
         case ListValue(items=items):
@@ -325,6 +340,8 @@ def show_value(value: Value) -> str:
         case str():
             escaped = value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\t", "\\t")
             return f'"{escaped.replace(chr(13), chr(92) + "r")}"'
+        case bytes():
+            return f'<bytes "{base64.b64encode(value).decode("ascii")}">'
         case UnitValue():
             return "unit"
         case ListValue(items=items) | TupleValue(items=items):
