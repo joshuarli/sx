@@ -1,0 +1,29 @@
+(let [dir "{{root}}/logs"
+      names (sort-by identity
+                     (map (fn [e] (get e :name))
+                          (filter (fn [e] (and (= (get e :kind) File) (text.ends-with? (get e :name) ".log")))
+                                  (call fs.list {:path dir}))))
+      texts (par-map {:limit 8} (fn [n] (call fs.read-text {:path (str dir "/" n)})) names)
+      lines (map (fn [l] (text.replace l "\r" "")) (flatten (map (fn [t] (text.split t "\n")) texts)))
+      records (keep (fn [line]
+                      (let [f (text.split line " ")]
+                        (if (>= (count f) 4)
+                          (if (= (nth f 1) "ERROR") (some {:service (nth f 2) :code (nth f 3)}) none)
+                          none)))
+                    lines)
+      tally (fn [keys]
+              (sort-by (fn [c] [(- (get c :count)) (get c :name)])
+                       (map (fn [g] {:name (first g) :count (count (nth g 1))})
+                            (group-by identity keys))))
+      by-code (tally (map (fn [r] (get r :code)) records))
+      by-service (tally (map (fn [r] (get r :service)) records))
+      row (fn [c] (str (get c :name) ": " (get c :count)))
+      summary (str (text.join "\n"
+                              (concat [(str "files: " (count names)) (str "errors: " (count records)) "by code:"]
+                                      (concat (map row by-code) (concat ["by service:"] (map row by-service)))))
+                   "\n")
+      _ (call fs.write-text {:path "{{root}}/summary.txt" :text summary})]
+  {:files (count names)
+   :errors (count records)
+   :by_code (map (fn [c] {:code (get c :name) :count (get c :count)}) by-code)
+   :by_service (map (fn [c] {:service (get c :name) :count (get c :count)}) by-service)})
