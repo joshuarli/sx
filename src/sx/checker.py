@@ -100,6 +100,7 @@ MISSING_FUNCTIONS = {
     "remove": "Use filter with the opposite test.",
     "sort": "Use sort-by with the value itself as the key: (sort-by (fn [x] x) xs).",
 }
+TEST_SUBJECT = {"if": "An if condition", "cond": "A cond test"}
 OPTIONAL_HINT = "This value is optional. Take it apart first: (match x (some v) ... none ...)."
 BINARY_SIGNATURE = {"+": "Int Int", "*": "Int Int", "quot": "Int Int", "rem": "Int Int"}
 
@@ -140,6 +141,14 @@ class FunctionBinding:
 
 
 type Binding = ValueBinding | FunctionBinding
+
+
+@dataclass(frozen=True, slots=True)
+class Test:
+    condition: ir.Node
+    presence: bool
+    name: str | None
+    inner: Type | None
 
 
 @dataclass(slots=True)
@@ -866,13 +875,28 @@ class _Checker:
                     inner[name] = ValueBinding(NEVER)
                 return ir.Discard(), inner
 
-    def form_if(self, node: Form, expected: Type | None, scope: Mapping[str, Binding]) -> tuple[ir.Node, Type]:
-        if not self.arity(node, 3, 3, "condition then else"):
-            return self.placeholder(node.span)
-        _, condition_node, then_node, else_node = node.items
+    def check_test(self, condition_node: Node, scope: Mapping[str, Binding], who: str) -> Test:
         with self.outside_tail():
             condition, condition_type = self.check(condition_node, None, scope)
         resolved = self.resolve(condition_type)
+        if isinstance(resolved, OptionType):
+            inner = self.resolve(resolved.inner)
+            if inner == BOOL:
+                self.error(
+                    "condition-not-bool", condition_node.span,
+                    f"{TEST_SUBJECT[who]} must be true or false, "
+                    f"but this is {describe(self.zonk(condition_type))}.",
+                    detail=(
+                        "Presence and truth would disagree: (some false) is present but false.\n"
+                        f"Match on it instead: (match {show(condition_node)} (some v) ... none ...)."
+                    ),
+                    help=who,
+                )
+                return Test(condition, False, None, None)
+            if not isinstance(inner, Variable | Never):
+                name = condition_node.name if isinstance(condition_node, Symbol) else None
+                narrows = name is not None and isinstance(scope.get(name), ValueBinding)
+                return Test(condition, True, name if narrows else None, resolved.inner)
         if not self.trial(condition_type, BOOL):
             hint = (
                 "To test an optional value, match on it: (match x (some v) ... none ...)."
@@ -881,15 +905,36 @@ class _Checker:
             )
             self.error(
                 "condition-not-bool", condition_node.span,
-                f"An if condition must be true or false, but this is {describe(self.zonk(condition_type))}.",
-                detail=hint, help="if",
+                f"{TEST_SUBJECT[who]} must be true or false, "
+                f"but this is {describe(self.zonk(condition_type))}.",
+                detail=hint, help=who,
             )
-        then, then_type = self.check(then_node, expected, scope)
+        return Test(condition, False, None, None)
+
+    def narrowed(self, test: Test, scope: Mapping[str, Binding]) -> Mapping[str, Binding]:
+        if test.name is None or test.inner is None:
+            return scope
+        return {**scope, test.name: ValueBinding(test.inner)}
+
+    def lower_test(self, test: Test, then: ir.Node, otherwise: ir.Node, span: Span) -> ir.Node:
+        if not test.presence:
+            return ir.If(test.condition, then, otherwise, span)
+        binder: ir.Binder = ir.BindName(test.name) if test.name is not None else ir.Discard()
+        return ir.Match(
+            test.condition, ((ir.MatchSome(ir.MatchAny(binder)), then), (ir.MatchNone(), otherwise)), span,
+        )
+
+    def form_if(self, node: Form, expected: Type | None, scope: Mapping[str, Binding]) -> tuple[ir.Node, Type]:
+        if not self.arity(node, 3, 3, "condition then else"):
+            return self.placeholder(node.span)
+        _, condition_node, then_node, else_node = node.items
+        test = self.check_test(condition_node, scope, "if")
+        then, then_type = self.check(then_node, expected, self.narrowed(test, scope))
         otherwise, else_type = self.check(else_node, expected, scope)
         (then, otherwise), t = self.join(
             [(then, then_type, then_node.span), (otherwise, else_type, else_node.span)], expected,
         )
-        return ir.If(condition, then, otherwise, node.span), t
+        return self.lower_test(test, then, otherwise, node.span), t
 
     def form_match(self, node: Form, expected: Type | None, scope: Mapping[str, Binding]) -> tuple[ir.Node, Type]:
         span = node.span
@@ -909,10 +954,28 @@ class _Checker:
         complete = False
         clauses: list[tuple[ir.MatchPattern, ir.Node, Type, Span]] = []
         pairs = list(zip(clause_nodes[::2], clause_nodes[1::2], strict=True))
+        scrutinee_option = self.resolve(scrutinee_type)
+        scrutinee_name = (
+            node.items[1].name
+            if isinstance(node.items[1], Symbol)
+            and isinstance(scope.get(node.items[1].name), ValueBinding)
+            and isinstance(scrutinee_option, OptionType)
+            else None
+        )
         for index, (pattern_node, body_node) in enumerate(pairs):
             pattern, inner, keys, total = self.match_pattern(pattern_node, scrutinee_type, scope)
             last = index == len(pairs) - 1
             wildcard = isinstance(pattern, ir.MatchAny)
+            if (
+                scrutinee_name is not None
+                and isinstance(scrutinee_option, OptionType)
+                and last
+                and "none" in covered
+                and isinstance(pattern_node, Symbol)
+                and pattern_node.name == "_"
+            ):
+                pattern = ir.MatchSome(ir.MatchAny(ir.BindName(scrutinee_name)))
+                inner = {**scope, scrutinee_name: ValueBinding(scrutinee_option.inner)}
             if complete and not (last and wildcard):
                 self.error(
                     "unreachable-clause", pattern_node.span,

@@ -84,7 +84,7 @@ by element.
 | Form | Type rule |
 | --- | --- |
 | `(let [p1 e1 p2 e2 ...] body)` | Each `e` is visible to later bindings and to `body`. The body is one expression. |
-| `(if c then else)` | `c` is `Bool`. Both branches have the same type. |
+| `(if c then else)` | `c` is `Bool`, or an `Option<T>` presence test. See [Conditions](#conditions). Both branches have the same type. |
 | `(match e clause...)` | See [Match](#match). |
 | `(fn [p ...] body)` | A function argument, or the value of a `let` binding. See [Functions](#functions). |
 | `(get r :field)` | `r` is a record with `field`. A missing field is rejected by the checker. |
@@ -99,6 +99,23 @@ by element.
 A pattern `p` is a symbol, `_`, or a tuple pattern `[p1 ... pn]`. Patterns appear in `let`,
 `loop`, and `fn` parameters. `_` evaluates the value and discards it, so
 `(let [_ (map send items)] (count items))` runs every send.
+
+### Conditions
+
+An `if` condition is a `Bool`, or an `Option<T>` where `T` is not `Bool`. An optional condition is a
+presence test: the then-branch runs for `(some x)` and the else-branch for `none`. When the condition
+is a bare name bound by `let`, `loop`, `fn`, or `match`, the then-branch sees that name as the inner
+value, of type `T`:
+
+```
+(let [next (get page :next)]
+  (if next (recur next ids) ids))
+```
+
+Any other optional expression, such as `(get page :next)`, is a presence test without narrowing.
+Narrowing covers only a bare name, never a field path such as `(get x :f)`. An `Option<Bool>`
+condition is rejected with `condition-not-bool`, because `(some false)` is present but false, and
+the diagnostic shows the `match` to write. The same rules apply to the tests of `cond`.
 
 ### Functions
 
@@ -131,6 +148,13 @@ The scrutinee's type determines which variant names are in scope, so patterns ar
 matches anything. A `match` without `_` must name every variant. A final `_` clause is allowed
 even when the clauses before it name every variant. Any other clause that can never match is
 rejected.
+
+When the scrutinee is a bare name of type `Option<T>` and a `none` clause comes before a final `_`
+clause, the `_` clause sees that name as the inner value, of type `T`:
+
+```
+(match acc none v _ (semver.compare v acc))
+```
 
 ## Recovery and repetition
 

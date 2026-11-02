@@ -1,0 +1,8 @@
+; task: dev-latest-version
+(reduce
+  (fn [acc s]
+    (match (semver.parse s)
+      none acc
+      (some v) (match acc none (some v) _ (if (> (semver.compare v acc) 0) (some v) (some acc)))))
+  none
+  (call registry.versions {:name "x"}))

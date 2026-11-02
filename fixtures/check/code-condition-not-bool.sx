@@ -1,3 +1,3 @@
 ; task: dev-events-pages
 (let [page (call audit.page {:cursor none})]
-  (if (get page :next) "more" "done"))
+  (if (get page :events) "more" "done"))

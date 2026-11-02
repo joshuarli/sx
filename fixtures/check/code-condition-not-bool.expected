@@ -1,6 +1,5 @@
-error[condition-not-bool] 3:7-3:23
-    (if (get page :next) "more" "done"))
-        ^^^^^^^^^^^^^^^^
-  An if condition must be true or false, but this is an Option<String>.
-  To test an optional value, match on it: (match x (some v) ... none ...).
+error[condition-not-bool] 3:7-3:25
+    (if (get page :events) "more" "done"))
+        ^^^^^^^^^^^^^^^^^^
+  An if condition must be true or false, but this is a List<Event>.
   Help: sx help if

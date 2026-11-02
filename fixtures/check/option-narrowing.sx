@@ -1,0 +1,6 @@
+; task: dev-events-pages
+(let [page (call audit.page {:cursor none})
+      next (get page :next)]
+  [(if next (str next "!") "done")
+   (if (get page :next) "more" "done")
+   (match next none "done" _ (str next "?"))])

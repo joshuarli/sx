@@ -26,8 +26,10 @@ FORMS = (
     entry("let", "(let [name value ...] body)", "Binds names, each visible to later bindings and the body. "
           "A fn value binds a local function, and _ runs a value for its effect.",
           "(let [a 1 b (+ a 1) double (fn [x] (* 2 x))] (double b))", "4"),
-    entry("if", "(if condition then else)", "Chooses a branch. The condition is true or false.",
-          '(if (> 2 1) "yes" "no")', '"yes"'),
+    entry("if", "(if condition then else)", "Chooses a branch. The condition is true or false, or an "
+          "optional, which tests that a value is present. When the condition is an optional name, the "
+          "then-branch sees the value inside it.",
+          '(let [n (some 3)] (if n (+ n 1) 0))', "4"),
     entry("match", "(match value pattern result ...)", "Chooses the first clause whose pattern matches. "
           "Patterns: (some x) none (ok x) (err e) Variant (Variant x) _.",
           "(match (some 3) (some n) (+ n 1) none 0)", "4"),

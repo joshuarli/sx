@@ -1,0 +1,7 @@
+error[condition-not-bool] 2:5-2:16
+  (if (some true) "present" "absent")
+      ^^^^^^^^^^^
+  An if condition must be true or false, but this is an Option<Bool>.
+  Presence and truth would disagree: (some false) is present but false.
+  Match on it instead: (match (some true) (some v) ... none ...).
+  Help: sx help if

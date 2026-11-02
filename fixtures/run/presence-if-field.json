@@ -1,0 +1,65 @@
+{
+  "description": "An if on an optional that is not a name tests presence without narrowing.",
+  "program": "(map (fn [r] (if (get r :hits) \"counted\" \"uncounted\")) (call rows.list {}))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list",
+    "rows.add",
+    "checks.list"
+  ],
+  "responses": [
+    {
+      "capability": "rows.list",
+      "input": {},
+      "results": [
+        {
+          "output": [
+            {
+              "name": "a",
+              "note": "fast",
+              "hits": 3
+            },
+            {
+              "name": "b",
+              "note": null,
+              "hits": null
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": [
+      "counted",
+      "uncounted"
+    ]
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "rows.list",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": [
+        {
+          "name": "a",
+          "note": "fast",
+          "hits": 3
+        },
+        {
+          "name": "b",
+          "note": null,
+          "hits": null
+        }
+      ]
+    }
+  ]
+}

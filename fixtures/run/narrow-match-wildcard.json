@@ -1,0 +1,65 @@
+{
+  "description": "A final _ clause after none sees the matched name unwrapped.",
+  "program": "(map (fn [r] (let [hits (get r :hits)] (match hits none 0 _ (+ hits 1)))) (call rows.list {}))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list",
+    "rows.add",
+    "checks.list"
+  ],
+  "responses": [
+    {
+      "capability": "rows.list",
+      "input": {},
+      "results": [
+        {
+          "output": [
+            {
+              "name": "a",
+              "note": "fast",
+              "hits": 3
+            },
+            {
+              "name": "b",
+              "note": null,
+              "hits": null
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": [
+      4,
+      0
+    ]
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "rows.list",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": [
+        {
+          "name": "a",
+          "note": "fast",
+          "hits": 3
+        },
+        {
+          "name": "b",
+          "note": null,
+          "hits": null
+        }
+      ]
+    }
+  ]
+}
