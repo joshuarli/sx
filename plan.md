@@ -482,6 +482,39 @@ Host code, in non-blank lines of the files a host writes: `declarations.json` pl
 
 **Gaps and cautions.** The sample is one model, 3 samples, 6 workflows written by the language's author, so the 10-of-18 and 2.5 times figures carry the held-out warning from the probe; a workflow written beside the language overstates transfer. Wall time was measured with 4 trials running at once. A refused core call (the `yaml` refusal) is not caught by `attempt`, so `yaml-manifests` excludes the file the core would refuse by name; the check does not depend on the failure kind's name. `sx mcp import` omits `idempotent` on a non-idempotent write, which the runner supplies as `false` when it builds the TypeScript declarations. Open: a `par-map` that may call `process.run` for a granted read-only command (a gap, not fixed here); a diagnostic for an unknown lowercase name where an enum is expected that suggests the string literal.
 
+**Phase 10a: the baseline and its failures.** The Sx arm of the six workflows on master at `1fb7eca`,
+Muse Spark at medium thinking, standard guide, 3 samples: first attempt 11 of 18 (9c: 10), final 17 of
+18 (9c: 16), mean tokens per trial 14,669 (9c: 16,445). TypeScript in 9c was 18 and 18 of 18 at 6,692.
+Every attempt that was not correct, by cause:
+
+| Cause | Trials | Attempts |
+| --- | --- | --- |
+| Records with different fields joined into one list, then read as if a flag such as `:known` narrowed them, as a TypeScript discriminated union does (`type-mismatch` or `not-a-record` on the now-optional field) | 3 | 3 |
+| Unbalanced brackets in a program written as one long nested `let` | 2 | 3 |
+| A default on a field that is always present (`arity`), written to repair the join error | 1 | 1 |
+| No `attempt` around `process.run` in a directory the task said may be missing (`NotFound`) | 1 | 1 |
+| A loop accumulator that starts as `[]` and is read before its `recur` (`unresolved-type`) | 1 | 1 |
+| Compiler diagnostics hand-parsed by splitting on `:` with a wrong part count, which TypeScript does with a regular expression (wrong result, not repaired) | 1 | 1 |
+
+The development probe runs (r6 and the retired held-out set) had too few rejections to add a cause.
+Writing six more workflows (Phase 10b) found four gaps: no way to decode a JSON file, no local
+function that takes a function argument (`fn-position`), the untyped `[]` above, and `par-map` limited
+to reads, so non-idempotent POSTs run one at a time.
+
+**Phase 10b.** `log-triage` (14 logs, two with CRLF, counts with a tie rule, a summary file compared
+byte for byte), `invoice-totals` (the `decimal` core, rounding half away from zero per line, stated
+against computed totals), `deploy-rollout` (non-idempotent POSTs retried only after a 429, polling
+every 100 ms with a 1 second deadline, rollback only for failures), `issue-notify` (page-number
+pagination to an empty page, duplicates across pages, declared statements over a seeded database, a chat
+post that fails with 503), `calendar-mcp` (a stdio MCP server with nested structured results and an
+optional field, error results for hidden holds), and `dependency-audit` (`semver`, at most 4 registry
+requests in flight). Both references of each pass, and wrong variants of each were rejected by its check.
+
+**The repomod track passed.** repomod gained `default_catalog`, `select_repositories`, `print_json`,
+`discover_owner`, `checkout_status`, `todo_item_count`, `status_text`, and `render_discover`, and
+`sx-repomod` calls them. repomod's suite gives 595 passed and 1 skipped, ruff and ty pass, and the 36
+parity tests pass. Both commits are local to each repository.
+
 Decided at the Phase 0 checkpoint:
 
 - Keywords used as values, such as `{:kind :unknown}`, appeared in both rounds despite the guide.
