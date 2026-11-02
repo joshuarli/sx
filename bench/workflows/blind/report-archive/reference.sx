@@ -1,0 +1,42 @@
+(let [reports "{{root}}/reports"
+      archive "{{root}}/archive"
+      files (map (fn [e] (get e :name)) (filter (fn [e] (= (get e :kind) File)) (call fs.list {:path reports})))
+      parsed (map (fn [f]
+                    (match (re.matches #"([a-z]+)-(\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])\.([a-z]+)" f)
+                      (some g) {:file f :report true :stem (str (nth g 1) "-" (nth g 2) "-" (nth g 3) "-" (nth g 4))
+                                :date (str (nth g 2) "-" (nth g 3) "-" (nth g 4))
+                                :year (nth g 2) :month (nth g 3) :ext (nth g 5)}
+                      none {:file f :report false :stem "" :date "" :year "" :month "" :ext ""}))
+                  files)
+      found (filter (fn [p] (get p :report)) parsed)
+      old (sort-by (fn [p] [(get p :date) (get p :file)]) (filter (fn [p] (< (get p :date) "2025-12-10")) found))
+      move (fn [p]
+             (let [dir (str archive "/" (get p :year) "/" (get p :month))
+                   source (str reports "/" (get p :file))
+                   target (str dir "/" (get p :file))
+                   _ (call process.run {:program "/bin/mkdir" :args ["-p" dir] :cwd "{{root}}" :stdin none})]
+               (match (call fs.stat {:path target})
+                 none (let [_ (call process.run {:program "/bin/mv" :args [source target] :cwd "{{root}}" :stdin none})]
+                        {:from (get p :file) :to (str (get p :year) "/" (get p :month) "/" (get p :file)) :duplicate false})
+                 (some _)
+                 (if (= (call fs.read-text {:path source}) (call fs.read-text {:path target}))
+                   (let [_ (call process.run {:program "/bin/rm" :args [source] :cwd "{{root}}" :stdin none})]
+                     {:from (get p :file) :to "" :duplicate true})
+                   (let [n (loop {:max 50} [n 1]
+                             (let [name (str (get p :stem) "." n "." (get p :ext))]
+                               (match (call fs.stat {:path (str dir "/" name)})
+                                 none n
+                                 (some _) (recur (+ n 1)))))
+                         name (str (get p :stem) "." n "." (get p :ext))
+                         _ (call process.run {:program "/bin/mv" :args [source (str dir "/" name)] :cwd "{{root}}" :stdin none})]
+                     {:from (get p :file) :to (str (get p :year) "/" (get p :month) "/" name) :duplicate false})))))
+      done (map move old)
+      line (fn [d] (if (get d :duplicate)
+                     (str (get d :from) " (duplicate)\n")
+                     (str (get d :from) " -> " (get d :to) "\n")))
+      _ (call fs.write-text {:path (str archive "/INDEX.txt")
+                             :text (str (call fs.read-text {:path (str archive "/INDEX.txt")}) (text.join "" (map line done)))})]
+  {:archived (map (fn [d] {:from (get d :from) :to (get d :to)}) (filter (fn [d] (not (get d :duplicate))) done))
+   :duplicates (map (fn [d] (get d :from)) (filter (fn [d] (get d :duplicate)) done))
+   :kept (- (count found) (count old))
+   :ignored (sort-by identity (map (fn [p] (get p :file)) (filter (fn [p] (not (get p :report))) parsed)))})

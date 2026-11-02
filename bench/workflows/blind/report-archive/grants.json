@@ -1,0 +1,14 @@
+{
+  "fs.list": {"roots": ["{{root}}"]},
+  "fs.stat": {"roots": ["{{root}}"]},
+  "fs.read-text": {"roots": ["{{root}}"]},
+  "fs.write-text": {"roots": ["{{root}}/archive"]},
+  "process.run": {
+    "commands": [
+      {"program": "/bin/mkdir", "args": [{"tag": "Exact", "value": "-p"}, "AnyOne"]},
+      {"program": "/bin/mv", "args": ["AnyOne", "AnyOne"]},
+      {"program": "/bin/rm", "args": ["AnyOne"]}
+    ],
+    "roots": ["{{root}}"]
+  }
+}
