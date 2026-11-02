@@ -148,7 +148,7 @@ suite runs in an environment where repomod is not installed, which proves the bo
 ## Status
 
 Phase 0 and Phase 1 have passed their gates. Phase 2 failed its gate on the first held-out run,
-on both models. Whether to spend the one allowed revision is undecided.
+on both models. The owner chose to spend the one allowed revision, described below.
 
 **Phase 0.** The syntax pilot ran on the development set and drove one language revision.
 
@@ -182,30 +182,73 @@ TypeScript by 6.7 points on Muse Spark and 26.7 points on Iceman at first attemp
 the gate there.
 
 **Phase 2 held-out result.** The standard guide against TypeScript, two samples of the 24
-expressible held-out tasks on each model, with up to two repairs:
+expressible held-out tasks on each model, with up to two repairs, rescored under the zero-wait
+rule below:
 
 | Model | Arm | First attempt | Final | Attempts | First prompt | Reasoning per trial | Tokens per solved task |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Muse Spark | TypeScript | 97.9% | 100.0% | 1.02 | 526 | 3,157 | 4,292 |
-| Muse Spark | Sx | 72.9% | 91.7% | 1.31 | 1,995 | 4,266 | 8,402 |
+| Muse Spark | Sx | 77.1% | 95.8% | 1.31 | 1,995 | 4,266 | 8,037 |
 | Iceman | TypeScript | 95.8% | 95.8% | 1.00 | 524 | 597 | 1,538 |
-| Iceman | Sx | 20.8% | 52.1% | 2.06 | 2,009 | 1,237 | 13,579 |
+| Iceman | Sx | 22.9% | 56.2% | 2.06 | 2,009 | 1,237 | 12,573 |
 
-Sx minus TypeScript at first attempt is -25.0 points on Muse Spark (95% interval -43.8 to -8.3)
-and -75.0 on Iceman (-89.6 to -58.3). At final it is -8.3 (-18.8 to 0.0) and -43.8 (-62.5 to
--27.1). Sx also costs 2.0 and 8.8 times the tokens per solved task, so it fails every part of the
+Sx minus TypeScript at first attempt is -20.8 points on Muse Spark (95% interval -37.5 to -6.2)
+and -72.9 on Iceman (-87.5 to -56.2). At final it is -4.2 (-10.4 to 0.0) and -39.6 (-58.3 to
+-22.9). Sx also costs 1.9 and 8.2 times the tokens per solved task, so it fails every part of the
 gate on both models. The expressiveness gap is 6 of 30 held-out tasks.
 
-- Muse Spark fell from 93.3% on the development set to 72.9% here, and reasoned more in Sx than in
+- Muse Spark fell from 93.3% on the development set to 77.1% here, and reasoned more in Sx than in
   TypeScript, the reverse of the development sweep. The development set was written alongside the
   language and overstates how well it transfers.
 - Muse Spark repaired all 20 diagnostics it received. Iceman repaired most type diagnostics but
   only 0 of 7 `unclosed` and 1 of 5 `unexpected-close`, so balancing brackets is its hardest
   problem.
-- Two final Sx trials on each model fail only because they waited `[0, 0]` where the reference
-  waited nothing. A `0ms` retry delay reaches the host as a wait, while an immediate TypeScript
-  retry calls no `sleep`. Counting those trials as correct moves each model by at most 2 of 48
-  trials, so the gate verdict stands. They were not rescored.
+- As first scored, two final Sx trials on each model failed only because they waited `[0, 0]`
+  where the reference waited nothing. A `0ms` retry delay reaches the host as a wait, while an
+  immediate TypeScript retry calls no `sleep`. Rescoring under the zero-wait rule raised Muse
+  Spark from 72.9% to 77.1% at first attempt and from 91.7% to 95.8% at final, and Iceman from
+  20.8% to 22.9% and 52.1% to 56.2%. The verdict did not change.
+
+**Phase 2 revision.** Almost every first-attempt failure on the development set is a static
+rejection, and most come from Sx being stricter than the habits models bring from TypeScript and
+Clojure, not from the S-expression surface. The revision accepts those habits where they have one
+safe meaning. Each change cites the development failures behind it:
+
+1. **An optional name narrows in a condition.** `(if next (recur next ids) ids)` tests whether
+   `next` is present and sees its value in the then-branch. A `match` on a name narrows it in a
+   final `_` clause when the clauses before it handled `none`. An `Option<Bool>` condition stays an
+   error, because presence and truth would disagree. Evidence: `(> ahead 0)` on an `Option<Int>`
+   in both Muse Spark failures of `dev-dirty-or-ahead`, `(if next ...)` in `dev-events-pages`, and
+   `(match acc none v _ (semver.compare v acc))` in `dev-latest-version`.
+2. **Defaults read like Clojure.** `(get r :ahead 0)` reads an optional field with a fallback.
+   Evidence: Muse Spark hedged with `(match (get s :ahead) (some a) a none 0 _ (get s :ahead))`
+   twice.
+3. **A nullary enum joins with `String`.** Nullary variants already encode as their names, so a
+   branch returning `"missing"` beside a `ci.State` makes the join `String`. Evidence: three
+   `branch-mismatch` rejections on `dev-retry-ci`.
+4. **A lowercase name is a catch-all `match` pattern** that binds the value, under the rules for
+   `_`. Evidence: `c {:repo repo ...}` on `dev-retry-ci` and the Phase 0 watch item.
+5. **A bracket literal takes its shape from its use.** A homogeneous literal that a tuple pattern
+   later takes apart is a tuple, not a list. Evidence: `[(get s :repo) b]` destructured by
+   `(fn [[repo branch]] ...)` on Muse Spark's `dev-stale-branches`.
+6. **`cond` and `identity` exist.** `cond` must end with `:else`. Evidence: `dev-ticket-actions`
+   and `dev-order-totals`.
+7. **A record literal may omit an `Option` field**, which is then `none`. Evidence: three
+   `missing-field` rejections at the minimal level and the Phase 0 watch item.
+8. **`unclosed` and `unexpected-close` say where the form should close**, from the indentation of
+   the lines after the opener. Evidence: four bracket rejections at the minimal level.
+
+Out of the revision: `Map` and dynamic keys (`assoc`, `keys`), which also make up the
+expressiveness gap, belong to the type-set work in the roadmap.
+
+One scoring change comes with it and applies to both arms: a zero-length wait no longer counts
+as a wait, so an immediate retry scores the same whether it is written as a `0ms` Sx delay or as a
+TypeScript loop with no `sleep`. The table above is rescored under it.
+
+Held-out exposure before the revision: the aggregate report, diagnostic codes with repair counts,
+and the judge's reason line for each final failure. No held-out task or model answer was read.
+The bracket-diagnostic change (item 8) matches the held-out `unclosed` repair rate as well as the
+development evidence.
 
 Decided at the Phase 0 checkpoint:
 

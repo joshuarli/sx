@@ -83,9 +83,10 @@ and bounded, and each has a campaign that addresses it:
 
 Full JavaScript is the baseline, not the strongest alternative. The strongest is a restricted,
 typed TypeScript subset, analyzed before it runs. It could deliver much of Sx's static authority
-while keeping the familiarity models already have. If Sx cannot beat it, the custom syntax does
-not earn its cost. Add a TypeScript-subset arm to the probe once the first probe passes, and to
-the campaign 2 workflow comparison.
+while keeping the familiarity models already have. Sx does not build one. After the first
+held-out probe failed, the owner chose to keep designing a new language rather than restrict an
+existing one. The risk stays: if Sx cannot beat TypeScript in the campaign 2 workflow comparison,
+the custom syntax has not earned its cost.
 
 ## Campaign 1: language correctness
 
