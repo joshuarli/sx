@@ -17,7 +17,9 @@ SCRATCH = ROOT / ".work" / "tmp" / "agree"
 
 def lake() -> str:
     found = shutil.which("lake")
-    return found if found is not None else str(Path.home() / ".elan" / "bin" / "lake")
+    if found is None:
+        raise SystemExit("agree.py: lake is not on PATH. Install elan and add ~/.elan/bin to PATH.")
+    return found
 
 
 def main() -> int:

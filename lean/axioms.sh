@@ -1,6 +1,7 @@
 #!/bin/sh
 set -eu
 cd "$(dirname "$0")"
+command -v lake >/dev/null || { echo "axioms.sh: lake is not on PATH. Install elan and add ~/.elan/bin to PATH." >&2; exit 1; }
 lake build
 out=$(lake env lean Axioms.lean)
 printf '%s\n' "$out"

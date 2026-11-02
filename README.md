@@ -101,6 +101,7 @@ rsync -a --exclude .git --exclude .venv --exclude .work ../repomod/ .work/tmp/re
 runs the semantic IR that `sx check FILE --emit ir` exports. The agreement check exports every
 accepted run fixture, replays it with `sx-ref`, and compares outcome and trace with the fixture.
 The axioms check builds the proofs and fails unless each theorem uses only Lean's standard axioms.
+These commands need elan's `lake` on `PATH`, usually from `~/.elan/bin`.
 
 ```sh
 uv run sx check FILE --declarations DECLARATIONS --allow ID --emit ir > program.ir.json
