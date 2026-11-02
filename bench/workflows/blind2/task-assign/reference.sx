@@ -1,0 +1,44 @@
+(let [people0 (get (call mcp-taskdesk.list-people {}) :people)
+      tasks (loop {:max 10} [cursor none acc []]
+              (let [page (call mcp-taskdesk.list-tasks {:cursor cursor})
+                    all (concat acc (get page :items))]
+                (match (get page :next_cursor)
+                  (some next) (recur next all)
+                  none all)))
+      rank (fn [t]
+             (cond (= (get t :priority) "urgent") 0
+                   (= (get t :priority) "high") 1
+                   (= (get t :priority) "normal") 2
+                   :else 3))
+      unassigned? (fn [t] (match (get t :assignee) (some _) false none true))
+      todo (sort-by (fn [t] [(rank t) (- 0 (get t :estimate)) (get t :id)])
+                    (filter (fn [t] (and (= (get t :state) "open") (unassigned? t))) tasks))
+      handled (loop {:max 20} [todo todo people people0 assigned [] unassigned []]
+                (if (= (count todo) 0)
+                  {:assigned assigned :unassigned unassigned}
+                  (let [t (first todo)
+                        skilled (filter (fn [p] (contains? (get p :skills) (get t :area))) people)
+                        roomy (filter (fn [p] (>= (- (get p :capacity) (get p :load)) (get t :estimate))) skilled)
+                        ordered (sort-by (fn [p] [(get p :load) (get p :name)]) roomy)
+                        outcome (loop {:max 8} [candidates ordered]
+                                  (if (= (count candidates) 0)
+                                    none
+                                    (match (attempt (call mcp-taskdesk.assign-task {:task_id (get t :id) :assignee (get (first candidates) :name)}))
+                                      (ok r) (some {:name (get r :assignee) :load (get r :load)})
+                                      (err _) (recur (rest candidates)))))]
+                    (match outcome
+                      (some o) (recur (rest todo)
+                                      (map (fn [p] {:name (get p :name) :skills (get p :skills) :capacity (get p :capacity)
+                                                    :load (if (= (get p :name) (get o :name)) (get o :load) (get p :load))})
+                                           people)
+                                      (concat assigned [{:task (get t :id) :assignee (get o :name)}])
+                                      unassigned)
+                      none (recur (rest todo) people assigned
+                                  (concat unassigned [{:task (get t :id)
+                                                       :reason (cond (= (count skilled) 0) "no-skill"
+                                                                     (= (count roomy) 0) "no-room"
+                                                                     :else "refused")}])))))) 
+      final (get (call mcp-taskdesk.list-people {}) :people)]
+  {:assigned (get handled :assigned)
+   :unassigned (get handled :unassigned)
+   :loads (map (fn [p] {:name (get p :name) :load (get p :load)}) final)})
