@@ -426,7 +426,7 @@ partial def jsonEq (a b : Json) : Bool :=
   match a, b with
   | .null, .null => true
   | .bool x, .bool y => x == y
-  | .num x, .num y => x == y
+  | .num x, .num y => x.mantissa * 10 ^ y.exponent == y.mantissa * 10 ^ x.exponent
   | .str x, .str y => x == y
   | .arr xs, .arr ys => xs.size == ys.size && (xs.toList.zip ys.toList).all fun (x, y) => jsonEq x y
   | .obj _, .obj _ =>
