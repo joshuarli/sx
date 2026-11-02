@@ -11,9 +11,3 @@ pub fn json_case_runs_in_python(case: &Json) -> bool {
 pub fn source_runs_in_python(source: &str) -> bool {
     !source.split('\n').take_while(|line| line.starts_with(';')).any(|line| line == PYTHON_MARKER)
 }
-
-const INFER_MARKER: &str = "; closers: infer";
-
-pub fn source_infers_closers(source: &str) -> bool {
-    source.split('\n').take_while(|line| line.starts_with(';')).any(|line| line == INFER_MARKER)
-}
