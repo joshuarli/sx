@@ -15,7 +15,7 @@ from typescript import declarations
 
 from sx.checker import check
 from sx.diagnostics import render
-from sx.help import guide
+from sx.help import GUIDE_LEVELS, guide
 from sx.host import FixtureHost, UnexpectedCallError, run
 from sx.machine import Completed, Failed
 from sx.reader import read
@@ -55,6 +55,7 @@ class Trial:
     arm: str
     model: str
     thinking: str
+    guide: str
     sample: int
     attempts: list[Attempt]
 
@@ -96,8 +97,8 @@ def node_run(task: Json, solution: Path) -> Json:
     return result
 
 
-def sx_prompt(task: Json) -> str:
-    return f"{guide()}\n\n{task_section(task)}\n"
+def sx_prompt(task: Json, level: str) -> str:
+    return f"{guide(level)}\n\n{task_section(task)}\n"
 
 
 def js_prompt(task: Json, cores: Json) -> str:
@@ -204,11 +205,12 @@ def repair_prompt(original: str, attempts: list[Attempt], language: str) -> str:
 
 
 def run_trial(
-    task: Json, arm: str, model: str, thinking: str, sample: int, out: Path, cores: Json, wanted: list[int]
+    task: Json, arm: str, level: str, model: str, thinking: str, sample: int, out: Path, cores: Json, wanted: list[int]
 ) -> Trial:
-    directory = out / task["id"] / f"{arm}-{sample}"
+    label = arm if arm == "js" else f"sx-{level}"
+    directory = out / task["id"] / f"{label}-{sample}"
     directory.mkdir(parents=True, exist_ok=True)
-    original = sx_prompt(task) if arm == "sx" else js_prompt(task, cores)
+    original = sx_prompt(task, level) if arm == "sx" else js_prompt(task, cores)
     language = "sx" if arm == "sx" else "ts"
     attempts: list[Attempt] = []
     prompt = original
@@ -229,7 +231,7 @@ def run_trial(
         if status == "correct" or feedback is None:
             break
         prompt = repair_prompt(original, attempts, language)
-    trial = Trial(task["id"], arm, model, thinking, sample, attempts)
+    trial = Trial(task["id"], arm, model, thinking, level if arm == "sx" else "none", sample, attempts)
     (directory / "trial.json").write_text(json.dumps(asdict(trial), indent=2))
     return trial
 
@@ -253,68 +255,103 @@ def tokens(trial: Trial) -> int:
     return sum(a.tokens.get("input", 0) + a.tokens.get("output", 0) for a in trial.attempts)
 
 
+def condition(trial: Trial) -> str:
+    return "js" if trial.arm == "js" else f"sx-{trial.guide}"
+
+
+def summarize(arm_trials: list[Trial], tasks: list[str]) -> dict[str, Any]:
+    first = {task: mean(t.first_correct for t in arm_trials if t.task == task) for task in tasks}
+    final = {task: mean(t.final_correct for t in arm_trials if t.task == task) for task in tasks}
+    solved = sum(t.final_correct for t in arm_trials)
+    total = sum(tokens(t) for t in arm_trials)
+    return {
+        "first": first,
+        "final": final,
+        "solved": solved,
+        "trials": len(arm_trials),
+        "prompt": mean(t.attempts[0].tokens.get("input", 0) for t in arm_trials),
+        "input": mean(sum(a.tokens.get("input", 0) for a in t.attempts) for t in arm_trials),
+        "output": mean(sum(a.tokens.get("output", 0) for a in t.attempts) for t in arm_trials),
+        "reasoning": mean(sum(a.tokens.get("reasoning", 0) for a in t.attempts) for t in arm_trials),
+        "attempts": mean(len(t.attempts) for t in arm_trials),
+        "per_solved": total / solved if solved else float("inf"),
+    }
+
+
 def report(trials: list[Trial], expressiveness: tuple[int, int]) -> str:
-    lines = []
+    lines: list[str] = []
     for model in sorted({t.model for t in trials}):
         mine = [t for t in trials if t.model == model]
-        tasks = sorted({t.task for t in mine})
-        paired = [task for task in tasks if {t.arm for t in mine if t.task == task} == {"sx", "js"}]
-        lines += [f"## {model}", "", f"Tasks with both arms: {len(paired)}", ""]
-        rows = {}
-        for arm in ("sx", "js"):
-            arm_trials = [t for t in mine if t.arm == arm and t.task in paired]
-            per_task_first = {task: mean(t.first_correct for t in arm_trials if t.task == task) for task in paired}
-            per_task_final = {task: mean(t.final_correct for t in arm_trials if t.task == task) for task in paired}
-            solved = sum(t.final_correct for t in arm_trials)
-            total_tokens = sum(tokens(t) for t in arm_trials)
-            rows[arm] = (per_task_first, per_task_final, solved, total_tokens, arm_trials)
+        conditions = sorted({condition(t) for t in mine}, key=lambda c: (c != "js", c))
+        present = {(condition(t), t.task) for t in mine}
+        tasks = sorted(task for task in {t.task for t in mine} if all((c, task) in present for c in conditions))
+        stats = {c: summarize([t for t in mine if condition(t) == c and t.task in tasks], tasks) for c in conditions}
+        lines += [f"## {model}", "", f"Tasks with every condition: {len(tasks)}", ""]
         lines += [
-            "| Arm | First attempt | Final | Trials | Tokens per solved task |",
-            "| --- | --- | --- | --- | --- |",
+            "| Condition | First attempt | Final | Attempts | First prompt | Input per trial | Output per trial "
+            "| Of which reasoning | Tokens per solved task |",
+            "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
         ]
-        for arm, (first, final, solved, total, arm_trials) in rows.items():
-            per_solved = f"{total / solved:,.0f}" if solved else "none solved"
-            rates = f"{mean(first.values()):.1%} | {mean(final.values()):.1%}"
-            row = f"| {arm} | {rates} | {len(arm_trials)} | {per_solved} |"
-            lines.append(row)
-        first_diff = [rows["sx"][0][t] - rows["js"][0][t] for t in paired]
-        final_diff = [rows["sx"][1][t] - rows["js"][1][t] for t in paired]
-        low, high = bootstrap(first_diff)
-        final_low, final_high = bootstrap(final_diff)
-        lines += [
-            "",
-            f"Sx minus JS, first attempt: {mean(first_diff):+.1%} (95% interval {low:+.1%} to {high:+.1%})",
-            f"Sx minus JS, final: {mean(final_diff):+.1%} (95% interval {final_low:+.1%} to {final_high:+.1%})",
-        ]
-        sx_tps = rows["sx"][3] / rows["sx"][2] if rows["sx"][2] else float("inf")
-        js_tps = rows["js"][3] / rows["js"][2] if rows["js"][2] else float("inf")
-        within = mean(first_diff) >= -0.05
-        better = mean(final_diff) > 0 or sx_tps < js_tps
-        verdict = "PASS" if within and better else "FAIL"
-        lines += [
-            f"Gate: first attempt within 5 points: {'yes' if within else 'no'}; "
-            f"better on final correctness or tokens per solved task: {'yes' if better else 'no'}; {verdict}",
-            "",
-        ]
-        sx_trials = [t for t in mine if t.arm == "sx"]
+        for name, st in stats.items():
+            per_solved = f"{st['per_solved']:,.0f}" if st["solved"] else "none solved"
+            lines.append(
+                f"| {name} | {mean(st['first'].values()):.1%} | {mean(st['final'].values()):.1%} "
+                f"| {st['attempts']:.2f} | {st['prompt']:,.0f} | {st['input']:,.0f} | {st['output']:,.0f} "
+                f"| {st['reasoning']:,.0f} | {per_solved} |"
+            )
+        lines.append("")
+        if "js" in stats:
+            for name in [c for c in conditions if c != "js"]:
+                sx, js = stats[name], stats["js"]
+                first_diff = [sx["first"][t] - js["first"][t] for t in tasks]
+                final_diff = [sx["final"][t] - js["final"][t] for t in tasks]
+                low, high = bootstrap(first_diff)
+                final_low, final_high = bootstrap(final_diff)
+                within = mean(first_diff) >= -0.05
+                better = mean(final_diff) > 0 or sx["per_solved"] < js["per_solved"]
+                verdict = "PASS" if within and better else "FAIL"
+                lines += [
+                    f"{name} minus js, first attempt: {mean(first_diff):+.1%} "
+                    f"(95% interval {low:+.1%} to {high:+.1%}); "
+                    f"final: {mean(final_diff):+.1%} ({final_low:+.1%} to {final_high:+.1%}); gate {verdict}",
+                ]
+            lines.append("")
         fixed: Counter[str] = Counter()
         seen: Counter[str] = Counter()
-        for trial in sx_trials:
+        for trial in mine:
             for before, after in zip(trial.attempts, trial.attempts[1:], strict=False):
                 for code in set(before.diagnostics):
-                    seen[code] += 1
-                    fixed[code] += code not in after.diagnostics
+                    seen[f"{trial.arm} {code}"] += 1
+                    fixed[f"{trial.arm} {code}"] += code not in after.diagnostics
         if seen:
-            lines += ["Sx diagnostics and whether the next attempt fixed them:", ""]
+            lines += ["Diagnostics and whether the next attempt fixed them:", ""]
             lines += [f"- {code}: fixed {fixed[code]} of {count}" for code, count in seen.most_common()]
             lines.append("")
-        outcomes: Counter[str] = Counter()
-        for trial in mine:
-            outcomes[f"{trial.arm} {trial.attempts[-1].status}"] += 1
+        outcomes: Counter[str] = Counter(f"{condition(t)} {t.attempts[-1].status}" for t in mine)
         lines += ["Final status counts: " + ", ".join(f"{k} {v}" for k, v in sorted(outcomes.items())), ""]
     missing, total = expressiveness
     lines.append(f"Expressiveness gap: {missing} of {total} held-out tasks need a type Sx v0 lacks.")
-    return "\n".join(str(line) for line in lines)
+    return "\n".join(lines)
+
+
+def measure_guides(model: str, thinking: str, out: Path) -> str:
+    out.mkdir(parents=True, exist_ok=True)
+    instruction = "Reply with only the word OK."
+
+    def input_tokens(text: str, name: str) -> int:
+        prompt = out / f"measure-{name}.md"
+        prompt.write_text(text)
+        _, used, error = ask(prompt, model, thinking, out)
+        if error is not None:
+            raise RuntimeError(f"measuring {name} failed: {error}")
+        return used.get("input", 0)
+
+    baseline = input_tokens(instruction, "baseline")
+    lines = [f"Baseline, a one-line prompt: {baseline} input tokens", ""]
+    for level in GUIDE_LEVELS:
+        cost = input_tokens(f"{guide(level)}\n\n{instruction}", level) - baseline
+        lines.append(f"- guide {level}: {cost} tokens")
+    return "\n".join(lines)
 
 
 def main() -> None:
@@ -327,7 +364,9 @@ def main() -> None:
     parser.add_argument("--arm", action="append", choices=["sx", "js"])
     parser.add_argument("--task", action="append")
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--guide", action="append", choices=list(GUIDE_LEVELS), help="Sx guide levels to run")
     parser.add_argument("--report", action="store_true", help="Report on saved trials without calling a model")
+    parser.add_argument("--measure-guides", action="store_true", help="Measure each guide level's token cost")
     args = parser.parse_args()
     args.out = args.out.resolve()
     all_tasks = [json.loads(p.read_text()) for p in (BENCH / "tasks").glob("*/task.json")]
@@ -336,21 +375,27 @@ def main() -> None:
     if args.report:
         print(report(load_trials(args.out), gap))
         return
+    if args.measure_guides:
+        print(measure_guides(args.model, args.thinking, args.out))
+        return
     cores = json.loads((BENCH / "cores.json").read_text())
     tasks = load_tasks(args.split, args.task)
     arms = args.arm or ["sx", "js"]
+    levels = args.guide or ["standard"]
     args.out.mkdir(parents=True, exist_ok=True)
     with ThreadPoolExecutor(max_workers=args.jobs) as pool:
         jobs = []
         for task in tasks:
             wanted = reference_delays(task)
             for arm in arms:
-                for sample in range(args.samples):
-                    settings = (args.model, args.thinking, sample, args.out, cores, wanted)
-                    jobs.append(pool.submit(run_trial, task, arm, *settings))
+                for level in levels if arm == "sx" else ["none"]:
+                    for sample in range(args.samples):
+                        settings = (args.model, args.thinking, sample, args.out, cores, wanted)
+                        jobs.append(pool.submit(run_trial, task, arm, level, *settings))
         for job in jobs:
             trial = job.result()
-            print(f"{trial.task:28} {trial.arm} {trial.sample} {[a.status for a in trial.attempts]}", flush=True)
+            statuses = [a.status for a in trial.attempts]
+            print(f"{trial.task:28} {condition(trial):12} {trial.sample} {statuses}", flush=True)
     print(report(load_trials(args.out), gap))
 
 

@@ -316,6 +316,18 @@ Build the harness in `bench/codemode` that runs the Phase 0 corpus in two arms.
 
 Tune diagnostics and habit detectors on the development set before the held-out run.
 
+The guide is the largest fixed cost in an Sx prompt, so the probe tracks token efficiency as
+closely as correctness. `sx help` has three levels: `minimal`, a cheat sheet of signatures;
+`standard`, the hand-written guide the pilot tuned; and `full`, the standard guide plus every help
+example. `probe.py --measure-guides` reports each level's cost on the model's own tokenizer. The
+report breaks every condition's tokens into the first prompt, total input, output, and reasoning,
+with tokens per solved task.
+
+Choose the guide level on the development set only. Run every level there, then take the level
+with the fewest tokens per solved task among those within 5 percentage points of the best
+first-attempt correctness. The held-out run uses that level for the gate. Other levels may run on
+the held-out set as description, but never choose the gate's level.
+
 Score each task as the mean over its samples, and compare the arms task by task, so repeated
 samples of one task do not count as independent evidence. Report a bootstrap confidence interval
 over tasks with every result. With about 30 held-out tasks, one task is about 3 percentage points.

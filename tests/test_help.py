@@ -38,7 +38,15 @@ def test_every_form_and_prelude_function_has_a_help_entry() -> None:
     assert sorted((SPECIAL_FORMS | PRELUDE | {"none"}) - set(sx_help.ENTRIES)) == []
 
 
-def test_the_guide_names_every_form_and_prelude_function() -> None:
-    text = sx_help.guide()
-    missing = [name for name in sorted(SPECIAL_FORMS | PRELUDE) if f"({name} " not in text and f"`{name}`" not in text]
+@pytest.mark.parametrize("level", sx_help.GUIDE_LEVELS)
+def test_every_guide_level_names_every_form_and_prelude_function(level: str) -> None:
+    text = sx_help.guide(level)
+    names = sorted(SPECIAL_FORMS | PRELUDE)
+    spellings = ("({} ", "`{}`", " {} ")
+    missing = [name for name in names if not any(form.format(name) in text for form in spellings)]
     assert missing == []
+
+
+def test_guide_levels_grow_in_detail() -> None:
+    sizes = [len(sx_help.guide(level)) for level in sx_help.GUIDE_LEVELS]
+    assert sizes == sorted(sizes)

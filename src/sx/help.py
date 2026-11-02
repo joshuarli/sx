@@ -173,8 +173,44 @@ def example_registry() -> Registry:
     return registry
 
 
-def guide() -> str:
-    return files("sx").joinpath("guide.md").read_text()
+GUIDE_LEVELS = ("minimal", "standard", "full")
+
+MINIMAL_HEADER = """# Sx
+
+Sx calls tools and combines their results. A program is one expression; its value is the result.
+It looks like Clojure, but only the forms and functions below exist.
+
+Values: true false, integers (no fractions), "strings", [lists], {:field value} records (keywords
+only name fields), [1 "a"] tuples (mixed types), (some x) and none (no nil; a plain value works
+where an optional is expected), (ok x) and (err e). Durations such as 250ms 5s 2m 1h appear only in
+retry and wait-until options. Names may be kebab-case, camelCase, or snake_case. Comments start
+with ;.
+"""
+
+
+def first_sentence(text: str) -> str:
+    return text.split(". ")[0].rstrip(".") + "."
+
+
+def guide(level: str = "standard") -> str:
+    standard = files("sx").joinpath("guide.md").read_text()
+    if level == "standard":
+        return standard
+    if level == "minimal":
+        lines = [MINIMAL_HEADER, "Forms:"]
+        shown = [e for e in FORMS if e.name not in {"some", "ok", "err"}]
+        lines += [f"  {e.signature}  {first_sentence(e.description)}" for e in shown]
+        lines += ["", "Functions (function arguments come first):"]
+        lines += [f"  {e.signature}" for e in PRELUDE]
+        kinds = " ".join(CALL_ERROR_KINDS)
+        lines += ["", f"Error kinds for attempt, retry :on, and (get e :kind): {kinds}.", ""]
+        return "\n".join(lines)
+    if level == "full":
+        lines = [standard.rstrip(), "", "## More examples", ""]
+        for e in (*FORMS, *PRELUDE, *TYPES):
+            lines.append(f"- `{e.example}` returns `{e.result}`")
+        return "\n".join(lines) + "\n"
+    raise ValueError(f"unknown guide level {level!r}; choose one of {', '.join(GUIDE_LEVELS)}")
 
 
 def render_entry(e: Entry) -> str:

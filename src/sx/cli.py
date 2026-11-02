@@ -37,6 +37,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     help_command = commands.add_parser("help", help="Print the guide, or the entry for one name.")
     help_command.add_argument("name", nargs="?")
     help_command.add_argument("--declarations", type=Path, help="JSON declarations that add tools and types")
+    help_command.add_argument("--level", choices=sx_help.GUIDE_LEVELS, default="standard", help="Guide detail")
     for name, summary in (
         ("check", "Check a program and print its diagnostics."),
         ("explain", "Print the tools, effects, inputs, and result type of a program."),
@@ -82,7 +83,7 @@ def load_registry(path: Path | None) -> tuple[Registry, dict[str, Any]]:
 def command_help(args: argparse.Namespace) -> int:
     registry, _ = load_registry(args.declarations)
     if args.name is None:
-        print(sx_help.guide(), end="")
+        print(sx_help.guide(args.level), end="")
         return EXIT_OK
     found = sx_help.lookup(args.name, registry)
     if found is None:
