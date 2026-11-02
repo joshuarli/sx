@@ -97,7 +97,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run workflows in Sx and in TypeScript on Bun.")
     parser.add_argument("mode", choices=["reference", "trials", "report", "sessions", "effects-report"])
     parser.add_argument(
-        "--set", choices=list(definition.SETS), default="dev", help="The development, blind, blind2, effects, or effects-blind set"
+        "--set", choices=list(definition.SETS), default="dev", help="The workflow set",
     )
     parser.add_argument("--workflow", action="append", help="Workflow ids; every workflow of the set by default")
     parser.add_argument("--arm", action="append", choices=[*ARMS, "both"])
