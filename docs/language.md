@@ -209,6 +209,12 @@ A pattern `p` is a symbol, `_`, or a tuple pattern `[p1 ... pn]`. Patterns appea
 `loop`, and `fn` parameters. `_` evaluates the value and discards it, so
 `(let [_ (map send items)] (count items))` runs every send.
 
+A binding name may start with a capital letter, as in `(let [N (* qty price)] ...)`, `(fn [N] ...)`,
+`(def N 3)`, and `(loop {:max 5} [I 0] ...)`, and uses of the name resolve to the value. When an enum in
+scope has a variant of that name, the binding is a `reserved-name` error that names the enum and
+suggests the lowercase name, because the name would otherwise mean the variant. A capitalized name
+in a `match` pattern is still a variant pattern.
+
 The names of the special forms are reserved: `let`, `if`, `cond`, `match`, `fn`, `get`, `call`,
 `attempt`, `retry`, `wait-until`, `sleep`, `loop`, `recur`, `par`, `par-map`, `some`, `ok`, and
 `err`, and `none`. Binding one of them in `let`, `loop`, `fn` parameters, or a `match` pattern, or

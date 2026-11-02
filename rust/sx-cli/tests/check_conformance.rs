@@ -561,6 +561,14 @@ fn is_unfilled_accumulator(codes: &[String], source: &str) -> bool {
     source.contains("(loop") && codes.iter().any(|code| code == "unresolved-type")
 }
 
+fn is_capitalized_binding(rendered: &str) -> bool {
+    rendered.lines().any(|line| {
+        line.strip_prefix("  ").is_some_and(|text| {
+            text.starts_with(|c: char| c.is_ascii_uppercase()) && text.contains(" is not a pattern. A pattern is a name")
+        })
+    })
+}
+
 fn compare(label: &str, cases: &[Case]) -> (Tally, Vec<String>) {
     let python = python_checks(label, cases);
     let mut failures = Vec::new();
@@ -576,6 +584,9 @@ fn compare(label: &str, cases: &[Case]) -> (Tally, Vec<String>) {
             }
             (_, Checked::Rejected { codes, rendered }) if is_frozen_refusal(codes, rendered) => tally.widened += 1,
             (_, Checked::Rejected { codes, .. }) if &rust != python && is_unfilled_accumulator(codes, &case.source) => {
+                tally.widened += 1;
+            }
+            (_, Checked::Rejected { rendered, .. }) if &rust != python && is_capitalized_binding(rendered) => {
                 tally.widened += 1;
             }
             _ if &rust != python => {

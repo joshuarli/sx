@@ -1794,7 +1794,23 @@ impl<'r> Checker<'r> {
     ) -> (Binder, Scope<'a>) {
         match &pattern.kind {
             NodeKind::Symbol(name) if name == "_" => (Binder::Discard, scope.clone()),
-            NodeKind::Symbol(name) if !first_upper(name) => {
+            NodeKind::Symbol(name) if !first_upper(name) || role != "match" => {
+                if first_upper(name)
+                    && let Some(owner) = self.enums().into_iter().find(|e| e.has(name))
+                {
+                    let mut letters = name.chars();
+                    let lowered: String = letters.next().into_iter().flat_map(char::to_lowercase).chain(letters).collect();
+                    self.report(
+                        Diagnostic::new(
+                            "reserved-name",
+                            pattern.span,
+                            format!("{name} is a variant of {}, so it cannot name a value.", owner.name),
+                        )
+                        .detail("A capitalized name is a variant when an enum in scope has a variant of that name. Name a value with a lowercase name.")
+                        .fix(lowered),
+                    );
+                    return (Binder::Discard, scope.value(name, Type::Never));
+                }
                 if self.reserved(name, pattern.span) && name == "none" {
                     return (Binder::Discard, scope.clone());
                 }
@@ -3743,7 +3759,7 @@ impl<'r> Checker<'r> {
                 self.coerce(prelude(prelude_op, vec![value], span), &INT, expected, span)
             }
             "=" | "not=" => {
-                let variant_first = symbol(&args[0]).is_some_and(first_upper);
+                let variant_first = symbol(&args[0]).is_some_and(|name| first_upper(name) && scope.get(name).is_none());
                 let string_first =
                     matches!(args[0].kind, NodeKind::String(_)) && !matches!(args[1].kind, NodeKind::String(_));
                 let (one, two) = if variant_first || string_first { (1, 0) } else { (0, 1) };

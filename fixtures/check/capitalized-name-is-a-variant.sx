@@ -1,0 +1,5 @@
+; declarations: fixtures/run/declarations.json
+; python: no
+(let [Passing 1
+      Failing 2]
+  (map (fn [Unknown] Unknown) [Passing]))

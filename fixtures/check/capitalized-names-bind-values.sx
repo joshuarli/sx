@@ -1,0 +1,11 @@
+; declarations: fixtures/run/declarations.json
+; python: no
+(def N 3)
+(defn scaled [X] (* X N))
+(let [P (* N 2)
+      [A B] [P 1]
+      doubled (map (fn [Y] (* Y 2)) [A B])]
+  (loop {:max 5} [I 0 Total 0]
+    (if (< I N)
+      (recur (+ I 1) (+ Total (scaled I)))
+      [Total doubled (= N 3)])))

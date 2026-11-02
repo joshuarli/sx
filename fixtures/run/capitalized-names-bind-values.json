@@ -1,0 +1,12 @@
+{
+  "description": "A capitalized name binds an ordinary value when no enum in scope has a variant of that name, in let, fn parameters, and loop bindings, and uses resolve to the value.",
+  "python": false,
+  "program": "(def N 3)\n(defn scaled [X] (* X N))\n(let [P (* N 2) [A B] [P 1] doubled (map (fn [Y] (* Y 2)) [A B])] (loop {:max 5} [I 0 Total 0] (if (< I N) (recur (+ I 1) (+ Total (scaled I))) [Total doubled (= N 3)])))",
+  "declarations": "declarations.json",
+  "allow": [],
+  "responses": [],
+  "expect": {
+    "completed": [9, [12, 2], true]
+  },
+  "trace": []
+}

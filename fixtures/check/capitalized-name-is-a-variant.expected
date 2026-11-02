@@ -1,0 +1,20 @@
+error[reserved-name] 3:7-3:14
+  (let [Passing 1
+        ^^^^^^^
+  Passing is a variant of Level, so it cannot name a value.
+  A capitalized name is a variant when an enum in scope has a variant of that name. Name a value with a lowercase name.
+  Fix: passing
+
+error[reserved-name] 4:7-4:14
+        Failing 2]
+        ^^^^^^^
+  Failing is a variant of Level, so it cannot name a value.
+  A capitalized name is a variant when an enum in scope has a variant of that name. Name a value with a lowercase name.
+  Fix: failing
+
+error[reserved-name] 5:13-5:20
+    (map (fn [Unknown] Unknown) [Passing]))
+              ^^^^^^^
+  Unknown is a variant of Level, so it cannot name a value.
+  A capitalized name is a variant when an enum in scope has a variant of that name. Name a value with a lowercase name.
+  Fix: unknown
