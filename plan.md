@@ -994,8 +994,21 @@ What the transcripts say Sx should change:
   mode in both arms.
 
 **Handoff.** Everything is on master and nothing is pushed. Raw sessions are under `.work/real/`
-(disposable; the tables above are the record). The campaign's planned phases are done. The changes
-above are proposals for the owner, and none is made.
+(disposable; the tables above are the record). The campaign's planned phases are done.
+
+**After Phase 17.** The owner asked for the lead's recommendations, and two changes are made:
+
+- `sx mcp import` reads a wrapped result as the value it wraps. A tool marked `sx/result: wrapped`
+  whose `outputSchema` is exactly `{result: VALUE}` declares the type of `VALUE`, with the result kind
+  `wrapped`. This breaks programs written against declarations imported before; those declarations
+  still load and run.
+- `fs.make-directory` of a path that resolves to a granted root succeeds without doing anything.
+  `fs.delete`, `fs.move`, and `fs.write-text` of a root are still refused.
+
+Two are not made. Asking for one program per request would trade away what Phase 16 found keeps these
+sessions safe: reading in one run and writing literal paths in the next, which `check` can judge. Letting
+a program read an earlier run's result is a language change, and 17 retyped runs do not yet justify it.
+Session-wide limits wait for more than one violation.
 
 #### Phase 16: The effects benchmark
 
