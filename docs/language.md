@@ -1696,7 +1696,9 @@ one program against those declarations. It has these sections, in order:
 4. A section for each core the declarations list, with its functions.
 5. Each granted tool, with its effect, its description, the method and URL of a typed endpoint, a
    call template written in Sx, and its input and result shapes.
-6. A checklist of the mistakes models make most often.
+6. A note that the host checks the whole program before anything runs, so a model may write it
+   directly. A checklist of common mistakes in its place made answers cost more without making them
+   more often right.
 
 A tool that is not granted does not appear, and neither does the section of a pack with no granted
 tool. `--notes` prints only the behavior notes. They describe the tools and not Sx, so a host can

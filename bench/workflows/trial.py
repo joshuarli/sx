@@ -22,11 +22,7 @@ LANGUAGE: dict[str, str] = {"sx": "sx", "js": "ts"}
 
 
 TAILORED = "tailored"
-VARIANTS = ("slim", "direct", "nochecklist")
-WRITE_DIRECTLY = (
-    "The host checks the whole program before it runs anything and reports each mistake with its fix, so "
-    "write the program directly instead of deliberating over syntax: a rejected program costs only another try."
-)
+VARIANTS = ("slim",)
 REPLY_SX = "Reply with one Sx program in a ```sx code block, and nothing else."
 
 
@@ -65,11 +61,7 @@ def sx_prompt(workflow: Workflow, sandbox: Sandbox, level: str) -> str:
         shown = arms.sx_guide(workflow, sandbox, notes=False).rstrip()
         if "slim" in variants:
             shown = slimmed(shown)
-        if "nochecklist" in variants:
-            kept = [part.rstrip() for part in sections(shown) if not part.startswith("## Before you answer")]
-            shown = "\n\n".join(kept)
-        direct = [WRITE_DIRECTLY, ""] if "direct" in variants else []
-        return "\n".join([shown, "", "## Your task", "", task, "", *direct, REPLY_SX]) + "\n"
+        return "\n".join([shown, "", "## Your task", "", task, "", REPLY_SX]) + "\n"
     return "\n".join([
         guide(level), "", "## Your task", "", task, "", arms.sx_listing(workflow, sandbox),
         REPLY_SX,

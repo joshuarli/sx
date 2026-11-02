@@ -197,7 +197,7 @@ impl GuideLevel {
 const STANDARD_GUIDE: &str = include_str!("../../../src/sx/guide.md");
 pub const KERNEL: &str = include_str!("../guide/kernel.md");
 pub const TYPESCRIPT: &str = include_str!("../guide/typescript.md");
-pub const CHECKLIST: &str = include_str!("../guide/checklist.md");
+pub const WRITING: &str = include_str!("../guide/writing.md");
 
 const MINIMAL_HEADER: &str = "# Sx
 

@@ -15,7 +15,8 @@ const GUIDE_HELP: &str = r#"usage: sx guide --declarations FILE [--grants FILE] 
 
 Print the guide for writing one program against these declarations: the
 kernel guide, how TypeScript habits map to Sx, a section for each pack and
-core in use, a call template for each granted tool, and a checklist.
+core in use, a call template for each granted tool, and how the host treats
+the program it is given.
 
 options:
   --declarations FILE  Declarations of the capabilities, packs, and cores
@@ -142,7 +143,7 @@ fn tailored(registry: &Registry, declarations: &Json, tools: &[Tool<'_>], famili
         }
     }
     parts.push(tools_section(tools));
-    parts.push(sx_kernel::help::CHECKLIST.trim_end().to_string());
+    parts.push(sx_kernel::help::WRITING.trim_end().to_string());
     format!("{}\n", parts.join("\n\n"))
 }
 
