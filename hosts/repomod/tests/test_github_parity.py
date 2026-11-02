@@ -1,12 +1,8 @@
 import random
 
+from evaluate import evaluator
 from repomod.github import _state_for_checks
 from repomod.types import CheckResult
-from sx_github import CI_LABELS, CORE
-
-from sx.host import evaluate
-from sx.registry import Registry
-from sx.values import ListValue, decode
 
 STATES = [
     "success", "passed", "failure", "failed", "error", "timed_out", "action_required", "startup_failure",
@@ -45,16 +41,12 @@ def as_json(check: CheckResult) -> dict[str, object]:
 
 
 def test_ci_state_matches_repomod_for_generated_check_sets() -> None:
-    registry = Registry()
-    registry.add_core(CORE)
     cases = generated(20261101, 4000)
-    listed = registry.parse(f"List<{CASE}>")
     payload = [{"checks": [as_json(c) for c in checks], "complete": complete} for checks, complete in cases]
     source = "(map (fn [c] (github.ci-state-name (github.ci-state (get c :checks) (get c :complete)))) cases)"
-    names = evaluate(registry, source, {"cases": (listed, decode(payload, listed, "$cases"))})
+    with evaluator("github") as evaluate:
+        names = evaluate(source, {"cases": (f"List<{CASE}>", payload)})
     expected = [_state_for_checks(tuple(checks), complete) for checks, complete in cases]
-    assert isinstance(names, ListValue)
-    assert list(names.items) == expected
+    assert names == expected
     every_state = {"failed", "pending", "passed", "none", "unknown", "stale", "cancelled", "skipped", "neutral"}
-    assert every_state <= set(expected)
-    assert set(expected) <= set(CI_LABELS.values())
+    assert set(expected) == every_state

@@ -155,20 +155,6 @@ requires-dist = [{ name = "sx", editable = "." }]
 name = "sx-repomod"
 version = "0.1.0"
 source = { editable = "hosts/repomod" }
-dependencies = [
-    { name = "sx" },
-    { name = "sx-git" },
-    { name = "sx-github" },
-    { name = "sx-text" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "sx", editable = "." },
-    { name = "sx-git", editable = "cores/git" },
-    { name = "sx-github", editable = "cores/github" },
-    { name = "sx-text", editable = "cores/text" },
-]
 
 [[package]]
 name = "sx-semver"

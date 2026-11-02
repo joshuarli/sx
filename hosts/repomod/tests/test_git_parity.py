@@ -1,14 +1,10 @@
 from itertools import product
 from pathlib import Path
 
+from evaluate import evaluator
 from repomod.cmd.status import _age_days, _local_label, _stale_local_work
 from repomod.types import GitStatus
-from sx_git import CORE
 from sx_repomod.capabilities import checkout_json
-
-from sx.host import evaluate
-from sx.registry import Registry
-from sx.values import ListValue, SomeValue, decode
 
 CASE = "Record {checkout: git.Checkout, default: Option<String>, branch: Option<Int>, unpushed: Option<Int>}"
 PATH = Path("/unused")
@@ -44,8 +40,6 @@ def statuses() -> list[GitStatus]:
 
 
 def test_local_label_matches_repomod_for_every_status_shape() -> None:
-    registry = Registry()
-    registry.add_core(CORE)
     cases = []
     expected = []
     for status in statuses():
@@ -63,28 +57,23 @@ def test_local_label_matches_repomod_for_every_status_shape() -> None:
         "(map (fn [c] (git.local-label (get c :checkout) (get c :default) (get c :branch) (get c :unpushed)))"
         " cases)"
     )
-    listed = registry.parse(f"List<{CASE}>")
-    labels = evaluate(registry, source, {"cases": (listed, decode(cases, listed, "$cases"))})
-    assert isinstance(labels, ListValue)
-    assert list(labels.items) == expected
+    with evaluator("git") as evaluate:
+        labels = evaluate(source, {"cases": (f"List<{CASE}>", cases)})
+    assert labels == expected
     assert len(set(expected)) > 15
 
 
 def test_age_and_staleness_match_repomod() -> None:
-    registry = Registry()
-    registry.add_core(CORE)
     pairs = [
         (since, now)
         for since in (None, 0, 1, 86_399, 86_400, 1_700_000_000, 1_800_000_000, 1_800_000_500)
         for now in (1_800_000_000, 1_800_000_001, 1_800_086_399, 1_800_086_400, 1_900_000_000)
     ]
     cases = [{"since": since, "now": now * 1000} for since, now in pairs]
-    case_type = registry.parse("List<Record {since: Option<Int>, now: Int}>")
     source = "(map (fn [c] (git.age-days (get c :now) (get c :since))) cases)"
-    ages = evaluate(registry, source, {"cases": (case_type, decode(cases, case_type, "$cases"))})
-    days = [_age_days(since, float(now)) for since, now in pairs]
-    assert isinstance(ages, ListValue)
-    assert [item.value if isinstance(item, SomeValue) else None for item in ages.items] == days
-    for branch, unpushed in product((None, 0, 6, 7, 30), repeat=2):
-        source = f"(git.stale-work? {optional(branch)} {optional(unpushed)})"
-        assert evaluate(registry, source) == _stale_local_work(branch, unpushed)
+    with evaluator("git") as evaluate:
+        ages = evaluate(source, {"cases": ("List<Record {since: Option<Int>, now: Int}>", cases)})
+        assert ages == [_age_days(since, float(now)) for since, now in pairs]
+        for branch, unpushed in product((None, 0, 6, 7, 30), repeat=2):
+            source = f"(git.stale-work? {optional(branch)} {optional(unpushed)})"
+            assert evaluate(source) == _stale_local_work(branch, unpushed)

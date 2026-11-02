@@ -116,10 +116,7 @@ fn load_registry(path: Option<&str>, mut registry: Registry) -> Result<(Registry
     if !matches!(declarations, Json::Object(_)) {
         return Err(Stop::usage(format!("declarations {shown} must be a JSON object")));
     }
-    let cores = core_ids(&declarations, &shown)?;
-    load_declarations(&mut registry, &declarations)
-        .map_err(|e| Stop::usage(format!("invalid declarations {shown}: {e}")))?;
-    for id in cores {
+    for id in core_ids(&declarations, &shown)? {
         if registry.core(&id).is_some() {
             continue;
         }
@@ -128,6 +125,8 @@ fn load_registry(path: Option<&str>, mut registry: Registry) -> Result<(Registry
         })?;
         registry.add_core(core).map_err(|e| Stop::usage(format!("invalid declarations {shown}: {e}")))?;
     }
+    load_declarations(&mut registry, &declarations)
+        .map_err(|e| Stop::usage(format!("invalid declarations {shown}: {e}")))?;
     Ok((registry, declarations))
 }
 

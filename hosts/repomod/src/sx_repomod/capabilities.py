@@ -15,11 +15,20 @@ from repomod.git import GitError, branch_checked_out_time, oldest_unpushed_commi
 from repomod.github import GitHubError
 from repomod.policy import PolicyError
 from repomod.types import Catalog, CiState, GitStatus, Repository
-from sx_github import CI_LABELS
 
 type Json = Any
 
-CI_VARIANT_OF = {label: variant for variant, label in CI_LABELS.items()}
+CI_VARIANT_OF = {
+    "passed": "Passed",
+    "failed": "Failed",
+    "pending": "Pending",
+    "cancelled": "Cancelled",
+    "skipped": "Skipped",
+    "neutral": "Neutral",
+    "none": "NoChecks",
+    "unknown": "Unknown",
+    "stale": "Stale",
+}
 UNCATALOGUED = "repository is not catalogued"
 
 

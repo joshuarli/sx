@@ -5,14 +5,14 @@ import sys
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
-from sx import cli as sx_cli
-from sx_repomod.declarations import DISCOVER, STATUS_OFFLINE, Program, new_registry
+from sx_repomod.declarations import DISCOVER, STATUS_OFFLINE, Program
+from sx_repomod.kernel import KernelError
+from sx_repomod.sx_command import SX_COMMANDS, delegate, list_cores
 
 if TYPE_CHECKING:
     from sx_repomod.capabilities import Environment
 
 EXIT_FAILED = 2
-SX_COMMANDS = ("help", "cores", "check", "explain", "run")
 
 
 def parser() -> argparse.ArgumentParser:
@@ -38,7 +38,6 @@ def parser() -> argparse.ArgumentParser:
 
 def execute(program: Program, inputs: dict[str, object], environment: Environment | None) -> Any:
     from sx_repomod.capabilities import Capabilities
-    from sx_repomod.kernel import KernelError
     from sx_repomod.runner import Errored, RejectedProgramError, Succeeded, run_program
 
     try:
@@ -56,10 +55,18 @@ def execute(program: Program, inputs: dict[str, object], environment: Environmen
     return outcome.result
 
 
+def run_sx_command(arguments: list[str]) -> int:
+    try:
+        return list_cores(arguments[1:]) if arguments[0] == "cores" else delegate(arguments)
+    except KernelError as failure:
+        print(f"sx-repomod: the Rust kernel failed: {failure}", file=sys.stderr)
+        return EXIT_FAILED
+
+
 def main(argv: Sequence[str] | None = None, environment: Environment | None = None) -> int:
     arguments = list(sys.argv[1:] if argv is None else argv)
     if arguments and arguments[0] in SX_COMMANDS:
-        return sx_cli.main(arguments, new_registry)
+        return run_sx_command(arguments)
     args = parser().parse_args(arguments)
     from sx_repomod import render
 

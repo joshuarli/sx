@@ -24,7 +24,7 @@ This is a uv workspace.
 | `src/sx` | The kernel: reader, checker, machine, registry, help. |
 | `cores/text`, `cores/semver` | Pure cores that register through the Python API. |
 | `cores/git`, `cores/github` | Decision cores: a checkout as `Missing | Invalid | OriginMismatch | Detached | OnBranch`, and CI aggregation. |
-| `hosts/repomod` | `sx-repomod`: capabilities that wrap repomod, and the `discover` and `status --offline` programs. |
+| `hosts/repomod` | `sx-repomod`: capabilities that wrap repomod, and the `discover` and `status --offline` programs, run on the Rust binary. |
 | `bench/codemode` | The model probe. |
 
 The kernel and the cores never import repomod. Only `hosts/repomod` does, and it finds repomod on
@@ -89,6 +89,12 @@ uv run sx-repomod help github
 
 Options such as `--owner`, `--repo`, `--tag`, `--dirty`, `--failed`, and `--refresh` reach the
 program as inputs. `status` takes no `--checkout` or `--details`, and `--offline` is required.
+
+`help`, `cores`, `check`, `explain`, and `run` are the `sx` commands with the host's cores and
+capabilities already declared, and they run on the same Rust binary. A `--declarations` file you give
+adds to the host's declarations, and may list more built-in `cores`. The host reads each core's version
+and assurance from the binary's `sx help CORE`. `sx-repomod` imports neither the Python kernel nor the
+Python cores. The parity tests import them only to compare with the frozen Python commands.
 
 The parity tests build copied catalogs, temporary Git repositories, fake `gh` responses, and a
 fixed clock from repomod's own test helpers, run the Python command and the program on the same

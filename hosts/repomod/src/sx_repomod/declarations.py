@@ -4,12 +4,6 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from importlib.resources import files
 
-from sx_git import CORE as GIT
-from sx_github import CORE as GITHUB
-from sx_text import CORE as TEXT
-
-from sx.registry import Capability, Effect, Registry
-
 FINDING = (
     "Record {repository: String, rule: String, file: Option<String>, message: String, severity: String, "
     "fixable: Bool, kind: String, line: Option<Int>, column: Option<Int>, code: Option<String>}"
@@ -41,24 +35,18 @@ CAPABILITIES: tuple[tuple[str, str, str, str], ...] = (
 )
 
 
-CORE_IDS = tuple(core.id for core in (TEXT, GIT, GITHUB))
+CORE_IDS = ("text", "git", "github")
 
 
-def new_registry() -> Registry:
-    registry = Registry()
-    for core in (TEXT, GIT, GITHUB):
-        registry.add_core(core)
-    for capability_id, input_type, output_type, description in CAPABILITIES:
-        registry.add_capability(
-            Capability(
-                id=capability_id,
-                effect=Effect.READ,
-                input=registry.parse(input_type),
-                output=registry.parse(output_type),
-                description=description,
-            )
-        )
-    return registry
+def capability_declarations() -> list[dict[str, object]]:
+    return [
+        {"id": capability_id, "effect": "read", "input": input_type, "output": output_type, "description": text}
+        for capability_id, input_type, output_type, text in CAPABILITIES
+    ]
+
+
+def host_declarations() -> dict[str, object]:
+    return {"cores": list(CORE_IDS), "capabilities": capability_declarations()}
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,14 +61,7 @@ class Program:
 
     @property
     def declarations(self) -> dict[str, object]:
-        return {
-            "cores": list(CORE_IDS),
-            "inputs": dict(self.inputs),
-            "capabilities": [
-                {"id": capability_id, "effect": "read", "input": input_type, "output": output_type, "description": text}
-                for capability_id, input_type, output_type, text in CAPABILITIES
-            ],
-        }
+        return {**host_declarations(), "inputs": dict(self.inputs)}
 
 
 DISCOVER = Program(
