@@ -161,7 +161,10 @@ did the work. The owner then started the second campaign, Phases 10 to 12, to cl
 the guide, and opened repomod to the changes Phase 3 proposed. Every phase of the second campaign has
 passed. On eight workflows written blind, Sx and TypeScript were both correct on 24 of 24 first
 attempts. Sx still spends 1.8 times TypeScript's output tokens and 5 times its prompt tokens, and 3 of
-its 24 answers ran only because the reader inferred closers from indentation.
+its 24 answers ran only because the reader inferred closers from indentation. The third campaign,
+Phases 13 and 14, cut Sx's cost 12% on the development set, but on a second blind set Sx still cost
+2.4 times TypeScript per solved task, so its cost gate failed; the handoff at the end of Phase 14 says
+where to resume.
 
 **The Python prototype is frozen.** `src/sx` and the Python cores are frozen as of commit
 `15b6ed6`, the parent of the commit that records this, because Rust passed its gates. The prototype
@@ -623,6 +626,46 @@ costs 11 points of first attempts, while TypeScript loses almost nothing at low 
 settings the gap widens from 1.7 to 2.5 times. The remaining dev gap is mostly the prompt: Sx's
 reasoning is now within a fifth of TypeScript's here, and its 6,400 prompt tokens are a third of
 its cost.
+
+**Phase 14: the second blind set (the third campaign's result).** A subagent under Phase 12's rules
+wrote `bench/workflows/blind2/`: `catalog-sync`, `customer-merge`, `export-jobs`, `release-tagger`,
+`service-config-audit`, `task-assign`, `tidy-text-files`, and `usage-report`; both references of each
+are correct on the measured binary (`35994e4`, the guide that ends with the write-directly sentence
+and has no checklist). 3 samples, both arms, TypeScript with the tool notes. One Sx trial at medium
+thinking (`export-jobs` sample 0) was lost when a reply without a reasoning count crashed the runner,
+fixed in `96780bd`; its rerun was stopped when the session ended, so that row has 23 trials.
+
+| Arm, thinking | First attempt | Final | Prompt | Output | Reasoning | Cost per solved task |
+| --- | --- | --- | --- | --- | --- | --- |
+| Sx, medium | 21 of 23 | 22 of 23 | 7,597 | 11,114 | 9,687 | $0.00312 |
+| TypeScript, medium | 23 of 24 | 24 of 24 | 1,433 | 5,785 | 4,495 | $0.00130 |
+| Sx, low | 21 of 24 | 24 of 24 | 8,092 | 4,480 | 3,204 | $0.00171 |
+| TypeScript, low | 21 of 24 | 24 of 24 | 1,656 | 2,685 | 1,448 | $0.00070 |
+
+The cost gate failed: Sx costs 2.4 times TypeScript per solved task at both thinking levels, against a
+target of 1.6. Correctness stayed within the 10 points (91% against 96% at medium, level at low). The
+development set's 12% saving (confirmed on the shipped guide: 34 of 36, $0.00199) did not reach unseen
+tasks, where Sx's reasoning stays twice TypeScript's, as on the first blind set (9,968 against 4,857).
+On familiar tasks reasoning nearly closed; on new ones the model still plans at length in a language it
+has not seen. The blind author recorded two needs Sx could not meet: bounded concurrent writes (`par`
+and `par-map` refuse writes) and writing JSON.
+
+**Handoff.** Everything is committed on master; nothing from Phases 13 and 14 is pushed. The raw trials
+are under `.work/workflows/` (disposable; the tables above are the record). To resume the lost trial:
+`SX_BIN=<binary built at 35994e4> uv run python bench/workflows/runner.py trials --set blind2
+--workflow export-jobs --arm sx --guide tailored --samples 1 --out .work/workflows/blind2`. The next
+campaign, as proposed to the owner and not yet chosen:
+
+1. **Sx as code mode for any MCP client:** one MCP tool that takes an Sx program, describes itself with
+   `sx guide`, checks and explains the program's exact calls, and only then runs it against the host's
+   real tools, so real agent sessions, with a strong model as well as Muse, replace synthetic tasks.
+2. **A benchmark where effects matter:** destructive writes, policies a program can violate, partial
+   effects before a failure, and a host approving exact calls before anything runs, which is where
+   Sx's static authority should win and which no campaign has measured.
+3. **The gaps the blind authors designed around:** writing JSON, creating, moving, and deleting files in
+   `fs`, date arithmetic, bounded concurrent writes, and parallel read-only commands.
+4. **Stop tuning cost** beyond this: the remaining gap is reasoning on unseen tasks, and a host with
+   prompt caching would make the guide's prompt tokens nearly free.
 
 **The repomod track passed.** repomod gained `default_catalog`, `select_repositories`, `print_json`,
 `discover_owner`, `checkout_status`, `todo_item_count`, `status_text`, and `render_discover`, and
