@@ -32,7 +32,7 @@ pub const USER_AGENT: &str = concat!("sx-packs/", env!("CARGO_PKG_VERSION"));
 const FRAMING_HEADERS: [&str; 7] =
     ["host", "content-length", "transfer-encoding", "connection", "upgrade", "te", "trailer"];
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Headers(Vec<(HeaderName, HeaderValue)>);
 
 impl Headers {
@@ -54,8 +54,27 @@ impl Headers {
         Ok(())
     }
 
+    pub fn insert_secret(&mut self, name: &str, value: &str) -> Result<(), Failure> {
+        if value.is_empty() {
+            return Err(Failure::new(CallErrorKind::Invalid, format!("header {name:?}: the value is empty")));
+        }
+        self.insert(name, value)?;
+        if let Some((_, content)) = self.0.last_mut() {
+            content.set_sensitive(true);
+        }
+        Ok(())
+    }
+
     pub fn has(&self, name: &str) -> bool {
         self.0.iter().any(|(existing, _)| existing.as_str() == name)
+    }
+
+    pub fn names(&self) -> impl Iterator<Item = &str> {
+        self.0.iter().map(|(name, _)| name.as_str())
+    }
+
+    pub fn values(&self) -> impl Iterator<Item = &[u8]> {
+        self.0.iter().map(|(_, value)| value.as_bytes())
     }
 }
 
@@ -95,7 +114,7 @@ fn transport_failure(url: &Url, error: &Error) -> Failure {
     Failure::new(kind, format!("{}: {error}{source}", url.shown()))
 }
 
-fn request_of(outgoing: &Outgoing) -> Result<Request<Vec<u8>>, Failure> {
+fn request_of(outgoing: &Outgoing, scope: &Scope) -> Result<Request<Vec<u8>>, Failure> {
     let invalid = |what: String| Failure::new(CallErrorKind::Invalid, what);
     let method = Method::from_bytes(outgoing.method.as_bytes())
         .map_err(|_| invalid(format!("{:?} is not an HTTP method", outgoing.method)))?;
@@ -106,7 +125,11 @@ fn request_of(outgoing: &Outgoing) -> Result<Request<Vec<u8>>, Failure> {
     for (name, value) in &outgoing.headers.0 {
         request.headers_mut().append(name.clone(), value.clone());
     }
-    if !outgoing.headers.has("user-agent") {
+    let injected = scope.injected_for(&outgoing.url.origin);
+    for (name, value) in injected.iter().flat_map(|headers| &headers.0) {
+        request.headers_mut().append(name.clone(), value.clone());
+    }
+    if !outgoing.headers.has("user-agent") && !injected.is_some_and(|headers| headers.has("user-agent")) {
         request.headers_mut().append(HeaderName::from_static("user-agent"), HeaderValue::from_static(USER_AGENT));
     }
     Ok(request)
@@ -221,7 +244,7 @@ pub fn send(limits: &Limits, scope: &Scope, request: Outgoing) -> Result<Reply, 
             return Err(timed_out(&current.url.shown()));
         };
         let response = client
-            .request_with_timeout(request_of(&current)?, Some(remaining))
+            .request_with_timeout(request_of(&current, scope)?, Some(remaining))
             .map_err(|e| transport_failure(&current.url, &e))?;
         let (head, body) = response.into_parts();
         if followed < limits.max_redirects
@@ -236,14 +259,33 @@ pub fn send(limits: &Limits, scope: &Scope, request: Outgoing) -> Result<Reply, 
             .get(h12tiny::client_sync::http::header::CONTENT_LENGTH)
             .and_then(|value| value.to_str().ok())
             .and_then(|text| text.trim().parse::<usize>().ok());
-        let headers = joined_headers(&head.headers, &current.url)?;
+        let secrets = scope.secrets();
+        let headers = joined_headers(&head.headers, &current.url)?
+            .into_iter()
+            .map(|(name, value)| (name, redact(value.into_bytes(), &secrets)))
+            .map(|(name, value)| (name, String::from_utf8_lossy(&value).into_owned()))
+            .collect();
         let body = if current.method == "HEAD" {
             Ok(Vec::new())
         } else {
-            read_body(body, declared, limits, deadline, &current.url)
+            read_body(body, declared, limits, deadline, &current.url).map(|bytes| redact(bytes, &secrets))
         };
         return Ok(Reply { status: head.status.as_u16(), headers, url: current.url, body });
     }
+}
+
+const REDACTED: &[u8] = b"[redacted]";
+
+fn redact(mut bytes: Vec<u8>, secrets: &[Vec<u8>]) -> Vec<u8> {
+    for secret in secrets {
+        let mut at = 0;
+        while let Some(found) = bytes.get(at..).and_then(|rest| rest.windows(secret.len()).position(|window| window == secret.as_slice())) {
+            let start = at + found;
+            bytes.splice(start..start + secret.len(), REDACTED.iter().copied());
+            at = start + REDACTED.len();
+        }
+    }
+    bytes
 }
 
 pub fn status_kind(status: u16) -> Option<CallErrorKind> {

@@ -9,7 +9,7 @@ use sx_kernel::authority::Grants;
 use sx_kernel::json::{Json, Layout, dumps, parse, python_equal};
 use sx_kernel::registry::{Registry, load_declarations_with};
 use sx_kernel::types::CallErrorKind;
-use sx_packs::http::EndpointLoader;
+use sx_packs::declared::DeclaredLoader;
 use sx_packs::mcp::{Answer, Server, error_result, serve};
 
 fn json(text: &str) -> Json {
@@ -22,7 +22,7 @@ fn shown(value: &Json) -> String {
 
 fn server(declarations: &str, grants: &str) -> Server {
     let mut registry = Registry::new();
-    let mut loader = EndpointLoader::new();
+    let mut loader = DeclaredLoader::new();
     let declarations = json(declarations);
     for pack in ["fs", "http"] {
         if declarations.get("packs").and_then(Json::as_array).is_some_and(|packs| packs.iter().any(|p| p.as_str() == Some(pack))) {

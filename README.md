@@ -62,7 +62,7 @@ Each command takes `--format json`.
 
 `rust/` holds the same command line as a Rust binary, `sx`, with the same options, exit codes, and
 output as the Python one. Build it with `cargo build --release --manifest-path rust/Cargo.toml -p sx-cli`.
-Two things differ on purpose. The Rust binary reads `"cores": ["text", "semver", "git", "github", "decimal"]` in a
+Two things differ on purpose. The Rust binary reads `"cores": ["text", "semver", "git", "github", "decimal", "yaml"]` in a
 declarations file and registers those built-in cores, where the Python command refuses. And it
 validates declarations more strictly than Python's duck typing does, for example `"types": []`.
 `rust/sx-cli/tests/cli_parity.rs` runs every `tests/test_cli.py` scenario, every `fixtures/cli`
@@ -137,7 +137,37 @@ A grant lists origins and methods, `check` rejects a literal call outside them w
 denied request never opens a socket. Redirects are followed only inside the grant, at most 5 times.
 Status codes map to call error kinds by a closed table (`404` is `NotFound`, `429` is `RateLimited`,
 `5xx` is `Unavailable`), and one 30 second deadline and an 8 MiB body cap bound every request.
+A grant can also inject headers per origin, such as `"headers": {"https://api.example.com": {"authorization": {"env": "API_TOKEN"}}}`:
+the host adds them to every request, reading `{"env": NAME}` from its environment when the grant loads, and
+the program never sees them in a value, a trace, `explain`, or an error. A request that sets the same header
+is denied.
 [docs/language.md](docs/language.md#the-http-pack) has the origin rules, the endpoint format, and the table.
+
+## The sqlite pack
+
+`"packs": ["sqlite"]` registers `sqlite.execute`, which runs DDL, and a declarations file declares typed
+SQL statements the way it declares HTTP endpoints. `:name` parameters bind input fields, a query's rows
+decode into the declared output by column name, and a statement's output is its changed row count. A grant
+lists the directories databases may live in, as `fs` does:
+
+```sh
+cat > store.json <<'JSON'
+{"packs": ["sqlite"],
+ "capabilities": [{"id": "store.add", "effect": "write", "idempotent": true,
+   "sqlite": {"database": "/srv/data/store.db",
+              "statement": "INSERT OR REPLACE INTO repo(name, stars) VALUES (:name, :stars)"},
+   "input": "Record {name: String, stars: Int}", "output": "Int"},
+  {"id": "store.top", "effect": "read",
+   "sqlite": {"database": "/srv/data/store.db", "statement": "SELECT name, stars FROM repo ORDER BY stars DESC LIMIT 3"},
+   "input": "Record {}", "output": "List<Record {name: String, stars: Int}>"}]}
+JSON
+echo '{"sqlite.execute": {"roots": ["/srv/data"]}, "store.add": {"roots": ["/srv/data"]}, "store.top": {"roots": ["/srv/data"]}}' > grants.json
+sx run top.sx --declarations store.json --grants grants.json
+```
+
+Each call runs in its own transaction. Constraint failures are `Conflict`, a busy database is
+`Unavailable`, and a syntax error is `Invalid` for a read and `Failed` for a write.
+[docs/language.md](docs/language.md#the-sqlite-pack) has the declaration rules, the row types, and the table.
 
 ## Scripts and decimals
 
@@ -167,6 +197,23 @@ sx run square.sx --declarations decimal.json --input 'price="12.50"'
 
 [docs/language.md](docs/language.md#scripts) has the rules, and
 [the decimal core](docs/language.md#the-decimal-core) its functions and limits.
+
+## Editing YAML in place
+
+The `yaml` core edits block-style YAML without reformatting it. `yaml.get text path` reads a scalar,
+`yaml.keys text path` lists a mapping's keys or a sequence's indexes, and `yaml.set text path value` returns
+the text with that one scalar replaced and every other byte, comments and indentation included, as it was.
+
+```sh
+echo '{"cores": ["yaml"]}' > yaml.json
+echo '(yaml.set "replicas: 2  # web\n" ["replicas"] "5")' > bump.sx
+sx run bump.sx --declarations yaml.json
+```
+
+It reads block mappings, block sequences, comments, and plain, single-quoted, and double-quoted scalars.
+Flow collections, anchors and aliases, tags, multi-line scalars, several documents, and tabs in indentation
+stop the program with the line and the reason instead of being guessed at.
+[docs/language.md](docs/language.md#the-yaml-core) has the exact subset and the quoting rules.
 
 ## MCP tools
 

@@ -1,0 +1,14 @@
+url: http://example.com:8080/path?a=b#frag
+hash: a#b
+spaced: "  padded  "
+single: 'a ''quoted'' word'
+escapes: "tab\there \"q\" \\ é \x41 \N"
+negative: -1.5
+dash: -x
+question: ?mark
+colon: a:b
+empty:
+empty_comment: # nothing
+number: 0x1F
+time: 12:30:00
+unicode: café ☕

@@ -15,3 +15,4 @@ all = { level = "warn", priority = -1 }
 sx-kernel = { path = "../sx-kernel" }
 libc = { version = "0.2", default-features = false }
 h12tiny = { version = "0.7", default-features = false, features = ["client-sync", "tls"] }
+rusqlite = { version = "0.41", default-features = false, features = ["bundled", "limits"] }
