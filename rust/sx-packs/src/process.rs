@@ -374,15 +374,15 @@ fn run(scope: &Value, input: &Value) -> Result<Value, Failure> {
 }
 
 #[derive(Clone, Copy, Debug)]
-struct Group(libc::pid_t);
+pub(crate) struct Group(libc::pid_t);
 
 impl Group {
-    fn of(pid: u32) -> Option<Group> {
+    pub(crate) fn of(pid: u32) -> Option<Group> {
         libc::pid_t::try_from(pid).ok().filter(|pid| *pid > 1).map(Group)
     }
 
     #[allow(unsafe_code)]
-    fn kill(self) {
+    pub(crate) fn kill(self) {
         // SAFETY: killpg takes two integers and touches no memory. The id is above 1, so it
         // never names the caller's own group (0) or every process (-1 as a pid).
         unsafe {
