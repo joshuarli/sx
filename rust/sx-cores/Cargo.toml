@@ -5,6 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
+sx-kernel = { path = "../sx-kernel" }
 
 [dev-dependencies]
 deser-json = "0.10"

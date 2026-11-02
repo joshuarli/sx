@@ -100,15 +100,21 @@ pub enum Outcome {
     Failed(Failure),
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CoreError {
+    Unimplemented,
+    Failed(String),
+}
+
 pub trait CoreImplementations {
-    fn apply(&self, function: &str, args: &[Value]) -> Option<Value>;
+    fn apply(&self, function: &str, args: &[Value]) -> Result<Value, CoreError>;
 }
 
 pub struct NoCores;
 
 impl CoreImplementations for NoCores {
-    fn apply(&self, _function: &str, _args: &[Value]) -> Option<Value> {
-        None
+    fn apply(&self, _function: &str, _args: &[Value]) -> Result<Value, CoreError> {
+        Err(CoreError::Unimplemented)
     }
 }
 
@@ -1026,8 +1032,12 @@ impl<'p> Machine<'p> {
             NodeKind::Prelude { op, .. } => self.prelude(id, *op, values, span),
             NodeKind::CoreCall { function, .. } => {
                 let args = plain_all(values)?;
-                let Some(result) = self.cores.apply(function, &args) else {
-                    return Err(internal(format!("{function} has a signature but no implementation."), Some(span)));
+                let result = match self.cores.apply(function, &args) {
+                    Ok(result) => result,
+                    Err(CoreError::Unimplemented) => {
+                        return Err(internal(format!("{function} has a signature but no implementation."), Some(span)));
+                    }
+                    Err(CoreError::Failed(message)) => return Err(internal(format!("{function}: {message}"), Some(span))),
                 };
                 self.check_size(&result, Some(span))?;
                 self.set_returning(id, result);

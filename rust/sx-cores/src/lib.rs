@@ -8,6 +8,7 @@
 
 pub mod git;
 pub mod github;
+pub mod kernel;
 pub mod semver;
 mod tables;
 pub mod text;
