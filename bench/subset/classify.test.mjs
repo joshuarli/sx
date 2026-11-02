@@ -170,7 +170,7 @@ test("allSettled results are guarded by status, and may be printed only when no 
   expect(accepted(`${settled} console.log(JSON.stringify(a));`)).toBe(true);
   const risky = `const rs = await Promise.allSettled([(async () => { const t = await tools.fs.readText({path: "/a"}); if (!t) throw new Error("x"); return t; })()]);`;
   expect(codesOf(`${risky} console.log(JSON.stringify(rs[0]));`)).toContain("ts-settled-escape");
-  expect(codesOf(`${settled} console.log({...a});`)).toEqual(["ts-spread"]);
+  expect(accepted(`${settled} console.log({i: 0, ...a});`)).toBe(true);
   const many = `const rs = await Promise.allSettled(["/a"].map((p) => tools.fs.readText({path: p})));`;
   expect(accepted(`${many} for (const r of rs) { console.log(r.status === "fulfilled" ? r.value : r.reason?.message); }`)).toBe(false);
   expect(accepted(`${many} for (const r of rs) { console.log(r.status === "fulfilled" ? r.value : (r.reason?.message ?? "")); }`)).toBe(true);
@@ -198,7 +198,11 @@ test("object literals have static, non-integer keys and no spread", () => {
   expect(codesOf(`const o = {[call]: 1}; ${call};`)).toContain("ts-key");
   expect(codesOf(`const o = {1: "a"}; ${call};`)).toEqual(["ts-key"]);
   expect(codesOf(`const o = {a: 1, a: 2}; ${call};`)).toEqual(["ts-key"]);
-  expect(codesOf(`const o = {a: 1}; const p = {...o, b: 2}; ${call};`)).toEqual(["ts-spread"]);
+  expect(accepted(`const o = {a: 1}; const p = {...o, b: 2}; const q = {...o, ...p.inner, ...[p][0]}; ${call};`)).toBe(true);
+  expect(codesOf(`const o = {a: 1}; const p = {...(o || {}), b: 2}; ${call};`)).toEqual(["ts-spread"]);
+  expect(codesOf(`const p = {...(await tools.fs.stat({path: "/a"}))}; ${call};`)).toEqual(["ts-spread"]);
+  expect(codesOf(`const o = {a: 1}; const p = {...o?.b}; ${call};`)).toContain("ts-spread");
+  expect(codesOf(`const p = {...{a: 1}}; ${call};`)).toEqual(["ts-spread"]);
   expect(accepted(`const a = [1]; const b = [...a, 2]; ${call};`)).toBe(true);
   expect(codesOf(`Math.max(...[1, 2]); ${call};`)).toEqual(["ts-spread"]);
   expect(codesOf(`const o = {get a() { return 1; }}; ${call};`)).toContain("ts-class");
@@ -211,7 +215,9 @@ test("numbers beyond the safe range are rejected as literals", () => {
 
 test("builtins outside the table, regular expressions, dates, and nondeterminism are rejected", () => {
   expect(codesOf(`[1].at(0); ${call};`)).toEqual(["ts-unknown-builtin"]);
-  expect(codesOf(`store("k", 1); ${call};`)).toEqual(["ts-unknown-builtin"]);
+  expect(codesOf(`store("k", 1); ${call};`)).toEqual(["ts-codemode-store"]);
+  expect(codesOf(`const v = load("k"); ${call};`)).toEqual(["ts-codemode-store"]);
+  expect(accepted(`function load(k) { return k; } load("k"); ${call};`)).toBe(true);
   expect(codesOf(`const c = new Set(); ${call};`)).toEqual(["ts-unsupported-class"]);
   expect(codesOf(`"a".match(/a/); ${call};`)).toContain("ts-regexp");
   expect(codesOf(`const r = /a/; ${call};`)).toEqual(["ts-regexp"]);

@@ -650,7 +650,7 @@ export function classify(rawCode) {
     const seen = new Set();
     for (const property of node.properties) {
       if (property.type === "SpreadElement") {
-        flag("ts-spread");
+        if (property.argument.type !== "Identifier" && property.argument.type !== "MemberExpression") flag("ts-spread");
         continue;
       }
       if (property.kind !== "init" || property.method) flag("ts-class");
@@ -898,6 +898,7 @@ export function classify(rawCode) {
       if (DISCOVERY.has(name)) flag("ts-tools-escape");
       else if (name === "eval" || name === "Function") flag("ts-eval");
       else if (name === "require") flag("ts-import-export");
+      else if ((name === "store" || name === "load") && !lookup(name)) return;
       else if (name === "RegExp") flag("ts-regexp");
       else if (NONDETERMINISTIC_GLOBALS.has(name)) flag("ts-nondeterministic");
       else if (name === "String") {
@@ -1083,6 +1084,10 @@ export function classify(rawCode) {
             if (!okShape) flag("ts-tools-escape");
           }
         }
+        continue;
+      }
+      if (name === "store" || name === "load") {
+        flag("ts-codemode-store");
         continue;
       }
       if (name === "text") continue;

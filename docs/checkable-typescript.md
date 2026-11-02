@@ -90,7 +90,7 @@ table give a more specific code and fix for the constructs models are likely to 
 | --- | --- |
 | Literals | numbers (see [Numbers](#numbers)), strings, `true`, `false`, `null`, template literals with `${e}` |
 | Array | `[e, …]` and `[...e, …]` for arrays |
-| Object | `{ k: e, k, "k": e, … }` with identifier or string keys that are not integer-like, no duplicates, no computed keys, no spread, no methods |
+| Object | `{ k: e, k, "k": e, …, ...r }` with identifier or string keys that are not integer-like, no duplicate explicit keys, no computed keys, no methods; `...r` under [Object spread](#object-spread) |
 | Names | identifiers, and `tools` only as `tools.namespace.name(…)` |
 | Member | `e.k`, `e["k"]` with a string literal, `e[i]`, and the same with `?.` under the [optional-chain rule](#optional-values) |
 | Call | `e(…)` of a [builtin](#builtins), a user function, a tool, or a method in the builtins table |
@@ -407,8 +407,7 @@ const text = a.status === "fulfilled" ? a.value : "";
 A `Settled` may be passed whole to `JSON.stringify`, `console.log`, `return`, or stored, when no branch of
 the `allSettled` can throw a plain error: that is, when the branches contain no `throw`, `JSON.parse`, or call
 of a function that does, so every `reason` is a `CallError` with the JSON above. Otherwise the whole value is
-`ts-settled-escape`, and only `.status`, `.value`, and `.reason.message` are accepted. Spreading a `Settled`
-is `ts-spread`.
+`ts-settled-escape`, and only `.status`, `.value`, and `.reason.message` are accepted. A `Settled` may be spread as in [Object spread](#object-spread).
 
 The limit 16 is the number of branches in flight and changes no result. JavaScript starts all branches at
 once; for reads, the number in flight is unobservable except as latency. `parMap` sets another limit.
@@ -440,9 +439,59 @@ A `Map` as a program result or as a tool argument is fine, because a JSON object
 may rely on. An `Option` entry in a `Map` has no JSON encoding and is rejected by the checker.
 
 A list is immutable; `push`, `sort`, and `reverse` follow the [mutation table](#mutation). Spread in an array
-literal is `concat`; spread in a call and object spread are `ts-spread`. `xs[i]` is `(nth xs i)` with `i` an
+literal is `concat`; spread in a call is `ts-spread`; object spread is below. `xs[i]` is `(nth xs i)` with `i` an
 `Int`, and past the end it is the `out-of-range` trap. `xs.length` is `(js.length xs)`. A destructuring of a
 list takes `(nth xs 0)`, `(nth xs 1)`, and a destructuring of a `Tuple` takes its elements.
+
+### Object spread
+
+`{ ...a, k: v, ...b }` is accepted when every spread operand is a **name or a member expression** (`r`, `row.meta`,
+`rs[i]`) whose type is a closed record with declared fields. That operand is evaluated once, without effect,
+and can be neither `undefined` nor `null`. A call, `await`, literal, conditional, `||`, `??`, or `?.` chain as the
+operand is `ts-spread`, and so is an operand of any other type:
+
+| Operand type | Spread |
+| --- | --- |
+| Record with declared fields: an object literal, a tool's output record, a `CallError` | accepted |
+| Open record (`Record open {…}`) | `ts-spread`: JavaScript copies the fields the tool sent and Sx dropped |
+| `Map` | `ts-spread`: the keys are not declared and their order is not preserved |
+| `Option<…>` | `ts-spread`: JavaScript copies nothing for `null`, so the field set varies |
+| List, `Tuple`, `String`, number, `Bool`, `Unit` | `ts-spread`: JavaScript copies index keys, or nothing |
+| `Settled<T>` | accepted, with the result described below |
+
+**What JavaScript does.** An object literal creates an empty object and processes its properties left to right.
+A spread copies each own enumerable property of the operand, in the operand's key order: integer-like keys
+ascending, then the other string keys in the order they were created. Writing a key that the new object
+already has replaces its value and leaves its position; a key it does not have is appended. An explicit
+`k: v` does the same. Records have no integer-like keys (`ts-key` rejects them), accessors, or symbols,
+so the key order of a record is its declared field order. A field of type `Option` is an own property with
+the value `null`, so it is copied. In `{ ...{a: 1, b: 2}, c: 3, ...{b: 9, d: 4} }` the result is
+`{a: 1, b: 9, c: 3, d: 4}`: `b` keeps the second position of the first spread and takes the later value.
+
+**The result type.** Start with the empty list of fields. For each item of the literal in source order, take
+its fields in order (the operand type's fields for a spread, the one field for `k: v`). A field whose name
+is in the list replaces that entry's type in place, and any other field is appended. The final list is the
+record type's field order, and `js.stringify`, `console.log`, and the program result write the fields in it.
+So the order is exactly the order JavaScript gives the object.
+
+**Lowering.** The front end emits `(record-spread item …)`, where an item is `(:spread e)` or `(:field "k" e)`.
+The checker, which knows the operand types, elaborates it into an existing record literal and nothing else:
+
+```
+{ ...a, c: 3, ...b }   becomes   (let [s1 a  v2 3  s3 b] {:x (get s1 :x) :y (get s3 :y) :c v2 ...})
+```
+
+with one binding per item in source order, and one field per entry of the result type, taking the value of the
+last item that wrote it. So the IR holds only `let`, `get`, and a record literal, and Lean sees nothing new.
+
+**Spread of a `Settled`.** The fields of a `Settled` depend on its variant: `status` and `value` when
+fulfilled, `status` and `reason` when rejected. A literal with one `Settled` operand has one result shape for
+each variant, computed by the rule above; a literal with two or more `Settled` operands is `ts-spread`. The
+checker elaborates it into a `match` on the variants whose arms are the two record literals, joined into a
+`js.Shaped` value, a `js` core type that holds one of several records. It is written as the record that is
+present, so a rejected result prints `{"i":0,"status":"rejected","reason":{…}}` with no `value` key, as
+JavaScript does. A read of a field that every shape has is an ordinary `get`; a read of a field that only some
+shapes have is the `out-of-range` trap when the present shape lacks it, where JavaScript has `undefined`.
 
 ### Output
 
@@ -638,6 +687,8 @@ Sx program, because the flag is off for them.
 | `(range start end)`, `(range start end step)`: `List<Int>`; `end` is excluded; `step` is a nonzero integer literal | prelude, Rust and Lean | Phase 19, required |
 | `(put target key value)`: a record with the field replaced, or a map with the key set | kernel, Rust and Lean | Phase 19, required |
 | `(truthy e)`, elaborated by the checker | checker only | Phase 19, required |
+| `(record-spread item …)`, elaborated by the checker into `let`, `get`, and a record literal | checker only | Phase 19, required |
+| `js.Shaped` and `js.shaped-get`, for a spread `Settled` | `js` core, Rust and Lean | Phase 19, required |
 | `safe-int` IR node, `(safe-int e)`: the `arithmetic` trap outside ±2^53 | IR, Rust and Lean | Phase 19, required |
 | `(enumerate xs)`: `List<Tuple<Int, T>>` | prelude, Rust and Lean | Phase 19, required |
 | `js.length`, `js.slice`, `js.index-of`, `js.join`, `js.reverse`, `js.find`, `js.settled-status`, `js.settled-value`, `js.settled-reason` | `js` core, Rust and Lean | Phase 19, required |
@@ -649,7 +700,6 @@ Sx program, because the flag is off for them.
 | `Set` and `Map` classes, `Object.entries` of a `Map` in insertion order | would need ordered maps | deferred |
 | `parseFloat`, `toFixed`, `localeCompare`, `Intl` | `js` core | deferred |
 | `pop`, `shift`, `splice` | rewrite with `Option` results | deferred |
-| Object spread `{...r, k: v}` | `put` over a record with added fields | deferred |
 | `switch`, `finally`, labeled statements | | deferred |
 
 ## Diagnostics
@@ -697,7 +747,7 @@ call that failed.
 | `ts-optional-chain` | a `?.` result used outside `??`, `== null`, `!= null`, a condition | `The result of ?. is undefined, not null` | `x == null ? null : x.f` |
 | `ts-unsafe-integer` | an integer literal beyond 2^53 | `This literal is not a safe integer` | |
 | `ts-key` | integer-like or computed object keys, duplicates | `This key cannot be a record field` | |
-| `ts-spread` | object spread, spread in a call | `Spread is supported only in array literals` | |
+| `ts-spread` | spread in a call; object spread of anything but a record with declared fields | `Only records with declared fields can be spread into an object` | write the fields |
 | `ts-param` | default, rest, `this` parameters; pattern defaults and rest | `Defaults and rest are not supported` | |
 | `ts-regexp` | regular expression literals, `RegExp`, `match`, `test`, `exec` | `Regular expressions are not supported` | `includes`, `startsWith`, `split` |
 | `ts-date` | `Date` | `Date is not supported` | |
@@ -752,7 +802,7 @@ front end would accept it. A script is **accepted** when it triggers none of the
 
 A use of `.content`, `.structuredContent`, or `.isError` that the rewrite does not cover stays, and the
 classifier rejects it as `ts-codemode-residue`. That code measures the rewrite, not the subset. A call
-to `store` or `load`, codemode's cross-run storage, is `ts-unknown-builtin`.
+to `store` or `load`, codemode's cross-run storage, is `ts-codemode-store`; like the residue code it measures codemode, not the subset.
 
 The classifier cannot see types, so it does not apply the rules that need them: `js-float-as-int`,
 `js-coercion`, `js-equality`, `js-for-of-source`, the record half of `ts-map-order`, the checks
@@ -763,7 +813,9 @@ the share the front end accepts, by the number of scripts those rules would reje
 The tests in `bench/subset/classify.test.mjs` cover each code with a script that triggers it and one near it
 that does not.
 
-On the 512 tool-calling scripts of Phases 16 and 17, 416 (81%) are accepted and 286 (56%) are accepted without
-rewriting. The rules that reject the most scripts are `ts-unknown-builtin` (25, mostly codemode's `store`
-and `Set` and `Map` methods), `ts-optional-chain` (19), `ts-regexp` (12), `ts-spread` (11, mostly
-`{...settled}`), `ts-codemode-residue` (11), and `ts-while` (10). `bench/subset/summary.py` prints the full table.
+On the 512 tool-calling scripts of Phases 16 and 17, 419 (81.8%) are accepted and 287 (56%) are accepted without
+rewriting. The rules that reject the most scripts are `ts-optional-chain` (19), `ts-unknown-builtin` (16),
+`ts-regexp` (12), `ts-codemode-residue` (11), `ts-while` (10), and `ts-codemode-store` (9). The classifier
+accepts an object spread when the operand is a name or member expression and cannot check that it is a closed
+record, so that count is an upper bound. `bench/subset/summary.py` prints the full table, the share net of
+the two codemode-only codes, and the effect of relaxing rules.

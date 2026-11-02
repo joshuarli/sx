@@ -65,6 +65,24 @@ def feature_rows(scripts: list[Classified]) -> list[str]:
     return lines
 
 
+ARTIFACTS = frozenset({"ts-codemode-residue", "ts-codemode-store"})
+
+
+def net_rows(scripts: list[Classified]) -> list[str]:
+    calling = [s for s in scripts if s.calls_tools]
+    gross = sum(s.accepted for s in calling)
+    artifact_only = [s for s in calling if not s.accepted and s.call_set and s.codes and s.codes <= ARTIFACTS]
+    net = gross + len(artifact_only)
+    return [
+        "| Share of tool-calling scripts | Scripts |",
+        "| --- | --- |",
+        f"| Gross: accepted by the spec | {share(gross, len(calling))} |",
+        f"| Rejected only by codemode artifacts (`store`, `load`, leftover `.content`) | {len(artifact_only)} |",
+        f"| Net, counting those as accepted | {share(net, len(calling))} |",
+        f"| Net, leaving those out of the total | {share(gross, len(calling) - len(artifact_only))} |",
+    ]
+
+
 def rejection_rows(scripts: list[Classified]) -> list[str]:
     calling = [s for s in scripts if s.calls_tools]
     rejected = [s for s in calling if not s.accepted]
@@ -112,8 +130,8 @@ def main() -> None:
     args = parser.parse_args()
     scripts = [load(line) for line in args.classified.read_text().splitlines() if line]
     sections = [
-        group_rows(scripts), rejection_rows(scripts), relaxation_rows(scripts), feature_rows(scripts),
-        literal_rows(scripts),
+        group_rows(scripts), net_rows(scripts), rejection_rows(scripts), relaxation_rows(scripts),
+        feature_rows(scripts), literal_rows(scripts),
     ]
     print("\n\n".join("\n".join(section) for section in sections))
 
