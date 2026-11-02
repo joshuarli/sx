@@ -1,0 +1,4 @@
+error[bad-pattern] 3:3-3:4
+    _)
+    ^
+  _ discards a value in a pattern. It is not a value itself.

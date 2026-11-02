@@ -225,8 +225,8 @@ fn first_upper(name: &str) -> bool {
     name.chars().next().is_some_and(char::is_uppercase)
 }
 
-fn first_lower(name: &str) -> bool {
-    name.chars().next().is_some_and(char::is_lowercase)
+fn is_plain_name(name: &str) -> bool {
+    name.strip_prefix('_').unwrap_or(name).chars().next().is_some_and(char::is_lowercase)
 }
 
 fn option(t: Type) -> Type {
@@ -383,7 +383,7 @@ fn is_else(node: &Node) -> bool {
 
 fn pattern_names(node: &Node) -> Vec<String> {
     match &node.kind {
-        NodeKind::Symbol(name) if first_lower(name) && name != "none" => vec![name.clone()],
+        NodeKind::Symbol(name) if is_plain_name(name) && name != "none" => vec![name.clone()],
         NodeKind::Form(items) => items.iter().skip(1).flat_map(pattern_names).collect(),
         NodeKind::List(items) => items.iter().flat_map(pattern_names).collect(),
         _ => Vec::new(),
@@ -2344,7 +2344,7 @@ impl<'r> Checker<'r> {
                 }
                 return (variant, scope.clone(), keys(name), true);
             }
-            NodeKind::Symbol(name) if first_lower(name) => {
+            NodeKind::Symbol(name) if is_plain_name(name) => {
                 self.reserved(name, span);
                 return (MatchPattern::Any(Binder::Name(name.clone())), scope.value(name, t.clone()), BTreeSet::new(), true);
             }
@@ -2467,7 +2467,7 @@ impl<'r> Checker<'r> {
 
     fn sub_pattern<'a>(&mut self, pattern: &Node, t: &Type, scope: &Scope<'a>) -> (MatchPattern, Scope<'a>, bool) {
         let binds = match &pattern.kind {
-            NodeKind::Symbol(name) => (first_lower(name) && name != "none") || name == "_",
+            NodeKind::Symbol(name) => (is_plain_name(name) && name != "none") || name == "_",
             NodeKind::List(_) => true,
             _ => false,
         };

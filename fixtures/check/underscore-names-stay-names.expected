@@ -1,0 +1,29 @@
+error[bad-symbol] 3:7-3:9
+  (let [_1 2
+        ^^
+  _1 is not a valid name. A name starts with a lowercase letter, then letters, digits, - and _.
+
+error[bad-symbol] 4:7-4:10
+        __x 3
+        ^^^
+  __x is not a valid name. A name starts with a lowercase letter, then letters, digits, - and _.
+
+error[bad-symbol] 5:7-5:11
+        _Big 4]
+        ^^^^
+  _Big is not a valid name. A name starts with a lowercase letter, then letters, digits, - and _.
+
+error[bad-symbol] 6:4-6:6
+    [_1 __x _Big])
+     ^^
+  _1 is not a valid name. A name starts with a lowercase letter, then letters, digits, - and _.
+
+error[bad-symbol] 6:7-6:10
+    [_1 __x _Big])
+        ^^^
+  __x is not a valid name. A name starts with a lowercase letter, then letters, digits, - and _.
+
+error[bad-symbol] 6:11-6:15
+    [_1 __x _Big])
+            ^^^^
+  _Big is not a valid name. A name starts with a lowercase letter, then letters, digits, - and _.

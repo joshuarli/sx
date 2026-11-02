@@ -1,0 +1,13 @@
+; declarations: fixtures/run/declarations.json
+; allow: store.get store.list
+; python: no
+(def _stored (map (fn [id] (call store.get {:id id})) (call store.list {})))
+(defn _twice [_n] (* _n 2))
+(let [_unused 1
+      [_a _b] [2 3]]
+  (loop {:max 3} [_i 0 _total 0]
+    (if (< _i 2)
+      (recur (+ _i 1) (+ _total (_twice _i)))
+      (match (some _stored)
+        (some _found) [(count _found) _total _unused _a _b]
+        none []))))

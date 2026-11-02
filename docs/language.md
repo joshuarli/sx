@@ -51,7 +51,7 @@ program runs. There is no general recursion and no unbounded loop.
 | String | `"..."` | UTF-8. Escapes: `\"`, `\\`, `\n`, `\r`, `\t`, `\u{HEX}`. |
 | Pattern string | `#"..."` | A String whose text is taken as is: backslashes stay, so `#"\d+"` is the four characters `\d+`. Only `\"` is an escape, and it stands for `"`. For regular expressions; see [The re core](#the-re-core). A Rust-only form. |
 | Keyword | `:name` | Record field names only. Same characters as a symbol. |
-| Symbol | `name`, `repo-id`, `repoId`, `ahead_count`, `ok?`, `acc'` | A lowercase letter, then letters, digits, `-`, and `_`, then optionally `?` or primes. |
+| Symbol | `name`, `repo-id`, `repoId`, `ahead_count`, `ok?`, `acc'`, `_unused` | A lowercase letter, or `_` and then a lowercase letter, then letters, digits, `-`, and `_`, then optionally `?` or primes. `_stored` is an ordinary name, as in TypeScript, and is read like any other. `_` alone is the wildcard. |
 | Operator | `+ - * / = not= < <= > >=` | Prelude functions |
 | Wildcard | `_` | Any pattern position: discards the value |
 | Variant | `OnBranch` | A capital letter, then letters and digits. Enum variants in patterns. |

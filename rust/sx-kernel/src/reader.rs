@@ -146,6 +146,10 @@ fn duration_like(text: &[char]) -> Option<(String, String)> {
 }
 
 fn is_name(text: &[char]) -> bool {
+    let text = match text {
+        ['_', rest @ ..] => rest,
+        _ => text,
+    };
     let Some(first) = text.first() else {
         return false;
     };

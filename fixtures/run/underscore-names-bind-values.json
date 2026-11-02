@@ -1,0 +1,73 @@
+{
+  "description": "A name that starts with an underscore and a letter is an ordinary name in def, defn, let, loop, and match, and later uses read it.",
+  "python": false,
+  "program": "(def _stored (map (fn [id] (call store.get {:id id})) (call store.list {}))) (defn _twice [_n] (* _n 2)) (let [_unused 1 [_a _b] [2 3]] (loop {:max 3} [_i 0 _total 0] (if (< _i 2) (recur (+ _i 1) (+ _total (_twice _i))) (match (some _stored) (some _found) [(count _found) _total _unused _a _b] none []))))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list"
+  ],
+  "responses": [
+    {
+      "capability": "store.list",
+      "input": {},
+      "results": [
+        {
+          "output": [
+            "a"
+          ]
+        }
+      ]
+    },
+    {
+      "capability": "store.get",
+      "input": {
+        "id": "a"
+      },
+      "results": [
+        {
+          "output": {
+            "id": "a",
+            "size": 7
+          }
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": [
+      1,
+      2,
+      1,
+      2,
+      3
+    ]
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "store.list",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": [
+        "a"
+      ]
+    },
+    {
+      "request": "r:2",
+      "capability": "store.get",
+      "input": {
+        "id": "a"
+      }
+    },
+    {
+      "response": "r:2",
+      "output": {
+        "id": "a",
+        "size": 7
+      }
+    }
+  ]
+}

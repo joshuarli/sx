@@ -1,0 +1,6 @@
+; declarations: fixtures/run/declarations.json
+; python: no
+(let [_1 2
+      __x 3
+      _Big 4]
+  [_1 __x _Big])
