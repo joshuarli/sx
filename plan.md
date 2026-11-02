@@ -790,8 +790,14 @@ within 10 points.
 
 Planned, not started. The owner chose it after Phase 14 and accepted every recommendation in the
 handoff. Two questions no campaign has answered: does Sx work as the code mode of a real agent, and
-does its static authority prevent harmful effects that TypeScript code mode lets happen? Cost is not a
+does its static authority prevent harmful effects that JavaScript code mode lets happen? Cost is not a
 goal here; it is reported.
+
+The agent is pi, which the owner uses, not Claude Code. pi connects to MCP servers (user-level
+`~/.pi/agent/mcp.json`, or `.pi/mcp.json` in a project the owner has trusted), restricts the tools a
+model sees with `--tools`, and has its own code mode: the `codemode` tool runs JavaScript in a QuickJS
+sandbox that calls pi's tools and MCP tools, and its calls before a failure are not undone. That
+built-in code mode is the baseline, so both arms run in the same agent with the same model and tools.
 
 What Sx can claim and TypeScript cannot, which this campaign must measure rather than assume:
 
@@ -824,9 +830,14 @@ What Sx can claim and TypeScript cannot, which this campaign must measure rather
   no symlink traversal, whole-component containment, and an error table), and a way to write JSON
   text from a value. Dates, bounded concurrent writes, and parallel read-only commands wait until a
   task needs them.
+- **In pi:** `pi mcp add sx-code -l -- sx mcp code --declarations D --grants G --policy P` in a project
+  under `.work`, with `direct` exposure, so a model sees `mcp__sx-code__check` and `mcp__sx-code__run`.
+  Whether a project can be trusted without the interactive prompt is checked first; if not, trusting
+  the benchmark projects once is an owner step.
 - **Gate:** an MCP client test drives `check` and `run` over stdio against native and proxied tools,
-  including refusals by the policy that leave the sandbox untouched; the new `fs` operations pass
-  scope and error-table tests like the existing ones; all existing gates pass.
+  including refusals by the policy that leave the sandbox untouched; a pi session in print mode solves
+  a small task through `sx mcp code` end to end; the new `fs` operations pass scope and error-table
+  tests like the existing ones; all existing gates pass.
 
 #### Phase 16: The effects benchmark
 
@@ -843,9 +854,11 @@ Workflows in `bench/workflows` format where a wrong effect costs something, each
 The runner keeps each attempt's effects before it resets the sandbox, because in real use a failed
 attempt's effects stay. Per arm and workflow it reports correctness, effects that violate the policy,
 trials with any violation, effects performed by attempts before the first correct one, the share of
-violating programs stopped before their first effect (by Sx's checker and approver, or by `tsc`), and
-cost. The Sx arm runs through `sx mcp code`; the TypeScript arm runs the Bun harness against `sx mcp
-serve` with the same grants.
+violating programs stopped before their first effect (by Sx's checker and approver), the tool calls
+and turns a session took, and cost. Both arms run as pi sessions in print mode with no built-in tools:
+the Sx arm with only `mcp__sx-code__*`, and the JavaScript arm with only pi's `codemode` over the same
+tools served by `sx mcp serve` with the same grants. A session may call its tool as often as it likes,
+so repairs happen inside the session, and every run's effects count.
 
 As before: six development workflows the campaign lead may read, then eight blind ones written under
 Phase 12's rules by a subagent that sees neither the guide nor any result, frozen before any model
@@ -858,12 +871,12 @@ programs before their first effect.
 
 #### Phase 17: Real sessions
 
-Claude Code connects to `sx mcp code` over the owner's real tools: repomod's read-only capabilities
-and a scratch directory tree with `fs` writes. A fixed list of everyday requests runs through it, and
-the transcripts record each program written, checked, refused, and run, the repairs, and where a
-model left code mode for another tool. Connecting the client is an owner step, since it changes the
-owner's Claude Code configuration. **Gate:** the transcripts and their counts are recorded, with what
-they say Sx should change.
+pi connects to `sx mcp code` over the owner's real tools: repomod's read-only capabilities and a
+scratch directory tree with `fs` writes. A fixed list of everyday requests runs through it and, for
+comparison, through pi's own `codemode` over the same tools, and the transcripts record each program
+written, checked, refused, and run, the repairs, and where a model left code mode for another tool.
+Adding the server to a project the owner trusts, or to the user-level configuration, is an owner step.
+**Gate:** the transcripts and their counts are recorded, with what they say Sx should change.
 
 #### The repomod track
 
