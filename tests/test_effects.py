@@ -309,3 +309,38 @@ def test_a_pi_session_in_the_sx_arm_records_the_rejection_before_the_run_that_ch
     assert (measured.violations, measured.stopped_attempts, measured.partial_effects) == (0, 1, 0)
     tools = json.loads((tmp_path / "requests.jsonl").read_text().splitlines()[0])["tools"]
     assert sorted(t["function"]["name"] for t in tools) == ["mcp__sx_code__check", "mcp__sx_code__run"]
+
+
+RECORDED = Path(__file__).parent / "recorded_sessions"
+
+
+def ledger_classes() -> dict[str, EffectClass]:
+    workflow = definition.load_effects(LEDGER)
+    with workflow.sandbox() as sandbox:
+        return effects.effect_classes(workflow.declarations_json(sandbox))
+
+
+def recorded_session(arm: str) -> tuple[list[Stamped], list[ProxyCall]]:
+    return effects.read_events(RECORDED / arm / "events.jsonl"), effects.read_proxy(RECORDED / arm / "proxy.jsonl")
+
+
+def test_a_recorded_javascript_session_attributes_repeated_lookups_to_the_script_that_made_each() -> None:
+    events, calls = recorded_session("js")
+    attempts, found = effects.js_attempts(effects.executions(events), calls, ledger_classes())
+    assert [a.status for a in attempts] == ["completed"] * 5
+    per_attempt = [sum(e.attempt == a.index for e in found) for a in attempts]
+    assert per_attempt == [1, 12, 8, 3, 8]
+    lookups = [e.attempt for e in found if e.capability == "payments.charges" and e.input["invoice"] == "inv-101"]
+    assert lookups == [1, 2, 4]
+    assert [e.outcome for e in found if e.capability == "payments.charge"].count("Unavailable") == 3
+    used = effects.usage_of(events)
+    assert (used.turns, used.input, used.output, used.cache_read) == (6, 8031, 2869, 24629)
+
+
+def test_a_recorded_sx_session_takes_its_effects_from_the_run_trace_and_none_from_check() -> None:
+    events, calls = recorded_session("sx")
+    attempts, found = effects.sx_attempts(effects.executions(events), calls, ledger_classes())
+    assert [(a.tool, a.status) for a in attempts] == [("check", "checked"), ("run", "completed")]
+    assert {e.attempt for e in found} == {1}
+    assert len(found) == 17
+    assert [e.outcome for e in found if e.capability == "payments.charge"].count("Unavailable") == 3

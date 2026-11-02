@@ -243,7 +243,8 @@ Like a workflow above, with `check` replaced:
 
 `scripted_model.py` is a local OpenAI-compatible server that replies with fixed tool calls. The tests run
 real pi sessions against it, so the wiring and the attribution are exercised without a model and without
-cost.
+cost. `tests/recorded_sessions/` holds one real session per arm,
+trimmed to the events and the proxy log the attribution reads, so a change in pi's event shapes fails a test.
 
 ## Wall time
 
