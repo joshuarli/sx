@@ -1,0 +1,6 @@
+error[unexpected-close] 3:10-3:11
+    (bar x))
+           ^
+  This ) closes nothing, because every bracket before it is already closed.
+  The ( at 1:1 closed at 2:10, but line 3 is indented as if inside it.
+  Fix: remove the ) at 2:10, then keep this one

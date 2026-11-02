@@ -1,0 +1,6 @@
+error[unclosed] 1:1-1:2
+  (let [x 1]
+  ^
+  This ( is never closed.
+  Line 3 is indented like a new form, not inside this (.
+  Fix: add ) at the end of line 2

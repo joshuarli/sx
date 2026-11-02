@@ -485,6 +485,21 @@ error[unknown-field] 4:12-4:17
 
 `--format json` emits the same parts as one object per diagnostic.
 
+The reader's bracket diagnostics read the indentation of the lines after an opener, because a
+model that loses count of brackets still indents correctly. Blank lines and lines holding only a
+comment are skipped.
+
+- `unclosed` says where to close. For an opener at some column, find the first later line whose
+  indentation is at most that column. The fix adds the closer at the end of the last line before
+  it, or at the end of the program when no later line is that shallow.
+- `unexpected-close` with no open bracket says that the closer closes nothing. When a top-level
+  form closed earlier and every line from there to this closer is indented deeper than that form's
+  opener, it names that earlier closer as the one that closed too soon, and the fix removes it.
+- `unexpected-close` where a closer meets the wrong open bracket keeps the replacement fix, unless
+  the closer matches an outer opener and indentation shows the inner opener should have ended
+  before it. Then the fix adds the inner opener's closer at the end of its last line, and the
+  reader goes on as if that closer were there.
+
 A diagnostic's message follows these rules:
 
 - Say what is wrong before saying why.

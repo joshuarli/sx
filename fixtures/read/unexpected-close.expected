@@ -1,5 +1,5 @@
 error[unexpected-close] 1:8-1:9
   (+ 1 2))
          ^
-  This ) has no matching opening bracket.
+  This ) closes nothing, because every bracket before it is already closed.
   Fix: remove it

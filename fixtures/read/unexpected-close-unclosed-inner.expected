@@ -1,0 +1,6 @@
+error[unexpected-close] 2:10-2:11
+    (foo x))
+           ^
+  Expected ] to close the [ at 1:6, found ).
+  This ) most likely closes the ( at 1:1. Line 2 is indented like a new form, so the [ at 1:6 should end on line 1.
+  Fix: add ] at the end of line 1

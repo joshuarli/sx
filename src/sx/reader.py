@@ -58,10 +58,27 @@ _JS_OPERATORS = {
 }
 
 
+def _indent(line: str) -> int:
+    return len(line) - len(line.lstrip(" \t"))
+
+
+def _is_blank(line: str) -> bool:
+    text = line.strip()
+    return not text or text.startswith(";")
+
+
 @dataclass(frozen=True, slots=True)
 class ReadResult:
     program: Node | None
     diagnostics: tuple[Diagnostic, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class _Closed:
+    opener: str
+    opener_span: Span
+    closer: str
+    closer_span: Span
 
 
 @dataclass(slots=True)
@@ -85,6 +102,8 @@ class _Reader:
         self.stack: list[_Frame] = []
         self.top: list[Node] = []
         self.top_poisoned = False
+        self.lines = source.split("\n")
+        self.closed_top: list[_Closed] = []
 
     def position(self) -> Position:
         return Position(self.line, self.column)
@@ -158,15 +177,33 @@ class _Reader:
             else:
                 self.atom()
         for frame in self.stack:
+            last, cut = self.form_end(frame.span)
+            where = "at the end of the program" if last is None else f"at the end of line {last}"
             self.diagnostics.append(
                 Diagnostic(
                     code="unclosed",
                     span=frame.span,
                     message=f"This {frame.opener} is never closed.",
-                    fix=f"add {frame.closer} where the form ends",
+                    detail=(
+                        None if last is None
+                        else f"Line {cut} is indented like a new form, not inside this {frame.opener}."
+                    ),
+                    fix=f"add {frame.closer} {where}",
                 )
             )
         return self.finish()
+
+    def form_end(self, opener: Span) -> tuple[int | None, int | None]:
+        column = opener.start.column - 1
+        last = opener.start.line
+        for number in range(opener.start.line + 1, len(self.lines) + 1):
+            text = self.lines[number - 1]
+            if _is_blank(text):
+                continue
+            if _indent(text) <= column:
+                return last, number
+            last = number
+        return None, None
 
     def finish(self) -> ReadResult:
         if not self.diagnostics:
@@ -201,27 +238,73 @@ class _Reader:
     def close(self) -> None:
         start = self.position()
         char = self.advance()
-        span = Span(start, self.position())
+        self.close_with(char, Span(start, self.position()))
+
+    def close_with(self, char: str, span: Span) -> None:
         if not self.stack:
-            self.error("unexpected-close", span, f"This {char} has no matching opening bracket.", fix="remove it")
+            self.extra_close(char, span)
             return
         frame = self.stack.pop()
         whole = Span(frame.span.start, span.end)
+        resume = False
         if char != frame.closer:
-            self.diagnostics.append(
-                Diagnostic(
-                    code="unexpected-close",
-                    span=span,
-                    message=f"Expected {frame.closer} to close the {frame.opener} at {_at(frame.span)}, found {char}.",
-                    fix=f"replace {char} with {frame.closer}",
-                )
-            )
+            diagnostic, resume = self.mismatched_close(char, span, frame)
+            self.diagnostics.append(diagnostic)
             frame.poisoned = True
+        elif not self.stack:
+            self.closed_top.append(_Closed(frame.opener, frame.span, char, span))
         node = self.build(frame, whole)
         if frame.poisoned:
             self.poison()
         if node is not None:
             self.emit(node)
+        if resume:
+            self.close_with(char, span)
+
+    def extra_close(self, char: str, span: Span) -> None:
+        message = f"This {char} closes nothing, because every bracket before it is already closed."
+        closed = next((c for c in self.closed_top if self.encloses_by_indent(c, span)), None)
+        if closed is None:
+            self.error("unexpected-close", span, message, fix="remove it")
+            return
+        early = _at(closed.closer_span)
+        self.error(
+            "unexpected-close", span, message,
+            detail=(
+                f"The {closed.opener} at {_at(closed.opener_span)} closed at {early}, "
+                f"but line {span.start.line} is indented as if inside it."
+            ),
+            fix=f"remove the {closed.closer} at {early}, then keep this one",
+        )
+
+    def encloses_by_indent(self, closed: _Closed, extra: Span) -> bool:
+        if extra.start.line <= closed.closer_span.start.line:
+            return False
+        column = closed.opener_span.start.column - 1
+        lines_between = self.lines[closed.closer_span.start.line : extra.start.line]
+        return all(_is_blank(text) or _indent(text) > column for text in lines_between)
+
+    def mismatched_close(self, char: str, span: Span, frame: _Frame) -> tuple[Diagnostic, bool]:
+        message = f"Expected {frame.closer} to close the {frame.opener} at {_at(frame.span)}, found {char}."
+        owner = next((f for f in reversed(self.stack) if f.closer == char), None)
+        last, cut = self.form_end(frame.span)
+        if owner is not None and last is not None and cut is not None and cut <= span.start.line:
+            diagnostic = Diagnostic(
+                code="unexpected-close",
+                span=span,
+                message=message,
+                detail=(
+                    f"This {char} most likely closes the {owner.opener} at {_at(owner.span)}. "
+                    f"Line {cut} is indented like a new form, so the {frame.opener} at {_at(frame.span)} "
+                    f"should end on line {last}."
+                ),
+                fix=f"add {frame.closer} at the end of line {last}",
+            )
+            return diagnostic, True
+        diagnostic = Diagnostic(
+            code="unexpected-close", span=span, message=message, fix=f"replace {char} with {frame.closer}",
+        )
+        return diagnostic, False
 
     def build(self, frame: _Frame, span: Span) -> Node | None:
         if frame.opener == "(":

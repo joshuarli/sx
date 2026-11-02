@@ -2,4 +2,4 @@ error[unclosed] 1:1-1:2
   (let [x 1]
   ^
   This ( is never closed.
-  Fix: add ) where the form ends
+  Fix: add ) at the end of the program
