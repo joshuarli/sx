@@ -8,7 +8,8 @@
 - `fs.write-text` creates or replaces the whole file atomically and keeps an existing file's mode. Its
   directory must already exist.
 - `fs.make-directory` creates the directory and its missing parents, and succeeds when it already
-  exists. A path that exists as a file or a symlink fails with `Invalid`.
+  exists, including a granted directory itself. A path that exists as a file or a symlink fails with
+  `Invalid`.
 - `fs.move` renames a file, symlink, or directory and never replaces: a destination that exists
   fails with `Conflict`. Its destination directory must already exist. It is not idempotent.
 - `fs.delete` removes a file, a symlink (not what it points to), or an empty directory. A directory

@@ -733,8 +733,9 @@ A request path passes the scope check by these rules:
 3. The resolved path must lie inside a canonical root, comparing whole path components, never string
    prefixes: `/data-old` is not inside `/data`.
 4. For `fs.write-text`, `fs.make-directory`, `fs.move`, and `fs.delete`, the parent directory is
-   resolved by the same rules and must lie inside a root, so a root itself is never the target. The
-   final component must not be `.` or `..`. For `fs.write-text` and the `to` of `fs.move` it must not
+   resolved by the same rules and must lie inside a root, so a root itself is never the target, except
+   that `fs.make-directory` of a path that resolves to a root succeeds without doing anything, because
+   the root exists. The final component must not be `.` or `..`. For `fs.write-text` and the `to` of `fs.move` it must not
    be an existing symlink, even one that points inside a root. For `fs.make-directory`, `fs.delete`,
    and the `from` of `fs.move` it may be one, and the operation acts on the link, never its target.
 5. `fs.move` applies rule 4 to both `from` and `to`, and a request is denied when either fails. A

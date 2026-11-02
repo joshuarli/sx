@@ -383,18 +383,40 @@ fn make_directory_refuses_what_is_not_a_plain_new_or_existing_directory() {
         assert_eq!(kind, "Invalid", "{path}: {message}");
     }
     let denied = [
-        text(&s.root).to_string(),
         text(&s.base).to_string(),
         text(&s.outside.join("new")).to_string(),
         s.at("escape/new"),
         s.at("escape/deeper/new"),
         s.at("missing/../escaped"),
-        s.at("sub/.."),
         format!("{}-old/x", text(&s.root)),
     ];
     for path in &denied {
         let (kind, message) = attempted(&s, &format!("(call fs.make-directory {{:path (str {})}})", quoted(path)));
         assert_eq!(kind, "PermissionDenied", "{path}: {message}");
+    }
+    assert_eq!(contents(&s), before);
+}
+
+#[test]
+fn make_directory_of_a_granted_root_succeeds_and_changes_nothing() {
+    let s = Sandbox::new("mkdir-root");
+    let before = contents(&s);
+    let root = text(&s.root).to_string();
+    for path in [root.clone(), format!("{root}/"), s.at("sub/..")] {
+        let literal = s.result(&format!("(call fs.make-directory {{:path {}}})", quoted(&path)));
+        assert_eq!(shown(&literal), "null", "{path}");
+        let computed = s.result(&format!("(call fs.make-directory {{:path (str {})}})", quoted(&path)));
+        assert_eq!(shown(&computed), "null", "{path}");
+    }
+    let checked = s.sx("check", &format!("(call fs.make-directory {{:path {}}})", quoted(&root)), &[]);
+    assert_eq!((checked.code, checked.stdout.as_str()), (0, "ok: Unit\n"));
+    for source in [
+        format!("(call fs.delete {{:path (str {})}})", quoted(&root)),
+        format!("(call fs.move {{:from (str {}) :to {}}})", quoted(&root), quoted(&s.at("elsewhere"))),
+        format!("(call fs.write-text {{:path (str {}) :text \"x\"}})", quoted(&root)),
+    ] {
+        let (kind, message) = attempted(&s, &source);
+        assert_eq!(kind, "PermissionDenied", "{source}: {message}");
     }
     assert_eq!(contents(&s), before);
 }

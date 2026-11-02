@@ -152,7 +152,7 @@ pub fn pack() -> Pack {
             path_input(),
             UNIT,
             "Creates a directory and any missing parents, or succeeds when the directory exists.",
-            destructive_check(check_entry),
+            destructive_check(check_directory),
         ),
         capability(
             MOVE,
@@ -269,6 +269,10 @@ impl Roots {
     fn contain(&self, path: &Path) -> bool {
         self.0.iter().any(|root| path.starts_with(root))
     }
+
+    fn hold_as_root(&self, path: &Path) -> bool {
+        self.0.iter().any(|root| path == root)
+    }
 }
 
 fn segments(path: &str) -> Result<Vec<&str>, String> {
@@ -370,6 +374,15 @@ pub fn resolve_entry(roots: &Roots, path: &str) -> Result<PathBuf, String> {
     locate_entry(roots, path)
 }
 
+pub fn resolve_directory(roots: &Roots, path: &str) -> Result<PathBuf, String> {
+    if let Ok(resolved) = resolve(path, &segments(path)?)
+        && roots.hold_as_root(&resolved)
+    {
+        return Ok(resolved);
+    }
+    locate_entry(roots, path)
+}
+
 pub fn resolve_destination(roots: &Roots, path: &str) -> Result<PathBuf, String> {
     refuse_symlink(path, locate_entry(roots, path)?, "fs.move never replaces one")
 }
@@ -395,6 +408,10 @@ fn check_write(scope: &Value, input: &Value) -> Verdict {
 
 fn check_entry(scope: &Value, input: &Value) -> Verdict {
     verdict(scope, input, resolve_entry)
+}
+
+fn check_directory(scope: &Value, input: &Value) -> Verdict {
+    verdict(scope, input, resolve_directory)
 }
 
 fn check_move(scope: &Value, input: &Value) -> Verdict {
@@ -588,7 +605,7 @@ fn write_text(scope: &Value, input: &Value) -> Result<Value, Failure> {
 }
 
 fn make_directory(scope: &Value, input: &Value) -> Result<Value, Failure> {
-    let (path, target) = located(MAKE_DIRECTORY, scope, input, resolve_entry)?;
+    let (path, target) = located(MAKE_DIRECTORY, scope, input, resolve_directory)?;
     let mut missing = Vec::new();
     let mut ancestor = target.as_path();
     loop {
