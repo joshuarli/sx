@@ -1,0 +1,4 @@
+{
+  "cores": ["semver"],
+  "packs": ["fs", "process"]
+}

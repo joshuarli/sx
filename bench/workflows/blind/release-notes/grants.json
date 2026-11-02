@@ -1,0 +1,10 @@
+{
+  "fs.write-text": {"roots": ["{{root}}/out"]},
+  "process.run": {
+    "commands": [
+      {"program": "/usr/bin/git", "args": [{"tag": "Exact", "value": "tag"}, {"tag": "Exact", "value": "--list"}]},
+      {"program": "/usr/bin/git", "args": [{"tag": "Exact", "value": "log"}, {"tag": "Exact", "value": "--format=%H %s"}, "AnyOne"]}
+    ],
+    "roots": ["{{root}}/repo"]
+  }
+}

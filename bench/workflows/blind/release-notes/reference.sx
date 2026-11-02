@@ -1,0 +1,34 @@
+(let [git (fn [args]
+            (get (call process.run {:program "/usr/bin/git" :args args :cwd "{{root}}/repo" :stdin none}) :stdout))
+      versions (keep (fn [tag]
+                       (match (re.matches #"v(\d+\.\d+\.\d+)" tag)
+                         (some g) (semver.parse (nth g 1))
+                         none none))
+                     (text.split (git ["tag" "--list"]) "\n"))
+      highest (reduce (fn [best v] (if (> (semver.compare v best) 0) v best)) (first versions) (rest versions))
+      tag (str "v" (semver.show highest))
+      log (filter (fn [l] (not= l "")) (text.split (git ["log" "--format=%H %s" (str tag "..HEAD")]) "\n"))
+      parsed (map (fn [line]
+                    (match (re.matches #"([0-9a-f]{7})[0-9a-f]* ([a-z]+)(?:\(([^()]*)\))?(!)?: (.*)" line)
+                      (some g) {:ok true :hash (nth g 1) :type (nth g 2) :scope (nth g 3) :breaking (= (nth g 4) "!") :text (nth g 5)}
+                      none {:ok false :hash "" :type "" :scope "" :breaking false :text ""}))
+                  log)
+      changes (filter (fn [p] (get p :ok)) parsed)
+      entry (fn [c]
+              (if (= (get c :scope) "")
+                (str "- " (get c :text) " (" (get c :hash) ")")
+                (str "- **" (get c :scope) ":** " (get c :text) " (" (get c :hash) ")")))
+      sections (filter (fn [s] (> (count (get s :entries)) 0))
+                       [{:title "Breaking changes" :entries (filter (fn [c] (get c :breaking)) changes)}
+                        {:title "Features" :entries (filter (fn [c] (and (not (get c :breaking)) (= (get c :type) "feat"))) changes)}
+                        {:title "Fixes" :entries (filter (fn [c] (and (not (get c :breaking)) (= (get c :type) "fix"))) changes)}
+                        {:title "Performance" :entries (filter (fn [c] (and (not (get c :breaking)) (= (get c :type) "perf"))) changes)}])
+      body (map (fn [s] (str "\n\n### " (get s :title) "\n" (text.join "\n" (map entry (get s :entries))))) sections)
+      _ (call fs.write-text {:path "{{root}}/out/RELEASE_NOTES.md"
+                             :text (str "## Changes since " tag (text.join "" body) "\n")})
+      listed (reduce + 0 (map (fn [s] (count (get s :entries))) sections))]
+  {:tag tag
+   :commits (count log)
+   :listed listed
+   :skipped (- (count log) listed)
+   :sections (map (fn [s] {:title (get s :title) :entries (count (get s :entries))}) sections)})
