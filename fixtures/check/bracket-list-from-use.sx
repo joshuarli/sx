@@ -1,0 +1,3 @@
+; task: dev-stale-branches
+(let [pair [1 2]]
+  (map (fn [n] (+ n 1)) pair))

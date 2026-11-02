@@ -193,6 +193,13 @@ class MakeTuple:
 
 
 @dataclass(frozen=True, slots=True)
+class MakeBracket:
+    items: tuple[Node, ...]
+    shape: Type
+    span: Span
+
+
+@dataclass(frozen=True, slots=True)
 class Wrap:
     kind: str
     value: Node
@@ -267,8 +274,8 @@ class ParMap:
 
 type Node = (
     Literal | Variable | Let | LocalFunction | If | Match | Lambda | ApplyLocal | Prelude | CoreCall | Call | Get
-    | MakeRecord | MakeList | MakeTuple | Wrap | MakeVariant | Coerce | Attempt | Retry | WaitUntil | Loop | Recur
-    | Par | ParMap
+    | MakeRecord | MakeList | MakeTuple | MakeBracket | Wrap | MakeVariant | Coerce | Attempt | Retry | WaitUntil
+    | Loop | Recur | Par | ParMap
 )
 
 

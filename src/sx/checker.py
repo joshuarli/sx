@@ -3,8 +3,8 @@ from __future__ import annotations
 import itertools
 from collections.abc import Generator, Mapping, Sequence
 from contextlib import contextmanager
-from dataclasses import dataclass, field
-from typing import TypeIs
+from dataclasses import dataclass, field, fields, is_dataclass, replace
+from typing import TypeIs, cast
 
 from sx import ir
 from sx.diagnostics import Diagnostic
@@ -152,6 +152,12 @@ class Test:
     inner: Type | None
 
 
+@dataclass(frozen=True, slots=True)
+class BracketShape:
+    element: Type
+    count: int
+
+
 @dataclass(slots=True)
 class LoopContext:
     types: list[Type]
@@ -223,6 +229,7 @@ def check(
     scope: dict[str, Binding] = {name: ValueBinding(t) for name, t in declared_inputs.items()}
     body, result = checker.check(program, None, scope)
     checker.check_size(program)
+    body = cast("ir.Node", checker.settle(body))
     final = checker.zonk(result)
     problem = encodable_problem(final)
     if problem is not None:
@@ -243,6 +250,7 @@ class _Checker:
         self.allowed = allowed
         self.budgets = budgets
         self.substitution: dict[int, Type] = {}
+        self.shapes: dict[int, BracketShape] = {}
         self.counter = itertools.count()
         self.diagnostics: list[Diagnostic] = []
         self.effects: list[Effects] = []
@@ -286,6 +294,17 @@ class _Checker:
             )
 
 
+    def settle(self, node: object) -> object:
+        if isinstance(node, ir.MakeBracket):
+            items = tuple(self.settle(item) for item in node.items)
+            made = ir.MakeTuple if isinstance(self.resolve(node.shape), TupleType) else ir.MakeList
+            return made(cast("tuple[ir.Node, ...]", items), node.span)
+        if isinstance(node, tuple):
+            return tuple(self.settle(item) for item in node)
+        if is_dataclass(node) and not isinstance(node, type) and type(node).__module__ == ir.__name__:
+            return replace(node, **{f.name: self.settle(getattr(node, f.name)) for f in fields(node)})
+        return node
+
     def fresh(self) -> Variable:
         return Variable(next(self.counter))
 
@@ -294,9 +313,15 @@ class _Checker:
             t = self.substitution[t.id]
         return t
 
+    def is_open(self, t: Type) -> bool:
+        resolved = self.resolve(t)
+        return isinstance(resolved, Variable) and resolved.id not in self.shapes
+
     def zonk(self, t: Type) -> Type:
         t = self.resolve(t)
         match t:
+            case Variable(id=other) if other in self.shapes:
+                return ListType(self.zonk(self.shapes[other].element))
             case ListType(element=element):
                 return ListType(self.zonk(element))
             case TupleType(items=items):
@@ -314,7 +339,8 @@ class _Checker:
         t = self.resolve(t)
         match t:
             case Variable(id=other):
-                return other == variable.id
+                shape = self.shapes.get(other)
+                return other == variable.id or (shape is not None and self.occurs(variable, shape.element))
             case ListType(element=element):
                 return self.occurs(variable, element)
             case OptionType(inner=inner):
@@ -333,12 +359,9 @@ class _Checker:
         if a == b or isinstance(a, Never) or isinstance(b, Never):
             return True
         if isinstance(a, Variable):
-            if self.occurs(a, b):
-                return False
-            self.substitution[a.id] = b
-            return True
+            return self.bind_variable(a, b)
         if isinstance(b, Variable):
-            return self.unify(b, a)
+            return self.bind_variable(b, a)
         match a, b:
             case ListType(), ListType():
                 return self.unify(a.element, b.element)
@@ -357,6 +380,36 @@ class _Checker:
             case _:
                 return False
 
+    def bind_variable(self, variable: Variable, t: Type) -> bool:
+        if self.occurs(variable, t):
+            return False
+        shape = self.shapes.get(variable.id)
+        other = self.resolve(t)
+        if isinstance(other, Variable):
+            other_shape = self.shapes.get(other.id)
+            if shape is None:
+                self.substitution[variable.id] = other
+                return True
+            if other_shape is None:
+                self.substitution[other.id] = variable
+                return True
+            self.substitution[variable.id] = other
+            if shape.count != other_shape.count:
+                self.substitution[other.id] = ListType(other_shape.element)
+            return self.unify(shape.element, other_shape.element)
+        if shape is None:
+            self.substitution[variable.id] = t
+            return True
+        match other:
+            case ListType(element=element):
+                self.substitution[variable.id] = other
+                return self.unify(shape.element, element)
+            case TupleType(items=items) if len(items) == shape.count:
+                self.substitution[variable.id] = other
+                return all(self.unify(shape.element, item) for item in items)
+            case _:
+                return False
+
     def trial(self, a: Type, b: Type) -> bool:
         snapshot = dict(self.substitution)
         if self.unify(a, b):
@@ -372,7 +425,7 @@ class _Checker:
         a, e = self.resolve(actual), self.resolve(expected)
         if joining and e == STRING and isinstance(a, EnumType) and all(payload is None for _, payload in a.variants):
             return True, ir.VariantName()
-        if isinstance(e, OptionType) and not isinstance(a, OptionType | Variable | Never):
+        if isinstance(e, OptionType) and not isinstance(a, OptionType | Never) and not self.is_open(a):
             ok, inner = self.convert(a, e.inner, joining)
             if ok:
                 return True, ir.ToSome(inner)
@@ -622,7 +675,9 @@ class _Checker:
             return self.coerce(ir.MakeList((), span), ListType(self.fresh()), expected, span)
         element = checked[0][1]
         if all(self.trial(t, element) for _, t in checked[1:]):
-            return self.coerce(ir.MakeList(tuple(n for n, _ in checked), span), ListType(element), expected, span)
+            shape = self.fresh()
+            self.shapes[shape.id] = BracketShape(element, len(checked))
+            return self.coerce(ir.MakeBracket(tuple(n for n, _ in checked), shape, span), shape, expected, span)
         t = TupleType(tuple(t for _, t in checked))
         return self.coerce(ir.MakeTuple(tuple(n for n, _ in checked), span), t, expected, span)
 
@@ -858,8 +913,9 @@ class _Checker:
             case ListLiteral(items=items, span=span):
                 resolved = self.resolve(t)
                 if isinstance(resolved, Variable):
-                    resolved = TupleType(tuple(self.fresh() for _ in items))
-                    self.unify(t, resolved)
+                    candidate = TupleType(tuple(self.fresh() for _ in items))
+                    if self.unify(t, candidate):
+                        resolved = candidate
                 if isinstance(resolved, Never):
                     resolved = TupleType(tuple(NEVER for _ in items))
                 if isinstance(resolved, RecordType):
@@ -924,7 +980,7 @@ class _Checker:
                     help=who,
                 )
                 return Test(condition, False, None, None)
-            if not isinstance(inner, Variable | Never):
+            if not isinstance(inner, Never) and not self.is_open(inner):
                 name = condition_node.name if isinstance(condition_node, Symbol) else None
                 narrows = name is not None and isinstance(scope.get(name), ValueBinding)
                 return Test(condition, True, name if narrows else None, resolved.inner)
@@ -1056,7 +1112,7 @@ class _Checker:
         if isinstance(node, Symbol) and node.name == "_":
             return ir.MatchAny(ir.Discard()), dict(scope), set(), True
         if isinstance(node, Symbol) and node.name == "none":
-            if isinstance(resolved, Variable):
+            if self.is_open(resolved):
                 resolved = OptionType(self.fresh())
                 self.unify(t, resolved)
             if not isinstance(resolved, OptionType | Never):
@@ -1090,7 +1146,7 @@ class _Checker:
         if isinstance(node, Form) and len(node.items) == 2 and isinstance(node.items[0], Symbol):
             constructor, inner_node = node.items[0].name, node.items[1]
             if constructor in {"some", "ok", "err"}:
-                if isinstance(resolved, Variable):
+                if self.is_open(resolved):
                     resolved = (
                         OptionType(self.fresh())
                         if constructor == "some"
@@ -1180,7 +1236,7 @@ class _Checker:
         resolved = self.resolve(record_type)
         if isinstance(resolved, Never):
             return self.placeholder(node.span)
-        if isinstance(resolved, Variable):
+        if self.is_open(resolved):
             self.error(
                 "unresolved-type", record_node.span,
                 "The checker cannot tell which record this is, so it cannot read a field from it.",
@@ -1769,7 +1825,7 @@ class _Checker:
                 first, first_type = self.check(args[0], None, scope)
                 second, _ = self.check(args[1], first_type, scope)
                 resolved = self.resolve(first_type)
-                if not isinstance(resolved, Never | Variable) and resolved not in {INT, STRING}:
+                if not isinstance(resolved, Never) and not self.is_open(resolved) and resolved not in {INT, STRING}:
                     hint = OPTIONAL_HINT if isinstance(resolved, OptionType) else None
                     self.error(
                         "type-mismatch", args[0].span,

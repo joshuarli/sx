@@ -1,0 +1,7 @@
+; task: dev-stale-branches
+(let [repos (call catalog.list {:tags []})
+      statuses (map (fn [r] (call git.status {:repo (get r :id)})) repos)
+      branched (keep (fn [s] (match (get s :branch) (some b) [(get s :repo) b] none none)) statuses)]
+  (par-map {:limit 8}
+    (fn [[repo branch]] (call github.repo {:repo repo}))
+    branched))

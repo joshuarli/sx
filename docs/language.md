@@ -43,7 +43,7 @@ program runs. There is no general recursion and no unbounded loop.
 | `String` | UTF-8 strings |
 | `Unit` | One value, returned by capabilities with no result |
 | `List<T>` | Ordered, finite |
-| `Tuple<T1, ..., Tn>` | Produced by `par`, `group-by`, and bracket literals of mixed types |
+| `Tuple<T1, ..., Tn>` | Produced by `par`, `group-by`, and bracket literals of mixed types or used as tuples |
 | `Option<T>` | `(some x)`, `none` |
 | `Result<T, E>` | `(ok x)`, `(err e)` |
 | `Record {k: T, ...}` | Structural, with exactly the declared fields |
@@ -76,9 +76,16 @@ the enum takes `"Failing"`. A string literal that names no variant of the enum, 
 that carries a value, is an `unknown-variant` error that lists the variants. A string that is not a
 literal never becomes an enum.
 
-A bracket literal is a list when its elements share a type, and a tuple when they do not, or when
-a tuple is expected. `[1 2]` is a `List<Int>`, and `[(- 0 count) tag]` is a
-`Tuple<Int, String>`.
+A bracket literal whose elements have different types is a tuple. A bracket literal with a known
+expected type, a `List<T>` or a `Tuple<...>` of its length, has that type. Any other bracket literal
+whose elements share a type takes its shape from its first use as a list or as a tuple of its length:
+a list function such as `map` makes it a `List<T>`, and a tuple pattern such as `[repo branch]`
+makes it a `Tuple<T, T>`. A literal that no use settles is a `List<T>`. So `[1 2]` alone is a
+`List<Int>`, `[(- 0 count) tag]` is a `Tuple<Int, String>`, and in
+`(par-map {:limit 8} (fn [[repo branch]] ...) (keep (fn [s] ... [(get s :repo) b] ...) statuses))`
+each `[(get s :repo) b]` is a `Tuple<String, String>`. Two undecided literals of different lengths
+become lists. A use that fits neither shape, such as a tuple pattern of another length, is a
+`type-mismatch`.
 
 Programs have no type annotations. The checker infers types bidirectionally from literals,
 bindings, prelude and core signatures, capability signatures, and the expected type of each

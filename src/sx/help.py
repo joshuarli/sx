@@ -131,7 +131,8 @@ TYPES = (
           '(match (attempt (call metrics.uptime {:host "gone"})) (ok m) "up" (err e) (match (get e :kind) '
           'NotFound "missing" _ "other"))', '"missing"'),
     entry("Tuple", "Tuple<A, B, ...>: [a b ...]", "A fixed-size group of values of different types, from par, "
-          "group-by, and bracket literals of mixed types.", '(let [[n s] [1 "a"]] s)', '"a"'),
+          "group-by, and bracket literals of mixed types or that a tuple pattern takes apart.",
+          '(let [[n s] [1 "a"]] s)', '"a"'),
 )
 
 ENTRIES: Mapping[str, Entry] = {e.name: e for e in (*FORMS, *PRELUDE, *TYPES)}

@@ -1,0 +1,138 @@
+{
+  "description": "A homogeneous bracket literal that a tuple pattern takes apart is a tuple.",
+  "program": "(let [pairs (keep (fn [r] (match (get r :note) (some n) [(get r :name) n] none none)) (call rows.list {}))] (par-map {:limit 2} (fn [[name id]] [name (get (call store.get {:id id}) :size)]) pairs))",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list",
+    "rows.add",
+    "checks.list",
+    "checks.add"
+  ],
+  "responses": [
+    {
+      "capability": "rows.list",
+      "input": {},
+      "results": [
+        {
+          "output": [
+            {
+              "name": "a",
+              "note": "x",
+              "hits": 3
+            },
+            {
+              "name": "b",
+              "note": null,
+              "hits": null
+            },
+            {
+              "name": "c",
+              "note": "z",
+              "hits": 5
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "capability": "store.get",
+      "input": {
+        "id": "x"
+      },
+      "results": [
+        {
+          "output": {
+            "id": "x",
+            "size": 1
+          }
+        }
+      ]
+    },
+    {
+      "capability": "store.get",
+      "input": {
+        "id": "z"
+      },
+      "results": [
+        {
+          "output": {
+            "id": "z",
+            "size": 2
+          }
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": [
+      [
+        "a",
+        1
+      ],
+      [
+        "c",
+        2
+      ]
+    ]
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "rows.list",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": [
+        {
+          "name": "a",
+          "note": "x",
+          "hits": 3
+        },
+        {
+          "name": "b",
+          "note": null,
+          "hits": null
+        },
+        {
+          "name": "c",
+          "note": "z",
+          "hits": 5
+        }
+      ]
+    },
+    {
+      "request": "r.0:1",
+      "capability": "store.get",
+      "input": {
+        "id": "x"
+      }
+    },
+    {
+      "request": "r.1:1",
+      "capability": "store.get",
+      "input": {
+        "id": "z"
+      }
+    },
+    {
+      "response": "r.0:1",
+      "output": {
+        "id": "x",
+        "size": 1
+      }
+    },
+    {
+      "response": "r.1:1",
+      "output": {
+        "id": "z",
+        "size": 2
+      }
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "description": "A nested homogeneous bracket literal takes its shape from the pattern that takes it apart.",
+  "program": "(map (fn [[a b]] (+ a b)) [[1 2] [3 4]])",
+  "declarations": "declarations.json",
+  "allow": [
+    "store.get",
+    "store.list",
+    "store.put",
+    "mail.send",
+    "job.state",
+    "rows.list",
+    "rows.add",
+    "checks.list",
+    "checks.add"
+  ],
+  "responses": [],
+  "expect": {
+    "completed": [
+      3,
+      7
+    ]
+  },
+  "trace": []
+}
