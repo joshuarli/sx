@@ -1,0 +1,5 @@
+{
+  "fs.read-text": {"roots": ["/usr/share"]},
+  "fs.list": {"roots": ["/usr/share"]},
+  "fs.write-text": {"roots": ["/usr/share"]}
+}

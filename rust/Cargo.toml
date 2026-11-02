@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["sx-kernel", "sx-cli", "sx-cores"]
+members = ["sx-kernel", "sx-cli", "sx-cores", "sx-packs"]
 
 [workspace.package]
 version = "0.1.0"

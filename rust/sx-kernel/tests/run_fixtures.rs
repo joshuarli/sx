@@ -3,11 +3,13 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::OnceLock;
 
+use sx_kernel::authority::Grants;
 use sx_kernel::budgets::Budgets;
 use sx_kernel::export::{read_program_text, read_type};
 use sx_kernel::host::{FixtureHost, parse_result, run};
 use sx_kernel::json::{Json, Layout, dumps, parse, python_equal};
 use sx_kernel::machine::{Machine, NoCores, Outcome, Response};
+use sx_kernel::registry::{Registry, load_declarations};
 use sx_kernel::values::{decode, encode, show_value};
 
 fn root() -> PathBuf {
@@ -91,6 +93,16 @@ fn shown(json: &Json) -> String {
     dumps(json, Layout::Spaced).expect("serializable")
 }
 
+fn grants_of(case: &Json) -> Result<Grants, String> {
+    let declarations = case.get("declarations").and_then(Json::as_str).ok_or("the case names no declarations")?;
+    let path = root().join("fixtures/run").join(declarations);
+    let text = fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let mut registry = Registry::new();
+    load_declarations(&mut registry, &parse(&text).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+    let allow: Vec<&str> = case.get("allow").and_then(Json::as_array).ok_or("the case has no allow list")?.iter().filter_map(Json::as_str).collect();
+    Grants::unscoped(&registry, &allow).map_err(|e| e.to_string())
+}
+
 fn run_case(path: &Path, case: &Json, ir: &Path, python: &Json) -> Result<(), String> {
     let text = fs::read_to_string(ir).map_err(|e| format!("no exported IR: {e}"))?;
     let program = read_program_text(&text).map_err(|e| e.to_string())?;
@@ -125,7 +137,8 @@ fn run_case(path: &Path, case: &Json, ir: &Path, python: &Json) -> Result<(), St
         let responses = case.get("responses").cloned().unwrap_or(Json::Array(Vec::new()));
         let mut host =
             FixtureHost::from_responses(&program.signatures.capabilities, &responses).map_err(|e| e.to_string())?;
-        let finished = run(&program, &mut host, &[], budgets, &cores).map_err(|e| format!("unexpected call: {e}"))?;
+        let finished =
+            run(&program, &grants_of(case)?, &mut host, &[], budgets, &cores).map_err(|e| format!("unexpected call: {e}"))?;
         let trace = finished.machine.trace().to_vec();
         (finished.outcome, trace)
     };

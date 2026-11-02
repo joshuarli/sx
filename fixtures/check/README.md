@@ -16,6 +16,13 @@ must print for it. A few later programs are short and written to pin one diagnos
 A fixture whose second line is `; allow: ID ...` checks with only those capabilities authorized.
 Otherwise every capability the task declares is authorized.
 
+A fixture may also carry `; grants: PATH`, after the `; allow:` line when there is one, naming a grants
+file relative to the repository root, as `sx check --grants` takes it. Its capabilities are granted with
+their scopes, and only those, plus any `; allow:` IDs. The `fs` fixtures declare
+`fixtures/check/fs-declarations.json` and grant `fixtures/check/fs-grants.json`, whose root,
+`/usr/share`, exists and is no symlink on both macOS and Linux, so the expected output is the same on
+both. Only Rust reads grants, so such a fixture is also marked `; python: no`.
+
 `test_every_specified_diagnostic_code_has_a_pinned_fixture` fails when a code listed in
 [docs/language.md](../../docs/language.md#diagnostics) has no fixture here or in `fixtures/read`.
 
@@ -23,7 +30,7 @@ Otherwise every capability the task declares is authorized.
 
 A fixture for a feature that only Rust and Lean implement carries the header line `; python: no`.
 The line is the last header line: it follows the `; task:` or `; declarations:` line, and the
-`; allow:` line when there is one. Python's fixture tests do not collect a marked fixture. The
+`; allow:` and `; grants:` lines when there are any. Python's fixture tests do not collect a marked fixture. The
 Rust check test compares its rendered diagnostics with the `.expected` file, as for every fixture.
 The command-line comparison against Python skips it.
 

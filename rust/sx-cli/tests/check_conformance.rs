@@ -6,6 +6,7 @@ use std::process::Command;
 use std::sync::OnceLock;
 
 use sx_cores::kernel::{Cores, declared_registry};
+use sx_kernel::authority::{Authority, Grants};
 use sx_kernel::budgets::Budgets;
 use sx_kernel::checker::compile_source;
 use sx_kernel::diagnostics::render;
@@ -105,8 +106,13 @@ fn registry_for(spec: &Spec) -> Registry {
             declared_registry(&task).unwrap_or_else(|e| panic!("task {id}: {e}"))
         }
         Spec::Declarations(path) => {
+            let declarations = read_json(&root().join(path));
             let mut registry = Registry::new();
-            load_declarations(&mut registry, &read_json(&root().join(path))).unwrap_or_else(|e| panic!("{path}: {e}"));
+            for id in declarations.get("packs").and_then(Json::as_array).into_iter().flatten() {
+                let pack = id.as_str().and_then(sx_packs::pack).unwrap_or_else(|| panic!("{path}: unknown pack {id:?}"));
+                registry.add_pack(pack).unwrap_or_else(|e| panic!("{path}: {e}"));
+            }
+            load_declarations(&mut registry, &declarations).unwrap_or_else(|e| panic!("{path}: {e}"));
             registry
         }
         Spec::Help => {
@@ -139,12 +145,13 @@ struct Case {
     source: String,
     spec: Spec,
     allowed: Option<Vec<String>>,
+    grants: Option<String>,
     budgets: Vec<(String, u64)>,
 }
 
 impl Case {
     fn new(name: impl Into<String>, source: impl Into<String>, spec: Spec) -> Case {
-        Case { name: name.into(), source: source.into(), spec, allowed: None, budgets: Vec::new() }
+        Case { name: name.into(), source: source.into(), spec, allowed: None, grants: None, budgets: Vec::new() }
     }
 
     fn json(&self) -> Json {
@@ -219,14 +226,27 @@ fn rust_check(case: &Case) -> (Checked, Option<sx_kernel::ir::Program>) {
     on_large_stack(|| rust_check_here(case))
 }
 
+fn grants_for(case: &Case, registry: &Registry) -> Grants {
+    let mut grants = match &case.grants {
+        Some(path) => Grants::load(registry, &read_json(&root().join(path))).unwrap_or_else(|e| panic!("{path}: {e}")),
+        None => Grants::new(),
+    };
+    let allowed: Vec<String> = match &case.allowed {
+        None if case.grants.is_some() => Vec::new(),
+        None => registry.capabilities().filter(|c| c.scope.is_none()).map(|c| c.id.clone()).collect(),
+        Some(ids) => ids.clone(),
+    };
+    for id in &allowed {
+        grants.grant_unscoped(registry, id).unwrap_or_else(|e| panic!("{}: {e}", case.name));
+    }
+    grants
+}
+
 fn rust_check_here(case: &Case) -> (Checked, Option<sx_kernel::ir::Program>) {
     let registry = registry_for(&case.spec);
-    let allowed: BTreeSet<String> = match &case.allowed {
-        None => registry.capabilities().map(|c| c.id.clone()).collect(),
-        Some(ids) => ids.iter().cloned().collect(),
-    };
+    let grants = grants_for(case, &registry);
     let outcome = catch_unwind(AssertUnwindSafe(|| {
-        compile_source(&case.source, &registry, &allowed, &BTreeMap::new(), case.budgets())
+        compile_source(&case.source, &registry, Authority::Granted(&grants), &BTreeMap::new(), case.budgets())
     }));
     match outcome {
         Err(panic) => {
@@ -250,15 +270,23 @@ fn rust_check_here(case: &Case) -> (Checked, Option<sx_kernel::ir::Program>) {
     }
 }
 
-fn header_spec(source: &str) -> (Spec, Option<Vec<String>>) {
+fn header_spec(source: &str) -> (Spec, Option<Vec<String>>, Option<String>) {
     let mut lines = source.split('\n');
     let first = lines.next().unwrap_or_default();
     let spec = match first.strip_prefix("; task: ") {
         Some(task) => Spec::Task(task.to_string()),
         None => Spec::Declarations(first.strip_prefix("; declarations: ").unwrap_or(RUN_DECLARATIONS).to_string()),
     };
-    let allowed = lines.next().and_then(|l| l.strip_prefix("; allow: ")).map(|ids| ids.split_whitespace().map(str::to_string).collect());
-    (spec, allowed)
+    let mut allowed = None;
+    let mut grants = None;
+    for line in lines.take_while(|line| line.starts_with(';')) {
+        if let Some(ids) = line.strip_prefix("; allow: ") {
+            allowed = Some(ids.split_whitespace().map(str::to_string).collect());
+        } else if let Some(path) = line.strip_prefix("; grants: ") {
+            grants = Some(path.to_string());
+        }
+    }
+    (spec, allowed, grants)
 }
 
 const RUN_DECLARATIONS: &str = "fixtures/run/declarations.json";
@@ -283,11 +311,10 @@ fn check_fixture_cases() -> Vec<(Case, String)> {
         .map(|path| {
             let source = fs::read_to_string(&path).expect("fixture source");
             let expected = fs::read_to_string(path.with_extension("expected")).expect("expected output");
-            let (spec, allowed) = header_spec(&source);
+            let (spec, allowed, grants) = header_spec(&source);
             let mut case = Case::new(stem(&path), source, spec);
-            if allowed.is_some() {
-                case.allowed = allowed;
-            }
+            case.allowed = allowed;
+            case.grants = grants;
             (case, expected)
         })
         .collect()
@@ -387,7 +414,9 @@ fn run_rust(program: &sx_kernel::ir::Program, case: &RunCase) -> Result<(), Stri
         let responses = fixture.get("responses").cloned().unwrap_or(Json::Array(Vec::new()));
         let mut host =
             FixtureHost::from_responses(&program.signatures.capabilities, &responses).map_err(|e| e.to_string())?;
-        let finished = run(program, &mut host, &[], budgets, &cores).map_err(|e| format!("unexpected call: {e}"))?;
+        let registry = registry_for(&case.case.spec);
+        let grants = grants_for(&case.case, &registry);
+        let finished = run(program, &grants, &mut host, &[], budgets, &cores).map_err(|e| format!("unexpected call: {e}"))?;
         let trace = finished.machine.trace().to_vec();
         (finished.outcome, trace)
     };
@@ -690,7 +719,8 @@ fn mutate(source: &str, random: &mut Random) -> String {
 const MUTANTS: usize = 25;
 
 fn corpus() -> Vec<Case> {
-    let mut seeds: Vec<Case> = check_fixture_cases().into_iter().map(|(case, _)| case).collect();
+    let mut seeds: Vec<Case> =
+        check_fixture_cases().into_iter().map(|(case, _)| case).filter(|case| source_runs_in_python(&case.source)).collect();
     for path in sx_files("fixtures/read") {
         let source = fs::read_to_string(&path).expect("read fixture");
         seeds.push(Case::new(format!("read-{}", stem(&path)), source, Spec::Declarations("fixtures/run/declarations.json".to_string())));

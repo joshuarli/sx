@@ -9,7 +9,7 @@ positional arguments:
     check               Check a program and print its diagnostics.
     explain             Print the tools, effects, inputs, and result type of a
                         program.
-    run                 Run a program against recorded tool responses.
+    run                 Run a program against recorded responses or packs.
 
 options:
   -h, --help            show this help message and exit
@@ -38,7 +38,7 @@ options:
 "#;
 
 pub const CHECK_HELP: &str = r#"usage: sx check [-h] [--declarations DECLARATIONS] [--allow ID]
-                [--format {text,json}] [--emit {ir}]
+                [--grants GRANTS] [--format {text,json}] [--emit {ir}]
                 file
 
 positional arguments:
@@ -48,13 +48,14 @@ options:
   -h, --help            show this help message and exit
   --declarations DECLARATIONS
                         JSON declarations of tools, types, and inputs
-  --allow ID            Authorize one tool
+  --allow ID            Authorize one tool that declares no scope
+  --grants GRANTS       JSON object granting tools, with their scopes
   --format {text,json}
   --emit {ir}           Print the checked semantic IR as JSON
 "#;
 
 pub const EXPLAIN_HELP: &str = r#"usage: sx explain [-h] [--declarations DECLARATIONS] [--allow ID]
-                  [--format {text,json}]
+                  [--grants GRANTS] [--format {text,json}]
                   file
 
 positional arguments:
@@ -64,13 +65,14 @@ options:
   -h, --help            show this help message and exit
   --declarations DECLARATIONS
                         JSON declarations of tools, types, and inputs
-  --allow ID            Authorize one tool
+  --allow ID            Authorize one tool that declares no scope
+  --grants GRANTS       JSON object granting tools, with their scopes
   --format {text,json}
 "#;
 
 pub const RUN_HELP: &str = r#"usage: sx run [-h] [--declarations DECLARATIONS] [--allow ID]
-              [--format {text,json}] [--responses RESPONSES]
-              [--input NAME=JSON]
+              [--grants GRANTS] [--format {text,json}]
+              [--responses RESPONSES] [--input NAME=JSON]
               file
 
 positional arguments:
@@ -80,10 +82,12 @@ options:
   -h, --help            show this help message and exit
   --declarations DECLARATIONS
                         JSON declarations of tools, types, and inputs
-  --allow ID            Authorize one tool
+  --allow ID            Authorize one tool that declares no scope
+  --grants GRANTS       JSON object granting tools, with their scopes
   --format {text,json}
   --responses RESPONSES
-                        JSON list of recorded tool responses
+                        JSON list of recorded tool responses; without it,
+                        --grants runs pack tools for real
   --input NAME=JSON     One input value
 "#;
 

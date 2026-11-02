@@ -15,3 +15,4 @@ workspace = true
 [dependencies]
 sx-kernel = { path = "../sx-kernel" }
 sx-cores = { path = "../sx-cores" }
+sx-packs = { path = "../sx-packs" }

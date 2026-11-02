@@ -35,6 +35,7 @@ pub struct ProgramArgs {
     pub file: String,
     pub declarations: Option<String>,
     pub allow: Vec<String>,
+    pub grants: Option<String>,
     pub format: Format,
 }
 
@@ -54,6 +55,7 @@ pub enum Parsed {
 enum Slot {
     Declarations,
     Allow,
+    Grants,
     Format,
     Emit,
     Responses,
@@ -73,6 +75,7 @@ const EMITS: &[&str] = &["ir"];
 
 const DECLARATIONS: Flag = Flag { name: "--declarations", slot: Slot::Declarations, choices: None };
 const ALLOW: Flag = Flag { name: "--allow", slot: Slot::Allow, choices: None };
+const GRANTS: Flag = Flag { name: "--grants", slot: Slot::Grants, choices: None };
 const FORMAT: Flag = Flag { name: "--format", slot: Slot::Format, choices: Some(FORMATS) };
 const EMIT: Flag = Flag { name: "--emit", slot: Slot::Emit, choices: Some(EMITS) };
 const RESPONSES: Flag = Flag { name: "--responses", slot: Slot::Responses, choices: None };
@@ -115,21 +118,21 @@ const SUBCOMMANDS: [Subcommand; 5] = [
     Subcommand {
         name: Name::Check,
         word: "check",
-        flags: &[DECLARATIONS, ALLOW, FORMAT, EMIT],
+        flags: &[DECLARATIONS, ALLOW, GRANTS, FORMAT, EMIT],
         positional: Positional::Required("file"),
         help: CHECK_HELP,
     },
     Subcommand {
         name: Name::Explain,
         word: "explain",
-        flags: &[DECLARATIONS, ALLOW, FORMAT],
+        flags: &[DECLARATIONS, ALLOW, GRANTS, FORMAT],
         positional: Positional::Required("file"),
         help: EXPLAIN_HELP,
     },
     Subcommand {
         name: Name::Run,
         word: "run",
-        flags: &[DECLARATIONS, ALLOW, FORMAT, RESPONSES, INPUT],
+        flags: &[DECLARATIONS, ALLOW, GRANTS, FORMAT, RESPONSES, INPUT],
         positional: Positional::Required("file"),
         help: RUN_HELP,
     },
@@ -380,6 +383,7 @@ fn build(command: &Subcommand, collected: Collected) -> Invocation {
                 file: collected.positional.clone().unwrap_or_default(),
                 declarations: last(&collected, Slot::Declarations),
                 allow: all(&collected, Slot::Allow),
+                grants: last(&collected, Slot::Grants),
                 format: format_of(&collected),
             })
         }

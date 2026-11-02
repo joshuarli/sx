@@ -6,6 +6,9 @@ import Sx
 #print axioms Sx.checked_program_type_safety
 #print axioms Sx.effect_soundness
 #print axioms Sx.effect_soundness_calls
+#print axioms Sx.out_of_scope_rejected
+#print axioms Sx.out_of_scope_never_requests
+#print axioms Sx.admitted_effect_soundness
 #print axioms Sx.core_application_no_request
 #print axioms Sx.pure_program_no_request
 #print axioms Sx.pure_program_never_waits_on_a_call

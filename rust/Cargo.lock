@@ -495,6 +495,7 @@ version = "0.1.0"
 dependencies = [
  "sx-cores",
  "sx-kernel",
+ "sx-packs",
 ]
 
 [[package]]
@@ -513,6 +514,14 @@ dependencies = [
  "deser",
  "deser-json",
  "deser-value",
+]
+
+[[package]]
+name = "sx-packs"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "sx-kernel",
 ]
 
 [[package]]

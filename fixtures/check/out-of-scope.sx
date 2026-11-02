@@ -1,0 +1,6 @@
+; declarations: fixtures/check/fs-declarations.json
+; grants: fixtures/check/fs-grants.json
+; python: no
+[(call fs.read-text {:path "notes.txt"})
+ (call fs.read-text {:path "/usr/lib/sx-fixture.txt"})
+ (count (call fs.list {:path "/usr/share/sx-fixture-absent/../../lib"}))]

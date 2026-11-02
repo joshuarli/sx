@@ -109,8 +109,9 @@ Until Phase 4, `docs/language.md` is the specification and the fixture corpus is
 ### The prototype is read-only
 
 No phase in this plan performs Git or GitHub writes. Capabilities carry an effect class (`read`
-or `write`) so the type system can reject parallel writes, but no `write` capability is
-implemented against a real system.
+or `write`) so the type system can reject parallel writes. The one `write` capability implemented
+against a real system is Phase 6's `fs.write-text`, an atomic, idempotent file write confined to
+granted roots.
 
 ## Architecture
 
@@ -430,6 +431,8 @@ with Lean on every accepted fixture, and the repomod parity tests pass on the Ru
   freeze are not in them.
 
 **Phase 5 host boundary and measurements.** `sx serve` speaks the JSON [host protocol](docs/language.md#host-protocol), 127 accepted and 18 rejected `fixtures/run` cases give the same outcome and exact trace through it, and `sx-repomod` runs its 26 parity tests on the Rust kernel. Release build, CPU time per operation (median of 9 interleaved samples, minimum to maximum in parentheses, none discarded by `perf-gate-ready`, which exited 0 although other lanes were compiling), Python kernel against Rust: parsing 33.9 (32.6-35.4) against 1.16 (1.13-1.23) microseconds per fixture program, and 2,039 against 63 for `status-offline.sx`; checking 46.4 (45.6-49.8) against 41.9 (39.5-50.1) per fixture program, and 1,715 against 468 for the status program; running with a fixture host 28.1 against 2.1 per fixture program, and 12.6 against 0.90 milliseconds for the status program on 70 recorded responses; 25.5 against 1.38 milliseconds for 59,000 machine steps of pure computation; one suspension and resume 21.3 (20.9-25.6) against 1.48 (1.45-1.58), and 13.6 against 1.29 per request in a 16-wide `par-map`. Half of Rust's cost to check a small program is the 22 microseconds the checker spends starting its 64 MiB stack thread, so small programs gain little from Rust there. Host dispatch: a Python host answering over the protocol costs 24.5 (24.1-26.3) microseconds of CPU per call in the client and the kernel together, 1.15 times the Python kernel with an in-process Python host, so the protocol is no faster than Python for trivial answers. Real capability calls take milliseconds, so the measurements do not call for PyO3. Reproduce with `uv run python bench/kernel/measure.py`, which builds the release binaries and takes about ten minutes. `uv run pytest bench/kernel/record_status.py` records the status program's responses from repomod's test fleet.
+
+**Phase 6a: scoped authorization and the `fs` pack.** An execution's authority is a set of grants, each a capability ID with a scope value of the record type the capability declares, or with none. The kernel never reads a scope: the pack registers a check from scope and request input to a verdict, the checker applies it to inputs built only from literals and rejects a denied call with `out-of-scope`, and every host applies it to every request and refuses a denied one with `PermissionDenied`. `sx check`, `explain`, and `run` take `--grants`, `sx run --grants` without `--responses` performs `fs` capabilities for real, and `sx serve` takes `grants` and answers `check-scope`. The `fs` pack in `rust/sx-packs` reads text and bytes, lists, stats, and writes atomically, with the path rules and the residual race stated in [docs/language.md](docs/language.md#the-fs-pack). Gate evidence: 11 scope and error-table tests in `sx-packs` (`..`, `.`, file, directory, chained, dangling, and looping symlinks, a symlinked root, relative, NUL, sibling-prefix, and root-write paths, case on case-insensitive APFS, a name that is not UTF-8, and a denied read of a FIFO outside the roots that returns without opening it); 9 `sx run`, `check`, and `explain` tests against temporary directories covering every capability and the `NotFound`, `PermissionDenied`, and `Invalid` kinds (`Failed` is reached only through the error table); 2 `sx serve` tests in which the host asks `check-scope` and answers; 3 marked `fixtures/check` cases, two `out-of-scope` and one accepted with literal and computed paths; all 73 Rust tests, 642 Python tests, 36 repomod tests, 128 of 128 Lean agreements, 15 axiom-clean theorems, and a fuzz run with 0 findings. The non-UTF-8 listing is exercised only on Linux, and was not run there for this phase. In Lean, `out_of_scope_never_requests` proves that a program with a known call the scope check denies admits no machine, so it records no request, and `admitted_effect_soundness` keeps effect soundness for admitted programs. Both treat the check as an oracle and the checker's rejection as the gate. A stronger theorem, that every request an admitted program makes at a literal call site carries that literal, would need an invariant that tracks argument values through the machine's sequencing frames in every step lemma, so it is not proved; the run-time check covers those requests.
 
 Decided at the Phase 0 checkpoint:
 
@@ -799,7 +802,8 @@ real Git and GitHub behavior, without separate conformance evidence.
 
 ## Out of scope
 
-- Writes to Git, GitHub, or the filesystem, including guarded sync, push, fix, and merge.
+- Writes to Git or GitHub, including guarded sync, push, fix, and merge, and file writes beyond
+  `fs.write-text` within granted roots.
 - Package manifests, version resolution, content-addressed identity, and dynamic loading. Cores
   register through the Python API until a second externally written core exists.
 - WASM, sandboxed third-party cores, and a stable binary ABI.

@@ -1,0 +1,8 @@
+; declarations: fixtures/check/fs-declarations.json
+; grants: fixtures/check/fs-grants.json
+; python: no
+(let [dir "/usr/share"
+      names (map (fn [e] (get e :name)) (call fs.list {:path "/usr/share/sx-fixture-absent"}))]
+  [(call fs.read-text {:path "/usr/share/sx-fixture-absent.txt"})
+   (call fs.read-text {:path (str dir "/sx-fixture-absent.txt")})
+   names])

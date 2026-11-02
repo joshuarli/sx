@@ -1,8 +1,10 @@
 #![forbid(unsafe_code)]
 
+pub mod authority;
 pub mod budgets;
 pub mod checker;
 pub mod diagnostics;
+pub mod explain;
 pub mod export;
 pub mod help;
 pub mod host;
