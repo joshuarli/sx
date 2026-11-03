@@ -1272,7 +1272,7 @@ record. Evidence:
 - The release binary is 10,624,288 bytes, +10.3% over 9,633,456. The lead accepted it rather than strip
   symbols or turn on LTO, which would change what the limit measures or the build time.
 
-Before Phase 21, the lead closed the gaps a model meets most: an optional narrows only inside
+Before Phase 21, the lead set out to close the gaps a model meets most: an optional narrows only inside
 `if (x != null)` and its `?:`, not after an early `return`, in `x != null && x.f`, or in an `else`; a payload
 enum a tool returns cannot be told apart; and some checker messages still show Sx forms.
 
