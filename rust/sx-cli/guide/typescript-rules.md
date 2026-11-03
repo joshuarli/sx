@@ -19,9 +19,11 @@ Loops
 Absent values and equality
 - There is no `undefined`. Test with `x == null` or `x != null`, never `x === null` or `x !== null`.
 - `x?.f` only as `x?.f ?? d`, `x?.f == null`, or a condition. Otherwise write `x == null ? null : x.f`.
-- Narrow an optional only inside `if (x != null) { x.f }` or `x != null ? x.f : d`. An early `if (x == null) return`, `x != null && x.f`, `if (x)`, and the else of `x == null` do not narrow: use `x?.f ?? d`.
+- A null test narrows, as in TypeScript: `if (x == null) return …;` (or `continue`, `break`, `throw`) narrows `x` for the rest of the block; so do `x != null && x.f`, `x == null || x.f`, `x ? x.f : d`, and the else of `x == null`. A field of a name narrows too (`r.note != null && r.note.length`) until the name is assigned.
+- `if (x)` on a string, number, or boolean proves it present only: its false branch is not narrowed, since `""`, `0`, and `false` are present.
 - `===` compares strings, numbers, booleans only. Compare fields, not arrays or objects (`a.id === b.id`). `==` and `!=` only against `null`.
-- A tool's optional field is `T | null`: use `r.note ?? ""` before `r.note.length`.
+- A tool's optional field is `T | null`: test it (`r.note != null && r.note.length > 0`) or use `r.note ?? ""`.
+- A payload enum is `{ tag: "A"; value: T } | "B"`: test `s === "B"` or `s.tag === "A"`, then read `s.value`. `s.value` before a tag test, and `s === "A"` for a variant with a value, are rejected. Write a field such as `age-seconds` as `r["age-seconds"]`.
 
 Numbers and text
 - An integer literal is an `Int`, `1.5` a `Float`. `/` always gives a `Float`: use `Math.floor(a / b)` where an index or `Int` is needed.

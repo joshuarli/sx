@@ -196,8 +196,8 @@ the call.
 | Source | Lowering |
 | --- | --- |
 | `x ?? d` | `(get x d)` when `x` is a bare name or an optional field, else `(match x (some v) v none d)`; `d` runs only when `x` is absent |
-| `x == null` | `(not x)` as a presence test |
-| `x != null` | `x` as a presence test |
+| `x == null` | `(not (present x))` |
+| `x != null` | `(present x)`, which is true for a value that cannot be absent, as `false != null` is true in JavaScript |
 | `x === null`, `x !== null` | `(= x none)`, which the checker rejects with `js-null-equality`: an absent value may be `undefined`, so only `== null` and `!= null` test presence |
 | `x?.f` | `(match x (some v) (get v :f) none none)` |
 | `x?.[i]`, `x?.f()` | the same, with the index or the method |
@@ -216,11 +216,48 @@ So a `?.` chain may appear only where `undefined` and `null` behave alike:
 with the fix `x == null ? null : x.f`. A plain `.f` on an `Option` is a `type-mismatch`, in TypeScript terms
 "possibly null".
 
+**Narrowing.** The checker narrows an `Option` to its value wherever the test proves it present, with the
+meaning JavaScript gives the test:
+
+| Test | `x` is present in |
+| --- | --- |
+| `x != null`, `x` | the `then` branch of `if` and `?:`, and the right operand of `&&` |
+| `x == null`, `!x` | the `else` branch, the right operand of `\|\|`, and the rest of the block after `if (x == null) S` when `S` ends in `return`, `break`, `continue`, or `throw` |
+| `a && b`, `!(a \|\| b)` | the union of what `a` and `b` prove |
+| `a \|\| b`, `!(a && b)` as the `else` or the rest after an exit | the union of what `a` and `b` disprove |
+| a second `x != null` where `x` is already present | always true |
+
+`x` truthy proves it present only; for a `String`, `Int`, `Float`, or `Bool` the false branch proves nothing, because
+`""`, `0`, and `false` are falsy and present. A path of fields of a name, `r.note` or `r.parent.label`, is narrowed the
+same way until the name is bound again, since an assignment through the name rebuilds the record. A name that is
+assigned inside the narrowed branch is a new binding and is `Option` again. `a && b` and `a || b` whose left side is a comparison or a null test are lowered as `(if a b false)` and
+`(if a true b)`, so that they narrow in value position as well.
+
 `typeof e` is decided by the type of `e`, which is static: `"string"` for a `String`, `"number"` for an
 `Int` or `Float`, `"boolean"` for a `Bool`, `"object"` for a list, tuple, record, or map, and for an `Option`
-the type of the value when present and `"object"` when absent (`typeof null`). It is elaborated by the checker.
+the type of the value when present and `"object"` when absent (`typeof null`), and for an enum that has payloads
+and nullary variants `"string"` for a nullary variant and `"object"` for the others. It is elaborated by the checker.
 `typeof` of a chain, a comparison with `"undefined"`, and `instanceof` are rejected. `Array.isArray(e)` is
 likewise `true` for a list or tuple and `false` for any other type.
+
+## Enums with payloads
+
+An enum with payloads reaches a program as the JSON the kernel writes for it: a variant with a value is
+`{ tag: "A", value: v }` and one without is the string `"B"`. A program tells the variants apart as TypeScript does:
+
+| Source | Meaning |
+| --- | --- |
+| `s === "B"`, `s !== "B"` | `s` is the nullary variant `B`, tested by a `match` |
+| `s.tag === "A"`, `s.tag !== "A"` | `s` is the variant `A`, which has a value; the other operand order is the same |
+| `s.value` | the value, after a test left exactly one variant that has one |
+| `s.tag` | the variant's name, when every variant still possible has a value |
+| `typeof s` | `"string"` for a nullary variant and `"object"` for the others, per variant |
+
+A test narrows the variants `s` can still be in the branch it proves, the rest of the block after an exit, and
+through `&&`, `||`, `!`, and `?:` as a null test does. `s.value` before a test has left one variant is
+`not-a-record`, as is `s.tag` of an enum with a nullary variant, which is `undefined` in JavaScript. `s === "A"` for a
+variant that has a value, and `s.tag === "B"` for a nullary one, are not the tests TypeScript accepts and stay
+`js-equality` and `not-a-record`.
 
 ## Lowering of statements
 
@@ -634,7 +671,7 @@ without a call, and the discovery calls of codemode (`searchTools`, `describeToo
 | `Record {k: T, …}` and open records | `{ k: T; … }`; an `Option` field is `k: T | null` in an output |
 | `Option<T>` | output `T | null`; input field `k?: T | null` |
 | Enum without payloads | a union of string literals |
-| Enum with payloads | `{ tag: "A"; value: T } | "B"`; a program can pass such a value through (return, log, `JSON.stringify`) but cannot yet read its `tag` or `value` |
+| Enum with payloads | `{ tag: "A"; value: T } \| "B"`, the JSON the kernel writes; see [Enums with payloads](#enums-with-payloads). A field whose name is not an identifier, such as `default-branch`, is written `"default-branch"` and read `r["default-branch"]` |
 | `Result<T, E>` | `Settled<T, E>`, the file's alias for `{ status: "fulfilled"; value: T } | { status: "rejected"; reason: E }` |
 | Core nominal | its base type |
 
@@ -742,9 +779,10 @@ Sx text. These are the places where the implementation fixes what this document 
   template, and `String(x)` accept a `String`, `Int`, `Float`, `Bool`, a nullary enum, or an optional one
   of those, which is `null` when absent. `<`, `<=`, `>`, `>=` on strings and a `sort-by` key of type
   `String` compare through `js.order-key`; a tuple key that contains a string is not mapped.
-- **Conditions.** A bare condition keeps its Sx meaning, with one change: an `Option<Bool>` is a presence
-  test, so the front end's `x != null` is the bare name. `(not x)` on an optional value is the absence
-  test. Everything else goes through `truthy`.
+- **Conditions.** `(present x)` is the front end's `x != null`: a presence test of an `Option`, and `true` of a value
+  that cannot be absent (`Unit` is `false`). `(not (present x))` is `x == null`. A condition that is a test of a
+  name, a field path of one, or a variant narrows as [Optional values](#optional-values) and
+  [Enums with payloads](#enums-with-payloads) say. Everything else goes through `truthy`.
 - **Record order.** A record value holds its fields in the order of the literal or the type that built it
   (a hint from a tool input type orders by the type). `log` and `js.stringify` write that order; `to-json`
   still writes keys ascending. `console.log` elaborates each argument to text or to `js.stringify`.
@@ -774,16 +812,15 @@ Sx text. These are the places where the implementation fixes what this document 
 - **Sorting.** `.sort()` lowers to `(sort-by identity xs)`; the checker reports `ts-sort-comparator` unless the
   elements are `String`s.
 - **Absent values.** `x ?? d` and `(match x (some v) … none …)` on a value that cannot be absent, such as a name
-  narrowed by an earlier `x != null`, take the present arm. A second `x != null` test inside that branch is still
-  `condition-not-bool`.
+  narrowed by an earlier `x != null`, take the present arm, and a second `x != null` test inside that branch is true.
 - **Destructuring.** An array pattern against an array literal of the same length is a tuple pattern; against any
   other length, or any other list, it reads `(nth xs i)`, so a name past the end is the `out-of-range` trap.
 - **Returns on every path.** A `try` and `catch` that both end in `return` leave nothing to run after them, and the
   lowering makes that continuation `(fail "unreachable")`.
 - **Expansions.** A diagnostic from inside a `js` expansion carries the span of the call that expanded it.
 - **Known gaps.** A `loop` variable that starts as an `Int` and receives a `Float` is `js-float-as-int`, where
-  `reduce` widens it. An enum with payloads that a tool returns cannot be discriminated: `s === "Dot"` is
-  `js-equality` and `s.tag` is `not-a-record`, so it is only passed through. A `sort-by` key that is a tuple with a
+  `reduce` widens it. A mixed enum read through a field, as in `r.shape === "Dot"`, is `js-equality`: bind it to a
+  name first. A `sort-by` key that is a tuple with a
   string compares by code point; no TypeScript form reaches it.
 
 ## Diagnostics
