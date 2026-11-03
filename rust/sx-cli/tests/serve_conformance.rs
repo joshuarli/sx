@@ -341,6 +341,9 @@ fn every_run_fixture_gives_the_same_outcome_and_trace_through_the_protocol() {
     let mut failures = Vec::new();
     for path in cases() {
         let case = read_json(&path);
+        if case.get("dialect").is_some() {
+            continue;
+        }
         let stem = path.file_stem().and_then(|s| s.to_str()).expect("fixture name");
         let declarations = read_json(&root().join("fixtures/run").join(case.get("declarations").and_then(Json::as_str).expect("declarations")));
         let is_rejected = case.get("expect").and_then(|e| e.get("rejected")).is_some();

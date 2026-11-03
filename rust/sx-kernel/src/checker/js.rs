@@ -63,7 +63,7 @@ fn some_of(value: ir::Node, wrapped: &Type, span: Span) -> ir::Node {
 }
 
 pub(super) enum Slot<'a> {
-    Value(ir::Node, Type),
+    Value(Box<(ir::Node, Type)>),
     Function(&'a Node),
 }
 
@@ -908,7 +908,8 @@ impl<'r> Checker<'r> {
         let mut wrappers: Vec<(&'static str, Option<ir::Node>)> = Vec::new();
         for (name, slot) in slots {
             match slot {
-                Slot::Value(value, t) => {
+                Slot::Value(held) => {
+                    let (value, t) = *held;
                     inner = inner.value(name, t);
                     wrappers.push((name, Some(value)));
                 }
@@ -1020,7 +1021,7 @@ impl<'r> Checker<'r> {
                 let texts = if self.resolve(&element) == STRING {
                     value
                 } else {
-                    let slots = vec![("js-xs", Slot::Value(value, t))];
+                    let slots = vec![("js-xs", Slot::Value(Box::new((value, t))))];
                     self.expand(span, "(map (fn [x] (str x)) js-xs)", slots, None, scope).0
                 };
                 let made = self.js_core_call("js.join", vec![separator, texts], span);
@@ -1031,7 +1032,7 @@ impl<'r> Checker<'r> {
                 if !matches!(self.resolve(&t), Type::List(_)) {
                     return self.receiver_error(name, args[0].span, &t, "a list");
                 }
-                let slots = vec![("js-xs", Slot::Value(value, t))];
+                let slots = vec![("js-xs", Slot::Value(Box::new((value, t))))];
                 let template = "(let [n (count js-xs)] (map (fn [i] (nth js-xs (- (- n 1) i))) (range 0 n)))";
                 self.expand(span, template, slots, expected, scope)
             }
@@ -1041,7 +1042,7 @@ impl<'r> Checker<'r> {
                     return self.placeholder(span);
                 }
                 let (value, t) = self.check(&args[1], None, scope);
-                let slots = vec![("js-xs", Slot::Value(value, t)), ("js-f", Slot::Function(&args[0]))];
+                let slots = vec![("js-xs", Slot::Value(Box::new((value, t)))), ("js-f", Slot::Function(&args[0]))];
                 let template = "(reduce (fn [found x] (match found (some _) found none (if (truthy (js-f x)) (some x) none))) none js-xs)";
                 self.expand(span, template, slots, expected, scope)
             }
@@ -1076,7 +1077,7 @@ impl<'r> Checker<'r> {
                 self.coerce(bind(RECEIVER, value, made, span), &STRING, expected, span)
             }
             Type::List(_) => {
-                let mut slots = vec![("js-xs", Slot::Value(value, t)), ("js-a", Slot::Value(start, INT))];
+                let mut slots = vec![("js-xs", Slot::Value(Box::new((value, t)))), ("js-a", Slot::Value(Box::new((start, INT))))];
                 let clamp = |bound: &str| {
                     format!(
                         "(if (< {bound} 0) (if (< (+ n {bound}) 0) 0 (+ n {bound})) (if (< n {bound}) n {bound}))"
@@ -1084,7 +1085,7 @@ impl<'r> Checker<'r> {
                 };
                 let stop = match end {
                     Some(end) => {
-                        slots.push(("js-b", Slot::Value(end, INT)));
+                        slots.push(("js-b", Slot::Value(Box::new((end, INT)))));
                         clamp("js-b")
                     }
                     None => "n".to_string(),
@@ -1122,7 +1123,7 @@ impl<'r> Checker<'r> {
             }
             Type::List(_) => {
                 let (needle, needle_type) = self.check(&args[1], None, scope);
-                let slots = vec![("js-xs", Slot::Value(value, t)), ("js-x", Slot::Value(needle, needle_type))];
+                let slots = vec![("js-xs", Slot::Value(Box::new((value, t)))), ("js-x", Slot::Value(Box::new((needle, needle_type))))];
                 let template = if searching {
                     "(reduce (fn [found p] (if (< found 0) (if (= (nth p 1) js-x) (nth p 0) found) found)) -1 (enumerate js-xs))"
                 } else {

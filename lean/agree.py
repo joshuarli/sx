@@ -166,7 +166,7 @@ def main() -> int:
         if ir is None:
             rejected.append(path.stem)
             continue
-        if re.search(r'"function":\s*"js\.', ir.read_text()):
+        if re.search(r'"function":\s*"js\.|"js\.Shaped<', ir.read_text()):
             js_core_only.append(path.stem)
             continue
         checked_by_lean = subprocess.run([binary, "check", ir], capture_output=True, text=True, check=False)
@@ -197,7 +197,7 @@ def main() -> int:
         print(f"lean checker rejects {name}: {reason}")
     print(f"compared {compared} accepted fixtures, {len(disagreements)} disagree; "
           f"{len(rejected)} rejected fixtures are elaborator behavior and are not compared: {', '.join(rejected)}")
-    print(f"{len(js_core_only)} js fixtures call the js core, which has no Lean counterpart, and are judged by the Rust gates alone")
+    print(f"{len(js_core_only)} js fixtures use the js core or js.Shaped, which have no Lean counterpart, and are judged by the Rust gates alone")
     print(f"the pure evaluator agrees on {pure_compared} call-free fixtures")
     print(f"the Lean checker accepts {compared - len(unchecked)} of {compared} exported programs")
     twins, wrongly_accepted = retry_write_twins(binary)

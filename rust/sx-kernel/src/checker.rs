@@ -4810,15 +4810,15 @@ pub fn check(
     budgets: Budgets,
     dialect: Dialect,
 ) -> CheckResult {
+    let setting = Setting { registry, authority, inputs, budgets, dialect };
     let checked = crate::stack::on_sized_stack(|| {
         let mut arguments = ArgumentTypes::default();
-        let first =
-            elaborate(program, registry, authority, inputs, budgets, dialect, ArgumentTypes::default(), &mut arguments);
+        let first = elaborate(program, &setting, ArgumentTypes::default(), &mut arguments);
         let unresolved = first.diagnostics.iter().any(|d| d.code == "unresolved-type");
         if !unresolved || arguments.implicated.is_empty() {
             return first;
         }
-        elaborate(program, registry, authority, inputs, budgets, dialect, arguments, &mut ArgumentTypes::default())
+        elaborate(program, &setting, arguments, &mut ArgumentTypes::default())
     });
     match checked {
         Ok(result) => result,
@@ -4829,16 +4829,16 @@ pub fn check(
     }
 }
 
-fn elaborate(
-    program: &Node,
-    registry: &Registry,
-    authority: Authority<'_>,
-    inputs: &BTreeMap<String, Type>,
+struct Setting<'s> {
+    registry: &'s Registry,
+    authority: Authority<'s>,
+    inputs: &'s BTreeMap<String, Type>,
     budgets: Budgets,
     dialect: Dialect,
-    earlier: ArgumentTypes,
-    found: &mut ArgumentTypes,
-) -> CheckResult {
+}
+
+fn elaborate(program: &Node, setting: &Setting<'_>, earlier: ArgumentTypes, found: &mut ArgumentTypes) -> CheckResult {
+    let Setting { registry, authority, inputs, budgets, dialect } = *setting;
     let mut checker = Checker {
         dialect,
         registry,
