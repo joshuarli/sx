@@ -174,7 +174,8 @@ TypeScript front end over the same kernel. The owner authorized every phase unat
 spec review to the lead. Phase 18 missed its coverage gate and the lead ruled to continue. In Phase 19,
 Bun and `sx` agreed on every accepted program from the corpus and a generator, and every mutant was
 rejected; the clean build grew 16% against a 10% limit, from the JS-mode checker, and the lead ruled to
-continue. Phase 20 is next.
+continue. Phase 20 passed: `sx mcp code --language ts` serves the subset, and a pi session solves a
+small task with it. Phase 21 is next.
 
 **The Python prototype is frozen.** `src/sx` and the Python cores are frozen as of commit
 `15b6ed6`, the parent of the commit that records this, because Rust passed its gates. The prototype
@@ -1250,6 +1251,30 @@ policy refusal or diagnostic points at TypeScript source.
 **Gate:** the Phase 15 gate in TypeScript: an MCP client test over stdio against native and proxied
 tools, policy refusals that leave the sandbox untouched, and a pi session in print mode that solves a
 small task.
+
+**Phase 20 result: the gate passed; the binary is 0.3 points over its 10% limit, and the lead accepted
+it.** `sx mcp code --language ts` takes a TypeScript `program` in `check` and `run`, and `run` has no
+`inputs`, since a TypeScript program declares none. `run`'s description carries the generated `.d.ts`,
+the behavior notes with tools named `tools.ns.name`, and 44 lines of rules
+(`rust/sx-cli/guide/typescript-rules.md`), about 6 KB in all. Diagnostics, `explain` call sites, and
+refusals point at TypeScript lines and columns, and types print as TypeScript. A `Result` a tool returns
+reads as a `Settled` (`status`, `value`, `reason`), and the `.d.ts` says so. The Phase 19 gap is closed:
+an `Int` in a tool's `Map` values, enum payloads, and `Result` arms is range-checked like one in a list or
+record. Evidence:
+
+- 28 stdio tests in `mcp_code`, 10 of them new: the listing, spanned diagnostics, native and proxied
+  tools, refusals with the sandbox unchanged, and logs. The workspace tests, clippy, Lean on 287 fixtures,
+  621 Python tests, and `bench/tsdiff` (1,000 generated programs and 150 mutants, no disagreement) pass.
+- Muse Spark at medium thinking, in pi with only `mcp__sx_code__*`, sorted six tagged notes into
+  directories and wrote the index correctly in three sessions: 7, 6, and 4 turns, $0.0028, $0.0011, and
+  $0.0016. The first hit `ts-annotation` twice on an index signature, whose message then improved, and
+  `ts-mutation-pattern` once; the third hit `ts-cast` once; the second hit nothing.
+- The release binary is 10,624,288 bytes, +10.3% over 9,633,456. The lead accepted it rather than strip
+  symbols or turn on LTO, which would change what the limit measures or the build time.
+
+Before Phase 21, the lead closed the gaps a model meets most: an optional narrows only inside
+`if (x != null)` and its `?:`, not after an early `return`, in `x != null && x.f`, or in an `else`; a payload
+enum a tool returns cannot be told apart; and some checker messages still show Sx forms.
 
 #### Phase 21: Is the tax gone?
 
