@@ -639,7 +639,7 @@ as in Clojure.
 | `filter` | `(T -> Bool) List<T> -> List<T>` |
 | `keep` | `(T -> Option<U>) List<T> -> List<U>`, the `some` values in order |
 | `any? all?` | `(T -> Bool) List<T> -> Bool`. Each stops at the first element that decides the answer. |
-| `reduce` | `(A T -> A) A List<T> -> A` |
+| `reduce` | `(A T -> A) A List<T> -> A`. When the function destructures its state as `[a b …]` and the initial value is a bracket of that many items, `A` is a tuple, so `[[] []]` holds two lists of different element types. Rust and Lean only. |
 | `sort-by` | `(T -> K) List<T> -> List<T>`, stable and ascending. `K` is a [sort key](#types). |
 | `distinct-by` | `(T -> K) List<T> -> List<T>`, keeps the first element for each key |
 | `group-by` | `(T -> K) List<T> -> List<Tuple<K, List<T>>>`, groups in first-occurrence order |

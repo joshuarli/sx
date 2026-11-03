@@ -1,0 +1,13 @@
+{
+  "description": "A reduce whose function destructures a pair of empty lists gives each list its own element type.",
+  "python": false,
+  "program": "(reduce (fn [[names sizes] x] [(concat names [(str x)]) (concat sizes [x])]) [[] []] [1 2 3])",
+  "declarations": "declarations.json",
+  "allow": [],
+  "expect": {
+    "completed": [
+      ["1", "2", "3"],
+      [1, 2, 3]
+    ]
+  }
+}

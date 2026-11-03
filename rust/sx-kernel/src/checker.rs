@@ -4682,9 +4682,6 @@ impl<'r> Checker<'r> {
     }
 
     fn state_tuple_hint(&mut self, function: &Node, initial: &Node) -> Option<Type> {
-        if self.dialect != Dialect::JavaScript {
-            return None;
-        }
         let state = list_items(form_items(function).filter(|_| is_function_form(function))?.get(1).and_then(list_items)?.first()?)?;
         let initial_items = list_items(initial)?;
         (state.len() > 1 && state.len() == initial_items.len()).then(|| Type::Tuple(state.iter().map(|_| self.fresh()).collect()))

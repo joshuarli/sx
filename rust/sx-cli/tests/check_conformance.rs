@@ -573,6 +573,7 @@ struct Tally {
     accepted: usize,
     rejected: usize,
     widened: usize,
+    split_states: usize,
     python_crashes: Vec<String>,
     codes: BTreeSet<String>,
 }
@@ -596,6 +597,12 @@ fn is_frozen_refusal(codes: &[String], rendered: &str) -> bool {
 
 fn is_unfilled_accumulator(codes: &[String], source: &str) -> bool {
     source.contains("(loop") && codes.iter().any(|code| code == "unresolved-type")
+}
+
+const SPLIT_REDUCE_STATE: &str = r#""op": "reduce", "args": [{"node": "Lambda", "params": [{"tuple": ["#;
+
+fn is_split_reduce_state(rust: &Checked) -> bool {
+    matches!(rust, Checked::Accepted { ir } if ir.contains(SPLIT_REDUCE_STATE))
 }
 
 fn is_capitalized_binding(rendered: &str) -> bool {
@@ -678,6 +685,7 @@ fn compare(label: &str, cases: &[Case]) -> (Tally, Vec<String>) {
             (_, Checked::Rejected { rendered, .. }) if &rust != python && is_form_name_widening(&rust, rendered) => {
                 tally.widened += 1;
             }
+            _ if &rust != python && is_split_reduce_state(&rust) => tally.split_states += 1,
             _ if &rust != python => {
                 failures.push(format!("{}:\n{}\n--- rust\n{rust:?}\n--- python\n{python:?}", case.name, case.source));
             }
@@ -954,12 +962,13 @@ fn differential_corpus_checks_identically_in_rust_and_python() {
     cases.extend(generated_cases());
     let (tally, failures) = compare("differential", &cases);
     eprintln!(
-        "{} differential programs compared: {} accepted, {} rejected with {} distinct codes, {} programs that only Rust accepts as written, {} where Python crashes",
+        "{} differential programs compared: {} accepted, {} rejected with {} distinct codes, {} programs that only Rust accepts as written, {} whose reduce state Rust types per element, {} where Python crashes",
         tally.compared,
         tally.accepted,
         tally.rejected,
         tally.codes.len(),
         tally.widened,
+        tally.split_states,
         tally.python_crashes.len()
     );
     for crash in &tally.python_crashes {
