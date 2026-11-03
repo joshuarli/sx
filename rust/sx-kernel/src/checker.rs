@@ -435,6 +435,18 @@ fn higher(op: &str) -> Option<HigherOrder> {
     }
 }
 
+fn holds_map(t: &Type) -> bool {
+    match t {
+        Type::Map(_) => true,
+        Type::List(inner) | Type::Option(inner) => holds_map(inner),
+        Type::Tuple(items) => items.iter().any(holds_map),
+        Type::Record(record) => record.fields.iter().any(|(_, field)| holds_map(field)),
+        Type::Result(ok, err) => holds_map(ok) || holds_map(err),
+        Type::Enum(e) => e.variants.iter().any(|(_, payload)| payload.as_ref().is_some_and(holds_map)),
+        _ => false,
+    }
+}
+
 fn lambda_node(lambda: Lambda) -> ir::Node {
     let span = lambda.span;
     node(Ir::Lambda(lambda), span)
@@ -2080,6 +2092,14 @@ impl<'r> Checker<'r> {
         let values = std::mem::take(&mut self.late_json_values);
         for (t, span, who) in &values {
             let t = self.zonk(t);
+            if self.dialect == Dialect::JavaScript && *who == "js.stringify" && holds_map(&t) {
+                self.report(
+                    Diagnostic::new("ts-map-order", *span, "The order of a Map's keys is not preserved")
+                        .detail("JavaScript writes the keys of an object in insertion order, and a Map here is in ascending key order.")
+                        .fix("Object.keys(m).sort()"),
+                );
+                continue;
+            }
             if let Some(problem) = encodable_problem(&t) {
                 let reason = problem.split_once(" has no JSON encoding").map_or("", |(_, reason)| reason);
                 self.report(
@@ -3349,7 +3369,12 @@ impl<'r> Checker<'r> {
         let (target_ir, target_type) = self.check(target, None, scope);
         let mut resolved = self.resolve(&target_type);
         if self.is_brace(&resolved) {
-            self.trial(&resolved, &empty_record());
+            if self.dialect == Dialect::JavaScript && !matches!(key.kind, NodeKind::String(_)) {
+                let value_type = self.fresh();
+                self.trial(&resolved, &map_of(value_type));
+            } else {
+                self.trial(&resolved, &empty_record());
+            }
             resolved = self.resolve(&resolved);
         }
         if let Some(value_type) = self.map_value_of(&target_type) {

@@ -1,0 +1,6 @@
+error[ts-map-order] 4:15-4:36
+  (js.stringify (call store.sizes {}))
+                ^^^^^^^^^^^^^^^^^^^^^
+  The order of a Map's keys is not preserved
+  JavaScript writes the keys of an object in insertion order, and a Map here is in ascending key order.
+  Fix: Object.keys(m).sort()
