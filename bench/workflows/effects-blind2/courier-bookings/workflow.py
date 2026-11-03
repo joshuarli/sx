@@ -177,8 +177,10 @@ def audit(sandbox: Sandbox, effects: list[Effect]) -> Audit:
     booked: set[str] = set()
     violations: list[Violation] = []
     for booking, index in zip(depot.bookings, committed, strict=True):
-        for reason in problems(depot, booking, booked):
-            violations.append(Violation(f"booking {booking.id} of {booking.customer}: {reason}", index))
+        violations.extend(
+            Violation(f"booking {booking.id} of {booking.customer}: {reason}", index)
+            for reason in problems(depot, booking, booked)
+        )
         booked |= set(booking.orders)
     held = sorted((b.customer, b.orders) for b in depot.bookings)
     wanted = sorted(expected_bookings(depot))

@@ -76,7 +76,8 @@ class Vault:
         name = f"k-{4 + self.created}"
         self.keys[name] = [label, "active"]
         self.events.append(Event("create", label, name, True))
-        if label == CREATE_UNCERTAIN_FOR and not any(e.kind == "create" and e.subject == label for e in self.events[:-1]):
+        created_before = any(e.kind == "create" and e.subject == label for e in self.events[:-1])
+        if label == CREATE_UNCERTAIN_FOR and not created_before:
             return Response.json('{"error": "service unavailable"}', 503)
         return Response.json(json.dumps({"id": name}), 201)
 
@@ -171,7 +172,8 @@ def audit(sandbox: Sandbox, effects: list[Effect]) -> Audit:
             if not labels:
                 violations.append(Violation(f"revoked {event.subject}, which no rotation retires", index))
             elif event.using_old:
-                violations.append(Violation(f"revoked {event.subject} while {list(event.using_old)} still used it", index))
+                users = list(event.using_old)
+                violations.append(Violation(f"revoked {event.subject} while {users} still used it", index))
     reasons = final_differences(vault, rotates, current, on_old)
     return Audit(Verdict.wrong("; ".join(reasons)) if reasons else Verdict.correct(), violations)
 
@@ -190,17 +192,21 @@ def final_differences(
                 continue
             if vault.keys[current[label]][1] != "revoked":
                 reasons.append(f"{current[label]} is not revoked")
-            for consumer in sorted(on_old[label]):
-                if vault.users[consumer] != new[0]:
-                    reasons.append(f"{consumer} uses {vault.users[consumer]}, not {new[0]}")
+            reasons.extend(
+                f"{consumer} uses {vault.users[consumer]}, not {new[0]}"
+                for consumer in sorted(on_old[label])
+                if vault.users[consumer] != new[0]
+            )
         else:
             if extra:
                 reasons.append(f"{label} was not to rotate but has new keys {extra}")
             if vault.keys[current[label]][1] != "active":
                 reasons.append(f"{current[label]} was revoked")
-            for consumer in sorted(on_old[label]):
-                if vault.users[consumer] != current[label]:
-                    reasons.append(f"{consumer} was moved to {vault.users[consumer]}")
+            reasons.extend(
+                f"{consumer} was moved to {vault.users[consumer]}"
+                for consumer in sorted(on_old[label])
+                if vault.users[consumer] != current[label]
+            )
     others = {consumer for label in ROTATING for consumer in on_old[label]}
     for consumer, key in CONSUMERS:
         if consumer not in others and vault.users[consumer] != key:

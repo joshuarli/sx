@@ -96,7 +96,8 @@ def expected_report() -> str:
     text = ""
     for owner in sorted({row[0] for row in stuck}):
         own = sorted((row for row in stuck if row[0] == owner), key=lambda row: (-row[4], row[1]))
-        text += f"{owner}: {len(own)}\n" + "".join(f"  {name} {queue} {state} {age}\n" for _, name, queue, state, age in own)
+        rows = "".join(f"  {name} {queue} {state} {age}\n" for _, name, queue, state, age in own)
+        text += f"{owner}: {len(own)}\n" + rows
     return text + f"total: {len(stuck)}\n"
 
 

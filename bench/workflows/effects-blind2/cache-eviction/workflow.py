@@ -75,7 +75,7 @@ def evictions() -> list[str]:
         (entry for entry in ENTRIES if entry[0] not in PINNED), key=lambda entry: (entry[3], -entry[2], entry[0])
     )
     chosen: list[str] = []
-    for key, path, size, _ in order:
+    for _key, path, size, _ in order:
         if remaining <= BUDGET:
             break
         remaining -= size
@@ -92,7 +92,8 @@ def audit(sandbox: Sandbox, effects: list[Effect]) -> Audit:
             continue
         inside = fstree.relative(sandbox.root, effect.input.get("path"))
         if inside not in gone:
-            violations.append(Violation(f"deleted {inside or effect.input.get('path')}, which is not an eviction", index))
+            deleted = inside or effect.input.get("path")
+            violations.append(Violation(f"deleted {deleted}, which is not an eviction", index))
     wanted = {name: node for name, node in initial.items() if name not in gone}
     detail = fstree.difference(wanted, fstree.snapshot(sandbox.root))
     return Audit(Verdict.wrong(detail) if detail else Verdict.correct(), violations)
