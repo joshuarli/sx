@@ -1485,6 +1485,62 @@ impl<'r> Checker<'r> {
         self.placeholder(at)
     }
 
+    fn js_index<'a>(&mut self, span: Span, args: &'a [Node], expected: Option<&Type>, scope: &Scope<'a>) -> Checked {
+        let (receiver, t) = self.check(&args[0], None, scope);
+        let resolved = self.resolve(&t);
+        match &resolved {
+            Type::Never => self.placeholder(span),
+            Type::Map(_) => self.indexed_map(span, receiver, &t, &args[1], expected, scope),
+            _ if self.is_brace(&resolved) => self.indexed_map(span, receiver, &t, &args[1], expected, scope),
+            Type::List(_) | Type::Tuple(_) | Type::Variable(_) => self.nth_of(span, receiver, t, &args[0], &args[1], expected, scope),
+            Type::Primitive(Primitive::String) => {
+                self.report(
+                    Diagnostic::new("ts-string-index", args[0].span, "A string cannot be indexed")
+                        .detail("s[i] is the character at i in JavaScript, and undefined past the end.")
+                        .fix("s.slice(i, i + 1)"),
+                );
+                self.placeholder(span)
+            }
+            Type::Record(_) => {
+                self.report(
+                    Diagnostic::new("ts-dynamic-key", args[1].span, "A record is read by field name, not by a computed key")
+                        .detail("Only a Record<string, V> built from computed keys can be read with m[k].")
+                        .fix("r.field"),
+                );
+                self.placeholder(span)
+            }
+            other => {
+                let found = self.zonk(other);
+                let advice = matches!(other, Type::Option(_)).then_some("This value may be null. Test it first: x != null ? x[i] : d.");
+                self.report(
+                    Diagnostic::new(
+                        "type-mismatch",
+                        args[0].span,
+                        format!("An array or a Record<string, V> is indexed here, but this is {}.", describe(&found)),
+                    )
+                    .detail(format!("Expected: array or Record<string, V>\nFound: {}", show_type(&found)))
+                    .maybe_fix(advice.map(str::to_string)),
+                );
+                self.placeholder(span)
+            }
+        }
+    }
+
+    fn indexed_map<'a>(
+        &mut self,
+        span: Span,
+        receiver: ir::Node,
+        t: &Type,
+        key: &'a Node,
+        expected: Option<&Type>,
+        scope: &Scope<'a>,
+    ) -> Checked {
+        let Some(value_type) = self.map_value_of(t) else {
+            return self.placeholder(span);
+        };
+        self.map_get(span, receiver, &value_type, key, None, expected, scope)
+    }
+
     pub(super) fn js_function<'a>(
         &mut self,
         span: Span,
@@ -1498,7 +1554,7 @@ impl<'r> Checker<'r> {
             "js.slice" => (1, 3),
             "js.length" | "js.reverse" | "js.is-array" | "js.is-integer" | "js.settled-status" | "js.settled-value"
             | "js.settled-reason" => (1, 1),
-            "js.index-of" | "js.includes" | "js.join" | "js.find" | "js.parse" => (2, 2),
+            "js.index-of" | "js.includes" | "js.join" | "js.find" | "js.parse" | "js.index" => (2, 2),
             "js.stringify" => (1, 2),
             _ => return self.js_registered(span, name, items, expected, scope),
         };
@@ -1538,6 +1594,7 @@ impl<'r> Checker<'r> {
                     }
                 }
             }
+            "js.index" => self.js_index(span, args, expected, scope),
             "js.settled-status" | "js.settled-value" | "js.settled-reason" => self.settled(name, span, args, expected, scope),
             "js.stringify" => {
                 let (value, t) = self.check(&args[0], None, scope);

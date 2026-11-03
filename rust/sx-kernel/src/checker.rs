@@ -4390,24 +4390,7 @@ impl<'r> Checker<'r> {
             }
             "nth" => {
                 let (items_ir, t) = self.check(&args[0], None, scope);
-                if let Type::Tuple(types) = self.resolve(&t) {
-                    let NodeKind::Int(index) = args[1].kind else {
-                        self.report(
-                            Diagnostic::new(
-                                "type-mismatch",
-                                args[1].span,
-                                "A tuple's elements have their own types, so nth on a tuple needs a literal index.",
-                            )
-                            .detail(format!("Take it apart instead: (let [{}] ...).", tuple_names(types.len())))
-                            .help("nth"),
-                        );
-                        return self.placeholder(span);
-                    };
-                    return self.tuple_item(items_ir, &t, index, &args[1], span, expected);
-                }
-                let element = self.list_element(&t, &args[0], "nth");
-                let (index, _) = self.check(&args[1], Some(&INT), scope);
-                self.coerce(prelude(prelude_op, vec![items_ir, index], span), &element, expected, span)
+                self.nth_of(span, items_ir, t, &args[0], &args[1], expected, scope)
             }
             "take" => {
                 let (count, _) = self.check(&args[0], Some(&INT), scope);
@@ -4537,6 +4520,37 @@ impl<'r> Checker<'r> {
             }
             _ => self.higher_order(syntax, items, op, expected, scope),
         }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn nth_of<'a>(
+        &mut self,
+        span: Span,
+        items_ir: ir::Node,
+        t: Type,
+        items_node: &'a Node,
+        index_node: &'a Node,
+        expected: Option<&Type>,
+        scope: &Scope<'a>,
+    ) -> Checked {
+        if let Type::Tuple(types) = self.resolve(&t) {
+            let NodeKind::Int(index) = index_node.kind else {
+                self.report(
+                    Diagnostic::new(
+                        "type-mismatch",
+                        index_node.span,
+                        "A tuple's elements have their own types, so nth on a tuple needs a literal index.",
+                    )
+                    .detail(format!("Take it apart instead: (let [{}] ...).", tuple_names(types.len())))
+                    .help("nth"),
+                );
+                return self.placeholder(span);
+            };
+            return self.tuple_item(items_ir, &t, index, index_node, span, expected);
+        }
+        let element = self.list_element(&t, items_node, "nth");
+        let (index, _) = self.check(index_node, Some(&INT), scope);
+        self.coerce(prelude(PreludeOp::Nth, vec![items_ir, index], span), &element, expected, span)
     }
 
     fn state_tuple_hint(&mut self, function: &Node, initial: &Node) -> Option<Type> {

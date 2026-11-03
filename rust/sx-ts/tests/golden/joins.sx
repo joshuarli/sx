@@ -15,7 +15,7 @@
                    (range 0 5))
       flag (if (> (js.length files) 1) (> count' 0) false)
       pick (let [t'2 tag] (if (truthy t'2) t'2 "fallback"))
-      value (if (truthy (js.length files)) (get (nth files 0) :name) "")
+      value (if (truthy (js.length files)) (get (js.index files 0) :name) "")
       _ (log count' tag flag pick)]
   {:count count'
    :tag tag
@@ -23,5 +23,5 @@
    :pick pick
    :value value
    :kind (typeof count')
-   :first (nth files 0)
-   :last (nth files (- (js.length files) 1))})
+   :first (js.index files 0)
+   :last (js.index files (- (js.length files) 1))})

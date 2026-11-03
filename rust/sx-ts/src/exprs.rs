@@ -392,8 +392,7 @@ impl<'a> Lowerer<'a> {
             return app("get", vec![receiver, kw(key, index.span)], span);
         }
         let key = self.expr_t(index, false, false);
-        let map_like = self.hint_of(base) == Hint::Map || self.is_stringy(index);
-        if map_like { app("get", vec![receiver, key], span) } else { app("nth", vec![receiver, key], span) }
+        app("js.index", vec![receiver, key], span)
     }
 
     fn unary(&mut self, op: UnaryOp, inner: &Expr, span: Span) -> Node {
