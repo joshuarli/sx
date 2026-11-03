@@ -130,3 +130,9 @@ fn a_record_is_not_read_by_a_computed_key() {
 fn a_string_is_not_indexed() {
     rejects("string-index", "ts-string-index", "const s = \"abc\";\nreturn s[1];");
 }
+
+#[test]
+fn an_array_element_is_not_assigned() {
+    rejects("array-assign", "ts-mutation-pattern", "const xs = [1, 2, 3];\nxs[1] = 5;\nreturn xs;");
+    rejects("array-compound", "ts-mutation-pattern", "const xs = [1, 2, 3];\nfor (let i = 0; i < 3; i++) { xs[i] += 1; }\nreturn xs;");
+}

@@ -3579,6 +3579,16 @@ impl<'r> Checker<'r> {
                 ));
                 return self.placeholder(span);
             }
+            other
+                if self.dialect == Dialect::JavaScript && matches!(self.zonk(&other), Type::List(_) | Type::Tuple(_)) =>
+            {
+                self.report(
+                    Diagnostic::new("ts-mutation-pattern", span, "An array element cannot be assigned")
+                        .detail("xs[i] = v changes an array in place, and an array here is a value. Build the new array instead.")
+                        .fix("xs = xs.slice(0, i).concat([v]).concat(xs.slice(i + 1))"),
+                );
+                return self.placeholder(span);
+            }
             other => {
                 let found = self.zonk(&other);
                 self.report(
