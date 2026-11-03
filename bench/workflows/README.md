@@ -5,6 +5,9 @@ which performs the granted tools natively, and TypeScript on Bun, which reaches 
 performers through `sx mcp serve`. Each language is an arm: `sx` and `js`, the probe's name for
 its TypeScript arm.
 
+Every model run uses `opencode-go/muse-spark-1.3-contributor` and no other model. This is a hard rule;
+see [Muse Spark is the only model](../../plan.md#muse-spark-is-the-only-model).
+
 ## Setup
 
 ```sh
@@ -314,8 +317,8 @@ the line of the model's code. Every attempt records its provider-reported cost.
 
 ```sh
 uv run python bench/workflows/runner.py trials --set blind --arm sx --arm ts --arm jsbody --guide tailored \
-  --model opencode-go/MODEL --samples 2 --jobs 8 --out .work/p23/blind-MODEL
-uv run python bench/workflows/runner.py trials-report --runs .work/p23/blind-MODEL .work/p23/blind2-MODEL
+  --model opencode-go/muse-spark-1.3-contributor --samples 2 --jobs 8 --out .work/p23/blind-muse
+uv run python bench/workflows/runner.py trials-report --runs .work/p23/blind-muse .work/p23/blind2-muse
 ```
 
 `trials-report` reads every `--runs` directory, groups by the set each trial recorded, and prints the per-arm
