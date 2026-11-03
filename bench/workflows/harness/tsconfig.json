@@ -12,5 +12,5 @@
     "skipLibCheck": true,
     "types": []
   },
-  "files": ["ambient.d.ts", "mcp.ts", "api.ts", "run.ts", "codemode.ts"]
+  "files": ["ambient.d.ts", "mcp.ts", "api.ts", "run.ts", "bodyrt.ts", "codemode.ts"]
 }

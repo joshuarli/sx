@@ -49,7 +49,9 @@ def verdict(candidate: Cell, baseline: Cell) -> tuple[float, float | None, bool]
     return gap, ratio, passed
 
 
-def lines(scored: list[Scored], arm_order: tuple[str, ...]) -> list[str]:
+def lines(
+    scored: list[Scored], arm_order: tuple[str, ...], candidate_arm: str = CANDIDATE, baseline_arm: str = BASELINE,
+) -> list[str]:
     found = cells(scored)
     models = sorted({s.model for s in scored})
     rows = [
@@ -66,12 +68,12 @@ def lines(scored: list[Scored], arm_order: tuple[str, ...]) -> list[str]:
                 )
     gate = [
         "",
-        f"| Model | {CANDIDATE} minus {BASELINE} correctness (points) | {CANDIDATE} / {BASELINE} cost "
+        f"| Model | {candidate_arm} minus {baseline_arm} correctness (points) | {candidate_arm} / {baseline_arm} cost "
         f"| Gate (within {CORRECTNESS_MARGIN_POINTS:.0f} points, at most {COST_RATIO_LIMIT}x) |",
         "| --- | --- | --- | --- |",
     ]
     for model in [*models, POOLED]:
-        candidate, baseline = found.get((model, CANDIDATE)), found.get((model, BASELINE))
+        candidate, baseline = found.get((model, candidate_arm)), found.get((model, baseline_arm))
         if candidate is None or baseline is None:
             continue
         gap, ratio, passed = verdict(candidate, baseline)

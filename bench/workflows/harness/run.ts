@@ -1,4 +1,5 @@
 import { CallError, HostError, buildApi, type CallRecord, type Source } from "./api.ts";
+import { logs } from "./bodyrt.ts";
 import { McpClient, STANDARD_TIMEOUT_MS } from "./mcp.ts";
 
 interface Options {
@@ -91,7 +92,7 @@ async function main(): Promise<Report> {
 }
 
 try {
-  process.stdout.write(JSON.stringify(await main()));
+  process.stdout.write(JSON.stringify({ logs, ...(await main()) }));
 } catch (error) {
   const shown = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
   process.stdout.write(JSON.stringify({ outcome: "failed", kind: "host", error: shown, calls: [], startupMs: 0, elapsedMs: 0 }));

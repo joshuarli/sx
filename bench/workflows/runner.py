@@ -5,6 +5,7 @@ from pathlib import Path
 import definition
 import effects_reference
 import effects_report
+import oneshot
 import report
 import session
 import trial
@@ -15,6 +16,7 @@ from records import SESSION_ARMS, SessionArm
 PROVIDER_STOP_RERUNS = 2
 
 ARMS: tuple[Arm, ...] = ("sx", "js")
+TRIAL_ARMS: tuple[Arm, ...] = ("sx", "js", "ts", "jsbody")
 DEFAULT_MODEL = "opencode-go/muse-spark-1.3-contributor"
 
 
@@ -81,7 +83,7 @@ def run_trials(args: argparse.Namespace, ids: list[str], arm_names: tuple[Arm, .
             pool.submit(
                 trial.run_trial,
                 definition.load(workflow_id, root), arm, args.model, args.thinking, args.guide, sample, out,
-                ts_notes=args.ts_notes,
+                ts_notes=args.ts_notes, workflow_set=args.set,
             )
             for workflow_id in ids
             for arm in arm_names
@@ -90,20 +92,29 @@ def run_trials(args: argparse.Namespace, ids: list[str], arm_names: tuple[Arm, .
         for job in jobs:
             finished = job.result()
             statuses = [a.status for a in finished.attempts]
-            line = f"{finished.task:24} {finished.arm:3} {finished.sample} {statuses} tokens {tokens(finished)}"
+            line = (
+                f"{finished.task:24} {finished.arm:6} {finished.sample} {statuses} tokens {tokens(finished)} "
+                f"cost ${finished.cost:.4f}"
+            )
             print(line, flush=True)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run workflows in Sx and in TypeScript on Bun.")
-    parser.add_argument("mode", choices=["reference", "trials", "report", "sessions", "effects-report"])
+    parser.add_argument(
+        "mode", choices=["reference", "trials", "report", "trials-report", "sessions", "effects-report"],
+    )
     parser.add_argument(
         "--set", choices=list(definition.SETS), default="dev", help="The workflow set",
     )
     parser.add_argument("--workflow", action="append", help="Workflow ids; every workflow of the set by default")
     parser.add_argument(
-        "--arm", action="append", choices=[*SESSION_ARMS, "both"], help="both is sx and js; name ts to run it",
+        "--arm", action="append", choices=[*TRIAL_ARMS, "both"],
+        help="both is sx and js; ts and jsbody are one-shot arms of trials, and ts is also a session arm",
     )
+    parser.add_argument("--runs", type=Path, nargs="+", help="trials-report: the --out directories to report")
+    parser.add_argument("--baseline", default=oneshot.BASELINE, help="trials-report: the arm the gate compares to")
+    parser.add_argument("--candidate", default=oneshot.CANDIDATE, help="trials-report: the arm the gate judges")
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--thinking", default="medium")
     parser.add_argument("--guide", default="standard")
@@ -114,12 +125,23 @@ def main() -> None:
     args = parser.parse_args()
     root = definition.SETS[args.set]
     ids = args.workflow or definition.available(root)
-    chosen: tuple[SessionArm, ...] = (
-        ARMS if not args.arm or "both" in args.arm else tuple(arm for arm in SESSION_ARMS if arm in args.arm)
-    )
-    if "ts" in chosen and args.mode != "sessions":
-        parser.error("the ts arm runs with sessions")
-    arm_names: tuple[Arm, ...] = tuple(arm for arm in chosen if arm != "ts")
+    if args.mode == "trials-report":
+        if not args.runs:
+            parser.error("trials-report needs --runs DIR [DIR ...]")
+        print(oneshot.render([run.resolve() for run in args.runs], args.candidate, args.baseline))
+        return
+    if not args.arm or "both" in args.arm:
+        picked: tuple[str, ...] = tuple(ARMS)
+    else:
+        picked = tuple(arm for arm in TRIAL_ARMS if arm in args.arm)
+    if args.mode == "sessions":
+        if "jsbody" in picked:
+            parser.error("the jsbody arm runs with trials")
+        chosen: tuple[SessionArm, ...] = tuple(arm for arm in SESSION_ARMS if arm in picked)
+        arm_names: tuple[Arm, ...] = ()
+    else:
+        chosen = ()
+        arm_names = tuple(arm for arm in TRIAL_ARMS if arm in picked)
     effects_set = args.set in definition.EFFECTS_SETS
     if args.mode in ("sessions", "effects-report") and not effects_set:
         parser.error(f"{args.mode} reads an effects set; pass --set {' or --set '.join(definition.EFFECTS_SETS)}")
@@ -135,9 +157,11 @@ def main() -> None:
             parser.error("report needs --out")
         print(report.render(Path(args.out).resolve(), root))
         return
-    if "js" in arm_names and args.mode != "sessions":
+    if {"js", "jsbody"} & set(arm_names):
         require_toolchain()
     if args.mode == "reference":
+        if {"ts", "jsbody"} & set(arm_names):
+            parser.error("reference solutions exist for sx and js only")
         runner = run_effects_references if effects_set else run_references
         raise SystemExit(0 if runner(ids, arm_names, root) else 1)
     if args.out is None:

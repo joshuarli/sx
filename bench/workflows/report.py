@@ -7,6 +7,7 @@ from typing import Any
 import arms
 import definition
 from probe import Trial, load_trials, tokens
+from trial import condition_folder
 
 type Json = dict[str, Any]
 HARNESS_FILES = ("mcp.ts", "api.ts", "run.ts")
@@ -17,9 +18,7 @@ def lines_of(path: Path) -> int:
 
 
 def extras_of(out: Path, trial: Trial) -> list[Json]:
-    js_folder = "js-notes" if trial.guide == "notes" else "js"
-    folder = js_folder if trial.arm == "js" else f"sx-{trial.guide}"
-    path = out / trial.task / f"{folder}-{trial.sample}" / "extras.json"
+    path = out / trial.task / f"{condition_folder(trial.arm, trial.guide)}-{trial.sample}" / "extras.json"
     loaded: list[Json] = json.loads(path.read_text())
     return loaded
 

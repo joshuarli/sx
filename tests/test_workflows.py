@@ -171,9 +171,9 @@ def test_the_harness_type_checks_with_the_pinned_tsc() -> None:
     assert checked.returncode == 0, checked.stdout + checked.stderr
 
 
-def reply(program: str) -> tuple[str, dict[str, int], str | None]:
+def reply(program: str) -> tuple[str, dict[str, int], str | None, float]:
     language = "sx" if program.lstrip().startswith("(") else "ts"
-    return f"```{language}\n{program}\n```", {"input": 100, "output": 10, "reasoning": 0}, None
+    return f"```{language}\n{program}\n```", {"input": 100, "output": 10, "reasoning": 0}, None, 0.01
 
 
 @pytest.mark.parametrize("arm", BOTH)
@@ -182,7 +182,9 @@ def test_a_model_trial_repairs_a_rejected_answer_and_counts_tokens(arm: Arm, tmp
     prompts: list[str] = []
     answers: list[str] = []
 
-    def fake_model(prompt: Path, model: str, thinking: str, workdir: Path) -> tuple[str, dict[str, int], str | None]:
+    def fake_model(
+        prompt: Path, model: str, thinking: str, workdir: Path,
+    ) -> tuple[str, dict[str, int], str | None, float]:
         text = prompt.read_text()
         prompts.append(text)
         root = re.search(r"`(/[^`]+)/data`", text)
@@ -201,3 +203,4 @@ def test_a_model_trial_repairs_a_rejected_answer_and_counts_tokens(arm: Arm, tmp
     folder = "js-0" if arm == "js" else "sx-standard-0"
     saved: dict[str, Any] = json.loads((tmp_path / EXAMPLE / folder / "trial.json").read_text())
     assert saved["attempts"][1]["status"] == "correct"
+    assert finished.cost == pytest.approx(0.02)

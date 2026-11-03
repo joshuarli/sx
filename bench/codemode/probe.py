@@ -51,6 +51,7 @@ class Attempt:
     diagnostics: list[str] = field(default_factory=list)
     calls: int = 0
     duplicate_calls: int = 0
+    cost: float = 0.0
 
 
 @dataclass(slots=True)
@@ -62,6 +63,7 @@ class Trial:
     guide: str
     sample: int
     attempts: list[Attempt]
+    workflow_set: str = ""
 
     @property
     def first_correct(self) -> bool:
@@ -70,6 +72,14 @@ class Trial:
     @property
     def final_correct(self) -> bool:
         return self.attempts[-1].status == "correct"
+
+    @property
+    def cost(self) -> float:
+        return sum(a.cost for a in self.attempts)
+
+    @property
+    def calls_without_success(self) -> int:
+        return sum(a.calls for a in self.attempts if a.status != "correct")
 
 
 def load_tasks(split: str, only: list[str] | None) -> list[Json]:
@@ -307,7 +317,7 @@ def run_trial(
     for index in range(REPAIRS + 1):
         prompt_file = directory / f"prompt-{index}.md"
         prompt_file.write_text(prompt)
-        reply, tokens, error = ask(prompt_file, model, thinking, out)
+        reply, tokens, error, _ = ask(prompt_file, model, thinking, out)
         code, _ = extract(reply)
         if not code.strip():
             attempts.append(Attempt(reply, code, tokens, error, "no-answer", error or "empty reply", None))
@@ -463,7 +473,7 @@ def measure_guides(model: str, thinking: str, out: Path) -> str:
     def input_tokens(text: str, name: str) -> int:
         prompt = out / f"measure-{name}.md"
         prompt.write_text(text)
-        _, used, error = ask(prompt, model, thinking, out)
+        _, used, error, _ = ask(prompt, model, thinking, out)
         if error is not None:
             raise RuntimeError(f"measuring {name} failed: {error}")
         return used.get("input", 0)

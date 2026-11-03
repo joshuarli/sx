@@ -1,4 +1,5 @@
 import json
+import re
 import shutil
 import subprocess
 import tempfile
@@ -14,7 +15,7 @@ from sandbox import SCRATCH, Sandbox
 from typescript import declarations as typescript_declarations
 
 type Json = dict[str, Any]
-type Arm = Literal["sx", "js"]
+type Arm = Literal["sx", "js", "ts", "jsbody"]
 type Status = Literal["completed", "failed", "rejected"]
 
 SX_TIMEOUT = 180
@@ -164,25 +165,27 @@ def inferred_note(report: Json) -> str:
     return f"\nThe brackets did not balance, so closers were inferred from indentation: {shown}"
 
 
-def run_sx(workflow: Workflow, sandbox: Sandbox, program: str) -> ArmRun:
+def run_sx(workflow: Workflow, sandbox: Sandbox, program: str, language: Literal["sx", "ts"] = "sx") -> ArmRun:
+    arm: Arm = language
+    flags = ["--language", "ts"] if language == "ts" else []
     with tempfile.TemporaryDirectory(dir=scratch()) as directory:
         files = Files(workflow, sandbox, Path(directory))
-        source = files.directory / "program.sx"
+        source = files.directory / f"program.{language}"
         source.write_text(program)
         arguments = files.program_arguments(source)
-        explained = sx_output(["explain", *arguments, "--format", "json"])
+        explained = sx_output(["explain", *arguments, *flags, "--format", "json"])
         explain: Json | None = json.loads(explained.stdout) if explained.returncode == SX_EXITS["ok"] else None
         verb = ["run"] if files.server is None else ["mcp", "run"]
         started = time.perf_counter()
-        completed = sx_output([*verb, *arguments, "--format", "json", *files.server_arguments()])
+        completed = sx_output([*verb, *arguments, *flags, "--format", "json", *files.server_arguments()])
         seconds = time.perf_counter() - started
         if completed.returncode == SX_EXITS["rejected"]:
             diagnostics = json.loads(completed.stdout)["diagnostics"]
-            checked = sx_output(["check", *arguments])
+            checked = sx_output(["check", *arguments, *flags])
             rendered = checked.stdout + checked.stderr
             labels = [label(d) for d in diagnostics]
             return ArmRun(
-                "sx", "rejected", None, rendered, rendered, [], seconds, seconds, labels, explain, completed.stdout
+                arm, "rejected", None, rendered, rendered, [], seconds, seconds, labels, explain, completed.stdout
             )
     if completed.returncode not in (SX_EXITS["ok"], SX_EXITS["failed"]):
         raise RuntimeError(f"sx run exited {completed.returncode}: {completed.stderr.strip()}")
@@ -193,11 +196,11 @@ def run_sx(workflow: Workflow, sandbox: Sandbox, program: str) -> ArmRun:
         where = f" at {show_span(failure['span'])}" if failure["span"] is not None else ""
         message = f"The program failed{where} with {failure['kind']}: {failure['message']}{inferred_note(report)}"
         return ArmRun(
-            "sx", "failed", None, message, message, calls, seconds, seconds,
+            arm, "failed", None, message, message, calls, seconds, seconds,
             explain=explain, transcript=completed.stdout,
         )
     return ArmRun(
-        "sx", "completed", report["result"], "", None, calls, seconds, seconds, explain=explain,
+        arm, "completed", report["result"], "", None, calls, seconds, seconds, explain=explain,
         transcript=completed.stdout,
     )
 
@@ -215,36 +218,73 @@ def typecheck(directory: Path) -> tuple[str, list[str]] | None:
     return errors, codes
 
 
-def run_js(workflow: Workflow, sandbox: Sandbox, program: str) -> ArmRun:
-    bun = require_toolchain()
+TOOLS_BLOCK = re.compile(r"```ts\n(.*?)\n```", re.DOTALL)
+BODY_FUNCTION = "async function __body(): Promise<unknown> { "
+RUNTIME_NAMES = "tools, sleep, retry, waitUntil, parMap, loop, next, done, console"
+
+
+def typescript_guide(files: Files, *, rules: bool) -> str:
+    arguments = [
+        "guide", "--declarations", str(files.declarations), "--grants", str(files.grants), "--language", "ts",
+    ]
+    completed = sx_output([*arguments, "--rules"] if rules else arguments)
+    if completed.returncode != 0:
+        raise RuntimeError(f"sx guide exited {completed.returncode}: {completed.stderr.strip()}")
+    return completed.stdout.strip()
+
+
+def typescript_guide_for(workflow: Spec, sandbox: Sandbox, *, rules: bool) -> str:
     with tempfile.TemporaryDirectory(dir=scratch()) as directory:
-        files = Files(workflow, sandbox, Path(directory))
-        api = typescript_declarations({**described(files), "cores": []}, NO_CORES).replace(VIRTUAL_WAIT, REAL_WAIT)
-        (files.directory / "api.d.ts").write_text(api)
-        solution = files.directory / "solution.mts"
-        solution.write_text(program)
-        failed_typecheck = typecheck(files.directory)
-        if failed_typecheck is not None:
-            errors, codes = failed_typecheck
-            return ArmRun("js", "rejected", None, errors, errors, [], 0.0, 0.0, codes)
-        serve = [
-            str(sx_binary()), "mcp", "serve", "--declarations", str(files.declarations),
-            "--grants", str(files.native_grants),
-        ]
-        imported = [] if files.server is None else [
-            "--imported-command", json.dumps(files.server.command),
-            "--imported-names", json.dumps({c["mcp"]["tool"]: c["id"] for c in files.imported["capabilities"]}),
-        ]
-        command = [
-            bun, "run", str(paths.HARNESS / "run.ts"), "--solution", str(solution),
-            "--timeout-ms", str(CALL_TIMEOUT_MS), *imported, *(["--", *serve] if files.serves_natives else []),
-        ]
-        started = time.perf_counter()
-        completed = subprocess.run(
-            command, cwd=files.directory, stdin=subprocess.DEVNULL, capture_output=True, text=True,
-            timeout=BUN_TIMEOUT, check=False,
-        )
-        seconds = time.perf_counter() - started
+        return typescript_guide(Files(workflow, sandbox, Path(directory)), rules=rules)
+
+
+def body_declarations(guide: str) -> str:
+    found = TOOLS_BLOCK.search(guide)
+    if found is None:
+        raise RuntimeError("the TypeScript guide lists no tool declarations")
+    return found.group(1) + "\n"
+
+
+def checked_body(body: str) -> str:
+    return f"{BODY_FUNCTION}{body}\n}}\nexport {{}};\n"
+
+
+def runnable_body(body: str) -> str:
+    runtime = paths.HARNESS / "bodyrt.ts"
+    return (
+        f'import {{ runtime }} from "{runtime}"; export default async function main(api) {{ '
+        f"const {{ {RUNTIME_NAMES} }} = runtime(api); return (async () => {{ {body}\n}})(); }}\n"
+    )
+
+
+def run_on_bun(arm: Arm, files: Files, declarations: str, checked: str, executed: str) -> ArmRun:
+    bun = require_toolchain()
+    (files.directory / "api.d.ts").write_text(declarations)
+    (files.directory / "solution.mts").write_text(checked)
+    failed_typecheck = typecheck(files.directory)
+    if failed_typecheck is not None:
+        errors, codes = failed_typecheck
+        return ArmRun(arm, "rejected", None, errors, errors, [], 0.0, 0.0, codes)
+    runnable = files.directory / "run.mts"
+    runnable.write_text(executed)
+    serve = [
+        str(sx_binary()), "mcp", "serve", "--declarations", str(files.declarations),
+        "--grants", str(files.native_grants),
+    ]
+    imported = [] if files.server is None else [
+        "--imported-command", json.dumps(files.server.command),
+        "--imported-names", json.dumps({c["mcp"]["tool"]: c["id"] for c in files.imported["capabilities"]}),
+    ]
+    command = [
+        bun, "run", str(paths.HARNESS / "run.ts"), "--solution", str(runnable),
+        "--timeout-ms", str(CALL_TIMEOUT_MS), *imported, *(["--", *serve] if files.serves_natives else []),
+    ]
+    started = time.perf_counter()
+    completed = subprocess.run(
+        command, cwd=files.directory, stdin=subprocess.DEVNULL, capture_output=True, text=True,
+        timeout=BUN_TIMEOUT, check=False,
+    )
+    seconds = time.perf_counter() - started
     if not completed.stdout.startswith("{"):
         raise RuntimeError(f"the Bun harness exited {completed.returncode}: {completed.stderr.strip()[-2000:]}")
     report: Json = json.loads(completed.stdout)
@@ -258,12 +298,36 @@ def run_js(workflow: Workflow, sandbox: Sandbox, program: str) -> ArmRun:
             else f"The module threw: {message}"
         )
         return ArmRun(
-            "js", "failed", None, message, feedback, calls, seconds, program_seconds, transcript=completed.stdout
+            arm, "failed", None, message, feedback, calls, seconds, program_seconds, transcript=completed.stdout
         )
     return ArmRun(
-        "js", "completed", report["result"], "", None, calls, seconds, program_seconds, transcript=completed.stdout
+        arm, "completed", report["result"], "", None, calls, seconds, program_seconds, transcript=completed.stdout
     )
 
 
+def run_js(workflow: Workflow, sandbox: Sandbox, program: str) -> ArmRun:
+    require_toolchain()
+    with tempfile.TemporaryDirectory(dir=scratch()) as directory:
+        files = Files(workflow, sandbox, Path(directory))
+        api = typescript_declarations({**described(files), "cores": []}, NO_CORES).replace(VIRTUAL_WAIT, REAL_WAIT)
+        return run_on_bun("js", files, api, program, program)
+
+
+def run_jsbody(workflow: Workflow, sandbox: Sandbox, body: str) -> ArmRun:
+    require_toolchain()
+    with tempfile.TemporaryDirectory(dir=scratch()) as directory:
+        files = Files(workflow, sandbox, Path(directory))
+        declarations = body_declarations(typescript_guide(files, rules=False))
+        return run_on_bun("jsbody", files, declarations, checked_body(body), runnable_body(body))
+
+
 def run_arm(arm: Arm, workflow: Workflow, sandbox: Sandbox, program: str) -> ArmRun:
-    return run_sx(workflow, sandbox, program) if arm == "sx" else run_js(workflow, sandbox, program)
+    match arm:
+        case "sx":
+            return run_sx(workflow, sandbox, program)
+        case "ts":
+            return run_sx(workflow, sandbox, program, "ts")
+        case "js":
+            return run_js(workflow, sandbox, program)
+        case "jsbody":
+            return run_jsbody(workflow, sandbox, program)

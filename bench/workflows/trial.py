@@ -16,14 +16,21 @@ from sandbox import Sandbox
 from sx.help import guide
 
 type Json = dict[str, Any]
-type Ask = Callable[[Path, str, str, Path], tuple[str, dict[str, int], str | None]]
+type Ask = Callable[[Path, str, str, Path], tuple[str, dict[str, int], str | None, float]]
 
-LANGUAGE: dict[str, str] = {"sx": "sx", "js": "ts"}
+LANGUAGE: dict[str, str] = {"sx": "sx", "js": "ts", "ts": "ts", "jsbody": "ts"}
+BODY_ARMS = ("ts", "jsbody")
 
 
 TAILORED = "tailored"
 VARIANTS = ("slim",)
 REPLY_SX = "Reply with one Sx program in a ```sx code block, and nothing else."
+BODY_INSTRUCTION = (
+    "Write the body of an async function that solves the task. It calls the tools as "
+    "`tools.namespace.name({ ... })` with `await`, may print lines with `console.log`, and `return`s the final "
+    "answer as plain JSON data. The declarations below are already in scope."
+)
+REPLY_BODY = "Reply with the body in one ```ts code block, and nothing else."
 
 
 def sections(guide: str) -> list[str]:
@@ -81,6 +88,42 @@ def js_arm_prompt(workflow: Workflow, sandbox: Sandbox, *, notes: bool) -> str:
     return f"{prompt[:reply]}## How the tools behave\n\n{behavior}\n\n{prompt[reply:]}"
 
 
+def body_prompt(workflow: Workflow, sandbox: Sandbox, *, rules: bool) -> str:
+    task = workflow.render(workflow.task, sandbox).strip()
+    guide = arms.typescript_guide_for(workflow, sandbox, rules=rules)
+    return "\n".join(["## Your task", "", task, "", BODY_INSTRUCTION, "", guide, "", REPLY_BODY]) + "\n"
+
+
+def condition_folder(arm: Arm, guide: str) -> str:
+    match arm:
+        case "sx":
+            return f"sx-{guide}"
+        case "js":
+            return "js-notes" if guide == "notes" else "js"
+        case _:
+            return arm
+
+
+def initial_prompt(workflow: Workflow, sandbox: Sandbox, arm: Arm, level: str, *, ts_notes: bool) -> str:
+    match arm:
+        case "sx":
+            return sx_prompt(workflow, sandbox, level)
+        case "js":
+            return js_arm_prompt(workflow, sandbox, notes=ts_notes)
+        case "ts" | "jsbody":
+            return body_prompt(workflow, sandbox, rules=arm == "ts")
+
+
+def guide_level_of(arm: Arm, level: str, *, ts_notes: bool) -> str:
+    match arm:
+        case "sx":
+            return level
+        case "js":
+            return "notes" if ts_notes else "none"
+        case _:
+            return "rules" if arm == "ts" else "none"
+
+
 def verdict_of(workflow: Workflow, sandbox: Sandbox, run: ArmRun, program: str) -> tuple[str, str]:
     if run.status != "completed":
         return run.status, run.detail
@@ -98,34 +141,36 @@ def reference(workflow: Workflow, arm: Arm) -> tuple[ArmRun, str, str]:
 
 def run_trial(
     workflow: Workflow, arm: Arm, model: str, thinking: str, level: str, sample: int, out: Path, ask: Ask = ask_model,
-    *, ts_notes: bool,
+    *, ts_notes: bool, workflow_set: str = "",
 ) -> Trial:
-    js_label = "js-notes" if ts_notes else "js"
-    directory = out / workflow.id / f"{js_label if arm == 'js' else 'sx-' + level}-{sample}"
+    guide_level = guide_level_of(arm, level, ts_notes=ts_notes)
+    directory = out / workflow.id / f"{condition_folder(arm, guide_level)}-{sample}"
     directory.mkdir(parents=True, exist_ok=True)
     attempts: list[Attempt] = []
     extras: list[Json] = []
     with workflow.sandbox() as sandbox:
-        original = (
-            sx_prompt(workflow, sandbox, level) if arm == "sx" else js_arm_prompt(workflow, sandbox, notes=ts_notes)
-        )
+        original = initial_prompt(workflow, sandbox, arm, level, ts_notes=ts_notes)
         prompt = original
         for index in range(REPAIRS + 1):
             prompt_file = directory / f"prompt-{index}.md"
             prompt_file.write_text(prompt)
             asked = time.perf_counter()
-            reply, tokens, error = ask(prompt_file, model, thinking, out)
+            reply, tokens, error, cost = ask(prompt_file, model, thinking, out)
             model_seconds = time.perf_counter() - asked
             code, _ = extract(reply)
             if not code.strip():
-                attempts.append(Attempt(reply, code, tokens, error, "no-answer", error or "empty reply", None))
+                attempts.append(
+                    Attempt(reply, code, tokens, error, "no-answer", error or "empty reply", None, cost=cost)
+                )
                 extras.append({"model_seconds": model_seconds})
                 break
             sandbox.reset()
             workflow.setup(sandbox)
             run = arms.run_arm(arm, workflow, sandbox, code)
             status, detail = verdict_of(workflow, sandbox, run, code)
-            attempt = Attempt(reply, code, tokens, error, status, detail, run.feedback, run.labels, len(run.calls))
+            attempt = Attempt(
+                reply, code, tokens, error, status, detail, run.feedback, run.labels, len(run.calls), cost=cost,
+            )
             attempts.append(attempt)
             extras.append({
                 "model_seconds": model_seconds, "run_seconds": run.seconds, "program_seconds": run.program_seconds,
@@ -134,8 +179,7 @@ def run_trial(
             if status == "correct" or run.feedback is None:
                 break
             prompt = repair_prompt(original, attempts, LANGUAGE[arm])
-    guide_level = level if arm == "sx" else ("notes" if ts_notes else "none")
-    trial = Trial(workflow.id, arm, model, thinking, guide_level, sample, attempts)
+    trial = Trial(workflow.id, arm, model, thinking, guide_level, sample, attempts, workflow_set)
     (directory / "trial.json").write_text(json.dumps(asdict(trial), indent=2))
     (directory / "extras.json").write_text(json.dumps(extras, indent=2))
     return trial

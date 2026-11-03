@@ -63,7 +63,7 @@ def task_section(task: Json) -> str:
     reply = "Reply with one Sx program in a ```sx code block, and nothing else."
     return "\n".join(["## Your task", "", task["description"], "", listing, reply])
 
-def ask(prompt: Path, model: str, thinking: str, workdir: Path) -> tuple[str, dict[str, int], str | None]:
+def ask(prompt: Path, model: str, thinking: str, workdir: Path) -> tuple[str, dict[str, int], str | None, float]:
     command = [str(PI), "-p", "--mode", "json", *PI_ISOLATION, "--model", model, "--thinking", thinking]
     completed = subprocess.run(
         [*command, "--system-prompt", SYSTEM_PROMPT, prompt.read_text()],
@@ -76,6 +76,7 @@ def ask(prompt: Path, model: str, thinking: str, workdir: Path) -> tuple[str, di
     )
     text: list[str] = []
     tokens: Counter[str] = Counter()
+    cost = 0.0
     error = None
     for line in completed.stdout.splitlines():
         if not line.startswith("{"):
@@ -90,6 +91,7 @@ def ask(prompt: Path, model: str, thinking: str, workdir: Path) -> tuple[str, di
             elif part.get("type") != "thinking":
                 error = f"the reply contained a {part.get('type')} part"
         usage = message["usage"]
+        cost += float(usage["cost"]["total"])
         tokens.update(
             input=int(usage["input"]) + int(usage["cacheRead"]),
             output=int(usage["output"]),
@@ -99,7 +101,7 @@ def ask(prompt: Path, model: str, thinking: str, workdir: Path) -> tuple[str, di
             error = f"the model stopped with {message.get('stopReason')}: {message.get('errorMessage', '')}"
     if completed.returncode != 0 and error is None:
         error = f"pi exited {completed.returncode}: {completed.stderr.strip()[-500:]}"
-    return "".join(text), dict(tokens), error
+    return "".join(text), dict(tokens), error, cost
 
 
 def extract(reply: str) -> tuple[str, str | None]:
@@ -223,7 +225,7 @@ def execute(task: Json, program: Any, registry: Any) -> str:
 
 
 def run_one(task: Json, sample: int, model: str, thinking: str, prompt: Path, workdir: Path, cores: Json) -> Run:
-    reply, tokens, error = ask(prompt, model, thinking, workdir)
+    reply, tokens, error, _ = ask(prompt, model, thinking, workdir)
     return score(task, sample, model, thinking, reply, tokens, error, cores)
 
 
