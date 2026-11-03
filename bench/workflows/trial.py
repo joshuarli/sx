@@ -143,12 +143,19 @@ def trial_directory(out: Path, workflow_id: str, arm: Arm, guide_level: str, sam
     return out / workflow_id / f"{condition_folder(arm, guide_level)}-{sample}"
 
 
+PROVIDER_ERROR = "the model stopped with error"
+
+
 def provider_stopped(directory: Path) -> bool:
     recorded = directory / "trial.json"
     if not recorded.is_file():
         return True
     attempts = json.loads(recorded.read_text())["attempts"]
-    return any(a["status"] == "no-answer" and "the model stopped with error" in (a.get("error") or "") for a in attempts)
+    return any(a["status"] == "no-answer" and is_provider_error(a.get("error")) for a in attempts)
+
+
+def is_provider_error(error: str | None) -> bool:
+    return error is not None and error.startswith(PROVIDER_ERROR)
 
 
 def run_trial(
@@ -170,7 +177,7 @@ def run_trial(
             reply, tokens, error, cost = ask(prompt_file, model, thinking, out)
             model_seconds = time.perf_counter() - asked
             code, _ = extract(reply)
-            if not code.strip():
+            if not code.strip() or is_provider_error(error):
                 attempts.append(
                     Attempt(reply, code, tokens, error, "no-answer", error or "empty reply", None, cost=cost)
                 )

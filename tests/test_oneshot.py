@@ -170,6 +170,17 @@ def test_resuming_reruns_only_trials_the_provider_stopped_or_never_recorded(tmp_
     assert not trial.provider_stopped(judged)
 
 
+def test_a_reply_cut_off_by_a_provider_error_is_not_judged_and_is_resumed(tmp_path: Path) -> None:
+    def cut_off(prompt: Path, model: str, thinking: str, out: Path) -> tuple[str, dict[str, int], str | None, float]:
+        error = "the model stopped with error: Streaming response failed: [server_error] Internal server error"
+        return "```ts\nconst entries = await tools.fs.list({ path: ", {}, error, 0.01
+
+    workflow = definition.load(EXAMPLE)
+    finished = trial.run_trial(workflow, "ts", "m", "medium", "standard", 0, tmp_path, cut_off, ts_notes=False)
+    assert [a.status for a in finished.attempts] == ["no-answer"]
+    assert trial.provider_stopped(trial.trial_directory(tmp_path, EXAMPLE, "ts", finished.guide, 0))
+
+
 def test_a_nul_byte_in_a_prompt_reaches_the_model_escaped(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     seen: list[list[str]] = []
 
