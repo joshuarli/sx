@@ -1272,9 +1272,16 @@ record. Evidence:
 - The release binary is 10,624,288 bytes, +10.3% over 9,633,456. The lead accepted it rather than strip
   symbols or turn on LTO, which would change what the limit measures or the build time.
 
-Before Phase 21, the lead set out to close the gaps a model meets most: an optional narrows only inside
-`if (x != null)` and its `?:`, not after an early `return`, in `x != null && x.f`, or in an `else`; a payload
-enum a tool returns cannot be told apart; and some checker messages still show Sx forms.
+Before Phase 21, the lead closed the gaps a model meets most. An optional now narrows after an early
+`return`, `continue`, `break`, or `throw`, through `&&` and `||`, in an `else`, in the true branch of
+`if (x)`, and along a field path such as `r.note`; the false branch of `if (x)` on a string, number, or
+boolean does not narrow, since `""`, `0`, and `false` are present. A payload enum a tool returns is told
+apart by `s.tag === "A"` or `s === "B"`, and `s.value` reads once one variant is left. Kebab-case fields
+are quoted in the `.d.ts`. Checker messages in TypeScript mode are rewritten in TypeScript terms, and a
+detail line still in Sx is dropped. The work found one more silent miscompile, `false != null` taking the
+false branch, now lowered to a presence test. `bench/tsdiff` generates the new forms: 3,000 generated
+programs and 471 corpus scripts show no disagreement, and all 400 mutants are rejected. The binary is
+10,686,176 bytes, +10.9%.
 
 #### Phase 21: Is the tax gone?
 
