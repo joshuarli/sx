@@ -1,0 +1,22 @@
+(let [gallery "{{root}}/gallery"
+      top (call fs.list {:path gallery})
+      files-of (fn [entries] (filter (fn [e] (= (get e :kind) "File")) entries))
+      directories (map (fn [e] (get e :name)) (filter (fn [e] (= (get e :kind) "Directory")) top))
+      nested (flatten
+               (map (fn [d]
+                      (map (fn [e] (str d "/" (get e :name)))
+                           (files-of (call fs.list {:path (str gallery "/" d)}))))
+                    directories))
+      paths (sort-by identity (concat (map (fn [e] (get e :name)) (files-of top)) nested))
+      files (map (fn [p] {:path p :text (call fs.read-text {:path (str gallery "/" p)})}) paths)
+      favorite? (fn [f] (text.starts-with? (get f :path) "favorites/"))
+      doomed (sort-by (fn [f] (get f :path))
+               (flatten
+                 (map (fn [[_ copies]]
+                        (if (< (count copies) 2)
+                          []
+                          (if (any? favorite? copies)
+                            (filter (fn [f] (not (favorite? f))) copies)
+                            (rest copies))))
+                      (group-by (fn [f] (get f :text)) files))))]
+  (map (fn [f] (let [_ (call fs.delete {:path (str gallery "/" (get f :path))})] (get f :path))) doomed))

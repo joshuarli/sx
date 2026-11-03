@@ -1,0 +1,5 @@
+{
+  "cores": ["text", "re", "json"],
+  "packs": ["fs"],
+  "capabilities": []
+}

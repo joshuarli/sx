@@ -1,0 +1,5 @@
+{
+  "fs.list": {"roots": ["{{root}}/gallery"]},
+  "fs.read-text": {"roots": ["{{root}}/gallery"]},
+  "fs.delete": {"roots": ["{{root}}/gallery"]}
+}
