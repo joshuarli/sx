@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -37,6 +38,19 @@ def rust_kernel() -> Path:
     raise SystemExit(
         f"agree.py: a fixture marked python: false needs the Rust sx. Run `{KERNEL_BUILD}` or set {KERNEL_ENVIRONMENT}."
     )
+
+
+def js_ir(case: dict[str, Any], stem: str, path: Path) -> Path | None:
+    kernel = rust_kernel()
+    emitter = kernel.parent / "examples" / "fixture_ir"
+    if not emitter.is_file():
+        raise SystemExit(f"agree.py: a js fixture needs {emitter}. Run `cargo build --manifest-path rust/Cargo.toml -p sx-cli --example fixture_ir` with the profile of the sx binary.")
+    emitted = subprocess.run([emitter, "ir", path], capture_output=True, text=True, check=False)
+    if emitted.returncode != 0:
+        return None
+    ir = SCRATCH / f"{stem}.ir.json"
+    ir.write_text(emitted.stdout)
+    return ir
 
 
 def rust_ir(case: dict[str, Any], stem: str) -> Path | None:
@@ -133,10 +147,12 @@ def main() -> int:
     subprocess.run([lake(), "build", "sx-ref"], cwd=LEAN, check=True, capture_output=True)
     binary = LEAN / ".lake" / "build" / "bin" / "sx-ref"
     SCRATCH.mkdir(parents=True, exist_ok=True)
-    compared, pure_compared, rejected, disagreements, unchecked = 0, 0, [], [], []
+    compared, pure_compared, rejected, disagreements, unchecked, js_core_only = 0, 0, [], [], [], []
     for path in sorted(p for p in FIXTURES.glob("*.json") if p.name != "declarations.json"):
         case = json.loads(path.read_text())
-        if case.get("python") is False:
+        if case.get("dialect") == "js":
+            ir = js_ir(case, path.stem, path)
+        elif case.get("python") is False:
             ir = rust_ir(case, path.stem)
         else:
             registry = Registry()
@@ -149,6 +165,9 @@ def main() -> int:
                 ir.write_text(json.dumps(export_program(checked.program, {})))
         if ir is None:
             rejected.append(path.stem)
+            continue
+        if re.search(r'"function":\s*"js\.', ir.read_text()):
+            js_core_only.append(path.stem)
             continue
         checked_by_lean = subprocess.run([binary, "check", ir], capture_output=True, text=True, check=False)
         if checked_by_lean.returncode != 0:
@@ -178,6 +197,7 @@ def main() -> int:
         print(f"lean checker rejects {name}: {reason}")
     print(f"compared {compared} accepted fixtures, {len(disagreements)} disagree; "
           f"{len(rejected)} rejected fixtures are elaborator behavior and are not compared: {', '.join(rejected)}")
+    print(f"{len(js_core_only)} js fixtures call the js core, which has no Lean counterpart, and are judged by the Rust gates alone")
     print(f"the pure evaluator agrees on {pure_compared} call-free fixtures")
     print(f"the Lean checker accepts {compared - len(unchecked)} of {compared} exported programs")
     twins, wrongly_accepted = retry_write_twins(binary)
