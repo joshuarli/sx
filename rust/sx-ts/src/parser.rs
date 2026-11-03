@@ -1268,6 +1268,13 @@ impl Parser {
                     let key = match key_token.tok {
                         Tok::Ident(name) => name,
                         Tok::Str(text) => text,
+                        Tok::Punct("[") => {
+                            self.report(
+                                diag("ts-annotation", key_token.span, "an index signature is not in the annotation grammar")
+                                    .fix("Record<string, T>"),
+                            );
+                            return Err(Stop);
+                        }
                         _ => return self.type_error(key_token.span, "this member"),
                     };
                     let optional = self.eat("?");

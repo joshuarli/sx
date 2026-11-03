@@ -98,6 +98,7 @@ fn keys_params_and_casts() {
     rejects("ts-cast", "const a = { b: 1 }; const x = a!;");
     rejects("ts-annotation", "const x: Map<string, number> = null;");
     rejects("ts-annotation", "const x: () => void = null;");
+    rejects("ts-annotation", "const m: { [k: string]: string[] } = {};");
     rejects("ts-annotation", "const x: keyof Foo = null;");
     accepts("const x: { a: number; b?: string[] } = { a: 1 };\nreturn x;");
 }

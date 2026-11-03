@@ -1,7 +1,7 @@
 ## Writing the program
 
 The program is the body of an async function: `await` and `return` work at the top level, and the
-returned value must be JSON. Annotations are erased. The host checks the whole program before anything
+returned value must be JSON. Annotations are erased and optional: `T[]`, `Record<string, T>`, `{ k: T }`, `T | null`; no index signature `{ [k: string]: T }`, and no `as` except `JSON.parse(t) as T`. The host checks the whole program before anything
 runs, and rejects what it cannot give TypeScript's exact meaning. Each rule below is do / don't.
 
 Calls and errors
@@ -19,6 +19,7 @@ Loops
 Absent values and equality
 - There is no `undefined`. Test with `x == null` or `x != null`, never `x === null` or `x !== null`.
 - `x?.f` only as `x?.f ?? d`, `x?.f == null`, or a condition. Otherwise write `x == null ? null : x.f`.
+- Narrow an optional only inside `if (x != null) { x.f }` or `x != null ? x.f : d`. An early `if (x == null) return`, `x != null && x.f`, `if (x)`, and the else of `x == null` do not narrow: use `x?.f ?? d`.
 - `===` compares strings, numbers, booleans only. Compare fields, not arrays or objects (`a.id === b.id`). `==` and `!=` only against `null`.
 - A tool's optional field is `T | null`: use `r.note ?? ""` before `r.note.length`.
 
@@ -32,7 +33,7 @@ Numbers and text
 Arrays and objects
 - `.sort()` is for strings only. For numbers or keys: `xs.sort((a, b) => a.n - b.n)`, exactly `k(a) - k(b)`.
 - Objects joined by a branch, a `?:`, or an array need the same fields: `{ id, note: null }` in every branch.
-- `const m = {}; m[key] = v` makes a map: all values one type, read with `m[key]`, list with `Object.keys(m).sort()`. Do not log or stringify a map, or loop over its entries in order.
+- `const m = {}; for (const k of keys) { m[k] = v; }` makes a map: all values one type, `m[k] ?? d` reads it, `Object.keys(m).sort()` lists it. Use a variable key, not `m["a"] = v`. Do not log or stringify a map, or loop over its entries in order.
 - Spread only a name whose fields are known: `{ ...row, done: true }`; not a call result, a map, or `?.`.
 - Change variables only as statements: `x = e`, `x += 1`, `xs.push(e)`, `o.k = e` on an array or object you created. No `pop`, `shift`, `splice`, no assignment inside an expression or a closure that outlives the loop.
 - Functions are not recursive, and are not returned, stored, or passed to a tool. Use `for...of` or `loop`.
