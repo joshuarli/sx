@@ -30,6 +30,8 @@ PRELUDE = frozenset({
 BENCH = Path(__file__).parent
 ROOT = BENCH.parent.parent
 PI = Path.home() / ".local" / "bin" / "pi"
+MODEL = "opencode-go/muse-spark-1.3-contributor"
+SCRIPTED_MODEL = "scripted/scripted"
 SYSTEM_PROMPT = "You write one program that solves the task you are given. Reply with the program only."
 PI_ISOLATION = (
     "--no-session", "--no-tools", "--no-extensions", "--no-mcp", "--no-skills", "--no-context-files",
@@ -63,8 +65,14 @@ def task_section(task: Json) -> str:
     reply = "Reply with one Sx program in a ```sx code block, and nothing else."
     return "\n".join(["## Your task", "", task["description"], "", listing, reply])
 
+def allowed_model(model: str) -> str:
+    if model not in (MODEL, SCRIPTED_MODEL):
+        raise ValueError(f"{model} is refused: every run uses {MODEL} and no other model")
+    return model
+
+
 def ask(prompt: Path, model: str, thinking: str, workdir: Path) -> tuple[str, dict[str, int], str | None, float]:
-    command = [str(PI), "-p", "--mode", "json", *PI_ISOLATION, "--model", model, "--thinking", thinking]
+    command = [str(PI), "-p", "--mode", "json", *PI_ISOLATION, "--model", allowed_model(model), "--thinking", thinking]
     completed = subprocess.run(
         [*command, "--system-prompt", SYSTEM_PROMPT, prompt.read_text().replace("\0", "\\u0000")],
         stdin=subprocess.DEVNULL,
@@ -231,7 +239,7 @@ def run_one(task: Json, sample: int, model: str, thinking: str, prompt: Path, wo
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the syntax pilot on the development tasks.")
-    parser.add_argument("--model", default="opencode-go/muse-spark-1.3-contributor")
+    parser.add_argument("--model", choices=[MODEL], default=MODEL)
     parser.add_argument("--thinking", default="medium", help="Thinking level: off, minimal, low, medium, high")
     parser.add_argument("--samples", type=int, default=3)
     parser.add_argument("--jobs", type=int, default=4)

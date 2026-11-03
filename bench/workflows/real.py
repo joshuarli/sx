@@ -15,6 +15,7 @@ import fstree
 import gate
 import repairs
 import session
+from pilot import MODEL, allowed_model
 from probe import sx_binary
 from records import CODE_SERVER_ARMS, SESSION_ARMS, AttemptStatus, Json, SessionArm, Usage
 
@@ -214,6 +215,7 @@ def run_one(
     request: Request, arm: SessionArm, model: str, thinking: str, sample: int, out: Path, imported: Path,
     listing: JsListing,
 ) -> RealRecord:
+    allowed_model(model)
     directory = out / request.id / f"{arm}-{sample}"
     directory.mkdir(parents=True)
     scratch = SCRATCH_ROOT / uuid.uuid4().hex
@@ -339,7 +341,7 @@ def main() -> None:
         help="direct lists the tools in codemode's description; discovered is Phase 17's",
     )
     parser.add_argument("--judgments", type=Path, help="JSON of REQUEST/ARM-SAMPLE to true or false for the report")
-    parser.add_argument("--model", default="opencode-go/muse-spark-1.3-contributor")
+    parser.add_argument("--model", choices=[MODEL], default=MODEL)
     parser.add_argument("--thinking", default="medium")
     parser.add_argument("--samples", type=int, default=1)
     parser.add_argument("--jobs", type=int, default=4)

@@ -5,9 +5,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, override
 
-PROVIDER = "scripted"
-MODEL = "scripted"
-MODEL_FLAG = f"{PROVIDER}/{MODEL}"
+from pilot import SCRIPTED_MODEL
+
+MODEL_FLAG = SCRIPTED_MODEL
+PROVIDER, MODEL = SCRIPTED_MODEL.split("/")
 
 
 @dataclass(frozen=True, slots=True)

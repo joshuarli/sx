@@ -99,7 +99,7 @@ def test_the_cost_of_every_reply_is_summed(tmp_path: Path, monkeypatch: pytest.M
     prompt = tmp_path / "prompt.md"
     prompt.write_text("hi")
     monkeypatch.setattr(pilot, "PI", fake)
-    reply, tokens, error, cost = pilot.ask(prompt, "m", "medium", tmp_path)
+    reply, tokens, error, cost = pilot.ask(prompt, pilot.MODEL, "medium", tmp_path)
     assert (reply, error, cost) == ("okok", None, 0.75)
     assert tokens["output"] == 10
 
@@ -191,5 +191,5 @@ def test_a_nul_byte_in_a_prompt_reaches_the_model_escaped(tmp_path: Path, monkey
     monkeypatch.setattr(pilot.subprocess, "run", fake_run)
     prompt = tmp_path / "prompt.md"
     prompt.write_text("output was a\0b")
-    pilot.ask(prompt, "m", "medium", tmp_path)
+    pilot.ask(prompt, pilot.MODEL, "medium", tmp_path)
     assert seen[0][-1] == "output was a\\u0000b"

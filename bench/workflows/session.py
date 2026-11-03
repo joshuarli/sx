@@ -10,6 +10,7 @@ from pathlib import Path
 
 import arms
 import effects
+import pilot
 from arms import Files
 from definition import Audit, AuditError, EffectsWorkflow, Verdict, Violation
 from metrics import Measure, measure
@@ -162,7 +163,7 @@ def pi_command(wired: Wiring, model: str, thinking: str, prompt: str) -> list[st
     notes = wired.append_system_prompt
     append = [] if notes is None else ["--append-system-prompt", notes]
     return [
-        str(PI), *PI_ISOLATION, *extensions, *append, "--tools", wired.tools, "--model", model,
+        str(PI), *PI_ISOLATION, *extensions, *append, "--tools", wired.tools, "--model", pilot.allowed_model(model),
         "--thinking", thinking, prompt,
     ]
 

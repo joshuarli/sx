@@ -39,6 +39,9 @@ the owner ruled that no other model runs again. A phase whose design names anoth
 Muse Spark alone, or it does not run. Results already recorded for other models stay as history and
 do not justify running more.
 
+The harness enforces the rule: every runner's `--model` accepts only Muse Spark, and every place that
+starts `pi` refuses any other model except the local scripted model the tests serve.
+
 ### Sx lives in its own repository
 
 Sx is developed here, not inside repomod. repomod's `AGENTS.md` forbids generic workflow

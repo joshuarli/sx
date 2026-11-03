@@ -6,6 +6,7 @@ import definition
 import effects_reference
 import effects_report
 import oneshot
+import pilot
 import report
 import session
 import trial
@@ -17,7 +18,6 @@ PROVIDER_STOP_RERUNS = 2
 
 ARMS: tuple[Arm, ...] = ("sx", "js")
 TRIAL_ARMS: tuple[Arm, ...] = ("sx", "js", "ts", "jsbody")
-DEFAULT_MODEL = "opencode-go/muse-spark-1.3-contributor"
 
 
 def run_references(ids: list[str], arm_names: tuple[Arm, ...], root: Path) -> bool:
@@ -122,7 +122,7 @@ def main() -> None:
     parser.add_argument("--runs", type=Path, nargs="+", help="trials-report: the --out directories to report")
     parser.add_argument("--baseline", default=oneshot.BASELINE, help="trials-report: the arm the gate compares to")
     parser.add_argument("--candidate", default=oneshot.CANDIDATE, help="trials-report: the arm the gate judges")
-    parser.add_argument("--model", default=DEFAULT_MODEL)
+    parser.add_argument("--model", choices=[pilot.MODEL], default=pilot.MODEL)
     parser.add_argument("--thinking", default="medium")
     parser.add_argument("--guide", default="standard")
     parser.add_argument("--ts-notes", action="store_true", help="Give the TypeScript arm the tools' behavior notes")

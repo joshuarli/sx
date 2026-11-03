@@ -5,7 +5,8 @@ which performs the granted tools natively, and TypeScript on Bun, which reaches 
 performers through `sx mcp serve`. Each language is an arm: `sx` and `js`, the probe's name for
 its TypeScript arm.
 
-Every model run uses `opencode-go/muse-spark-1.3-contributor` and no other model. This is a hard rule;
+Every model run uses `opencode-go/muse-spark-1.3-contributor` and no other model, and `--model` rejects any
+other. This is a hard rule;
 see [Muse Spark is the only model](../../plan.md#muse-spark-is-the-only-model).
 
 ## Setup
