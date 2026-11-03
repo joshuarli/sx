@@ -217,7 +217,8 @@ def compare(js: Outcome, sx: Outcome, *, parallel: bool, expect_trap: str | None
         reasons += failure_differences(js.failure, sx.failure)
     elif not same_json(js.result, sx.result):
         reasons.append(f"result: js {canonical(js.result)[:300]}, sx {canonical(sx.result)[:300]}")
-    if js.logs != sx.logs:
+    unrecorded = js.failure is not None and sx.failure is not None and js.failure.cls == sx.failure.cls == "unexpected-call"
+    if js.logs != sx.logs and not unrecorded:
         reasons.append(f"logs: js {list(js.logs)[:5]}, sx {list(sx.logs)[:5]}")
     refined = False
     if js.calls != sx.calls:

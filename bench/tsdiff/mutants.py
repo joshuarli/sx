@@ -58,6 +58,29 @@ MUTANTS: tuple[Mutant, ...] = (
     Mutant("write-to-parameter", "ts-mutation-pattern", "function m(a: number[]) { a[0] = 1; return a; }"),
     Mutant("increment-in-expression", "ts-mutation-pattern", "let m = 0; const n = [1, 2][m++];"),
     Mutant("closure-assignment", "ts-mutation-escape", "let m = 0; const f = () => m + 1; m = 2;"),
+    Mutant(
+        "optional-read-without-exit", "type-mismatch",
+        "const mo = [1].length > 0 ? \"a\" : null; if (mo != null) { } const m = mo.length;",
+    ),
+    Mutant("optional-read-in-falsy-branch", "type-mismatch", "const mo = [1].length > 0 ? \"a\" : null; const m = mo ? 1 : mo.length;"),
+    Mutant("optional-read-in-null-branch", "type-mismatch", "const mo = [1].length > 0 ? \"a\" : null; const m = mo == null ? mo.length : 0;"),
+    Mutant("optional-read-after-reassignment", "type-mismatch", "let mo = [1].length > 0 ? \"a\" : null; if (mo != null) { mo = null; const m = mo.length; }"),
+    Mutant(
+        "optional-read-under-another-test", "type-mismatch",
+        "const mo = [1].length > 0 ? \"a\" : null; const mp = [1].length > 0 ? \"b\" : null; const m = mp != null ? mo.length : 0;",
+    ),
+    Mutant("optional-narrowed-by-or", "type-mismatch", "const mo = [1].length > 0 ? \"a\" : null; const m = mo != null || mo.length > 0;"),
+    Mutant("variant-payload-without-test", "not-a-record", "const mr = await tools.items.review({ id: \"i0\" }); const m = mr.value;"),
+    Mutant(
+        "variant-payload-after-empty-test", "not-a-record",
+        "const mr = await tools.items.review({ id: \"i0\" }); if (mr.tag === \"Score\") { } const m = mr.value;",
+    ),
+    Mutant("variant-tag-of-a-mixed-enum", "not-a-record", "const mr = await tools.items.review({ id: \"i0\" }); const m = mr.tag;"),
+    Mutant(
+        "variant-payload-of-another-variant", "not-a-record",
+        "const mr = await tools.items.review({ id: \"i0\" }); const m = mr.tag === \"Score\" ? 0 : mr.value.level;",
+    ),
+    Mutant("variant-payload-as-string", "js-equality", "const mr = await tools.items.review({ id: \"i0\" }); const m = mr === \"Score\";"),
     Mutant("tool-name", "unknown-tool", "await tools.items.nope({});"),
 )
 

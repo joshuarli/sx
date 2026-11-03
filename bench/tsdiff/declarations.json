@@ -4,6 +4,9 @@
     "Page": "Record {items: List<String>, next: Option<String>}",
     "Job": "Record {state: String, progress: Int}"
   },
+  "enums": {
+    "Review": {"Missing": null, "Score": "Int", "Flagged": "Record {reason: String, level: Int}"}
+  },
   "capabilities": [
     {"id": "items.list", "effect": "read", "input": "Record {}", "output": "List<Item>", "description": "Lists every item."},
     {"id": "items.get", "effect": "read", "input": "Record {id: String}", "output": "Item", "description": "Reads one item."},
@@ -15,6 +18,7 @@
     {"id": "notes.read", "effect": "read", "input": "Record {path: String}", "output": "String", "description": "Reads a note."},
     {"id": "notes.write", "effect": "write", "idempotent": true, "input": "Record {path: String, text: String}", "output": "Unit", "description": "Writes a note."},
     {"id": "pages.fetch", "effect": "read", "input": "Record {cursor: Option<String>}", "output": "Page", "description": "Reads one page of ids."},
+    {"id": "items.review", "effect": "read", "input": "Record {id: String}", "output": "Review", "description": "Reviews one item."},
     {"id": "jobs.status", "effect": "read", "input": "Record {id: String}", "output": "Job", "description": "Reads a job."}
   ]
 }

@@ -872,6 +872,8 @@ call that failed.
 | `js-null-equality` | `===` or `!==` against `null` (checker, JS mode) | `=== null and !== null are not supported` | `x == null` |
 | `js-truthiness` | a condition on `Bytes` or a validated string type (checker, JS mode) | whether it is truthy depends on its text | compare it |
 | `js-for-of-source` | `for…of` over a non-list | | |
+| `type-mismatch` | a value of another type than the position needs, including a read of an optional that no test has made present (checker) | `This is X, but Y is needed here` | `x != null ? x.f : d` |
+| `not-a-record` | a field read of a value that has none, including `.value` or `.tag` of a payload enum before a tag test has picked a variant (checker) | `which has several variants, so .value can be read only after a test` | `x.tag === "Name"` |
 
 ## The classifier
 

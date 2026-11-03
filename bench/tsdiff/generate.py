@@ -75,6 +75,15 @@ class World:
                 return [{"output": found if limit is None else found[:limit]}]
             case "items.count":
                 return [{"output": len(self.items)}]
+            case "items.review":
+                item = by_id.get(request["id"])
+                if item is None:
+                    return [{"error": {"kind": "NotFound", "message": f"no item {request['id']}"}}]
+                if item["qty"] <= 0:
+                    return [{"output": "Missing"}]
+                if item["qty"] % 2 == 0:
+                    return [{"output": {"tag": "Score", "value": item["qty"] * 10}}]
+                return [{"output": {"tag": "Flagged", "value": {"reason": item["name"], "level": item["qty"]}}}]
             case "items.update":
                 item = by_id.get(request["id"])
                 if item is None:
@@ -356,6 +365,129 @@ def item_id(w: Writer) -> str:
     return w.pick(*pool)
 
 
+def optional_name(w: Writer) -> str:
+    var = w.declare("ov", "narrowable")
+    items = w.vars_of("item")
+    source = w.pick(
+        lambda: f"({w.bool_(1)} ? {w.str_(0)} : null)",
+        lambda: f"({w.int_(1)} > 1 ? {w.str_(0)} : null)",
+        *([lambda: f"{w.rng.choice(items).name}.note"] * 3 if items else []),
+    )
+    w.emit(f"const {var.name} = {source};")
+    return var.name
+
+
+def narrowing(w: Writer, depth: int) -> None:
+    r = w.rng
+    o = optional_name(w)
+    k = w.fresh("k")
+    match r.choice(("exit", "exit", "throw", "value", "value", "else", "truthy", "nested", "pair", "function", "all")):
+        case "exit":
+            guard = r.choice((f"{o} == null", f"!{o}"))
+            leave = r.choice(("continue", "break"))
+            w.emit(f"for (const {k} of [1, 2, 3]) {{")
+            w.emit(f"  if ({guard}) {{ {leave}; }}")
+            w.emit(f"  console.log({o}.length, {k});")
+            w.emit("}")
+        case "throw":
+            w.emit("try {")
+            w.emit(f"  if ({o} == null) {{ throw new Error(\"absent\"); }}")
+            w.emit(f"  console.log({o}.length);")
+            w.emit("} catch (e) {")
+            w.emit("  console.log(e.message);")
+            w.emit("}")
+        case "value":
+            shape = r.choice(
+                (
+                    ("int", f"{o} == null ? {w.int_(0)} : {o}.length"),
+                    ("int", f"{o} != null ? {o}.length : {w.int_(0)}"),
+                    ("int", f"{o} ? {o}.length : {w.int_(0)}"),
+                    ("bool", f"{o} != null && {o}.length > {r.choice(('0', '1', '2'))}"),
+                    ("bool", f"{o} == null || {o}.length < {r.choice(('1', '2', '3'))}"),
+                    ("bool", f"{o} != null && {o}.startsWith({w.str_(0)})"),
+                    ("str", f"{o} == null ? \"none\" : {o}.toUpperCase()"),
+                )
+            )
+            var = w.declare("nv", shape[0])
+            w.emit(f"const {var.name} = {shape[1]};")
+        case "else":
+            w.emit(f"if ({o} == null) {{")
+            w.emit("  console.log(\"none\");")
+            w.emit("} else {")
+            w.emit(f"  console.log({o}.length);")
+            w.emit("}")
+        case "truthy":
+            w.emit(f"if ({o}) {{")
+            w.emit(f"  console.log({o}.length, \"truthy\");")
+            w.emit("} else {")
+            w.emit(f"  console.log({o} === null ? 0 : 1);".replace(f"{o} === null ? 0 : 1", f"{o} == null"))
+            w.emit("}")
+            w.emit(f"if ({o} && {o}.length > 1) {{ console.log({o}); }}")
+        case "nested":
+            w.emit(f"if ({o} != null) {{")
+            w.emit(f"  if ({o} != null) {{ console.log({o}.length); }}")
+            w.emit(f"  console.log({o} != null ? {o}.length : -1);")
+            w.emit("}")
+        case "pair":
+            other = optional_name(w)
+            w.emit(f"if ({o} != null && {other} != null) {{")
+            w.emit(f"  console.log({o}.length + {other}.length);")
+            w.emit("}")
+            w.emit(f"for (const {k} of [1, 2]) {{")
+            w.emit(f"  if ({o} == null || {other} == null) {{ continue; }}")
+            w.emit(f"  console.log({o}.length - {other}.length, {k});")
+            w.emit("}")
+        case "function":
+            name = w.fresh("narrowed")
+            parameter = w.fresh("p")
+            fallback = r.choice(("-1", "0", "99"))
+            w.helpers.append(
+                f"function {name}({parameter}: string | null): number {{\n"
+                f"  if ({parameter} == null) {{ return {fallback}; }}\n"
+                f"  return {parameter}.length;\n}}"
+            )
+            var = w.declare("hv", "int")
+            w.emit(f"const {var.name} = {name}({o});")
+        case _:
+            w.emit(f"const {w.fresh('nf')} = [{o}, null].map((x) => (x == null ? 0 : x.length));")
+
+
+def variants(w: Writer, depth: int) -> None:
+    r = w.rng
+    reviews = w.vars_of("review")
+    if not reviews or r.random() < 0.3:
+        fresh = w.declare("review", "review")
+        w.emit(f"const {fresh.name} = await tools.items.review({{ id: {item_id(w)} }});")
+        reviews = [fresh]
+    v = r.choice(reviews).name
+    k = w.fresh("k")
+    match r.choice(("str", "int", "exit", "tag", "typeof", "early")):
+        case "str":
+            var = w.declare("rs", "str")
+            w.emit(
+                f'const {var.name} = {v} === "Missing" ? "m" : {v}.tag === "Score" ? String({v}.value) : {v}.value.reason;'
+            )
+        case "int":
+            var = w.declare("ri", "int")
+            w.emit(f'const {var.name} = {v} === "Missing" ? 0 : {v}.tag === "Flagged" ? {v}.value.level : {v}.value;')
+        case "exit":
+            w.emit(f"for (const {k} of [1, 2]) {{")
+            w.emit(f'  if ({v} === "Missing") {{ continue; }}')
+            w.emit(f'  if ({v}.tag === "Score") {{ console.log({v}.value + {k}); }} else {{ console.log({v}.value.reason, {v}.value.level); }}')
+            w.emit("}")
+        case "tag":
+            var = w.declare("rt", "bool")
+            w.emit(f'const {var.name} = {v} !== "Missing" && {v}.tag === "{r.choice(("Score", "Flagged"))}";')
+        case "typeof":
+            var = w.declare("ro", "str")
+            w.emit(f"const {var.name} = typeof {v};")
+        case _:
+            w.emit(f"for (const {k} of [1, 2]) {{")
+            w.emit(f'  if ({v} === "Missing" || {v}.tag !== "Flagged") {{ break; }}')
+            w.emit(f"  console.log({v}.value.reason + {k});")
+            w.emit("}")
+
+
 def statements(w: Writer, count: int, depth: int) -> None:
     for _ in range(count):
         statement(w, depth)
@@ -373,6 +505,8 @@ def statement(w: Writer, depth: int) -> None:
         lambda: parallel(w),
         lambda: bounded(w),
         lambda: call_write(w),
+        lambda: narrowing(w, depth),
+        lambda: variants(w, depth),
     ]
     if depth > 0:
         choices += [
@@ -395,8 +529,11 @@ def declare_value(w: Writer) -> None:
 
 def call_read(w: Writer) -> None:
     r = w.rng
-    kind = r.choice(("list", "list", "get", "find", "count", "mean", "note", "item-from-list"))
+    kind = r.choice(("list", "list", "get", "find", "count", "mean", "note", "item-from-list", "review"))
     match kind:
+        case "review":
+            var = w.declare("review", "review")
+            w.emit(f"const {var.name} = await tools.items.review({{ id: {item_id(w)} }});")
         case "list":
             var = w.declare("items", "items")
             w.emit(f"const {var.name} = await tools.items.list({{}});")

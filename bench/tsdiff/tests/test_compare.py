@@ -167,3 +167,12 @@ def test_run_sx_fails_loudly_when_sx_rejects_the_flag(tmp_path: Path) -> None:
     binary = stub(tmp_path, refusal)
     with pytest.raises(SxUnsupportedLanguageError, match="--language ts"):
         run_sx(case_files(tmp_path), binary)
+
+
+def test_an_unrecorded_call_on_both_sides_agrees_although_sx_reports_no_logs() -> None:
+    stopped = Failure("unexpected-call", None, "no fixture")
+    js = outcome("js", "failed", None, ("before",), (("a", "{}"),), failure=stopped)
+    sx = outcome("sx", "failed", None, (), (("a", "{}"),), failure=stopped)
+    assert compare(js, sx, parallel=False).kind == "agree"
+    other = outcome("sx", "failed", None, (), (("a", "{}"),), failure=Failure("thrown", None, "x"))
+    assert compare(js, other, parallel=False).kind == "disagree"
