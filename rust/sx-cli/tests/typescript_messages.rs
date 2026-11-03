@@ -33,7 +33,7 @@ fn scratch(name: &str, contents: &str) -> String {
 
 fn diagnostics(source: &str, tag: &str) -> Vec<Json> {
     let program = scratch(&format!("{tag}.ts"), source);
-    let declarations = scratch("decl.json", DECLARATIONS);
+    let declarations = scratch(&format!("{tag}-decl.json"), DECLARATIONS);
     let output = Command::new(env!("CARGO_BIN_EXE_sx"))
         .args(["check", &program, "--format", "json", "--declarations", &declarations])
         .args(ALLOWED)

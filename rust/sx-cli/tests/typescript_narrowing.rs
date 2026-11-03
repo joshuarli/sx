@@ -21,7 +21,7 @@ fn scratch(name: &str, contents: &str) -> String {
 
 fn checks(source: &str, tag: &str) -> bool {
     let program = scratch(&format!("{tag}.ts"), source);
-    let declarations = scratch("decl.json", DECLARATIONS);
+    let declarations = scratch(&format!("{tag}-decl.json"), DECLARATIONS);
     let status = Command::new(env!("CARGO_BIN_EXE_sx"))
         .args(["check", &program, "--declarations", &declarations, "--allow", "items.get", "--allow", "items.list"])
         .output()
