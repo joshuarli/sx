@@ -1,0 +1,1 @@
+(let [o "x"] (if (= o none) 1 (not= o none)))

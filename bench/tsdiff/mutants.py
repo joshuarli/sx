@@ -20,6 +20,7 @@ MUTANTS: tuple[Mutant, ...] = (
     Mutant("set-timeout", "ts-nondeterministic", "setTimeout(() => 1, 10);"),
     Mutant("undefined", "ts-undefined", "const m = undefined;"),
     Mutant("loose-equality", "ts-loose-equality", "const m = 1 == 1;"),
+    Mutant("strict-null", "js-null-equality", "const o = [1].length > 0 ? \"a\" : null; const m = o === null;"),
     Mutant("switch", "ts-switch", "switch (1) { case 1: break; }"),
     Mutant("regexp", "ts-regexp", "const m = /a/.test(\"a\");"),
     Mutant("class", "ts-class", "class M { }"),

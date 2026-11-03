@@ -109,7 +109,7 @@ impl<'a> Lowerer<'a> {
             ExprKind::Binary(op @ (BinaryOp::StrictEq | BinaryOp::StrictNe), l, r) if matches!(r.kind, ExprKind::Null) || matches!(l.kind, ExprKind::Null) => {
                 let operand = if matches!(r.kind, ExprKind::Null) { l } else { r };
                 let v = self.expr_t(operand, false, false);
-                if *op == BinaryOp::StrictEq { app("not", vec![v], span) } else { v }
+                app(if *op == BinaryOp::StrictEq { "=" } else { "not=" }, vec![v, none(span)], span)
             }
             _ if self.is_bool_expr(e) => self.expr_t(e, true, false),
             _ => {
@@ -483,9 +483,7 @@ impl<'a> Lowerer<'a> {
                 if matches!(r.kind, ExprKind::Null) || matches!(l.kind, ExprKind::Null) {
                     let operand = if matches!(r.kind, ExprKind::Null) { l } else { r };
                     let v = self.expr_t(operand, false, false);
-                    let present = if negate { boolean(true, span) } else { boolean(false, span) };
-                    let absent = if negate { boolean(false, span) } else { boolean(true, span) };
-                    return app("if", vec![v, present, absent], span);
+                    return app(if negate { "not=" } else { "=" }, vec![v, none(span)], span);
                 }
                 let literal = |e: &Expr| matches!(e.kind, ExprKind::Str(_) | ExprKind::Number(_) | ExprKind::Bool(_));
                 let a = self.expr_t(l, literal(r), false);
