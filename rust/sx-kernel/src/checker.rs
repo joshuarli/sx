@@ -1128,6 +1128,12 @@ impl<'r> Checker<'r> {
             {
                 Some(FLOAT)
             }
+            (Type::Option(inner), Type::Primitive(Primitive::Bool)) | (Type::Primitive(Primitive::Bool), Type::Option(inner))
+                if self.dialect == Dialect::JavaScript
+                    && matches!(self.resolve(inner), Type::Primitive(Primitive::Bool) | Type::Never | Type::Variable(_)) =>
+            {
+                None
+            }
             (Type::Option(x), Type::Option(y)) => self.least_upper_bound(x, y).map(option),
             (Type::Option(x), _) if !self.is_open(&rb) => self.least_upper_bound(x, &rb).map(option),
             (_, Type::Option(y)) if !self.is_open(&ra) => self.least_upper_bound(&ra, y).map(option),

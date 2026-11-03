@@ -1,0 +1,5 @@
+error[branch-mismatch] 4:15-4:20
+  (if true none false)
+                ^^^^^
+  The branches return different types: Option<?> and Bool.
+  Every branch of an if or match must return the same type.

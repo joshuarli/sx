@@ -741,8 +741,30 @@ Sx text. These are the places where the implementation fixes what this document 
 - **Decoding.** `js.parse` reads the target type from a string literal in the `Type` syntax of Sx, with
   the registry's named types, and its core refuses a document of another shape (`invalid-input`) and traps
   on an `Int` beyond ±2^53. A type the front end passes must be written structurally.
-- **Result encoding.** A `Result` returned from the program is still `{"ok": …}` or `{"err": …}`; a
-  `Settled` returned whole is not yet written as JavaScript's `{"status": …}`.
+- **Result encoding.** A `Result` that a program returns, logs, or stringifies, alone or inside a list, option,
+  tuple, or record, is a `Settled`: the checker elaborates it into the `js.Shaped` of `{"status":"fulfilled","value":v}`
+  or `{"status":"rejected","reason":e}`. A `Result` is written as `{"ok": …}` only in an Sx program.
+- **Records that differ.** Two records with different field sets do not join in JS mode, because JavaScript keeps
+  the objects apart and prints only the keys each has. `out.push({ a })` after `out.push({ b })`, or branches that
+  return `{ a }` and `{ b }`, are checker diagnostics (`unknown-field`, `missing-field`, `branch-mismatch`). A `Bool`
+  does not join an absent value either (`c ? null : false`), because a condition would test the joined `Option<Bool>`
+  for presence.
+- **Maps.** An empty object that a program fills with computed keys is a `Map<String, V>`, and `V` must be one type.
+  A `Map` anywhere in a value that `JSON.stringify` or `console.log` writes is `ts-map-order`, reported by the checker
+  since only it knows the type. A `Map` in the program result is fine.
+- **Sorting.** `.sort()` lowers to `(sort-by identity xs)`; the checker reports `ts-sort-comparator` unless the
+  elements are `String`s.
+- **Absent values.** `x ?? d` and `(match x (some v) … none …)` on a value that cannot be absent, such as a name
+  narrowed by an earlier `x != null`, take the present arm. A second `x != null` test inside that branch is still
+  `condition-not-bool`.
+- **Destructuring.** An array pattern against an array literal of the same length is a tuple pattern; against any
+  other length, or any other list, it reads `(nth xs i)`, so a name past the end is the `out-of-range` trap.
+- **Returns on every path.** A `try` and `catch` that both end in `return` leave nothing to run after them, and the
+  lowering makes that continuation `(fail "unreachable")`.
+- **Expansions.** A diagnostic from inside a `js` expansion carries the span of the call that expanded it.
+- **Known gaps.** A `loop` variable that starts as an `Int` and receives a `Float` is `js-float-as-int`, where
+  `reduce` widens it. A `Map` value or an enum payload that a tool returns is not checked against ±2^53. A `sort-by`
+  key that is a tuple with a string compares by code point; no TypeScript form reaches it.
 
 ## Diagnostics
 
