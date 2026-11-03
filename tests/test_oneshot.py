@@ -150,3 +150,35 @@ def test_the_stop_table_credits_each_code_with_the_repairs_it_caused(tmp_path: P
     table = oneshot.render(synthetic(tmp_path))
     assert "| unsupported:while | 1 | 1 |" in table
     assert "| (no code) | 1 | 1 |" in table
+
+
+def test_resuming_reruns_only_trials_the_provider_stopped_or_never_recorded(tmp_path: Path) -> None:
+    def recorded(name: str, attempts: list[dict[str, str | None]]) -> Path:
+        directory = tmp_path / name
+        directory.mkdir()
+        (directory / "trial.json").write_text(json.dumps({"attempts": attempts}))
+        return directory
+
+    limited = recorded("limited", [{"status": "rejected", "error": None}, {
+        "status": "no-answer", "error": "the model stopped with error: 429: {\"type\":\"GoUsageLimitError\"}",
+    }])
+    empty_reply = recorded("empty", [{"status": "no-answer", "error": None}])
+    judged = recorded("judged", [{"status": "wrong", "error": None}])
+    assert trial.provider_stopped(limited)
+    assert trial.provider_stopped(tmp_path / "never-ran")
+    assert not trial.provider_stopped(empty_reply)
+    assert not trial.provider_stopped(judged)
+
+
+def test_a_nul_byte_in_a_prompt_reaches_the_model_escaped(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[list[str]] = []
+
+    def fake_run(command: list[str], **_: object) -> object:
+        seen.append(command)
+        return type("Completed", (), {"stdout": "", "stderr": "", "returncode": 0})()
+
+    monkeypatch.setattr(pilot.subprocess, "run", fake_run)
+    prompt = tmp_path / "prompt.md"
+    prompt.write_text("output was a\0b")
+    pilot.ask(prompt, "m", "medium", tmp_path)
+    assert seen[0][-1] == "output was a\\u0000b"

@@ -139,12 +139,24 @@ def reference(workflow: Workflow, arm: Arm) -> tuple[ArmRun, str, str]:
     return run, status, detail
 
 
+def trial_directory(out: Path, workflow_id: str, arm: Arm, guide_level: str, sample: int) -> Path:
+    return out / workflow_id / f"{condition_folder(arm, guide_level)}-{sample}"
+
+
+def provider_stopped(directory: Path) -> bool:
+    recorded = directory / "trial.json"
+    if not recorded.is_file():
+        return True
+    attempts = json.loads(recorded.read_text())["attempts"]
+    return any(a["status"] == "no-answer" and "the model stopped with error" in (a.get("error") or "") for a in attempts)
+
+
 def run_trial(
     workflow: Workflow, arm: Arm, model: str, thinking: str, level: str, sample: int, out: Path, ask: Ask = ask_model,
     *, ts_notes: bool, workflow_set: str = "",
 ) -> Trial:
     guide_level = guide_level_of(arm, level, ts_notes=ts_notes)
-    directory = out / workflow.id / f"{condition_folder(arm, guide_level)}-{sample}"
+    directory = trial_directory(out, workflow.id, arm, guide_level, sample)
     directory.mkdir(parents=True, exist_ok=True)
     attempts: list[Attempt] = []
     extras: list[Json] = []

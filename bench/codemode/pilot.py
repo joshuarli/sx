@@ -66,7 +66,7 @@ def task_section(task: Json) -> str:
 def ask(prompt: Path, model: str, thinking: str, workdir: Path) -> tuple[str, dict[str, int], str | None, float]:
     command = [str(PI), "-p", "--mode", "json", *PI_ISOLATION, "--model", model, "--thinking", thinking]
     completed = subprocess.run(
-        [*command, "--system-prompt", SYSTEM_PROMPT, prompt.read_text()],
+        [*command, "--system-prompt", SYSTEM_PROMPT, prompt.read_text().replace("\0", "\\u0000")],
         stdin=subprocess.DEVNULL,
         capture_output=True,
         text=True,

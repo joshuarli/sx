@@ -61,6 +61,9 @@ def run_sessions(args: argparse.Namespace, ids: list[str], arm_names: tuple[Sess
             for workflow_id in ids
             for arm in arm_names
             for sample in range(args.samples)
+            if not args.resume or trial.provider_stopped(
+                trial.trial_directory(out, workflow_id, arm, guide_level(arm, args), sample)
+            )
         ]
         for job in jobs:
             record = job.result()
@@ -73,6 +76,10 @@ def run_sessions(args: argparse.Namespace, ids: list[str], arm_names: tuple[Sess
                 flush=True,
             )
     return clean
+
+
+def guide_level(arm: Arm, args: argparse.Namespace) -> str:
+    return trial.guide_level_of(arm, args.guide, ts_notes=args.ts_notes)
 
 
 def run_trials(args: argparse.Namespace, ids: list[str], arm_names: tuple[Arm, ...], root: Path) -> None:
@@ -121,6 +128,9 @@ def main() -> None:
     parser.add_argument("--ts-notes", action="store_true", help="Give the TypeScript arm the tools' behavior notes")
     parser.add_argument("--samples", type=int, default=2)
     parser.add_argument("--jobs", type=int, default=4)
+    parser.add_argument(
+        "--resume", action="store_true", help="Run only trials with no record or one the provider stopped"
+    )
     parser.add_argument("--out", type=Path)
     args = parser.parse_args()
     root = definition.SETS[args.set]
