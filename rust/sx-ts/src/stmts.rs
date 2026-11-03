@@ -534,7 +534,11 @@ impl<'a> Lowerer<'a> {
                 (Some(annotation), ExprKind::Call(..)) if is_json_parse(init) => self.typed_parse(init, annotation),
                 _ => self.expr_t(init, tolerant, false),
             };
-            let tuple_ok = is_tuple_source(init);
+            let tuple_ok = is_tuple_source(init)
+                && match &decl.pattern.kind {
+                    PatternKind::Array(items) => tuple_source_len(init) == Some(items.len()),
+                    _ => true,
+                };
             bindings.extend(self.bind_pattern(&decl.pattern, value, tuple_ok, &template));
             if let PatternKind::Array(items) = &decl.pattern.kind
                 && matches!(self.hint_of(init), Hint::SettledList)
@@ -1053,6 +1057,18 @@ pub fn is_fresh(init: &Expr) -> bool {
 pub fn is_json_parse(e: &Expr) -> bool {
     matches!(&e.kind, ExprKind::Call(callee, _)
         if matches!(&callee.kind, ExprKind::Field(r, m) if m == "parse" && matches!(&r.kind, ExprKind::Ident(o) if o == "JSON")))
+}
+
+fn tuple_source_len(e: &Expr) -> Option<usize> {
+    match &e.kind {
+        ExprKind::Await(inner) => tuple_source_len(inner),
+        ExprKind::Array(items) => Some(items.len()),
+        ExprKind::Call(_, args) => match args.first().map(|a| &a.kind) {
+            Some(ExprKind::Array(items)) => Some(items.len()),
+            _ => None,
+        },
+        _ => None,
+    }
 }
 
 pub fn is_tuple_source(e: &Expr) -> bool {

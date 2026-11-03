@@ -1,0 +1,1 @@
+(let [[a b] [1 2] arr'1 [3 4] c (nth arr'1 0) d (nth arr'1 1) e (nth arr'1 2)] [a b c d])

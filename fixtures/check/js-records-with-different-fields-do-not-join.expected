@@ -1,0 +1,11 @@
+error[missing-field] 4:24-4:32
+  (concat [{:repo "a"}] [{:now 1}])
+                         ^^^^^^^^
+  This record is missing the field :repo.
+  Expected: Record {repo: String}
+
+error[unknown-field] 4:25-4:29
+  (concat [{:repo "a"}] [{:now 1}])
+                          ^^^^
+  This record has no field :now.
+  Fields: :repo

@@ -1,0 +1,4 @@
+; declarations: fixtures/run/declarations/js.json
+; dialect: js
+; python: no
+(concat [{:repo "a"}] [{:now 1}])
