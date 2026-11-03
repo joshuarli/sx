@@ -1263,6 +1263,13 @@ counted against it, unlike Phase 17.
 correctness and costs at most 1.25 times as much per session. If it is not, the campaign stops here,
 and the result says which rule or diagnostic cost the most repairs.
 
+How the gate is read, fixed before any model runs: correctness and mean cost per session are pooled over
+both sets and both models, every session counting once, and the pooled numbers decide. The per-model and
+per-set numbers are reported beside them. An effects session is correct when its audit's verdict is
+`correct`. A real request is judged by the lead against the key facts Phase 17 used, from the final
+answers shuffled and shown without their arm. A session the provider stopped is rerun at most twice, as
+in Phase 16. Cost is the provider-reported cost of the session.
+
 #### Phase 22: Does approval pay?
 
 Only if Phase 21 passes. A blind set built for the case the claim depends on, written under Phase 12's
