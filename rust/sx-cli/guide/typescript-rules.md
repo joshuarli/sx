@@ -35,7 +35,8 @@ Numbers and text
 Arrays and objects
 - `.sort()` is for strings only. For numbers or keys: `xs.sort((a, b) => a.n - b.n)`, exactly `k(a) - k(b)`.
 - Objects joined by a branch, a `?:`, or an array need the same fields: `{ id, note: null }` in every branch.
-- `const m = {}; for (const k of keys) { m[k] = v; }` makes a map: all values one type, `m[k] ?? d` reads it, `Object.keys(m).sort()` lists it. Use a variable key, not `m["a"] = v`. Do not log or stringify a map, or loop over its entries in order.
+- `const m = {}; for (const k of keys) { m[k] = v; }` makes a map: all values one type, any string key (`m[p.id]`). `m[k]` is `V | null` wherever it is read: use `m[k] ?? d` or test it first. Count with `m[k] = (m[k] ?? 0) + 1`, group with `m[k] = (m[k] ?? []).concat([x])`, list with `Object.keys(m).sort()`. Not `m[k] += 1`, `m[k].push(x)`, `m["a"] = v`, or a number key; a missing `constructor` or `toString` key fails the run. Do not log or stringify a map, or loop over its entries.
+- No `xs[i] = v` or `s[i]`: build a new array (`xs.slice(0, i).concat([v]).concat(xs.slice(i + 1))`) and use `s.slice(i, i + 1)`. `concat` takes one array.
 - Spread only a name whose fields are known: `{ ...row, done: true }`; not a call result, a map, or `?.`.
 - Change variables only as statements: `x = e`, `x += 1`, `xs.push(e)`, `o.k = e` on an array or object you created. No `pop`, `shift`, `splice`, no assignment inside an expression or a closure that outlives the loop.
 - Functions are not recursive, and are not returned, stored, or passed to a tool. Use `for...of` or `loop`.

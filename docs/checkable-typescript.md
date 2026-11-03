@@ -41,6 +41,7 @@ treat a run in which Sx traps as agreeing only when the fixture says the trap is
 | `Int` result outside ±2^53, or an `Int` decoded outside it | A rounded double | `arithmetic` |
 | `/`, `%`, or another `Float` operation that is infinite or not a number | `Infinity`, `NaN` | `arithmetic` |
 | `xs[i]`, or destructuring past the end of a list | `undefined` | `out-of-range` |
+| `m[k]` of a key the map lacks that `Object.prototype` names (`constructor`, `toString`, `valueOf`, …), and `m["__proto__"] = v` | The inherited function, or a changed prototype | `out-of-range` |
 | `Math.floor`, `ceil`, `round`, `trunc` of a value outside ±2^53 | A large double | `out-of-range` |
 | A string slice or index that cuts a surrogate pair | A lone surrogate | `arithmetic` |
 | `parseInt(s, 10)` when `s` has no leading digits | `NaN` | `arithmetic` |
@@ -336,7 +337,8 @@ a `Map` key.
 An assignment is accepted only when all of the following hold. The first failing check gives the code:
 
 1. **The pattern is in the table.** Assignment inside a larger expression (`a[i++]`, `x = y = 0`,
-   `if ((n += 1) > 3)`), destructuring assignment, `??=`, `||=`, `&&=`, and a write to a parameter or to a value
+   `if ((n += 1) > 3)`), destructuring assignment, `??=`, `||=`, `&&=`, an assignment to an array element
+   (`xs[i] = e`, `xs[i] += e`), and a write to a parameter or to a value
    that is not owned are `ts-mutation-pattern`. `pop`, `shift`, `unshift`, `splice`, `fill`, `copyWithin`, and
    `Object.assign` are `ts-mutating-method`.
 2. **The variable does not escape into a closure.** A function declaration, or an arrow that is stored in a
@@ -467,8 +469,10 @@ the order of a `Map`, or of a record it did not build:
 
 | Source | Accepted as | Else |
 | --- | --- | --- |
-| `m[k]` on a `Map` | `(get m k)`, an `Option` | |
+| `m[k]` on a `Map` | `(get m k)`, an `Option`; `k` is any `String` expression | |
+| `m[k]` on a record, or `s[i]` on a string | | `ts-dynamic-key`: write the field; `ts-string-index`: `s.slice(i, i + 1)` |
 | `m[k] = v` | `(put m k v)` | |
+| `xs[i] = v` on an array | | `ts-mutation-pattern`: build a new array |
 | `Object.keys(m).sort()` | `(sort-by identity (keys m))` | |
 | `Object.keys(m).length` | `(count m)` | |
 | `Object.keys(m)`, `Object.values(m)`, `Object.entries(m)` otherwise | | `ts-map-order` |
@@ -764,7 +768,7 @@ budgets, Dialect::JavaScript)`, and `compile_source` takes the same last paramet
 Sx text. These are the places where the implementation fixes what this document left open.
 
 - **Forms the front end emits.** `(truthy e)`, `(typeof e)`, `(record-spread (:spread e) (:field "k" e))`,
-  `(js.is-array e)`, `(js.includes recv x)`, `(js.parse "SX TYPE" text)`, `(js.stringify v [indent])`, and
+  `(js.is-array e)`, `(js.includes recv x)`, `(js.index recv key)`, `(js.parse "SX TYPE" text)`, `(js.stringify v [indent])`, and
   the `js.` functions of the table. The checker chooses between a list and a `String` receiver by type: a
   list expands into existing forms (`count`, `map`, `range`, `reduce`, `enumerate`), a `String` calls the
   `js` core. `js.find` stops at the first match, so a predicate with a call makes no call after it.
@@ -805,8 +809,12 @@ Sx text. These are the places where the implementation fixes what this document 
   a `Settled` from `Promise.allSettled`, so the `Settled` alias the `.d.ts` declares is what a program can do.
   `value` of a rejected `Result` is the `out-of-range` trap.
 - **Maps.** An empty object that a program fills with computed keys is a `Map<String, V>`, and `V` must be one type.
-  A static key (`m.k`, `m["k"]`) on a `Map` reads that key like `m[k]`, and an object literal where a tool's input
-  declares a `Map<String, V>` builds the map.
+  The front end emits `(js.index recv key)` for every index that is not a string literal, and the checker reads the
+  receiver's type: a `Map` gives `(get m k)`, so wherever it is read (in the loop that fills it, after it, with or
+  without `??`) the value is `V | null`; an array gives `(nth xs i)`. A static key (`m.k`, `m["k"]`) reads like
+  `m[k]`, and an object literal where a tool's input declares a `Map<String, V>` builds the map. A read of a key
+  that `Object.prototype` names, when the map lacks it, is the `out-of-range` trap. An empty-object variable passed
+  to a tool whose input fields are all optional sends those fields as `null`, as an inline `{}` does.
   A `Map` anywhere in a value that `JSON.stringify` or `console.log` writes is `ts-map-order`, reported by the checker
   since only it knows the type. A `Map` in the program result is fine.
 - **Sorting.** `.sort()` lowers to `(sort-by identity xs)`; the checker reports `ts-sort-comparator` unless the
@@ -883,6 +891,8 @@ call that failed.
 | `ts-callback-arity` | a callback with a parameter the builtin does not supply | | |
 | `ts-reduce-init` | `reduce` without an initial value | `reduce needs an initial value` | |
 | `ts-sort-comparator` | a comparator not of the accepted forms; `.sort()` on numbers | the accepted forms | `k(a) - k(b)` |
+| `ts-dynamic-key` | `r[k]` on a record with declared fields | `A record is read by field name, not by a computed key` | `r.field` |
+| `ts-string-index` | `s[i]` on a string | `A string cannot be indexed` | `s.slice(i, i + 1)` |
 | `ts-map-order` | observing a `Map`'s order | `The order of a Map's keys is not preserved` | `Object.keys(m).sort()` |
 | `ts-record-enumeration` | `Object.keys`, `entries`, `values` of a record | | name the fields |
 | `ts-annotation` | a type annotation outside the grammar | | |
@@ -909,6 +919,7 @@ call that failed.
 | `js-null-equality` | `===` or `!==` against `null` (checker, JS mode) | `=== null and !== null are not supported` | `x == null` |
 | `js-truthiness` | a condition on `Bytes` or a validated string type (checker, JS mode) | whether it is truthy depends on its text | compare it |
 | `js-for-of-source` | `for…of` over a non-list | | |
+| `branch-mismatch` | branches of an `if` or `?:` that return different types, including objects with different keys (checker) | `The branches return different types` | give every branch the same keys |
 | `type-mismatch` | a value of another type than the position needs, including a read of an optional that no test has made present (checker) | `This is X, but Y is needed here` | `x != null ? x.f : d` |
 | `not-a-record` | a field read of a value that has none, including `.value` or `.tag` of a payload enum before a tag test has picked a variant (checker) | `which has several variants, so .value can be read only after a test` | `x.tag === "Name"` |
 
