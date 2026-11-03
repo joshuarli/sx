@@ -175,7 +175,11 @@ spec review to the lead. Phase 18 missed its coverage gate and the lead ruled to
 Bun and `sx` agreed on every accepted program from the corpus and a generator, and every mutant was
 rejected; the clean build grew 16% against a 10% limit, from the JS-mode checker, and the lead ruled to
 continue. Phase 20 passed: `sx mcp code --language ts` serves the subset, and a pi session solves a
-small task with it. Phase 21 is next.
+small task with it. Phase 21's gate failed on cost, and the campaign stopped there. Over 288 sessions,
+checkable TypeScript was within 1.0 point of pi's `codemode` on correctness (90.6% against 91.7%) but cost
+2.19 times as much per session, against a limit of 1.25; Sx cost 1.90 times. The cost is repairs: a
+`type-mismatch` led the causes, most of it one front-end gap in reading a map while filling it. Phase 22
+did not run.
 
 **The Python prototype is frozen.** `src/sx` and the Python cores are frozen as of commit
 `15b6ed6`, the parent of the commit that records this, because Rust passed its gates. The prototype
@@ -1302,6 +1306,59 @@ per-set numbers are reported beside them. An effects session is correct when its
 with repomod's own capabilities when the sessions run, from the final answers shuffled and shown
 without their arm. A session the provider stopped is rerun at most twice, as
 in Phase 16. Cost is the provider-reported cost of the session.
+
+**Phase 21 result: the gate failed on cost, and the campaign stopped.** Correctness is within the margin:
+checkable TypeScript is 1.0 point behind `codemode`. Its sessions cost 2.19 times as much, against a limit
+of 1.25. The blind set is `bench/workflows/effects-blind2` (frozen at `96995ea`), and the real requests are
+Phase 17's eight over repomod. Each request ran 3 samples per arm and model at medium thinking: 288
+sessions, none stopped by the provider. In the `codemode` arm, pi listed every tool's declaration in
+`codemode`'s description (`exposure: "direct"`, an inline budget large enough for all of them).
+
+| Pooled, 96 sessions per arm | Correct | Mean cost per session | Cost against `codemode` |
+| --- | --- | --- | --- |
+| `codemode` | 88 (91.7%) | $0.00186 | 1 |
+| Checkable TypeScript | 87 (90.6%) | $0.00408 | 2.19× |
+| Sx | 85 (88.5%) | $0.00352 | 1.90× |
+
+| Set, model | `codemode` | TypeScript | Sx |
+| --- | --- | --- | --- |
+| Effects, Muse | 24/24, $0.0018 | 24/24, $0.0047 | 24/24, $0.0034 |
+| Effects, Luna | 18/24, $0.0013 | 19/24, $0.0044 | 21/24, $0.0037 |
+| Real, Muse | 24/24, $0.0022 | 24/24, $0.0034 | 24/24, $0.0033 |
+| Real, Luna | 22/24, $0.0021 | 20/24, $0.0038 | 16/24, $0.0038 |
+
+Ground truth was the same before and after the sessions. All 14 wrong real answers are Luna's, and every
+one read "my repositories" as the 10 under `joshuarli`, leaving out the 24 under `laputa-systems`: 8 in Sx,
+4 in TypeScript, and 2 in `codemode`.
+
+The cost is repairs, not reading. The TypeScript arm ran 12.3 turns per real Muse session against
+`codemode`'s 7.5. Over all its sessions, 253 programs were stopped and followed by another attempt.
+Even the 13 effects sessions in which no TypeScript program was stopped cost $0.0021 against `codemode`'s
+$0.0015 for its 38 such sessions, 1.4 times as much. Clean sessions skew toward easy workflows, so that
+ratio is only a rough floor.
+
+| Cause, TypeScript arm | Repairs |
+| --- | --- |
+| `type-mismatch` | 86 |
+| `call-failed` trap | 27 |
+| `ts-sort-comparator` | 16 |
+| `out-of-scope` refusal | 14 |
+| `invalid-input` trap, `unresolved-type`, `not-a-record` | 10 each |
+| `ts-mutation-pattern`, `branch-mismatch` | 9 each |
+| All other causes | 62 |
+
+`type-mismatch` cost the most repairs, and most of it is one front-end gap. A map built from `{}` can be
+written by a computed key but not read inside the loop that fills it: `counts[k] = (counts[k] ?? 0) + 1`
+lowers the read to `nth` on a list and is rejected with "nth takes a list here, but this is a
+Record<string, Int>", and the key with "This is a string, but an Int is needed here". The rules text
+teaches that idiom, and the differential never generated a read during the fill. The rejection is loud,
+so no accepted program was wrong. Fixing it would cut the largest cause of repairs, but not the extra
+cost of clean sessions, so the lead did not expect the fix alone to bring the cost under 1.25 times.
+
+The campaign stops here, as the gate fixed, and Phase 22 does not run. Worth keeping from it:
+`sx-ts` and the checker's `Dialect::JavaScript` as a checked TypeScript subset whose accepted programs
+mean what JavaScript means, with `bench/tsdiff` to prove that differentially; `sx mcp code --language ts`;
+and the three-arm harness with its gate and repair reports.
 
 #### Phase 22: Does approval pay?
 
