@@ -1388,6 +1388,33 @@ than `codemode`, and needs fewer approvals per solved task, at correctness withi
 does not, the product thesis stops, and the parts worth keeping (MCP import and export, the fs scope
 rules, the checker as a library) are recorded as the outcome.
 
+#### Phase 23: The subset's cost without the session
+
+After Phase 21 stopped the campaign, the owner had the map bug fixed and asked for a second measurement in
+the style of an evaluation pi's author published: each model writes a whole program from the prompt
+with no tools, the harness runs it, and only a compile, check, or run-time error is fed back, up to three
+attempts. A program that runs and answers wrongly is final. This separates what the subset's rules cost a
+model from what a multi-turn session adds, and it asks whether stronger models pay less.
+
+- **Arms.** `ts`: a body written against `tools.ns.name(input)`, run by `sx run --language ts`. `js`: the same
+  kind of body, run on Bun with the same tool API, so the two differ only in the subset's rules. `sx`: an Sx
+  program, as in Phase 12. Every arm sees the tools' behavior notes; `ts` and `js` see the same generated
+  `.d.ts`, and `ts` also the 46 lines of `typescript-rules.md`; `sx` sees the tailored guide.
+- **Tasks.** The 16 workflows of `bench/workflows/blind` and `blind2`, with their fixtures and judges. They
+  were written before the subset existed and have never run in a `ts` arm.
+- **Models,** all at medium thinking: `claude-haiku-5-5`, `gemini-4-argon`, `kimi-k3`, `glm-5.3`,
+  `deepseek-v4.1-flash`, `gpt-6-luna`, and `muse-spark-1.3-contributor`, through opencode-go. 2 samples.
+- **Measures per trial:** correct after at most three attempts; correct at the first attempt; the
+  provider-reported cost of all its attempts; and the tool calls made by attempts that did not end correct,
+  which a rejection before running keeps at zero.
+
+**Gate, fixed before any model runs:** pooled over the seven models and both sets, every trial counting
+once, `ts` is within 5 points of `js` on correctness after three attempts and costs at most 1.25 times as
+much per trial. Per-model numbers are reported beside the pooled ones and do not decide. If the gate
+passes, the lead proposes an approval study on the models where it held; if it fails, the subset's cost
+is the language's, not only the session's, and the TypeScript front end is kept as a checked subset, not
+as a code mode.
+
 ### Phase 0: Skeleton, task corpus, and syntax pilot
 
 This phase tests whether a model can learn the syntax before the checker and machine exist.
