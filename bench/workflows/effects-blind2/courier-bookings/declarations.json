@@ -1,0 +1,39 @@
+{
+  "cores": ["text", "re", "json"],
+  "enums": {"OrderStatus": {"ready": null, "hold": null, "shipped": null}},
+  "capabilities": [
+    {
+      "id": "ship.orders",
+      "http": {"method": "GET", "url": "{{ship_origin}}/orders", "query": []},
+      "input": "Record {}",
+      "output": "List<Record open {id: String, customer: String, weight_g: Int, status: OrderStatus}>",
+      "effect": "read",
+      "description": "Lists every order with its customer, its weight in grams, and its status."
+    },
+    {
+      "id": "ship.customers",
+      "http": {"method": "GET", "url": "{{ship_origin}}/customers", "query": []},
+      "input": "Record {}",
+      "output": "List<Record open {id: String, zone: String, blocked: Bool}>",
+      "effect": "read",
+      "description": "Lists every customer with the courier zone and whether bookings for them are blocked."
+    },
+    {
+      "id": "ship.bookings",
+      "http": {"method": "GET", "url": "{{ship_origin}}/bookings", "query": ["customer"]},
+      "input": "Record {customer: String}",
+      "output": "List<Record open {id: String, customer: String, orders: List<String>, weight_g: Int}>",
+      "effect": "read",
+      "description": "Lists the bookings the depot holds for one customer."
+    },
+    {
+      "id": "ship.book",
+      "http": {"method": "POST", "url": "{{ship_origin}}/bookings", "query": []},
+      "input": "Record {customer: String, zone: String, orders: List<String>, weight_g: Int}",
+      "output": "Record open {id: String}",
+      "effect": "write",
+      "idempotent": false,
+      "description": "Books the courier for a list of orders of one customer and returns the id of the booking. Every successful call adds a booking to the depot."
+    }
+  ]
+}

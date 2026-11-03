@@ -1,0 +1,5 @@
+{
+  "capabilities": ["ship.orders", "ship.customers", "ship.bookings", "ship.book"],
+  "computed_inputs": ["ship.bookings", "ship.book"],
+  "max_write_sites": 2
+}

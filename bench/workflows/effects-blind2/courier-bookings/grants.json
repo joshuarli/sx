@@ -1,0 +1,6 @@
+{
+  "ship.orders": {"origins": ["{{ship_origin}}"], "methods": ["GET"]},
+  "ship.customers": {"origins": ["{{ship_origin}}"], "methods": ["GET"]},
+  "ship.bookings": {"origins": ["{{ship_origin}}"], "methods": ["GET"]},
+  "ship.book": {"origins": ["{{ship_origin}}"], "methods": ["POST"]}
+}

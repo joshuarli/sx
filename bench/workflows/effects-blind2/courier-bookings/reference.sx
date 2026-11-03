@@ -1,0 +1,22 @@
+(let [customers (call ship.customers {})
+      orders (call ship.orders {})
+      blocked (map (fn [c] (get c :id)) (filter (fn [c] (get c :blocked)) customers))
+      ready (filter (fn [o] (and (= (get o :status) "ready") (not (contains? blocked (get o :customer))))) orders)
+      groups (flatten
+               (map (fn [[customer own]]
+                      (map (fn [[_ slice]] {:customer customer :orders (map (fn [[_ o]] o) slice)})
+                           (group-by (fn [[i _]] (quot i 4)) (enumerate own))))
+                    (group-by (fn [o] (get o :customer)) ready)))
+      book (fn [group]
+             (let [customer (get group :customer)
+                   ids (map (fn [o] (get o :id)) (get group :orders))
+                   zone (get (first (filter (fn [c] (= (get c :id) customer)) customers)) :zone)
+                   grams (reduce (fn [sum o] (+ sum (get o :weight_g))) 0 (get group :orders))
+                   request {:customer customer :zone zone :orders ids :weight_g grams}]
+               (match (attempt (call ship.book request))
+                 (ok _) {:customer customer :orders ids}
+                 (err _) (let [held (call ship.bookings {:customer customer})
+                               _ (when (not (any? (fn [b] (= (get b :orders) ids)) held))
+                                   (call ship.book request))]
+                           {:customer customer :orders ids}))))]
+  (map book groups))
