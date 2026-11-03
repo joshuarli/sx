@@ -2729,6 +2729,16 @@ impl<'r> Checker<'r> {
             if let Some(read) = self.enum_read(record_ir.clone(), &found, field, narrowed.as_deref(), span, expected) {
                 return read;
             }
+            let example = found.variants.iter().find(|(_, payload)| payload.is_some()).map_or("Name", |(name, _)| name.as_str());
+            self.report(Diagnostic::new(
+                "not-a-record",
+                record_node.span,
+                format!(
+                    "This is {}, which has several variants, so .{field} can be read only after a test such as x.tag === \"{example}\" has picked one.",
+                    describe(&self.zonk(&resolved))
+                ),
+            ));
+            return self.placeholder(span);
         }
         if self.dialect == Dialect::JavaScript
             && matches!(resolved, Type::Result(..))
