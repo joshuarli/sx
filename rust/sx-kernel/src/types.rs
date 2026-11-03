@@ -262,6 +262,13 @@ pub fn type_name(name: &str) -> String {
         .collect()
 }
 
+fn property_name(name: &str) -> String {
+    let mut chars = name.chars();
+    let identifier = chars.next().is_some_and(|c| c.is_ascii_alphabetic() || matches!(c, '_' | '$'))
+        && chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '$'));
+    if identifier { name.to_string() } else { format!("\"{name}\"") }
+}
+
 fn show_typescript(t: &Type, style: Style, definition: bool) -> String {
     let inner = |t: &Type| show_typescript(t, style, false);
     match t {
@@ -286,9 +293,12 @@ fn show_typescript(t: &Type, style: Style, definition: bool) -> String {
                 let fields: Vec<String> = record
                     .fields
                     .iter()
-                    .map(|(name, field)| match (field, style) {
-                        (Type::Option(held), Style::TypeScriptInput) => format!("{name}?: {} | null", inner(held)),
-                        _ => format!("{name}: {}", inner(field)),
+                    .map(|(name, field)| {
+                        let name = property_name(name);
+                        match (field, style) {
+                            (Type::Option(held), Style::TypeScriptInput) => format!("{name}?: {} | null", inner(held)),
+                            _ => format!("{name}: {}", inner(field)),
+                        }
                     })
                     .collect();
                 format!("{{ {} }}", fields.join("; "))

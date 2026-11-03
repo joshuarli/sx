@@ -1,7 +1,5 @@
 use super::*;
 
-type Narrowed = Vec<(String, Type)>;
-
 const SAFE_BOUND: f64 = 9_007_199_254_740_992.0;
 const PROMOTED: &str = "#promoted";
 const TRUTH: &str = "#truth";
@@ -64,11 +62,24 @@ fn some_of(value: ir::Node, wrapped: &Type, span: Span) -> ir::Node {
     node(Ir::Wrap { kind: WrapKind::Some, value: Box::new(value), wrapped_type: wrapped.clone() }, span)
 }
 
-pub(super) fn guard_present(narrowed: &[(String, Type)], body: ir::Node, result: &Type, span: Span) -> ir::Node {
-    narrowed
-        .iter()
-        .rev()
-        .fold(body, |body, (name, _)| when_present(variable(name, span), name, body, trap(result, span), span))
+pub(super) fn guard_present(narrowed: &Narrowed, body: ir::Node, result: &Type, span: Span) -> ir::Node {
+    narrowed.iter().rev().fold(body, |body, (name, fact)| match fact {
+        Fact::Present(_) => when_present(variable(name, span), name, body, trap(result, span), span),
+        Fact::Variants { .. } => body,
+    })
+}
+
+fn variant_operands<'a>(operands: &[&'a Node; 2]) -> Option<(&'a Node, &'a str, bool)> {
+    [(operands[0], operands[1]), (operands[1], operands[0])].into_iter().find_map(|(subject, literal)| {
+        let NodeKind::String(variant) = &literal.kind else {
+            return None;
+        };
+        match form_items(subject) {
+            Some([get, inner, key]) if symbol(get) == Some("get") && keyword(key) == Some("tag") => Some((inner, variant.as_str(), true)),
+            _ if matches!(subject.kind, NodeKind::String(_)) => None,
+            _ => Some((subject, variant.as_str(), false)),
+        }
+    })
 }
 
 pub(super) enum Slot<'a> {
@@ -618,6 +629,9 @@ impl<'r> Checker<'r> {
             );
             return self.coerce(boolean(false, span), &BOOL, expected, span);
         }
+        if let Some(checked) = self.variant_equality(op, span, args, expected, scope) {
+            return checked;
+        }
         let variant_first = symbol(&args[0]).is_some_and(|name| first_upper(name) && scope.get(name).is_none());
         let string_first = matches!(args[0].kind, NodeKind::String(_)) && !matches!(args[1].kind, NodeKind::String(_));
         let (one, two) = if variant_first || string_first { (1, 0) } else { (0, 1) };
@@ -835,8 +849,14 @@ impl<'r> Checker<'r> {
         let literal = |node: &Node, expected: bool| matches!(node.kind, NodeKind::Bool(b) if b == expected);
         let merge = |mut first: Narrowed, second: Narrowed| {
             for entry in second {
-                if !first.iter().any(|(name, _)| *name == entry.0) {
-                    first.push(entry);
+                match first.iter_mut().find(|(name, _)| *name == entry.0) {
+                    None => first.push(entry),
+                    Some((_, Fact::Variants { names, .. })) => {
+                        if let (_, Fact::Variants { names: other, .. }) = &entry {
+                            names.retain(|n| other.contains(n));
+                        }
+                    }
+                    Some(_) => {}
                 }
             }
             first
@@ -850,13 +870,39 @@ impl<'r> Checker<'r> {
                     return none;
                 };
                 match self.resolve(t) {
-                    Type::Option(inner) if !matches!(self.resolve(&inner), Type::Never) => (vec![(name.to_string(), *inner)], Vec::new()),
+                    Type::Option(inner) if !matches!(self.resolve(&inner), Type::Never) => {
+                        (vec![(name.to_string(), Fact::Present(*inner))], Vec::new())
+                    }
                     _ => none,
                 }
             }
             ("not", [operand]) => {
                 let (when_true, when_false) = self.narrowings(operand, scope);
                 (when_false, when_true)
+            }
+            ("=" | "not=", [first, second]) => {
+                let Some((subject, variant, _)) = variant_operands(&[first, second]) else {
+                    return none;
+                };
+                let Some((name, shaped)) = self.variant_subject(subject, scope) else {
+                    return none;
+                };
+                if shaped.variant(variant).is_none() {
+                    return none;
+                }
+                let current: Vec<String> = match scope.variants_of(&name) {
+                    Some(names) => names.to_vec(),
+                    None => shaped.variants.iter().map(|(v, _)| v.clone()).collect(),
+                };
+                let narrowed = |names: Vec<String>| {
+                    if names.is_empty() || names.len() == current.len() {
+                        return Vec::new();
+                    }
+                    vec![(name.clone(), Fact::Variants { enum_type: Type::Enum(shaped.clone()), names })]
+                };
+                let named = narrowed(current.iter().filter(|v| *v == variant).cloned().collect());
+                let rest = narrowed(current.iter().filter(|v| *v != variant).cloned().collect());
+                if head == "=" { (named, rest) } else { (rest, named) }
             }
             ("if", [first, then, otherwise]) if literal(otherwise, false) => {
                 let (first_true, _) = self.narrowings(first, scope);
@@ -870,6 +916,116 @@ impl<'r> Checker<'r> {
             }
             _ => none,
         }
+    }
+
+    fn variant_subject<'a>(&self, subject: &'a Node, scope: &Scope<'a>) -> Option<(String, Arc<EnumType>)> {
+        let name = symbol(subject).filter(|n| scope.is_value(n))?;
+        let Some(Binding::Value(t)) = scope.get(name) else {
+            return None;
+        };
+        match self.resolve(t) {
+            Type::Enum(e) if !e.name.starts_with(crate::values::SHAPED_PREFIX) && !Checker::nullary(&e) => {
+                Some((name.to_string(), e))
+            }
+            _ => None,
+        }
+    }
+
+    fn variant_is(value: ir::Node, found: &EnumType, variant: &str, negate: bool, span: Span) -> ir::Node {
+        let clauses = found
+            .variants
+            .iter()
+            .map(|(name, payload)| {
+                let inner = payload.as_ref().map(|_| Box::new(MatchPattern::Any(Binder::Discard)));
+                (MatchPattern::Variant { variant: name.clone(), inner }, boolean((name == variant) != negate, span))
+            })
+            .collect();
+        node(Ir::Match(ir::Match { scrutinee: Box::new(value), clauses }), span)
+    }
+
+    pub(super) fn variant_equality<'a>(
+        &mut self,
+        op: &str,
+        span: Span,
+        args: &'a [Node],
+        expected: Option<&Type>,
+        scope: &Scope<'a>,
+    ) -> Option<Checked> {
+        let (subject, variant, through_tag) = variant_operands(&[&args[0], &args[1]])?;
+        if !through_tag && self.variant_subject(subject, scope).is_none() {
+            return None;
+        }
+        let speculation = Speculation::start(self);
+        let (value, t) = self.check(subject, None, scope);
+        let eligible = match self.resolve(&t) {
+            Type::Enum(found) if !found.name.starts_with(crate::values::SHAPED_PREFIX) && !Checker::nullary(&found) => {
+                match found.variant(variant) {
+                    Some(Some(_)) => through_tag.then_some(found),
+                    Some(None) => (!through_tag).then_some(found),
+                    None => None,
+                }
+            }
+            _ => None,
+        };
+        let Some(found) = eligible else {
+            speculation.undo(self);
+            return None;
+        };
+        let test = Checker::variant_is(value, &found, variant, op == "not=", span);
+        Some(self.coerce(test, &BOOL, expected, span))
+    }
+
+    pub(super) fn enum_read(
+        &mut self,
+        value: ir::Node,
+        found: &EnumType,
+        field: &str,
+        narrowed: Option<&[String]>,
+        span: Span,
+        expected: Option<&Type>,
+    ) -> Option<Checked> {
+        let names: Vec<String> = match narrowed {
+            Some(names) => names.to_vec(),
+            None => found.variants.iter().map(|(v, _)| v.clone()).collect(),
+        };
+        let carried = |name: &String| matches!(found.variant(name), Some(Some(_)));
+        let (read, t) = match field {
+            "tag" if names.iter().all(carried) => {
+                let clauses = found
+                    .variants
+                    .iter()
+                    .map(|(name, payload)| {
+                        let inner = payload.as_ref().map(|_| Box::new(MatchPattern::Any(Binder::Discard)));
+                        let body = if names.contains(name) { text(name, span) } else { trap(&STRING, span) };
+                        (MatchPattern::Variant { variant: name.clone(), inner }, body)
+                    })
+                    .collect();
+                (node(Ir::Match(ir::Match { scrutinee: Box::new(value), clauses }), span), STRING)
+            }
+            "value" if names.len() == 1 && carried(&names[0]) => {
+                let Some(Some(payload)) = found.variant(&names[0]).cloned() else {
+                    return None;
+                };
+                let clauses = found
+                    .variants
+                    .iter()
+                    .map(|(name, held)| {
+                        let (inner, body) = match held {
+                            Some(_) if *name == names[0] => (
+                                Some(Box::new(MatchPattern::Any(Binder::Name(PROMOTED.to_string())))),
+                                variable(PROMOTED, span),
+                            ),
+                            Some(_) => (Some(Box::new(MatchPattern::Any(Binder::Discard))), trap(&payload, span)),
+                            None => (None, trap(&payload, span)),
+                        };
+                        (MatchPattern::Variant { variant: name.clone(), inner }, body)
+                    })
+                    .collect::<Vec<_>>();
+                (node(Ir::Match(ir::Match { scrutinee: Box::new(value), clauses }), span), payload)
+            }
+            _ => return None,
+        };
+        Some(self.coerce(read, &t, expected, span))
     }
 
     pub(super) fn form_truthy<'a>(
@@ -951,6 +1107,18 @@ impl<'r> Checker<'r> {
                 }
                 let shown = self.typeof_node(variable(TYPED, span), &inner, span);
                 when_present(value, TYPED, shown, text("object", span), span)
+            }
+            Type::Enum(e) if !Checker::nullary(e) && e.variants.iter().any(|(_, payload)| payload.is_none()) => {
+                let clauses = e
+                    .variants
+                    .iter()
+                    .map(|(name, payload)| {
+                        let inner = payload.as_ref().map(|_| Box::new(MatchPattern::Any(Binder::Discard)));
+                        let kind = if payload.is_some() { "object" } else { "string" };
+                        (MatchPattern::Variant { variant: name.clone(), inner }, text(kind, span))
+                    })
+                    .collect();
+                discard(value.clone(), node(Ir::Match(ir::Match { scrutinee: Box::new(value), clauses }), span), span)
             }
             _ => {
                 let name = match &resolved {

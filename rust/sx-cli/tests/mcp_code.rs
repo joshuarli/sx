@@ -728,6 +728,20 @@ fn typescript_reads_a_payload_enum_and_a_result_as_the_declarations_say() {
 }
 
 #[test]
+fn typescript_tells_the_variants_of_a_payload_enum_apart_by_tag() {
+    let sandbox = Sandbox::typescript("ts-variant-tags", true, r#"{"mcp-fx.variants": null}"#, r#"{"capabilities": ["mcp-fx.variants"]}"#);
+    let mut client = sandbox.client();
+    let source = "const s = (await tools.mcpFx.variants({})).shape;\nconst label = s === \"Dot\" ? \"dot\" : s.tag === \"Circle\" ? \"circle \" + s.value : \"square\";\nif (s === \"Dot\" || s.tag !== \"Circle\") { return { label, radius: -1.5, tag: \"none\", kind: \"string\" }; }\nreturn { label, radius: s.value, tag: s.tag, kind: typeof s };";
+    let reply = client.program("run", source);
+    assert!(!reply.is_error, "{}\n{}", shown(&reply.structured), reply.text);
+    let result = reply.structured.get("result").expect("result");
+    assert_eq!(string_at(result, &["label"]), "circle 2.5");
+    assert_eq!(shown(result.get("radius").expect("radius")), "2.5");
+    assert_eq!(string_at(result, &["tag"]), "Circle");
+    assert_eq!(string_at(result, &["kind"]), "object");
+}
+
+#[test]
 fn typescript_policy_refusals_name_tools_and_typescript_positions_and_leave_the_sandbox_untouched() {
     let only_reads = Sandbox::typescript("ts-refuse-capability", false, FS_GRANTS, r#"{"capabilities": ["fs.read-text"]}"#);
     assert_refused_without_effect(&only_reads, COPY_TS, &["capability-not-allowed"], &["tools.fs.writeText at 2:7"]);

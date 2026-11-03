@@ -491,8 +491,17 @@ enum Binding<'a> {
 struct Frame<'a> {
     name: String,
     binding: Binding<'a>,
+    variants: Option<Vec<String>>,
     parent: Scope<'a>,
 }
+
+#[derive(Clone)]
+enum Fact {
+    Present(Type),
+    Variants { enum_type: Type, names: Vec<String> },
+}
+
+type Narrowed = Vec<(String, Fact)>;
 
 #[derive(Clone, Default)]
 struct Scope<'a>(Option<Rc<Frame<'a>>>);
@@ -510,7 +519,34 @@ impl<'a> Scope<'a> {
     }
 
     fn with(&self, name: &str, binding: Binding<'a>) -> Scope<'a> {
-        Scope(Some(Rc::new(Frame { name: name.to_string(), binding, parent: self.clone() })))
+        Scope(Some(Rc::new(Frame { name: name.to_string(), binding, variants: None, parent: self.clone() })))
+    }
+
+    fn with_variants(&self, name: &str, enum_type: Type, names: Vec<String>) -> Scope<'a> {
+        let frame = Frame { name: name.to_string(), binding: Binding::Value(enum_type), variants: Some(names), parent: self.clone() };
+        Scope(Some(Rc::new(frame)))
+    }
+
+    fn variants_of(&self, name: &str) -> Option<&[String]> {
+        let mut at = self.0.as_deref();
+        while let Some(frame) = at {
+            if frame.name == name {
+                return frame.variants.as_deref();
+            }
+            at = frame.parent.0.as_deref();
+        }
+        None
+    }
+
+    fn narrow(&self, narrowed: &Narrowed) -> Scope<'a> {
+        let mut scope = self.clone();
+        for (name, fact) in narrowed {
+            scope = match fact {
+                Fact::Present(inner) => scope.value(name, inner.clone()),
+                Fact::Variants { enum_type, names } => scope.with_variants(name, enum_type.clone(), names.clone()),
+            };
+        }
+        scope
     }
 
     fn value(&self, name: &str, t: Type) -> Scope<'a> {
@@ -552,8 +588,8 @@ struct Test {
     presence: bool,
     name: Option<String>,
     inner: Option<Type>,
-    narrow_true: Vec<(String, Type)>,
-    narrow_false: Vec<(String, Type)>,
+    narrow_true: Narrowed,
+    narrow_false: Narrowed,
 }
 
 impl Test {
@@ -2178,22 +2214,15 @@ impl<'r> Checker<'r> {
     }
 
     fn narrowed<'a>(test: &Test, scope: &Scope<'a>) -> Scope<'a> {
-        let mut narrowed = match (&test.name, &test.inner) {
+        let narrowed = match (&test.name, &test.inner) {
             (Some(name), Some(inner)) => scope.value(name, inner.clone()),
             _ => scope.clone(),
         };
-        for (name, inner) in &test.narrow_true {
-            narrowed = narrowed.value(name, inner.clone());
-        }
-        narrowed
+        narrowed.narrow(&test.narrow_true)
     }
 
     fn narrowed_else<'a>(test: &Test, scope: &Scope<'a>) -> Scope<'a> {
-        let mut narrowed = scope.clone();
-        for (name, inner) in &test.narrow_false {
-            narrowed = narrowed.value(name, inner.clone());
-        }
-        narrowed
+        scope.narrow(&test.narrow_false)
     }
 
     fn lower_test(test: Test, then: ir::Node, otherwise: ir::Node, span: Span, result: &Type) -> ir::Node {
@@ -2688,6 +2717,19 @@ impl<'r> Checker<'r> {
             return self.coerce(read, &t, expected, span);
         }
         let mut resolved = self.resolve(&record_type);
+        if self.dialect == Dialect::JavaScript
+            && let Type::Enum(found) = &resolved
+            && !found.name.starts_with(crate::values::SHAPED_PREFIX)
+            && !Checker::nullary(found)
+            && default_node.is_none()
+            && let Some(field) = keyword(key).filter(|field| matches!(*field, "tag" | "value"))
+        {
+            let found = found.clone();
+            let narrowed = symbol(record_node).and_then(|name| scope.variants_of(name)).map(<[String]>::to_vec);
+            if let Some(read) = self.enum_read(record_ir.clone(), &found, field, narrowed.as_deref(), span, expected) {
+                return read;
+            }
+        }
         if self.dialect == Dialect::JavaScript
             && matches!(resolved, Type::Result(..))
             && default_node.is_none()
