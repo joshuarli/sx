@@ -153,6 +153,24 @@ const MISSING_FUNCTIONS: [(&str, &str); 20] = [
 ];
 const DEFAULT_BINDER: &str = "#present";
 const PUT_BINDER: &str = "#put";
+const KEY_BINDER: &str = "#key";
+const HIT_BINDER: &str = "#hit";
+const TARGET_BINDER: &str = "#target";
+const VALUE_BINDER: &str = "#value";
+const INHERITED_KEYS: [&str; 12] = [
+    "__defineGetter__",
+    "__defineSetter__",
+    "__lookupGetter__",
+    "__lookupSetter__",
+    "__proto__",
+    "constructor",
+    "hasOwnProperty",
+    "isPrototypeOf",
+    "propertyIsEnumerable",
+    "toLocaleString",
+    "toString",
+    "valueOf",
+];
 const INT_TO_FLOAT_HINT: &str = "Sx does not convert between number types. (float n) turns an Int into a Float.";
 const FLOAT_TO_INT_HINT: &str =
     "Sx does not convert between number types. (round x), (floor x), and (ceil x) turn a Float into an Int.";
@@ -2983,6 +3001,61 @@ impl<'r> Checker<'r> {
         self.coerce(made, inner, expected, span)
     }
 
+    fn inherited_key_test(keys: &[&str], key: ir::Node, span: Span) -> ir::Node {
+        let items = keys.iter().map(|name| literal(Value::string(name), STRING, span)).collect();
+        let names = node(Ir::MakeList { items, element: STRING }, span);
+        prelude(PreludeOp::Contains, vec![names, key], span)
+    }
+
+    fn without_inherited_keys(map: ir::Node, key: ir::Node, value_type: &Type, span: Span) -> ir::Node {
+        let variable = |name: &str| node(Ir::Variable { name: name.to_string() }, span);
+        let absent = literal(Value::None, option(value_type.clone()), span);
+        let nothing = node(Ir::MakeList { items: Vec::new(), element: option(value_type.clone()) }, span);
+        let trap = prelude(PreludeOp::Nth, vec![nothing, literal(Value::Int(0), INT, span)], span);
+        let missing = node(
+            Ir::If(ir::If {
+                condition: Box::new(Checker::inherited_key_test(&INHERITED_KEYS, variable(KEY_BINDER), span)),
+                then: Box::new(trap),
+                otherwise: Box::new(absent),
+            }),
+            span,
+        );
+        let lookup = prelude(PreludeOp::MapGet, vec![map, variable(KEY_BINDER)], span);
+        let choice = node(
+            Ir::Match(ir::Match {
+                scrutinee: Box::new(lookup),
+                clauses: vec![
+                    (MatchPattern::None, missing),
+                    (MatchPattern::Any(Binder::Name(HIT_BINDER.to_string())), variable(HIT_BINDER)),
+                ],
+            }),
+            span,
+        );
+        node(
+            Ir::Let(ir::Let { binder: Binder::Name(KEY_BINDER.to_string()), value: Box::new(key), body: Box::new(choice) }),
+            span,
+        )
+    }
+
+    fn without_prototype_write(target: ir::Node, key: ir::Node, value: ir::Node, value_type: &Type, span: Span) -> ir::Node {
+        let variable = |name: &str| node(Ir::Variable { name: name.to_string() }, span);
+        let bind = |name: &str, value: ir::Node, body: ir::Node| {
+            node(Ir::Let(ir::Let { binder: Binder::Name(name.to_string()), value: Box::new(value), body: Box::new(body) }), span)
+        };
+        let nothing = node(Ir::MakeList { items: Vec::new(), element: map_of(value_type.clone()) }, span);
+        let trap = prelude(PreludeOp::Nth, vec![nothing, literal(Value::Int(0), INT, span)], span);
+        let put = prelude(PreludeOp::Assoc, vec![variable(TARGET_BINDER), variable(KEY_BINDER), variable(VALUE_BINDER)], span);
+        let guarded = node(
+            Ir::If(ir::If {
+                condition: Box::new(Checker::inherited_key_test(&["__proto__"], variable(KEY_BINDER), span)),
+                then: Box::new(trap),
+                otherwise: Box::new(put),
+            }),
+            span,
+        );
+        bind(TARGET_BINDER, target, bind(KEY_BINDER, key, bind(VALUE_BINDER, value, guarded)))
+    }
+
     fn is_brace(&self, t: &Type) -> bool {
         matches!(self.resolve(t), Type::Variable(id) if matches!(self.shape(id), Some(Shape::Brace)))
     }
@@ -3032,7 +3105,11 @@ impl<'r> Checker<'r> {
         scope: &Scope<'a>,
     ) -> Checked {
         let (key_ir, _) = self.check(key, Some(&STRING), scope);
-        let lookup = prelude(PreludeOp::MapGet, vec![map_ir, key_ir], span);
+        let lookup = if self.dialect == Dialect::JavaScript {
+            Checker::without_inherited_keys(map_ir, key_ir, value_type, span)
+        } else {
+            prelude(PreludeOp::MapGet, vec![map_ir, key_ir], span)
+        };
         match default_node {
             None => self.coerce(lookup, &option(value_type.clone()), expected, span),
             Some(default_node) => self.or_default(lookup, value_type, default_node, expected, scope, span),
@@ -3562,8 +3639,12 @@ impl<'r> Checker<'r> {
         if let Some(value_type) = self.map_value_of(&target_type) {
             let (key_ir, _) = self.check(key, Some(&STRING), scope);
             let (value_ir, _) = self.check(value, Some(&value_type), scope);
-            let operands = vec![target_ir, key_ir, value_ir];
-            return self.coerce(prelude(PreludeOp::Assoc, operands, span), &map_of(value_type), expected, span);
+            let written = if self.dialect == Dialect::JavaScript {
+                Checker::without_prototype_write(target_ir, key_ir, value_ir, &value_type, span)
+            } else {
+                prelude(PreludeOp::Assoc, vec![target_ir, key_ir, value_ir], span)
+            };
+            return self.coerce(written, &map_of(value_type), expected, span);
         }
         let record = match resolved {
             Type::Never => return self.placeholder(span),

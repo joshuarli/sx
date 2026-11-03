@@ -24,6 +24,16 @@ fn run(tag: &str, source: &str) -> String {
     }
 }
 
+fn trap_of(tag: &str, source: &str) -> String {
+    let program = scratch(&format!("{tag}.ts"), source);
+    let output = Command::new(env!("CARGO_BIN_EXE_sx")).args(["run", &program, "--format", "json"]).output().expect("the sx binary runs");
+    let found = parse(&String::from_utf8(output.stdout).expect("utf-8")).expect("json");
+    match found.get("failure").and_then(|failure| failure.get("kind")) {
+        Some(Json::String(kind)) => kind.to_string(),
+        _ => panic!("{tag} did not fail: {found:?}"),
+    }
+}
+
 fn codes(tag: &str, source: &str) -> Vec<String> {
     let program = scratch(&format!("{tag}.ts"), source);
     let output = Command::new(env!("CARGO_BIN_EXE_sx")).args(["check", &program, "--format", "json"]).output().expect("the sx binary runs");
@@ -135,4 +145,20 @@ fn a_string_is_not_indexed() {
 fn an_array_element_is_not_assigned() {
     rejects("array-assign", "ts-mutation-pattern", "const xs = [1, 2, 3];\nxs[1] = 5;\nreturn xs;");
     rejects("array-compound", "ts-mutation-pattern", "const xs = [1, 2, 3];\nfor (let i = 0; i < 3; i++) { xs[i] += 1; }\nreturn xs;");
+}
+
+#[test]
+fn a_key_that_object_prototype_names_is_a_trap_when_the_map_lacks_it() {
+    let read = "const m = {};\nfor (const k of [\"a\"]) { m[k] = 1; }\nconst words = [\"a\", \"constructor\"];\nlet total = 0;\nfor (const w of words) { total += m[w] ?? 0; }\nreturn total;";
+    assert_eq!(trap_of("inherited-read", read), "out-of-range");
+    let write = "const m = {};\nfor (const k of [\"__proto__\"]) { m[k] = 1; }\nreturn Object.keys(m).length;";
+    assert_eq!(trap_of("inherited-write", write), "out-of-range");
+}
+
+#[test]
+fn a_key_that_object_prototype_names_reads_as_its_own_value_once_written() {
+    let source = "const m = {};\nfor (const k of [\"constructor\", \"a\"]) { m[k] = (m[k] ?? 0) + 1; }\nreturn 0;";
+    assert_eq!(trap_of("own-read", source), "out-of-range");
+    let written = "const m = {};\nfor (const w of [\"constructor\"]) { m[w] = 5; }\nconst k = \"constructor\";\nreturn m[k] ?? 0;";
+    assert_eq!(run("own-written", written), "5");
 }
