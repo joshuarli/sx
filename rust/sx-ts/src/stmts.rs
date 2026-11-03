@@ -672,6 +672,7 @@ impl<'a> Lowerer<'a> {
         app("put", vec![base, key, new], span)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn for_of(&mut self, pattern: &Pattern, source: Node, element_hint: Hint, body: &Stmt, span: Span, rest: &[Stmt], k: Cont<'_, 'a>) -> Node {
         let vars = self.existing(assigned_outer_stmt(body));
         let exit = stmt_exits_of(body);
