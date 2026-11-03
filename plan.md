@@ -1355,6 +1355,18 @@ teaches that idiom, and the differential never generated a read during the fill.
 so no accepted program was wrong. Fixing it would cut the largest cause of repairs, but not the extra
 cost of clean sessions, so the lead did not expect the fix alone to bring the cost under 1.25 times.
 
+After the stop, the owner asked for the map bug to be fixed. A computed index now lowers to `js.index`,
+which the checker resolves by the receiver's type: a map read is `V | null` wherever it is read, with any
+string key; a record read by a computed key is `ts-dynamic-key`, a string index `ts-string-index`, and an
+array element write a named `ts-mutation-pattern`. The `This is an Int, but a string is needed` messages
+were a second checker bug, two empty arrays in one loop state forced to one element type, fixed in JS mode
+only. Two fidelity holes were closed on the way: `concat` with several arguments dropped all but the first,
+and a map read of a key `Object.prototype` names, such as `constructor`, now traps instead of answering
+`null`. `bench/tsdiff` generates the map idioms: 3,000 programs and 300 mutants, no disagreement. Replayed
+through the fixed checker, 52 of the 160 Phase 21 TypeScript programs that were stopped for a reason other
+than scope now check, 51 of them from the 85 `type-mismatch` stops; this is an estimate of the repairs the
+fix would have saved, not a measurement, and a program that checks may still fail at run time.
+
 The campaign stops here, as the gate fixed, and Phase 22 does not run. Worth keeping from it:
 `sx-ts` and the checker's `Dialect::JavaScript` as a checked TypeScript subset whose accepted programs
 mean what JavaScript means, with `bench/tsdiff` to prove that differentially; `sx mcp code --language ts`;
