@@ -4494,7 +4494,8 @@ impl<'r> Checker<'r> {
                 self.coerce(prelude(prelude_op, vec![pairs], span), &map_of(value_type), expected, span)
             }
             "reduce" => {
-                let (mut initial, mut accumulator) = self.check(&args[1], None, scope);
+                let state_hint = self.state_tuple_hint(&args[0], &args[1]);
+                let (mut initial, mut accumulator) = self.check(&args[1], state_hint.as_ref(), scope);
                 let (items_ir, t) = self.check(&args[2], None, scope);
                 let element = self.list_element(&t, &args[2], "reduce");
                 let widens = self.dialect == Dialect::JavaScript && self.resolve(&accumulator) == INT;
@@ -4536,6 +4537,15 @@ impl<'r> Checker<'r> {
             }
             _ => self.higher_order(syntax, items, op, expected, scope),
         }
+    }
+
+    fn state_tuple_hint(&mut self, function: &Node, initial: &Node) -> Option<Type> {
+        if self.dialect != Dialect::JavaScript {
+            return None;
+        }
+        let state = list_items(form_items(function).filter(|_| is_function_form(function))?.get(1).and_then(list_items)?.first()?)?;
+        let initial_items = list_items(initial)?;
+        (state.len() > 1 && state.len() == initial_items.len()).then(|| Type::Tuple(state.iter().map(|_| self.fresh()).collect()))
     }
 
     fn keep_effects(&mut self, effects: Effects<'r>) {
