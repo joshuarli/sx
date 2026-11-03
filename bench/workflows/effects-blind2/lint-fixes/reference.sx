@@ -1,0 +1,22 @@
+(let [root "{{root}}"
+      report (call fs.read-text {:path (str root "/review/findings.txt")})
+      findings (keep (fn [line]
+                       (match (re.find #"^(\S+):(\d+): (.+) -> (.+)$" line)
+                         (some g) (match (text.to-int (nth g 2))
+                                    (some n) (some {:path (nth g 1) :line n :wrong (nth g 3) :right (nth g 4)})
+                                    none none)
+                         none none))
+                     (text.split report "\n"))
+      ranked (take 5 (sort-by (fn [[path own]] [(- 0 (count own)) path])
+                              (group-by (fn [f] (get f :path)) findings)))
+      fix (fn [[path own]]
+            (let [full (str root "/" path)
+                  lines (text.split (call fs.read-text {:path full}) "\n")
+                  fixed (map (fn [[i line]]
+                               (reduce (fn [acc f] (text.replace acc (get f :wrong) (get f :right)))
+                                       line
+                                       (filter (fn [f] (= (get f :line) (+ i 1))) own)))
+                             (enumerate lines))
+                  _ (call fs.write-text {:path full :text (text.join "\n" fixed)})]
+              path))]
+  (map fix ranked))
