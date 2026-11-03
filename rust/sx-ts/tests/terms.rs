@@ -4,18 +4,28 @@ use sx_ts::declarations::declarations;
 use sx_ts::terms::rewrite;
 
 #[test]
-fn types_and_tools_are_written_in_typescript_terms() {
+fn tool_ids_in_a_message_are_written_as_calls() {
     let registry = common::registry();
     let cases = [
-        ("Expected List<Option<Int>>, found Map<String, Float>", "Expected (Int | null)[], found Record<string, Float>"),
-        ("Found Record {a: Int, b: Option<String>}", "Found { a: Int; b: string | null }"),
-        ("Expected Tuple<Bool, Unit>, found Result<Int, String>", "Expected [boolean, null], found Settled<Int, string>"),
-        ("This program may not call fs.read-text. The host allows: mcp-github.list-issues", "This program may not call tools.fs.readText. The host allows: tools.mcpGithub.listIssues"),
-        ("a String, but an Int is needed", "a String, but an Int is needed"),
+        (
+            "This program may not call fs.read-text. The host allows: mcp-github.list-issues, jobs.status.",
+            "This program may not call tools.fs.readText. The host allows: tools.mcpGithub.listIssues, tools.jobs.status.",
+        ),
+        ("a String, but an Int is needed; see fs.nothing", "a String, but an Int is needed; see fs.nothing"),
     ];
     for (found, expected) in cases {
         assert_eq!(rewrite(found, &registry), expected);
     }
+}
+
+#[test]
+fn types_in_a_checked_program_are_written_as_typescript() {
+    let registry = common::registry();
+    let source = "const xs = [1, 2];\nconst ys: string[] = xs;\nconst t = await tools.jobs.status({ id: \"a\" });\nreturn t.pct + t;";
+    let found = sx_ts::compile_source(source, &registry, sx_kernel::authority::Authority::Unrestricted, &Default::default(), Default::default());
+    let text = found.diagnostics.iter().map(|d| format!("{} {}", d.message, d.detail.clone().unwrap_or_default())).collect::<Vec<_>>().join("\n");
+    assert!(text.contains("{ state: string; pct: Int }") && !text.contains("Record {"), "{text}");
+    assert_eq!(rewrite("This record has no field :nope.\nFields: :state, :pct", &registry), "This record has no field nope.\nFields: state, pct");
 }
 
 #[test]

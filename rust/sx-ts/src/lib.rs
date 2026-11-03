@@ -71,6 +71,7 @@ pub fn compile_source(
     match lower_source(source, registry) {
         Err(diagnostics) => rejected(diagnostics),
         Ok(program) => {
+            let _style = sx_kernel::types::use_style(sx_kernel::types::Style::TypeScriptOutput);
             let mut checked = check_lowered(&program, registry, authority, inputs, budgets, Dialect::JavaScript);
             checked.diagnostics = terms::in_typescript_terms(checked.diagnostics, registry);
             checked

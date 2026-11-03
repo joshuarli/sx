@@ -1,3 +1,4 @@
+use std::cell::Cell;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::Arc;
@@ -225,7 +226,87 @@ impl Type {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Style {
+    Sx,
+    TypeScriptOutput,
+    TypeScriptInput,
+}
+
+thread_local! {
+    static STYLE: Cell<Style> = const { Cell::new(Style::Sx) };
+}
+
+pub struct StyleGuard(Style);
+
+impl Drop for StyleGuard {
+    fn drop(&mut self) {
+        STYLE.with(|style| style.set(self.0));
+    }
+}
+
+pub fn use_style(style: Style) -> StyleGuard {
+    StyleGuard(STYLE.with(|held| held.replace(style)))
+}
+
+pub fn current_style() -> Style {
+    STYLE.with(Cell::get)
+}
+
+pub fn type_name(name: &str) -> String {
+    name.split(['.', '-'])
+        .map(|part| {
+            let mut chars = part.chars();
+            chars.next().map_or_else(String::new, |first| first.to_uppercase().chain(chars).collect())
+        })
+        .collect()
+}
+
+fn show_typescript(t: &Type, style: Style, definition: bool) -> String {
+    let inner = |t: &Type| show_typescript(t, style, false);
+    match t {
+        Type::Primitive(Primitive::Bool) => "boolean".to_string(),
+        Type::Primitive(Primitive::Int) => "Int".to_string(),
+        Type::Primitive(Primitive::Float) => "Float".to_string(),
+        Type::Primitive(Primitive::String | Primitive::Bytes) => "string".to_string(),
+        Type::Primitive(Primitive::Unit) => "null".to_string(),
+        Type::List(element) => {
+            let element = inner(element);
+            if element.contains(" | ") { format!("({element})[]") } else { format!("{element}[]") }
+        }
+        Type::Map(value) => format!("Record<string, {}>", inner(value)),
+        Type::Tuple(items) => format!("[{}]", items.iter().map(inner).collect::<Vec<_>>().join(", ")),
+        Type::Option(held) => format!("{} | null", inner(held)),
+        Type::Result(ok, err) => format!("Settled<{}, {}>", inner(ok), inner(err)),
+        Type::Record(_) if t.is_call_error() => "CallError".to_string(),
+        Type::Record(record) => match &record.name {
+            Some(name) if !definition => type_name(name),
+            _ if record.fields.is_empty() => "Record<string, never>".to_string(),
+            _ => {
+                let fields: Vec<String> = record
+                    .fields
+                    .iter()
+                    .map(|(name, field)| match (field, style) {
+                        (Type::Option(held), Style::TypeScriptInput) => format!("{name}?: {} | null", inner(held)),
+                        _ => format!("{name}: {}", inner(field)),
+                    })
+                    .collect();
+                format!("{{ {} }}", fields.join("; "))
+            }
+        },
+        Type::Enum(found) if found.name.starts_with(crate::values::SHAPED_PREFIX) => found.name.clone(),
+        Type::Enum(found) => type_name(&found.name),
+        Type::Nominal(nominal) => inner(&nominal.base),
+        Type::Variable(_) => "unknown".to_string(),
+        Type::Never => "never".to_string(),
+    }
+}
+
 pub fn show_type(t: &Type) -> String {
+    let style = STYLE.with(Cell::get);
+    if style != Style::Sx {
+        return show_typescript(t, style, false);
+    }
     match t {
         Type::Primitive(p) => p.name().to_string(),
         Type::List(element) => format!("List<{}>", show_type(element)),
@@ -253,6 +334,10 @@ pub fn show_type(t: &Type) -> String {
 }
 
 pub fn show_definition(t: &Type) -> String {
+    let style = STYLE.with(Cell::get);
+    if style != Style::Sx {
+        return show_typescript(t, style, true);
+    }
     match t {
         Type::Record(record) => {
             let marker = if record.open { "open " } else { "" };

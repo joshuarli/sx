@@ -312,6 +312,7 @@ impl<'r> Checker<'r> {
                 let ok_record = Type::Record(RecordType::plain(vec![("status".to_string(), STRING), ("value".to_string(), ok_type)]));
                 let err_record =
                     Type::Record(RecordType::plain(vec![("status".to_string(), STRING), ("reason".to_string(), err_type)]));
+                let _sx = crate::types::use_style(crate::types::Style::Sx);
                 let shaped = Arc::new(EnumType {
                     name: format!(
                         "{}{} | {}>",
@@ -1003,6 +1004,7 @@ impl<'r> Checker<'r> {
                 };
                 let to_type = |entries: Vec<Entry>| Type::Record(RecordType::plain(entries.into_iter().map(|e| (e.name, e.t)).collect()));
                 let (ok_type, err_type) = (to_type(ok_entries), to_type(err_entries));
+                let _sx = crate::types::use_style(crate::types::Style::Sx);
                 let shaped = Arc::new(EnumType {
                     name: format!("{}{} | {}>", crate::values::SHAPED_PREFIX, crate::types::show_definition(&ok_type), crate::types::show_definition(&err_type)),
                     variants: vec![("Fulfilled".to_string(), Some(ok_type)), ("Rejected".to_string(), Some(err_type))],

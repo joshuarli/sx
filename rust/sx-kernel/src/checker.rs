@@ -4901,7 +4901,9 @@ pub fn check(
     dialect: Dialect,
 ) -> CheckResult {
     let setting = Setting { registry, authority, inputs, budgets, dialect };
+    let style = crate::types::current_style();
     let checked = crate::stack::on_sized_stack(|| {
+        let _style = crate::types::use_style(style);
         let mut arguments = ArgumentTypes::default();
         let first = elaborate(program, &setting, ArgumentTypes::default(), &mut arguments);
         let unresolved = first.diagnostics.iter().any(|d| d.code == "unresolved-type");

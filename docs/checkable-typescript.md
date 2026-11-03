@@ -799,9 +799,10 @@ and the rest) keep their codes. Each node carries the span of the TypeScript it 
 the TypeScript expression. The message is rewritten: `List<T>` is `T[]`, `Option<T>` is `T | null`,
 `Record {a: T}` is `{ a: T }`, `Map<String, V>` is `Record<string, V>`, `Tuple<A, B>` is `[A, B]`, and an
 enum is a union of its string literals; `(get r :f)` is `r.f`; `call` is a call of `tools.ns.name`; the fix is
-rewritten as TypeScript or dropped when it has no TypeScript form. The rewrite is a pass over the checker's
-message, detail, and fix text, in `sx_ts::terms`: type forms and tool ids are written as above, a fix in Sx syntax is
-dropped, and `help` is `typescript`. A call that the policy refuses, or that
+rewritten as TypeScript or dropped when it has no TypeScript form. Types are written in TypeScript terms by the checker itself: `show_type` prints in the TypeScript style while the
+front end checks a program, and a record or enum that the declarations name is written as its camel-cased name. The
+rest is a pass over the message, detail, and fix text in `sx_ts::terms`: a tool id is written `tools.ns.name`, a
+keyword such as `:name` is written `name`, a fix in Sx syntax is dropped, and `help` is `typescript`. A call that the policy refuses, or that
 `explain` lists, names `tools.ns.name` and the span of the call. The failure of a run keeps the span of the
 call that failed.
 
