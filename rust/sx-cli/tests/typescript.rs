@@ -95,3 +95,26 @@ fn explain_lists_the_tools_a_typescript_program_calls() {
     assert!(ran.stdout.contains("fs.list  [read]"), "{}", ran.stdout);
     assert!(ran.stdout.contains("result: String"), "{}", ran.stdout);
 }
+
+const PAGED: &str = r#"{"capabilities": [
+  {"id": "hr.staff", "effect": "read", "input": "Record {cursor: Option<String>}", "output": "Record {items: List<String>, next: Option<String>}", "description": "One page."}
+]}"#;
+
+const PAGED_RESPONSES: &str = r#"[{"capability": "hr.staff", "input": {"cursor": null}, "results": [{"output": {"items": ["a"], "next": null}}]}]"#;
+
+#[test]
+fn an_empty_object_variable_is_a_tool_input_whose_fields_are_all_optional() {
+    let program = file("paged.ts", "const input = {};\nconst page = await tools.hr.staff(input);\nreturn page.items;\n");
+    let (declarations, responses) = (file("paged-decl.json", PAGED), file("paged-responses.json", PAGED_RESPONSES));
+    let ran = sx(&["run", &program, "--declarations", &declarations, "--responses", &responses, "--allow", "hr.staff"]);
+    assert_eq!((ran.code, ran.stderr.as_str(), ran.stdout.as_str()), (0, "", "[\"a\"]\n"));
+}
+
+#[test]
+fn objects_with_different_keys_do_not_join_and_the_message_says_what_to_write() {
+    let program = file("join.ts", "const cursor: string | null = null;\nconst input = cursor == null ? {} : { cursor };\nreturn input;\n");
+    let declarations = file("paged-decl.json", PAGED);
+    let ran = sx(&["check", &program, "--declarations", &declarations]);
+    assert_eq!(ran.code, 1);
+    assert!(ran.stdout.contains("branch-mismatch") && ran.stdout.contains("{ cursor: null }"), "{}{}", ran.stdout, ran.stderr);
+}

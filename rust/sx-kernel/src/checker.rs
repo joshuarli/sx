@@ -1172,7 +1172,13 @@ impl<'r> Checker<'r> {
                         show_type(&self.zonk(t))
                     );
                     let calls = branches.iter().any(|(node, _, _)| matches!(node.kind, Ir::Call { .. }));
-                    let detail = if calls {
+                    let records = self.dialect == Dialect::JavaScript
+                        && matches!(self.zonk(&target), Type::Record(_))
+                        && matches!(self.zonk(t), Type::Record(_));
+                    let detail = if records {
+                        "JavaScript keeps objects with different keys apart. Give every branch the same keys, such as { cursor: null }, \
+                         or write the conditional where a tool takes its input."
+                    } else if calls {
                         "Every branch of an if or match must return the same type. To call a tool only when a test \
                          holds, write (when test (call ...)), which is (some result) or none."
                     } else {
@@ -3080,6 +3086,8 @@ impl<'r> Checker<'r> {
         let argument_node = &items[2];
         let (argument, _) = if let NodeKind::Record(_) = argument_node.kind {
             self.record(argument_node, Some(&capability.input), scope, Some(&capability.id))
+        } else if let Some(filled) = self.empty_input(argument_node, &capability.input, scope) {
+            filled
         } else {
             self.check(argument_node, Some(&capability.input), scope)
         };
@@ -4561,6 +4569,35 @@ impl<'r> Checker<'r> {
         let element = self.list_element(&t, items_node, "nth");
         let (index, _) = self.check(index_node, Some(&INT), scope);
         self.coerce(prelude(PreludeOp::Nth, vec![items_ir, index], span), &element, expected, span)
+    }
+
+    fn empty_input<'a>(&mut self, argument: &'a Node, input: &Type, scope: &Scope<'a>) -> Option<Checked> {
+        if self.dialect != Dialect::JavaScript || !matches!(argument.kind, NodeKind::Symbol(_)) {
+            return None;
+        }
+        let Type::Record(wanted) = self.resolve(input) else {
+            return None;
+        };
+        if wanted.fields.is_empty() || !wanted.fields.iter().all(|(_, ft)| matches!(self.resolve(ft), Type::Option(_))) {
+            return None;
+        }
+        let attempt = Speculation::start(self);
+        let (value, t) = self.check(argument, None, scope);
+        attempt.undo(self);
+        let resolved = self.resolve(&t);
+        if self.is_brace(&resolved) {
+            self.trial(&resolved, &empty_record());
+        }
+        if !matches!(self.resolve(&t), Type::Record(found) if found.fields.is_empty() && !found.open) {
+            return None;
+        }
+        let absent = wanted
+            .fields
+            .iter()
+            .map(|(name, ft)| WidenedField { name: name.clone(), present: false, conversion: None, field_type: ft.clone() })
+            .collect();
+        let conversion = Conversion::WidenRecord(absent);
+        Some((node(Ir::Coerce { value: Box::new(value), conversion }, argument.span), input.clone()))
     }
 
     fn state_tuple_hint(&mut self, function: &Node, initial: &Node) -> Option<Type> {
