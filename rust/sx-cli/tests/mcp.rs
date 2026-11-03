@@ -492,3 +492,17 @@ fn the_command_line_is_checked() {
         64
     );
 }
+
+#[test]
+fn a_typescript_program_runs_against_the_server_and_an_unknown_language_is_a_usage_error() {
+    let harness = Harness::new("typescript");
+    let program = write(&harness.dir, "program.ts", "const s = await tools.mcpFx.add({ a: 2, b: 3 });\nreturn s.sum;");
+    let ran = sx(&[
+        "mcp", "run", &program, "--declarations", &harness.declarations, "--allow", "mcp-fx.add", "--language", "ts",
+        "--format", "json", "--", FIXTURE, &harness.tools,
+    ]);
+    assert_eq!(ran.code, 0, "{ran:?}");
+    assert_eq!(json(&ran.stdout).get("result").and_then(Json::as_i64), Some(5), "{}", ran.stdout);
+    let refused = sx(&["mcp", "run", &program, "--declarations", &harness.declarations, "--language", "python"]);
+    assert_eq!(refused.code, 64);
+}

@@ -13,7 +13,7 @@ const MCP_HELP: &str = r#"usage: sx mcp import --name NAME (--tools FILE | -- CO
                     [--timeout-ms MS]
        sx mcp run FILE --declarations FILE [--allow ID ...] [--grants FILE]
                   [--input NAME=JSON ...] [--format {text,json}] [--name NAME]
-                  [--timeout-ms MS] -- COMMAND [ARG ...]
+                  [--language {sx,ts}] [--timeout-ms MS] -- COMMAND [ARG ...]
        sx mcp serve --declarations FILE [--grants FILE] [--allow ID ...]
        sx mcp describe --declarations FILE [--grants FILE] [--allow ID ...]
        sx mcp export --declarations FILE
@@ -42,6 +42,7 @@ run options:
   --format {text,json}
   --name NAME          Serve the tools of this server when the declarations
                        hold several
+  --language {sx,ts}   Language of the program, sx by default
   --timeout-ms MS      Per-call and startup timeout, 60000 by default
 
 serve and describe options:
@@ -229,10 +230,15 @@ fn failure(message: &str) -> Exit {
 }
 
 fn run_program(args: &[String], new_registry: &dyn Fn() -> Registry) -> Exit {
-    let flags = ["--declarations", "--allow", "--grants", "--input", "--format", "--name", "--timeout-ms"];
+    let flags = ["--declarations", "--allow", "--grants", "--input", "--format", "--name", "--timeout-ms", "--language"];
     let options = match scan(args, &flags) {
         Ok(options) => options,
         Err(message) => return usage(&message),
+    };
+    let language = match options.last("--language") {
+        None | Some("sx") => Language::Sx,
+        Some("ts") => Language::TypeScript,
+        Some(other) => return usage(&format!("--language takes sx or ts, not {other}")),
     };
     let file = match options.positional.as_slice() {
         [file] => file.clone(),
@@ -262,7 +268,7 @@ fn run_program(args: &[String], new_registry: &dyn Fn() -> Registry) -> Exit {
         allow: options.all("--allow"),
         grants: options.last("--grants").map(str::to_string),
         format,
-        language: Language::Sx,
+        language,
     };
     let host = Host { command, name: options.last("--name").map(str::to_string), limits };
     crate::commands::execute_on_mcp(&program, new_registry(), &host)
