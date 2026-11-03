@@ -15,6 +15,7 @@ use std::collections::BTreeMap;
 
 use sx_kernel::authority::Authority;
 use sx_kernel::budgets::Budgets;
+pub use sx_kernel::checker::Dialect;
 use sx_kernel::checker::{CheckResult, check};
 use sx_kernel::diagnostics::Diagnostic;
 use sx_kernel::registry::Registry;
@@ -25,11 +26,6 @@ pub(crate) fn diag(code: &'static str, span: Span, message: impl Into<String>) -
     Diagnostic::new(code, span, message).help("typescript")
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Dialect {
-    Sx,
-    JavaScript,
-}
 
 pub fn lower_source(source: &str, registry: &Registry) -> Result<Node, Vec<Diagnostic>> {
     let lowered = sx_kernel::stack::on_sized_stack(|| {
@@ -54,8 +50,7 @@ pub fn check_lowered(
     budgets: Budgets,
     dialect: Dialect,
 ) -> CheckResult {
-    let _ = dialect;
-    check(program, registry, authority, inputs, budgets)
+    check(program, registry, authority, inputs, budgets, dialect)
 }
 
 pub fn compile_source(
