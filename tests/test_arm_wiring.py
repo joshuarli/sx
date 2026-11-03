@@ -4,10 +4,12 @@ from pathlib import Path
 import definition
 import effects
 import gate
+import pytest
 import real
 import repairs
 import session
 from arms import Files
+from records import Json, Tool
 from repairs import Tried
 
 LEDGER = "ledger-charges"
@@ -122,3 +124,42 @@ def test_the_gate_compares_ts_with_js_per_model_and_pooled() -> None:
     assert (round(pooled[0], 1), pooled[2]) == (-10.0, False)
     shown = gate.lines(scored, ("js", "ts"))
     assert any(line.startswith("| all models | -10.0") and line.endswith("fail |") for line in shown)
+
+
+TS_SERVER_ANSWERS: list[tuple[Tool, Json, tuple]] = [
+    (
+        "check",
+        {"ok": False, "diagnostics": [{"code": "ts-unsupported", "message": "var is not supported"}]},
+        ("rejected", ("ts-unsupported",), ()),
+    ),
+    (
+        "check",
+        {"ok": False, "explain": {"tools": []}, "policy": {"verdict": "refused", "refusals": [
+            {"kind": "too-many-write-sites", "message": "3 write call sites", "limit": 2},
+        ]}},
+        ("refused", (), ("too-many-write-sites",)),
+    ),
+    ("check", {"ok": True, "explain": {"tools": []}, "policy": {"verdict": "approved"}}, ("checked", (), ())),
+    (
+        "run",
+        {"outcome": "rejected", "diagnostics": [{"code": "unknown-field"}, {"code": "type-mismatch"}]},
+        ("rejected", ("unknown-field", "type-mismatch"), ()),
+    ),
+    (
+        "run",
+        {"outcome": "refused", "policy": {"verdict": "refused", "refusals": [{"kind": "too-many-write-sites"}]}},
+        ("refused", (), ("too-many-write-sites",)),
+    ),
+    (
+        "run",
+        {"outcome": "failed", "failure": {"kind": "out-of-range", "message": "nth 5 of a list of 1."}, "trace": []},
+        ("failed", ("trap:out-of-range",), ()),
+    ),
+]
+
+
+@pytest.mark.parametrize(("tool", "structured", "expected"), TS_SERVER_ANSWERS)
+def test_the_ts_server_answers_are_read_as_codes_refusals_and_traps(
+    tool: Tool, structured: Json, expected: tuple
+) -> None:
+    assert effects.sx_status(tool, structured) == expected

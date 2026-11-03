@@ -21,7 +21,17 @@ from records import CODE_SERVER_ARMS, SESSION_ARMS, AttemptStatus, Json, Session
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
 REQUESTS = HERE / "real" / "requests.json"
-REPOMOD_CHECKOUT = ROOT.parent / "repomod"
+
+
+def main_checkout() -> Path:
+    common = subprocess.run(
+        ["git", "-C", str(ROOT), "rev-parse", "--path-format=absolute", "--git-common-dir"],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    return Path(common).parent
+
+
+REPOMOD_CHECKOUT = main_checkout().parent / "repomod"
 REPOMOD_SOURCE = REPOMOD_CHECKOUT / "src"
 SCRATCH_ROOT = ROOT / ".work" / "real-scratch"
 USER_AGENT = Path.home() / ".pi" / "agent"
