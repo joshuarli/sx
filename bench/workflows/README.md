@@ -300,3 +300,22 @@ Findings that shape how to read a result:
 - The TypeScript arm has no `yaml` core, so `yaml-manifests` makes it scan lines by hand.
 - A `yaml` refusal is not caught by `attempt`, so the YAML workflow names the file the core would refuse in its task instead of expecting a program to recover.
 - Wall time is measured with `--jobs` trials at once. A model call dominates it.
+
+## One-shot body arms
+
+`trials` also runs two arms whose answer is the body of an async function that calls `tools.ns.name(input)`:
+`ts` runs it with `sx run --language ts` (or `sx mcp run --language ts` when the workflow imports MCP tools),
+and `jsbody` runs it on Bun over the same tools. Both prompts are the task, the instruction, and
+`sx guide --language ts` (the tool declarations and behavior notes `sx mcp code --language ts` shows);
+`ts` appends the subset's rules with `--rules`, so the two prompts differ only by that section. `jsbody` wraps
+the body in a module that provides `tools`, `console`, and the helpers the declarations list, keeping the body's
+line numbers, so `tsc` errors name the line the model wrote. Every attempt records its provider-reported cost.
+
+```sh
+uv run python bench/workflows/runner.py trials --set blind --arm sx --arm ts --arm jsbody --guide tailored \
+  --model opencode-go/MODEL --samples 2 --jobs 8 --out .work/p23/blind-MODEL
+uv run python bench/workflows/runner.py trials-report --runs .work/p23/blind-MODEL .work/p23/blind2-MODEL
+```
+
+`trials-report` reads every `--runs` directory, groups by the set each trial recorded, and prints the per-arm
+table, the gate of `--candidate` (`ts`) against `--baseline` (`jsbody`), and the `ts` stops by diagnostic code.
