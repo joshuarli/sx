@@ -61,19 +61,22 @@ def test_a_body_runs_in_both_executors_and_is_judged_alike(arm: Arm) -> None:
         assert json.loads(run.transcript)["logs"] == ["counted 3"]
 
 
-def test_a_type_error_in_a_jsbody_names_the_line_of_the_body() -> None:
-    body = 'const entries = await tools.fs.list({ path: "{{root}}/data" });\n\nconst n: number = "x";\nreturn entries;'
-    run, _ = run_body("jsbody", body)
-    assert run.status == "rejected"
-    assert run.labels == ["TS2322"]
-    assert "solution.mts(3," in run.detail
+def test_a_jsbody_is_not_type_checked_and_a_syntax_error_names_the_line_of_the_body() -> None:
+    typed, _ = run_body("jsbody", "const n: number = \"x\";\nreturn n;")
+    assert (typed.status, typed.result) == ("completed", "x")
+    run, _ = run_body("jsbody", "const a = 1;\nconst b = ;\nreturn a;")
+    assert run.status == "failed"
+    assert run.feedback is not None
+    assert run.feedback.startswith("The module threw: BuildMessage")
+    assert run.feedback.endswith("(at line 2 of your code)")
 
 
-def test_a_thrown_error_in_a_jsbody_is_reported_as_the_existing_js_arm_does() -> None:
-    run, _ = run_body("jsbody", 'return await tools.fs.list({ path: "{{root}}/absent" });')
+def test_a_thrown_error_in_a_jsbody_names_the_line_of_the_body() -> None:
+    run, _ = run_body("jsbody", 'const a = 1;\n\nreturn await tools.fs.list({ path: "{{root}}/absent" });')
     assert run.status == "failed"
     assert run.feedback is not None
     assert run.feedback.startswith("The module threw: CallError")
+    assert run.feedback.endswith("(at line 3 of your code)")
 
 
 def test_a_ts_body_the_subset_rejects_is_fed_back_with_its_diagnostic_code() -> None:

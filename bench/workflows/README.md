@@ -309,7 +309,8 @@ and `jsbody` runs it on Bun over the same tools. Both prompts are the task, the 
 `sx guide --language ts` (the tool declarations and behavior notes `sx mcp code --language ts` shows);
 `ts` appends the subset's rules with `--rules`, so the two prompts differ only by that section. `jsbody` wraps
 the body in a module that provides `tools`, `console`, and the helpers the declarations list, keeping the body's
-line numbers, so `tsc` errors name the line the model wrote. Every attempt records its provider-reported cost.
+line numbers. It is not type-checked: Bun strips types, and the feedback is a syntax error or a thrown error with
+the line of the model's code. Every attempt records its provider-reported cost.
 
 ```sh
 uv run python bench/workflows/runner.py trials --set blind --arm sx --arm ts --arm jsbody --guide tailored \

@@ -36,11 +36,20 @@ function parseArguments(argv: string[]): Options {
   return { solution, timeoutMs, command, imported };
 }
 
+function lineOf(error: unknown): number | null {
+  const position = (error as { position?: { line?: number } } | null)?.position;
+  if (typeof position?.line === "number") return position.line;
+  const stack = error instanceof Error ? (error.stack ?? "") : "";
+  const found = /run\.mts:(\d+):\d+/.exec(stack);
+  return found?.[1] === undefined ? null : Number(found[1]);
+}
+
 interface Report {
   outcome: "completed" | "failed";
   result?: unknown;
   kind?: "load" | "host" | "call" | "exception";
   error?: string;
+  line?: number | null;
   calls: CallRecord[];
   startupMs: number;
   elapsedMs: number;
@@ -78,12 +87,12 @@ async function main(): Promise<Report> {
         } catch (error) {
           const kind = error instanceof HostError ? "host" : error instanceof CallError ? "call" : "exception";
           const shown = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
-          report = { outcome: "failed", kind, error: shown, calls, startupMs, elapsedMs: performance.now() - started };
+          report = { outcome: "failed", kind, error: shown, line: lineOf(error), calls, startupMs, elapsedMs: performance.now() - started };
         }
       }
     } catch (error) {
       const shown = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
-      report = { outcome: "failed", kind: "load", error: shown, calls, startupMs, elapsedMs: 0 };
+      report = { outcome: "failed", kind: "load", error: shown, line: lineOf(error), calls, startupMs, elapsedMs: 0 };
     }
     return report;
   } finally {

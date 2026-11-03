@@ -1,5 +1,4 @@
 import json
-import re
 import shutil
 import subprocess
 import tempfile
@@ -218,8 +217,6 @@ def typecheck(directory: Path) -> tuple[str, list[str]] | None:
     return errors, codes
 
 
-TOOLS_BLOCK = re.compile(r"```ts\n(.*?)\n```", re.DOTALL)
-BODY_FUNCTION = "async function __body(): Promise<unknown> { "
 RUNTIME_NAMES = "tools, sleep, retry, waitUntil, parMap, loop, next, done, console"
 
 
@@ -238,17 +235,6 @@ def typescript_guide_for(workflow: Spec, sandbox: Sandbox, *, rules: bool) -> st
         return typescript_guide(Files(workflow, sandbox, Path(directory)), rules=rules)
 
 
-def body_declarations(guide: str) -> str:
-    found = TOOLS_BLOCK.search(guide)
-    if found is None:
-        raise RuntimeError("the TypeScript guide lists no tool declarations")
-    return found.group(1) + "\n"
-
-
-def checked_body(body: str) -> str:
-    return f"{BODY_FUNCTION}{body}\n}}\nexport {{}};\n"
-
-
 def runnable_body(body: str) -> str:
     runtime = paths.HARNESS / "bodyrt.ts"
     return (
@@ -257,11 +243,14 @@ def runnable_body(body: str) -> str:
     )
 
 
-def run_on_bun(arm: Arm, files: Files, declarations: str, checked: str, executed: str) -> ArmRun:
+def run_on_bun(arm: Arm, files: Files, executed: str, checked: tuple[str, str] | None) -> ArmRun:
     bun = require_toolchain()
-    (files.directory / "api.d.ts").write_text(declarations)
-    (files.directory / "solution.mts").write_text(checked)
-    failed_typecheck = typecheck(files.directory)
+    failed_typecheck = None
+    if checked is not None:
+        declarations, program = checked
+        (files.directory / "api.d.ts").write_text(declarations)
+        (files.directory / "solution.mts").write_text(program)
+        failed_typecheck = typecheck(files.directory)
     if failed_typecheck is not None:
         errors, codes = failed_typecheck
         return ArmRun(arm, "rejected", None, errors, errors, [], 0.0, 0.0, codes)
@@ -297,6 +286,8 @@ def run_on_bun(arm: Arm, files: Files, declarations: str, checked: str, executed
             if report["kind"] == "host"
             else f"The module threw: {message}"
         )
+        if arm == "jsbody" and report.get("line") is not None:
+            feedback += f" (at line {report['line']} of your code)"
         return ArmRun(
             arm, "failed", None, message, feedback, calls, seconds, program_seconds, transcript=completed.stdout
         )
@@ -310,15 +301,14 @@ def run_js(workflow: Workflow, sandbox: Sandbox, program: str) -> ArmRun:
     with tempfile.TemporaryDirectory(dir=scratch()) as directory:
         files = Files(workflow, sandbox, Path(directory))
         api = typescript_declarations({**described(files), "cores": []}, NO_CORES).replace(VIRTUAL_WAIT, REAL_WAIT)
-        return run_on_bun("js", files, api, program, program)
+        return run_on_bun("js", files, program, (api, program))
 
 
 def run_jsbody(workflow: Workflow, sandbox: Sandbox, body: str) -> ArmRun:
     require_toolchain()
     with tempfile.TemporaryDirectory(dir=scratch()) as directory:
         files = Files(workflow, sandbox, Path(directory))
-        declarations = body_declarations(typescript_guide(files, rules=False))
-        return run_on_bun("jsbody", files, declarations, checked_body(body), runnable_body(body))
+        return run_on_bun("jsbody", files, runnable_body(body), None)
 
 
 def run_arm(arm: Arm, workflow: Workflow, sandbox: Sandbox, program: str) -> ArmRun:
