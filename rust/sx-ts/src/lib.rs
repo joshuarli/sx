@@ -4,12 +4,14 @@ pub mod analysis;
 pub mod ast;
 pub mod build;
 pub mod calls;
+pub mod declarations;
 pub mod exprs;
 pub mod lexer;
 pub mod lower;
 pub mod parser;
 pub mod pretty;
 pub mod stmts;
+pub mod terms;
 
 use std::collections::BTreeMap;
 
@@ -68,7 +70,11 @@ pub fn compile_source(
     }
     match lower_source(source, registry) {
         Err(diagnostics) => rejected(diagnostics),
-        Ok(program) => check_lowered(&program, registry, authority, inputs, budgets, Dialect::JavaScript),
+        Ok(program) => {
+            let mut checked = check_lowered(&program, registry, authority, inputs, budgets, Dialect::JavaScript);
+            checked.diagnostics = terms::in_typescript_terms(checked.diagnostics, registry);
+            checked
+        }
     }
 }
 

@@ -1,0 +1,47 @@
+{
+  "description": "A field name on a Map reads the key, with a default when absent.",
+  "python": false,
+  "dialect": "js",
+  "program": "(let [m (call store.sizes {})] [(get m :a) (get m :z 0)])",
+  "declarations": "declarations/js-payloads.json",
+  "allow": [
+    "store.sizes",
+    "store.size",
+    "store.reading",
+    "store.listed",
+    "store.outcome",
+    "store.keep"
+  ],
+  "responses": [
+    {
+      "capability": "store.sizes",
+      "input": {},
+      "results": [
+        {
+          "output": {
+            "a": 5
+          }
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": [
+      5,
+      0
+    ]
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "store.sizes",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": {
+        "a": 5
+      }
+    }
+  ]
+}

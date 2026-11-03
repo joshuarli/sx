@@ -1,0 +1,30 @@
+{
+  "description": "A Result a tool returns reads as a Settled: status names the arm.",
+  "python": false,
+  "dialect": "js",
+  "program": "(let [r (call store.outcome {})] [(get r :status) (get r :value)])",
+  "declarations": "declarations/js-payloads.json",
+  "allow": [
+    "store.sizes",
+    "store.size",
+    "store.reading",
+    "store.listed",
+    "store.outcome"
+  ],
+  "responses": [
+    {
+      "capability": "store.outcome",
+      "input": {},
+      "results": [
+        {
+          "output": {"ok": 4}
+        }
+      ]
+    }
+  ],
+  "expect": {"completed": ["fulfilled", 4]},
+  "trace": [
+    {"request": "r:1", "capability": "store.outcome", "input": {}},
+    {"response": "r:1", "output": {"ok": 4}}
+  ]
+}

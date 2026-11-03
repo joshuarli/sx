@@ -18,16 +18,16 @@ const MCP_HELP: &str = r#"usage: sx mcp import --name NAME (--tools FILE | -- CO
        sx mcp describe --declarations FILE [--grants FILE] [--allow ID ...]
        sx mcp export --declarations FILE
        sx mcp code --declarations FILE --policy FILE [--grants FILE]
-                   [--allow ID ...] [--name NAME] [--timeout-ms MS]
-                   [-- COMMAND [ARG ...]]
+                   [--allow ID ...] [--language {sx,ts}] [--name NAME]
+                   [--timeout-ms MS] [-- COMMAND [ARG ...]]
 
 Import the tools of an MCP server as Sx declarations, run a program
 against that server over stdio, and serve granted capabilities as an MCP
 server on standard input and output, describe what serve would list in
 Sx terms, or export the tools/list result and result shapes of every declared
 capability for an MCP server in another language. Code serves two tools,
-check and run, that take a program in Sx, and runs it only when the approval
-policy allows.
+check and run, that take a program in Sx or, with --language ts, in checkable
+TypeScript, and runs it only when the approval policy allows.
 
 import options:
   --name NAME       Server name; its tools become capabilities mcp-NAME.TOOL
@@ -57,6 +57,8 @@ code options (the serve options, and):
   --policy FILE        JSON object judged against the explain report of each
                        program before it runs: capabilities (required),
                        computed_inputs, max_write_sites
+  --language {sx,ts}   Language of the programs the tools take, sx by default;
+                       ts lists the tools as a .d.ts and reports TypeScript spans
   --name NAME          Serve the tools of this server when the declarations
                        hold several
   --timeout-ms MS      Per-call and startup timeout, 60000 by default

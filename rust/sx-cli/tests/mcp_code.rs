@@ -57,10 +57,19 @@ fn snapshot(root: &Path) -> BTreeMap<String, Vec<u8>> {
 struct Sandbox {
     base: PathBuf,
     proxied: bool,
+    typescript: bool,
 }
 
 impl Sandbox {
     fn new(label: &str, proxied: bool, grants: &str, policy: &str) -> Sandbox {
+        Sandbox::build(label, proxied, false, grants, policy)
+    }
+
+    fn typescript(label: &str, proxied: bool, grants: &str, policy: &str) -> Sandbox {
+        Sandbox::build(label, proxied, true, grants, policy)
+    }
+
+    fn build(label: &str, proxied: bool, typescript: bool, grants: &str, policy: &str) -> Sandbox {
         let serial = SERIAL.fetch_add(1, Ordering::Relaxed);
         let base = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("mcp-code-{}-{label}-{serial}", std::process::id()));
         if base.exists() {
@@ -88,7 +97,7 @@ impl Sandbox {
         fs::write(base.join("declarations.json"), shown(&declarations)).expect("declarations");
         fs::write(base.join("grants.json"), substitute(grants)).expect("grants");
         fs::write(base.join("policy.json"), policy).expect("policy");
-        Sandbox { base, proxied }
+        Sandbox { base, proxied, typescript }
     }
 
     fn root(&self) -> PathBuf {
@@ -112,6 +121,9 @@ impl Sandbox {
         ]
         .map(str::to_string)
         .to_vec();
+        if self.typescript {
+            args.extend(["--language".to_string(), "ts".to_string()]);
+        }
         if self.proxied {
             args.extend(["--".to_string(), FIXTURE.to_string(), fixture_tools()]);
         }
@@ -550,4 +562,197 @@ fn an_unknown_tool_is_a_protocol_error_and_the_server_ends_cleanly() {
     assert_eq!(extra.get("isError").and_then(Json::as_bool), Some(true));
     let (code, stderr) = client.finish();
     assert_eq!((code, stderr.as_str()), (Some(0), ""));
+}
+
+const COPY_TS: &str =
+    "const text = await tools.fs.readText({ path: \"ROOT/a.txt\" });\nawait tools.fs.writeText({ path: \"ROOT/b.txt\", text });\nreturn text.length;";
+
+#[test]
+fn typescript_mode_lists_the_declarations_in_place_of_the_sx_guide() {
+    let sandbox = Sandbox::typescript("ts-listing", true, MIXED_GRANTS, r#"{"capabilities": ["fs.read-text", "mcp-fx.add"]}"#);
+    let mut client = sandbox.client();
+    let tools = client.list();
+    let names: Vec<&str> = tools.iter().map(|tool| string_at(tool, &["name"])).collect();
+    assert_eq!(names, ["check", "run"]);
+    let check = string_at(&tools[0], &["description"]);
+    let run = string_at(&tools[1], &["description"]);
+    assert!(check.contains("the run tool's description") && !check.contains("interface Tools"), "{check}");
+    for expected in [
+        "checkable TypeScript",
+        "type Int = number;",
+        "interface CallError extends Error",
+        "interface Tools {",
+        "    /** Reads a whole file as UTF-8 text. [read] */\n    readText(input: { path: string }): Promise<string>;",
+        "[write, idempotent]",
+        "  mcpFx: {",
+        "declare const tools: Tools;",
+        "declare function retry<T>",
+        "declare function loop<S extends object, R>",
+        "tools.fs.readText, tools.mcpFx.add",
+        "## Writing the program",
+        "never `x === null`",
+    ] {
+        assert!(run.contains(expected), "{expected} missing from {run}");
+    }
+    for absent in ["(call ", "fs.read-text", "mcp-fx", "Coming from TypeScript"] {
+        assert!(!run.contains(absent), "{absent} found in {run}");
+    }
+    for tool in &tools {
+        let schema = shown(tool.get("inputSchema").expect("schema"));
+        assert!(schema.contains(r#""required": ["program"]"#) && !schema.contains("inputs"), "{schema}");
+    }
+}
+
+#[test]
+fn typescript_check_explains_a_good_program_with_tool_names_and_performs_nothing() {
+    let sandbox = Sandbox::typescript("ts-check-good", false, FS_GRANTS, OPEN_POLICY);
+    let before = snapshot(&sandbox.root());
+    let mut client = sandbox.client();
+    let reply = client.program("check", &program_for(&sandbox, COPY_TS));
+    assert!(!reply.is_error, "{}", shown(&reply.structured));
+    assert_eq!(string_at(&reply.structured, &["policy", "verdict"]), "approved");
+    assert!(reply.text.contains("tools.fs.readText  [read]") && reply.text.contains("tools.fs.writeText"), "{}", reply.text);
+    assert_eq!(snapshot(&sandbox.root()), before);
+}
+
+#[test]
+fn typescript_diagnostics_point_at_the_typescript_source() {
+    let sandbox = Sandbox::typescript("ts-bad", false, FS_GRANTS, OPEN_POLICY);
+    let before = snapshot(&sandbox.root());
+    let mut client = sandbox.client();
+    let cases = [
+        (
+            "const a = 1;\nawait tools.fs.writeText({ path: \"ROOT/c.txt\", content: \"x\" });",
+            "unknown-field",
+            2,
+            "await tools.fs.writeText({ path: \"ROOT/c.txt\", content: \"x\" });",
+        ),
+        ("const a = 1;\nwhile (a < 3) {}\nreturn a;", "ts-while", 2, "while (a < 3) {}"),
+        ("const r = await tools.fs.list({ path: \"ROOT\" });\nreturn r[0].nope;", "unknown-field", 2, "return r[0].nope;"),
+        ("await tools.fs.nothing({ path: \"ROOT/a.txt\" });", "unknown-tool", 1, "await tools.fs.nothing"),
+        ("await tools.fs.list({ path: \"ROOT\" });", "unauthorized", 1, "await tools.fs.list"),
+        ("const n = null;\nreturn n === null;", "js-null-equality", 2, "return n === null;"),
+    ];
+    for tool in ["check", "run"] {
+        for (source, code, line, excerpt) in cases {
+            let reply = client.program(tool, &program_for(&sandbox, source));
+            assert!(reply.is_error, "{tool}: {source}");
+            let diagnostics = reply.structured.get("diagnostics").and_then(Json::as_array).expect("diagnostics");
+            let found = diagnostics.iter().find(|d| string_at(d, &["code"]) == code);
+            let found = found.unwrap_or_else(|| panic!("{code} missing from {}", shown(&reply.structured)));
+            let start = found.get("span").and_then(|span| span.get("start")).expect("span");
+            assert_eq!(start.get("line").and_then(Json::as_i64), Some(line), "{}", shown(found));
+            assert_eq!(string_at(found, &["help"]), "typescript", "{}", shown(found));
+            assert!(reply.text.contains(&format!("error[{code}] {line}:")), "{}", reply.text);
+            assert!(reply.text.contains(&program_for(&sandbox, excerpt)), "{}", reply.text);
+        }
+    }
+    assert_eq!(snapshot(&sandbox.root()), before);
+}
+
+#[test]
+fn typescript_diagnostics_name_types_and_tools_in_typescript_terms() {
+    let sandbox = Sandbox::typescript("ts-terms", false, FS_GRANTS, r#"{"capabilities": ["fs.read-text"]}"#);
+    let mut client = sandbox.client();
+    let reply = client.program("check", "const xs = await tools.fs.list({ path: \"/\" });\nconst n: number = xs;\nreturn xs.length + xs;");
+    assert!(reply.is_error);
+    assert!(!reply.text.contains("List<") && !reply.text.contains("Record {"), "{}", reply.text);
+    let ungranted = client.program("check", "return await tools.fs.list({ path: \"/\" });");
+    let text = ungranted.text;
+    assert!(text.contains("may not call tools.fs.list.") && text.contains("allows: tools.fs.readText"), "{text}");
+    assert!(!text.contains("fs.read-text"), "{text}");
+}
+
+#[test]
+fn typescript_run_performs_native_calls_and_returns_result_logs_and_calls() {
+    let sandbox = Sandbox::typescript("ts-native", false, FS_GRANTS, OPEN_POLICY);
+    let mut client = sandbox.client();
+    let source = "const text = await tools.fs.readText({ path: \"ROOT/a.txt\" });\nconsole.log(\"read\", text.length);\nawait tools.fs.writeText({ path: \"ROOT/b.txt\", text });\nconsole.log({ ok: true });\nreturn { size: text.length };";
+    let reply = client.program("run", &program_for(&sandbox, source));
+    assert!(!reply.is_error, "{}", shown(&reply.structured));
+    assert_eq!(string_at(&reply.structured, &["outcome"]), "completed");
+    assert_eq!(reply.structured.get("result").and_then(|r| r.get("size")).and_then(Json::as_i64), Some(6));
+    assert_eq!(shown(reply.structured.get("logs").expect("logs")), r#"["read 6", "{\"ok\":true}"]"#);
+    assert!(reply.text.contains("logs (2):\n  read 6\n"), "{}", reply.text);
+    assert_eq!(capabilities_called(reply.structured.get("trace").expect("trace")), ["fs.read-text", "fs.write-text"]);
+    assert!(reply.text.contains("calls (2):") && reply.text.contains("1. tools.fs.readText"), "{}", reply.text);
+    assert_eq!(fs::read_to_string(sandbox.root().join("b.txt")).expect("written"), "alpha\n");
+    let failed = client.program("run", "console.log(\"before\");\nthrow new Error(\"stop\");");
+    assert!(failed.is_error);
+    assert_eq!(string_at(&failed.structured, &["failure", "kind"]), "thrown");
+    assert_eq!(shown(failed.structured.get("logs").expect("logs")), r#"["before"]"#);
+}
+
+#[test]
+fn typescript_run_catches_a_failed_tool_call_as_a_call_error() {
+    let sandbox = Sandbox::typescript("ts-catch", false, FS_GRANTS, OPEN_POLICY);
+    let mut client = sandbox.client();
+    let source = "try {\n  await tools.fs.readText({ path: \"ROOT/missing.txt\" });\n  return \"read\";\n} catch (e) {\n  return e.kind + \": \" + e.message.length;\n}";
+    let reply = client.program("run", &program_for(&sandbox, source));
+    assert!(!reply.is_error, "{}", shown(&reply.structured));
+    assert!(string_at(&reply.structured, &["result"]).starts_with("NotFound: "), "{}", shown(&reply.structured));
+}
+
+#[test]
+fn typescript_run_calls_a_proxied_mcp_server_next_to_native_tools() {
+    let policy = r#"{"capabilities": ["fs.read-text", "mcp-fx.add"]}"#;
+    let sandbox = Sandbox::typescript("ts-proxied", true, MIXED_GRANTS, policy);
+    let mut client = sandbox.client();
+    let source = "const text = await tools.fs.readText({ path: \"ROOT/a.txt\" });\nconst total = await tools.mcpFx.add({ a: 20, b: 22 });\nreturn { text, sum: total.sum };";
+    let reply = client.program("run", &program_for(&sandbox, source));
+    assert!(!reply.is_error, "{}", shown(&reply.structured));
+    let result = reply.structured.get("result").expect("result");
+    assert_eq!(result.get("sum").and_then(Json::as_i64), Some(42));
+    assert_eq!(string_at(result, &["text"]), "alpha\n");
+    let mut called = capabilities_called(reply.structured.get("trace").expect("trace"));
+    called.sort();
+    assert_eq!(called, ["fs.read-text", "mcp-fx.add"]);
+}
+
+#[test]
+fn typescript_reads_a_payload_enum_and_a_result_as_the_declarations_say() {
+    let sandbox = Sandbox::typescript("ts-variants", true, r#"{"mcp-fx.variants": null}"#, r#"{"capabilities": ["mcp-fx.variants"]}"#);
+    let mut client = sandbox.client();
+    let run = string_at(&client.list()[1], &["description"]).to_string();
+    assert!(run.contains("type Settled<T, E> = { status: \"fulfilled\"; value: T } | { status: \"rejected\"; reason: E };"), "{run}");
+    assert!(run.contains("outcome: Settled<Int, string>"), "{run}");
+    assert!(run.contains("{ tag: \"Circle\"; value: Float }"), "{run}");
+    let source = "const r = await tools.mcpFx.variants({});\nconst shape = r.shape;\nconst outcome = r.outcome.status === \"fulfilled\" ? r.outcome.value : -1;\nconst fail = r.fail.status === \"rejected\" ? r.fail.reason : \"ok\";\nreturn { shape, outcome, fail, whole: r.outcome };";
+    let reply = client.program("run", source);
+    assert!(!reply.is_error, "{}\n{}", shown(&reply.structured), reply.text);
+    let result = reply.structured.get("result").expect("result");
+    assert_eq!(shown(result.get("shape").expect("shape")), r#"{"tag": "Circle", "value": 2.5}"#);
+    assert_eq!(result.get("outcome").and_then(Json::as_i64), Some(3));
+    assert_eq!(string_at(result, &["fail"]), "nope");
+    assert_eq!(shown(result.get("whole").expect("whole")), r#"{"status": "fulfilled", "value": 3}"#);
+}
+
+#[test]
+fn typescript_policy_refusals_name_tools_and_typescript_positions_and_leave_the_sandbox_untouched() {
+    let only_reads = Sandbox::typescript("ts-refuse-capability", false, FS_GRANTS, r#"{"capabilities": ["fs.read-text"]}"#);
+    assert_refused_without_effect(&only_reads, COPY_TS, &["capability-not-allowed"], &["tools.fs.writeText at 2:7"]);
+
+    let policy = r#"{"capabilities": ["fs.read-text", "fs.write-text"], "computed_inputs": ["fs.read-text"]}"#;
+    let computed = Sandbox::typescript("ts-refuse-computed", false, FS_GRANTS, policy);
+    let source = "const name = await tools.fs.readText({ path: \"ROOT/names.txt\" });\nawait tools.fs.writeText({ path: name, text: \"x\" });";
+    assert_refused_without_effect(&computed, source, &["computed-input-not-allowed"], &["tools.fs.writeText at 2:7", "computed_inputs"]);
+
+    let policy = r#"{"capabilities": ["fs.read-text", "fs.write-text"], "max_write_sites": 1}"#;
+    let many = Sandbox::typescript("ts-refuse-writes", false, FS_GRANTS, policy);
+    let source = "await tools.fs.writeText({ path: \"ROOT/c.txt\", text: \"1\" });\nawait tools.fs.writeText({ path: \"ROOT/d.txt\", text: \"2\" });";
+    assert_refused_without_effect(&many, source, &["too-many-write-sites"], &["2 write call sites", "tools.fs.writeText at 1:7", "allows 1"]);
+}
+
+#[test]
+fn typescript_mode_takes_no_inputs_and_an_unknown_language_is_a_usage_error() {
+    let sandbox = Sandbox::typescript("ts-inputs", false, FS_GRANTS, OPEN_POLICY);
+    let mut client = sandbox.client();
+    let extra = client.tool("run", json(r#"{"program": "return 1;", "inputs": {}}"#));
+    assert_eq!(extra.get("isError").and_then(Json::as_bool), Some(true));
+    let plain = Sandbox::new("lang-usage", false, FS_GRANTS, OPEN_POLICY);
+    let mut args = plain.arguments();
+    args.extend(["--language".to_string(), "python".to_string()]);
+    let output = Command::new(SX).args(&args).stdin(Stdio::null()).output().expect("sx runs");
+    assert_eq!(output.status.code(), Some(64));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("--language takes sx or ts"), "{}", String::from_utf8_lossy(&output.stderr));
 }

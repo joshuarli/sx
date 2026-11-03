@@ -48,6 +48,14 @@
       "input": "Record {}",
       "output": "Result<Int, String>",
       "description": "Reads a result."
+    },
+    {
+      "id": "store.keep",
+      "effect": "write",
+      "idempotent": true,
+      "input": "Record {sizes: Map<String, Int>}",
+      "output": "Unit",
+      "description": "Keeps sizes by name."
     }
   ]
 }

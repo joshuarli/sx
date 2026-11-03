@@ -634,12 +634,18 @@ without a call, and the discovery calls of codemode (`searchTools`, `describeToo
 | `Record {k: T, …}` and open records | `{ k: T; … }`; an `Option` field is `k: T | null` in an output |
 | `Option<T>` | output `T | null`; input field `k?: T | null` |
 | Enum without payloads | a union of string literals |
-| Enum with payloads | `{ tag: "A"; value: T } | "B"` |
-| `Result<T, E>` | `{ ok: T } | { err: E }` |
+| Enum with payloads | `{ tag: "A"; value: T } | "B"`; a program can pass such a value through (return, log, `JSON.stringify`) but cannot yet read its `tag` or `value` |
+| `Result<T, E>` | `Settled<T, E>`, the file's alias for `{ status: "fulfilled"; value: T } | { status: "rejected"; reason: E }` |
 | Core nominal | its base type |
 
-The generated file is the text below, in this order: the aliases, the named types and enums, `CallError`,
-the `Tools` interface with one member per namespace, and the declarations of the builtins. Each tool
+A `Result` is declared as the `Settled` shape because that is how JS mode reads and writes it: `r.status`,
+`r.value`, and `r.reason` read the arm as they do for the elements of `Promise.allSettled`, and a `Result` that a
+program returns, logs, or stringifies is the `{"status", …}` object. The `{ ok }` and `{ err }` shape of Sx text is
+not visible from TypeScript. The alias is written only when a granted tool uses a `Result`.
+
+The generated file is the text below, in this order: the aliases, the named types and enums, `Settled` when used,
+`CallError`, the `Tools` interface with one member per namespace, and the declarations of the builtins.
+A named type or enum is written once, as the camel-cased words of its name (`mcp-fx.Shape` is `McpFxShape`). Each tool
 carries a doc comment with its description and its effect, `[read]`, `[write, idempotent]` or
 `[write, not idempotent]`, and the behavior notes of `sx guide --notes` follow the file.
 
@@ -656,9 +662,11 @@ interface Tools {
   };
 }
 declare const tools: Tools;
+declare const console: { log(...values: unknown[]): void };
 declare function retry<T>(options: { delaysMs?: number[]; backoffMs?: [number, number]; withinMs?: number; on?: CallError["kind"][] }, body: () => Promise<T>): Promise<T>;
 declare function waitUntil<T>(options: { everyMs?: number; backoffMs?: [number, number]; withinMs: number }, poll: () => Promise<T>, done: (value: T) => boolean): Promise<T>;
 declare function parMap<T, U>(options: { limit: number }, items: T[], body: (item: T) => Promise<U>): Promise<U[]>;
+interface Step<S, R> { _next?: S; _done?: R }
 declare function loop<S extends object, R>(options: { max: number }, state: S, body: (state: S) => Step<S, R>): Promise<R>;
 declare function next<S>(state: S): Step<S, never>;
 declare function done<R>(value: R): Step<never, R>;
@@ -667,7 +675,13 @@ declare function sleep(ms: number): Promise<void>;
 
 This extends the declarations of `bench/codemode/typescript.py`, which reads the output of `sx mcp describe` as
 Sx type strings. The changes are the `Int` and `Float` aliases in place of `number`, the `null` union for
-optional input, the `Result` form, and the builtins.
+optional input, the `Settled` form of `Result`, and the builtins.
+
+`sx mcp code --language ts` serves `check` and `run` with a TypeScript program in the argument `program`. The `run`
+tool's description carries, in place of the Sx guide, the file above for the granted tools, the behavior notes of
+`sx guide --notes` with tool names written as `tools.ns.name`, and a short list of rules for the subset. Its
+diagnostics, its `explain` report, and its policy refusals name tools as `tools.ns.name` and point at lines and
+columns of the program. The generator is `sx_ts::declarations`.
 
 ## JS mode and the new kernel surface
 
@@ -720,7 +734,7 @@ Sx text. These are the places where the implementation fixes what this document 
   `js.settled-status`, `js.settled-value`, and `js.settled-reason` read a `Result` of `attempt` and are
   elaborated into a `match`; a `Settled` is a `Result<T, CallError>`.
 - **Numbers.** `+`, `-`, `*` on `Int`s are `(safe-int …)`; an `Int` a tool returns, in a list, option,
-  tuple, or record, is checked the same way (a `Map` value or an enum payload is not). `/` converts both
+  tuple, record, `Map` value, enum payload, or either arm of a `Result`, is checked the same way. `/` converts both
   operands. A rounding is guarded: a `Float` outside ±2^53 is the `out-of-range` trap, so every `Int` stays
   safe. An accumulator that starts as `0` and receives a `Float` is widened in `reduce`; a `loop` variable
   is not, and mixed `Int` and `Float` there is `js-float-as-int`.
@@ -749,7 +763,12 @@ Sx text. These are the places where the implementation fixes what this document 
   return `{ a }` and `{ b }`, are checker diagnostics (`unknown-field`, `missing-field`, `branch-mismatch`). A `Bool`
   does not join an absent value either (`c ? null : false`), because a condition would test the joined `Option<Bool>`
   for presence.
+- **Result fields.** `r.status`, `r.value`, and `r.reason` on a `Result` that a tool returned are the same reads as on
+  a `Settled` from `Promise.allSettled`, so the `Settled` alias the `.d.ts` declares is what a program can do.
+  `value` of a rejected `Result` is the `out-of-range` trap.
 - **Maps.** An empty object that a program fills with computed keys is a `Map<String, V>`, and `V` must be one type.
+  A static key (`m.k`, `m["k"]`) on a `Map` reads that key like `m[k]`, and an object literal where a tool's input
+  declares a `Map<String, V>` builds the map.
   A `Map` anywhere in a value that `JSON.stringify` or `console.log` writes is `ts-map-order`, reported by the checker
   since only it knows the type. A `Map` in the program result is fine.
 - **Sorting.** `.sort()` lowers to `(sort-by identity xs)`; the checker reports `ts-sort-comparator` unless the
@@ -763,8 +782,9 @@ Sx text. These are the places where the implementation fixes what this document 
   lowering makes that continuation `(fail "unreachable")`.
 - **Expansions.** A diagnostic from inside a `js` expansion carries the span of the call that expanded it.
 - **Known gaps.** A `loop` variable that starts as an `Int` and receives a `Float` is `js-float-as-int`, where
-  `reduce` widens it. A `Map` value or an enum payload that a tool returns is not checked against ±2^53. A `sort-by`
-  key that is a tuple with a string compares by code point; no TypeScript form reaches it.
+  `reduce` widens it. An enum with payloads that a tool returns cannot be discriminated: `s === "Dot"` is
+  `js-equality` and `s.tag` is `not-a-record`, so it is only passed through. A `sort-by` key that is a tuple with a
+  string compares by code point; no TypeScript form reaches it.
 
 ## Diagnostics
 
@@ -779,7 +799,9 @@ and the rest) keep their codes. Each node carries the span of the TypeScript it 
 the TypeScript expression. The message is rewritten: `List<T>` is `T[]`, `Option<T>` is `T | null`,
 `Record {a: T}` is `{ a: T }`, `Map<String, V>` is `Record<string, V>`, `Tuple<A, B>` is `[A, B]`, and an
 enum is a union of its string literals; `(get r :f)` is `r.f`; `call` is a call of `tools.ns.name`; the fix is
-rewritten as TypeScript or dropped when it has no TypeScript form. A call that the policy refuses, or that
+rewritten as TypeScript or dropped when it has no TypeScript form. The rewrite is a pass over the checker's
+message, detail, and fix text, in `sx_ts::terms`: type forms and tool ids are written as above, a fix in Sx syntax is
+dropped, and `help` is `typescript`. A call that the policy refuses, or that
 `explain` lists, names `tools.ns.name` and the span of the call. The failure of a run keeps the span of the
 call that failed.
 
@@ -802,7 +824,8 @@ call that failed.
 | `ts-recursion` | a function calling itself or a later one that calls it | `A function may not call itself` | `loop` |
 | `ts-eval` | `eval`, `Function`, `new Function`, dynamic `import` | `Code cannot be built at run time` | |
 | `ts-tools-escape` | `tools` not directly called, indexed, passed, aliased | `tools can only be called as tools.namespace.name(…)` | |
-| `unknown-tool` | a tool or namespace that is not granted | `No tool X` | the nearest names |
+| `unknown-tool` | a tool or namespace that no declaration defines | `No tool X` | the nearest names |
+| `unauthorized` | a declared tool the host does not grant (checker) | `This program may not call tools.ns.name` | one of the granted tools |
 | `ts-operator` | `**`, bitwise, `in`, `instanceof`, `delete`, `void`, comma, `??=`, `||=`, `&&=` | `X is not supported` | |
 | `ts-loose-equality` | `==`, `!=` other than against `null` | `Use === and !==` | |
 | `ts-instanceof` | `instanceof` | `Types are static; instanceof is not supported` | compare a field |

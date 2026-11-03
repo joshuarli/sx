@@ -1337,11 +1337,22 @@ impl<'r> Checker<'r> {
         scope: &Scope<'a>,
     ) -> Checked {
         let (value, t) = self.check(&args[0], None, scope);
+        self.settled_read(name, span, (value, t), args[0].span, expected)
+    }
+
+    pub(super) fn settled_read(
+        &mut self,
+        name: &str,
+        span: Span,
+        (value, t): Checked,
+        at: Span,
+        expected: Option<&Type>,
+    ) -> Checked {
         let Type::Result(ok, err) = self.resolve(&t) else {
             if matches!(self.resolve(&t), Type::Never) {
                 return self.placeholder(span);
             }
-            return self.receiver_error(name, args[0].span, &t, "the result of Promise.allSettled");
+            return self.receiver_error(name, at, &t, "the result of Promise.allSettled");
         };
         let ok = self.resolve(&ok);
         let clauses = |checker: &mut Checker<'_>, fulfilled: ir::Node, rejected: ir::Node| {

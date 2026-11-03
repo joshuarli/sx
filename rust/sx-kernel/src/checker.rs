@@ -1551,6 +1551,23 @@ impl<'r> Checker<'r> {
             fields.sort_by_key(|(name, _)| order.iter().position(|n| n == name));
             return self.coerce(node(Ir::MakeRecord { fields }, span), &hint, expected, span);
         }
+        if self.dialect == Dialect::JavaScript
+            && !record_fields.is_empty()
+            && let Type::Map(value_type) = &hint
+        {
+            let value_type = (**value_type).clone();
+            let pair_type = Type::Tuple(vec![STRING, value_type.clone()]);
+            let pairs = record_fields
+                .iter()
+                .map(|f| {
+                    let key = literal(Value::string(&f.key.name), STRING, f.key.span);
+                    let (value, _) = self.check(&f.value, Some(&value_type), scope);
+                    node(Ir::MakeTuple { items: vec![key, value] }, f.key.span)
+                })
+                .collect();
+            let list = node(Ir::MakeList { items: pairs, element: pair_type }, span);
+            return self.coerce(prelude(PreludeOp::IntoMap, vec![list], span), &hint, expected, span);
+        }
         if record_fields.is_empty() {
             if let Type::Map(_) = &hint {
                 return self.coerce(literal(Value::Map(MapValue::from_pairs([])), hint.clone(), span), &hint, expected, span);
@@ -2632,6 +2649,18 @@ impl<'r> Checker<'r> {
             return self.coerce(read, &t, expected, span);
         }
         let mut resolved = self.resolve(&record_type);
+        if self.dialect == Dialect::JavaScript
+            && matches!(resolved, Type::Result(..))
+            && default_node.is_none()
+            && let Some(read) = keyword(key).and_then(|field| match field {
+                "status" => Some("js.settled-status"),
+                "value" => Some("js.settled-value"),
+                "reason" => Some("js.settled-reason"),
+                _ => None,
+            })
+        {
+            return self.settled_read(read, span, (record_ir, record_type), record_node.span, expected);
+        }
         let Some(key_name) = keyword(key) else {
             if let Some(value_type) = self.map_value_of(&record_type) {
                 return self.map_get(span, record_ir, &value_type, key, default_node, expected, scope);
@@ -2652,6 +2681,11 @@ impl<'r> Checker<'r> {
             resolved = self.resolve(&resolved);
         }
         let record = match &resolved {
+            Type::Map(value_type) if self.dialect == Dialect::JavaScript => {
+                let value_type = (**value_type).clone();
+                let named = Node { kind: NodeKind::String(key_name.to_string()), span: key.span };
+                return self.map_get(span, record_ir, &value_type, &named, default_node, expected, scope);
+            }
             Type::Map(_) => {
                 self.report(
                     habit("keyword-value", key.span, "A Map is keyed by strings. Keywords only name record fields.")

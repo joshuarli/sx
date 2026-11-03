@@ -5,7 +5,7 @@ use sx_kernel::json::{Json, python_repr, repr_str};
 use sx_kernel::registry::Registry;
 use sx_kernel::syntax::Span;
 
-use crate::commands::span_json;
+use crate::commands::{Naming, span_json};
 
 const POLICY_KEYS: [&str; 3] = ["capabilities", "computed_inputs", "max_write_sites"];
 
@@ -14,6 +14,7 @@ pub(crate) struct Policy {
     capabilities: BTreeSet<String>,
     computed_inputs: BTreeSet<String>,
     max_write_sites: Option<usize>,
+    naming: Naming,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -136,7 +137,7 @@ fn id_list(policy: &Json, key: &str, registry: &Registry) -> Result<Option<BTree
 }
 
 impl Policy {
-    pub fn load(policy: &Json, registry: &Registry) -> Result<Policy, String> {
+    pub fn load(policy: &Json, registry: &Registry, naming: Naming) -> Result<Policy, String> {
         let Json::Object(fields) = policy else {
             return Err("the policy must be a JSON object".to_string());
         };
@@ -164,7 +165,7 @@ impl Policy {
             ),
             Some(other) => return Err(format!("max_write_sites must be a whole number, not {}", python_repr(other))),
         };
-        Ok(Policy { capabilities, computed_inputs, max_write_sites })
+        Ok(Policy { capabilities, computed_inputs, max_write_sites, naming })
     }
 
     pub fn judge(&self, tools: &[ExplainedTool]) -> Verdict {
@@ -172,7 +173,7 @@ impl Policy {
         let mut writes = Vec::new();
         for tool in tools {
             for call in &tool.calls {
-                let site = Site { capability: tool.id.clone(), span: call.span };
+                let site = Site { capability: self.naming.tool(&tool.id), span: call.span };
                 if tool.writes {
                     writes.push(site.clone());
                 }
@@ -207,7 +208,13 @@ impl Policy {
     }
 
     pub fn describe(&self) -> String {
-        let listed = |ids: &BTreeSet<String>| if ids.is_empty() { "none".to_string() } else { ids.iter().cloned().collect::<Vec<_>>().join(", ") };
+        let listed = |ids: &BTreeSet<String>| {
+            if ids.is_empty() {
+                "none".to_string()
+            } else {
+                ids.iter().map(|id| self.naming.tool(id)).collect::<Vec<_>>().join(", ")
+            }
+        };
         let limit = self.max_write_sites.map_or("no limit".to_string(), |limit| limit.to_string());
         format!(
             "## The approval policy\n\nBefore a program runs, the host judges it against a policy, and a program it refuses \

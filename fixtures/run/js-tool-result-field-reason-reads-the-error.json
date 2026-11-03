@@ -1,0 +1,30 @@
+{
+  "description": "reason of a rejected Result a tool returns is the error.",
+  "python": false,
+  "dialect": "js",
+  "program": "(let [r (call store.outcome {})] [(get r :status) (get r :reason)])",
+  "declarations": "declarations/js-payloads.json",
+  "allow": [
+    "store.sizes",
+    "store.size",
+    "store.reading",
+    "store.listed",
+    "store.outcome"
+  ],
+  "responses": [
+    {
+      "capability": "store.outcome",
+      "input": {},
+      "results": [
+        {
+          "output": {"err": "nope"}
+        }
+      ]
+    }
+  ],
+  "expect": {"completed": ["rejected", "nope"]},
+  "trace": [
+    {"request": "r:1", "capability": "store.outcome", "input": {}},
+    {"response": "r:1", "output": {"err": "nope"}}
+  ]
+}

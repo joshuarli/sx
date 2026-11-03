@@ -87,6 +87,11 @@ pub(crate) fn run(args: &[String], new_registry: &dyn Fn() -> Registry) -> Exit 
     Exit { code: EXIT_OK, stdout: text, stderr: String::new() }
 }
 
+pub(crate) fn notes_text(registry: &Registry, declarations: &Json, grants: &Grants) -> String {
+    let tools = granted_tools(registry, declarations, grants);
+    notes(&tools.iter().filter_map(|tool| tool.family).collect())
+}
+
 pub(crate) fn guide_text(registry: &Registry, declarations: &Json, grants: &Grants) -> String {
     let tools = granted_tools(registry, declarations, grants);
     let families: BTreeSet<Family> = tools.iter().filter_map(|tool| tool.family).collect();

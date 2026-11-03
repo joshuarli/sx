@@ -163,7 +163,7 @@ pub(crate) fn load_registry(path: Option<&str>, mut registry: Registry) -> Resul
 
 const TYPESCRIPT_CORES: [&str; 2] = ["js", "text"];
 
-fn add_typescript_cores(registry: &mut Registry) -> Result<(), Stop> {
+pub(crate) fn add_typescript_cores(registry: &mut Registry) -> Result<(), Stop> {
     for id in TYPESCRIPT_CORES {
         if registry.core(id).is_some() {
             continue;
@@ -389,19 +389,44 @@ fn command_explain(
     output: &mut Output,
 ) -> Result<i32, Stop> {
     let tools = explain_tools(program, registry, grants).map_err(Stop::Internal)?;
-    let (json, text) = explain_report(program, &tools, script)?;
+    let (json, text) = explain_report(program, &tools, script, args.language.into())?;
     output.emit(args.format, json, &text)?;
     Ok(EXIT_OK)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Naming {
+    Id,
+    TypeScript,
+}
+
+impl Naming {
+    pub(crate) fn tool(self, id: &str) -> String {
+        match self {
+            Naming::Id => id.to_string(),
+            Naming::TypeScript => sx_ts::terms::tool_name(id),
+        }
+    }
+}
+
+impl From<Language> for Naming {
+    fn from(language: Language) -> Naming {
+        match language {
+            Language::Sx => Naming::Id,
+            Language::TypeScript => Naming::TypeScript,
+        }
+    }
 }
 
 pub(crate) fn explain_report(
     program: &Program,
     tools: &[ExplainedTool],
     script: Option<&BTreeMap<String, Type>>,
+    naming: Naming,
 ) -> Result<(Json, String), Stop> {
     let mut lines = vec!["tools:".to_string()];
     for tool in tools {
-        lines.push(format!("  {}  [{}]  {}", tool.id, tool.effect, if tool.allowed { "allowed" } else { "not allowed" }));
+        lines.push(format!("  {}  [{}]  {}", naming.tool(&tool.id), tool.effect, if tool.allowed { "allowed" } else { "not allowed" }));
         for call in &tool.calls {
             let text = match &call.input {
                 None => RUNTIME_INPUT.to_string(),

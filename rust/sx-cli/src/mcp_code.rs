@@ -5,7 +5,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use sx_kernel::authority::{Authority, Grants};
 use sx_kernel::budgets::Budgets;
 use sx_kernel::checker::input_disagreement;
-use sx_kernel::closers::{CloserEdit, compile_source_inferring, edits_json};
+use sx_kernel::closers::{CloserEdit, Compiled, compile_source_inferring, edits_json};
 use sx_kernel::diagnostics::render;
 use sx_kernel::explain::{ExplainedTool, explain_tools};
 use sx_kernel::ir::Program;
@@ -16,11 +16,12 @@ use sx_kernel::values::Value;
 use sx_packs::Declared;
 use sx_packs::mcp::{Answer, Bindings, Session, ToolHost, serve as serve_connection};
 
+use crate::argparse::Language;
 use crate::commands::{
-    Stop, declared_inputs, diagnostic_json, explain_report, input_values, load_registry, read_json, run_report,
-    script_input_values,
+    Naming, Stop, add_typescript_cores, declared_inputs, diagnostic_json, explain_report, input_values, load_registry, read_json,
+    run_report, script_input_values,
 };
-use crate::guide::guide_text;
+use crate::guide::{guide_text, notes_text};
 use crate::mcp::{Host, scan, usage};
 use crate::mcp_policy::{Policy, Verdict};
 use crate::mcp_serve::{grants_of, stopped};
@@ -43,6 +44,7 @@ struct CodeServer {
     policy: Policy,
     mcp: Option<McpTools>,
     guide: String,
+    language: Language,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -67,10 +69,10 @@ impl Tool {
         }
     }
 
-    fn arguments(self) -> &'static [&'static str] {
-        match self {
-            Tool::Check => &["program"],
-            Tool::Run => &["program", "inputs"],
+    fn arguments(self, language: Language) -> &'static [&'static str] {
+        match (self, language) {
+            (Tool::Check, _) | (Tool::Run, Language::TypeScript) => &["program"],
+            (Tool::Run, Language::Sx) => &["program", "inputs"],
         }
     }
 }
@@ -140,11 +142,11 @@ fn logs_text(logs: &[String]) -> String {
     lines.join("\n") + "\n"
 }
 
-fn calls_text(trace: &Json) -> String {
+fn calls_text(trace: &Json, naming: Naming) -> String {
     let mut calls: Vec<(String, String, Option<String>)> = Vec::new();
     for entry in trace.as_array().unwrap_or_default() {
         if let Some(id) = entry.get("request").and_then(Json::as_str) {
-            let capability = entry.get("capability").and_then(Json::as_str).unwrap_or("?");
+            let capability = entry.get("capability").and_then(Json::as_str).map_or("?".to_string(), |id| naming.tool(id));
             let input = entry.get("input").map(shown).unwrap_or_default();
             calls.push((id.to_string(), format!("{capability} {input}"), None));
         } else if let Some(id) = entry.get("response").and_then(Json::as_str) {
@@ -173,7 +175,14 @@ fn calls_text(trace: &Json) -> String {
 }
 
 impl CodeServer {
+    fn naming(&self) -> Naming {
+        self.language.into()
+    }
+
     fn describe(&self, tool: Tool) -> String {
+        if self.language == Language::TypeScript {
+            return self.describe_typescript(tool);
+        }
         let purpose = match tool {
             Tool::Check => {
                 "Check a program written in Sx and perform no effect. Returns the \
@@ -198,11 +207,38 @@ impl CodeServer {
         }
     }
 
+    fn describe_typescript(&self, tool: Tool) -> String {
+        let purpose = match tool {
+            Tool::Check => {
+                "Check a program written in checkable TypeScript and perform no effect. Returns the diagnostics, with \
+                 line and column in the program you wrote, when it does not check. When it checks, returns its explain \
+                 report, every tool it can call with each literal input and that input's scope verdict, and whether the \
+                 approval policy would let it run. Use it to repair a program before running it."
+            }
+            Tool::Run => {
+                "Run a program written in checkable TypeScript, a subset described below. The program is the body of an \
+                 async function that calls tools as tools.namespace.name({ ... }). The host checks the program, explains \
+                 it, judges it against the approval policy, and only then runs it against the real tools. A program that \
+                 does not check, or that the policy refuses, performs nothing and the result says why. Otherwise the \
+                 result holds the program's value, the console.log lines as logs, and every call made with its outcome. \
+                 A call that already ran is not undone when a later call fails."
+            }
+        };
+        match tool {
+            Tool::Check => format!(
+                "{purpose} The tools and the subset are described in the run tool's description.\n\n{}",
+                self.policy.describe()
+            ),
+            Tool::Run => format!("{purpose}\n\n{}\n\n{}", self.policy.describe(), self.guide.trim_end()),
+        }
+    }
+
     fn listing(&self) -> Vec<Json> {
-        let program = Json::object([
-            ("type", Json::string("string")),
-            ("description", Json::string("The Sx program text.")),
-        ]);
+        let program_text = match self.language {
+            Language::Sx => "The Sx program text.",
+            Language::TypeScript => "The TypeScript program text.",
+        };
+        let program = Json::object([("type", Json::string("string")), ("description", Json::string(program_text))]);
         let inputs = Json::object([
             ("type", Json::string("object")),
             (
@@ -214,7 +250,7 @@ impl CodeServer {
             .into_iter()
             .map(|tool| {
                 let mut properties = vec![("program", program.clone())];
-                if tool == Tool::Run {
+                if tool == Tool::Run && self.language == Language::Sx {
                     properties.push(("inputs", inputs.clone()));
                 }
                 let schema = Json::object([
@@ -242,8 +278,15 @@ impl CodeServer {
     }
 
     fn examine(&self, source: &str) -> Result<Examined, Stop> {
-        let compiled =
-            compile_source_inferring(source, &self.registry, Authority::Granted(&self.grants), &self.inputs, Budgets::default());
+        let authority = Authority::Granted(&self.grants);
+        let compiled = match self.language {
+            Language::Sx => compile_source_inferring(source, &self.registry, authority, &self.inputs, Budgets::default()),
+            Language::TypeScript => Compiled {
+                check: sx_ts::compile_source(source, &self.registry, authority, &self.inputs, Budgets::default()),
+                source: source.to_string(),
+                edits: Vec::new(),
+            },
+        };
         let checked = compiled.check;
         let Some(program) = checked.program else {
             return Ok(Examined::Rejected {
@@ -274,7 +317,7 @@ impl CodeServer {
                 text,
             },
             Examined::Proposed(proposal) => {
-                let (explain, explained) = explain_report(&proposal.program, &proposal.tools, proposal.script.as_ref())?;
+                let (explain, explained) = explain_report(&proposal.program, &proposal.tools, proposal.script.as_ref(), self.naming())?;
                 let approved = proposal.verdict == Verdict::Approved;
                 Reply {
                     is_error: !approved,
@@ -354,7 +397,7 @@ impl CodeServer {
         let (outcome, machine) =
             crate::native::run(&proposal.program, &self.grants, &self.declared, session.as_ref(), &values, Budgets::default());
         let report = run_report(outcome, &machine)?;
-        let calls = report.json.get("trace").map(calls_text).unwrap_or_default();
+        let calls = report.json.get("trace").map(|trace| calls_text(trace, self.naming())).unwrap_or_default();
         let logs = logs_text(&report.logs);
         Ok(Reply {
             is_error: !report.completed,
@@ -365,9 +408,9 @@ impl CodeServer {
 
     fn dispatch(&self, tool: Tool, arguments: &Json) -> Json {
         if let Json::Object(fields) = arguments
-            && let Some((name, _)) = fields.iter().find(|(name, _)| !tool.arguments().contains(&name.as_str()))
+            && let Some((name, _)) = fields.iter().find(|(name, _)| !tool.arguments(self.language).contains(&name.as_str()))
         {
-            return failed_result(&format!("{} takes {}, not {name}", tool.name(), tool.arguments().join(" and ")));
+            return failed_result(&format!("{} takes {}, not {name}", tool.name(), tool.arguments(self.language).join(" and ")));
         }
         let Some(source) = arguments.get("program").and_then(Json::as_str) else {
             return failed_result(&format!("{} needs a string program", tool.name()));
@@ -412,7 +455,7 @@ impl ToolHost for CodeServer {
 }
 
 fn build(args: &[String], new_registry: &dyn Fn() -> Registry) -> Result<CodeServer, Exit> {
-    let flags = ["--declarations", "--grants", "--allow", "--policy", "--timeout-ms", "--name"];
+    let flags = ["--declarations", "--grants", "--allow", "--policy", "--timeout-ms", "--name", "--language"];
     let options = scan(args, &flags).map_err(|message| usage(&message))?;
     if let Some(extra) = options.positional.first() {
         return Err(usage(&format!("unrecognized argument {extra}")));
@@ -427,11 +470,19 @@ fn build(args: &[String], new_registry: &dyn Fn() -> Registry) -> Result<CodeSer
         .timeout()
         .map_err(|message| usage(&message))?
         .map_or(sx_packs::mcp::Limits::STANDARD, |timeout| sx_packs::mcp::Limits { startup: timeout, call: timeout });
-    let (registry, declarations, declared) = load_registry(Some(declarations_path), new_registry()).map_err(stopped)?;
+    let language = match options.last("--language") {
+        None | Some("sx") => Language::Sx,
+        Some("ts") => Language::TypeScript,
+        Some(other) => return Err(usage(&format!("--language takes sx or ts, not {other}"))),
+    };
+    let (mut registry, declarations, declared) = load_registry(Some(declarations_path), new_registry()).map_err(stopped)?;
+    if language == Language::TypeScript {
+        add_typescript_cores(&mut registry).map_err(stopped)?;
+    }
     let grants = grants_of(&options, &registry).map_err(stopped)?;
     let policy = read_json(policy_path, "policy")
         .and_then(|json| {
-            Policy::load(&json, &registry)
+            Policy::load(&json, &registry, language.into())
                 .map_err(|message| Stop::Usage(format!("invalid policy {}: {message}", path_text(policy_path))))
         })
         .map_err(stopped)?;
@@ -452,8 +503,24 @@ fn build(args: &[String], new_registry: &dyn Fn() -> Registry) -> Result<CodeSer
         }
         (None, Err(_)) => None,
     };
-    let guide = guide_text(&registry, &declarations, &grants);
-    Ok(CodeServer { registry, declared, grants, inputs, policy, mcp, guide })
+    let guide = match language {
+        Language::Sx => guide_text(&registry, &declarations, &grants),
+        Language::TypeScript => typescript_guide(&registry, &declarations, &grants),
+    };
+    Ok(CodeServer { registry, declared, grants, inputs, policy, mcp, guide, language })
+}
+
+const TYPESCRIPT_RULES: &str = include_str!("../guide/typescript-rules.md");
+
+fn typescript_guide(registry: &Registry, declarations: &Json, grants: &Grants) -> String {
+    let declared = sx_ts::declarations::declarations(registry, &|id| grants.contains(id));
+    let mut parts = vec![format!("## Your tools\n\n```ts\n{declared}\n```")];
+    let notes = notes_text(registry, declarations, grants);
+    if !notes.trim().is_empty() {
+        parts.push(format!("## How the tools behave\n\n{}", sx_ts::terms::rewrite(notes.trim_end(), registry).replace("`none`", "`null`")));
+    }
+    parts.push(TYPESCRIPT_RULES.trim_end().to_string());
+    parts.join("\n\n")
 }
 
 pub(crate) fn serve(args: &[String], new_registry: &dyn Fn() -> Registry) -> Exit {

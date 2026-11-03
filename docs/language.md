@@ -1437,8 +1437,11 @@ declarations import as `sx mcp import` writes them and which are called as `sx m
 
 ```sh
 sx mcp code --declarations FILE --policy FILE [--grants FILE] [--allow ID ...]
-            [--name NAME] [--timeout-ms MS] [-- COMMAND [ARG ...]]
+            [--language {sx,ts}] [--name NAME] [--timeout-ms MS] [-- COMMAND [ARG ...]]
 ```
+
+`--language ts` makes both tools take a checkable TypeScript program (see `docs/checkable-typescript.md`): `run`
+lists the tools as a `.d.ts` and the subset's rules in place of the guide, and `run` takes no `inputs`.
 
 `--declarations`, `--grants`, `--allow`, `--name`, and `--timeout-ms` mean what they mean for `sx mcp run`
 and `sx mcp serve`. A granted tool that is an MCP tool needs the server command, and a server command needs

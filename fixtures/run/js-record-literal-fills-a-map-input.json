@@ -1,0 +1,50 @@
+{
+  "description": "A record literal where a Map is wanted builds the map.",
+  "python": false,
+  "dialect": "js",
+  "program": "(call store.keep {:sizes {:a 1 :b 2}})",
+  "declarations": "declarations/js-payloads.json",
+  "allow": [
+    "store.sizes",
+    "store.size",
+    "store.reading",
+    "store.listed",
+    "store.outcome",
+    "store.keep"
+  ],
+  "responses": [
+    {
+      "capability": "store.keep",
+      "input": {
+        "sizes": {
+          "a": 1,
+          "b": 2
+        }
+      },
+      "results": [
+        {
+          "output": null
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": null
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "store.keep",
+      "input": {
+        "sizes": {
+          "a": 1,
+          "b": 2
+        }
+      }
+    },
+    {
+      "response": "r:1",
+      "output": null
+    }
+  ]
+}
