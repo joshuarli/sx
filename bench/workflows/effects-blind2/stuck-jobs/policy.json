@@ -1,0 +1,5 @@
+{
+  "capabilities": ["jobs.queues", "jobs.list", "fs.write-text"],
+  "computed_inputs": ["jobs.list", "fs.write-text"],
+  "max_write_sites": 1
+}

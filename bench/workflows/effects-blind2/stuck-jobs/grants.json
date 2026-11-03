@@ -1,0 +1,7 @@
+{
+  "jobs.queues": {"origins": ["{{jobs_origin}}"], "methods": ["GET"]},
+  "jobs.list": {"origins": ["{{jobs_origin}}"], "methods": ["GET"]},
+  "jobs.retry": {"origins": ["{{jobs_origin}}"], "methods": ["POST"]},
+  "jobs.cancel": {"origins": ["{{jobs_origin}}"], "methods": ["POST"]},
+  "fs.write-text": {"roots": ["{{root}}/reports"]}
+}

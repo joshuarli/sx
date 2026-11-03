@@ -1,0 +1,27 @@
+(let [queues (call jobs.queues {})
+      jobs (loop {:max 20} [cursor none
+                           seen []]
+             (let [page (retry {:delays [200ms 400ms]} (call jobs.list {:cursor cursor}))
+                   all (concat seen (get page :items))]
+               (match (get page :next)
+                 (some next) (recur next all)
+                 none all)))
+      stuck (keep (fn [j]
+                    (let [own (filter (fn [q] (= (get q :name) (get j :queue))) queues)]
+                      (if (= (count own) 0)
+                        none
+                        (if (and (or (= (get j :state) "queued") (= (get j :state) "running"))
+                                 (> (get j :age_s) (get (first own) :max_age_s)))
+                          (some {:id (get j :id) :queue (get j :queue) :state (get j :state)
+                                 :age (get j :age_s) :owner (get (first own) :owner)})
+                          none))))
+                  jobs)
+      section (fn [[owner own]]
+                (str owner ": " (count own) "\n"
+                     (text.join ""
+                                (map (fn [j] (str "  " (get j :id) " " (get j :queue) " " (get j :state) " " (get j :age) "\n"))
+                                     (sort-by (fn [j] [(- 0 (get j :age)) (get j :id)]) own)))))
+      report (str (text.join "" (map section (sort-by (fn [[owner _]] owner) (group-by (fn [j] (get j :owner)) stuck))))
+                  "total: " (count stuck) "\n")
+      _ (call fs.write-text {:path "{{root}}/reports/stuck.txt" :text report})]
+  (count stuck))

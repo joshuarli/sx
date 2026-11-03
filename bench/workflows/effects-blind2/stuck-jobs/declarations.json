@@ -1,0 +1,41 @@
+{
+  "cores": ["text", "re", "json"],
+  "packs": ["fs"],
+  "enums": {"JobState": {"queued": null, "running": null, "failed": null, "done": null}},
+  "capabilities": [
+    {
+      "id": "jobs.queues",
+      "http": {"method": "GET", "url": "{{jobs_origin}}/queues", "query": []},
+      "input": "Record {}",
+      "output": "List<Record open {name: String, owner: String, max_age_s: Int}>",
+      "effect": "read",
+      "description": "Lists the queues with the team that owns each and the longest a job may wait or run."
+    },
+    {
+      "id": "jobs.list",
+      "http": {"method": "GET", "url": "{{jobs_origin}}/jobs", "query": ["cursor"]},
+      "input": "Record {cursor: Option<String>}",
+      "output": "Record open {items: List<Record open {id: String, queue: String, state: JobState, age_s: Int, attempts: Int}>, next: Option<String>}",
+      "effect": "read",
+      "description": "Reads one page of jobs. Pass the previous page's next cursor, or no cursor for the first page."
+    },
+    {
+      "id": "jobs.retry",
+      "http": {"method": "POST", "url": "{{jobs_origin}}/jobs/{id}/retry", "query": []},
+      "input": "Record {id: String}",
+      "output": "Record open {id: String, state: JobState}",
+      "effect": "write",
+      "idempotent": false,
+      "description": "Puts a job back in its queue as a new run."
+    },
+    {
+      "id": "jobs.cancel",
+      "http": {"method": "POST", "url": "{{jobs_origin}}/jobs/{id}/cancel", "query": []},
+      "input": "Record {id: String}",
+      "output": "Record open {id: String, state: JobState}",
+      "effect": "write",
+      "idempotent": true,
+      "description": "Cancels a job."
+    }
+  ]
+}
