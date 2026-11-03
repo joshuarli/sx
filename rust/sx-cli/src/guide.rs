@@ -6,12 +6,14 @@ use sx_kernel::json::Json;
 use sx_kernel::registry::{Capability, Registry};
 use sx_kernel::types::{EnumType, Primitive, RecordType, Type};
 
-use crate::commands::{Stop, load_registry};
+use crate::commands::{Stop, add_typescript_cores, load_registry};
+use crate::mcp_code::typescript_guide;
 use crate::mcp::scan;
 use crate::mcp_serve::grants_of;
 use crate::{EXIT_FAILED, EXIT_OK, EXIT_USAGE, Exit};
 
 const GUIDE_HELP: &str = r#"usage: sx guide --declarations FILE [--grants FILE] [--allow ID ...] [--notes]
+                [--language {sx,ts}] [--rules]
 
 Print the guide for writing one program against these declarations: the
 kernel guide, how TypeScript habits map to Sx, a section for each pack and
@@ -24,6 +26,9 @@ options:
   --allow ID           Grant one capability that declares no scope
   --notes              Print only the notes on how the granted tools behave,
                        which hold for a program in any language
+  --language {sx,ts}   With ts, print the tools as TypeScript declarations
+                       and their notes, as sx mcp code --language ts shows them
+  --rules              With --language ts, add the rules of the TypeScript subset
 "#;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -58,8 +63,9 @@ pub(crate) fn run(args: &[String], new_registry: &dyn Fn() -> Registry) -> Exit 
         return Exit { code: EXIT_OK, stdout: GUIDE_HELP.to_string(), stderr: String::new() };
     }
     let notes_only = args.iter().any(|arg| arg == "--notes");
-    let rest: Vec<String> = args.iter().filter(|arg| *arg != "--notes").cloned().collect();
-    let options = match scan(&rest, &["--declarations", "--grants", "--allow"]) {
+    let rules = args.iter().any(|arg| arg == "--rules");
+    let rest: Vec<String> = args.iter().filter(|arg| *arg != "--notes" && *arg != "--rules").cloned().collect();
+    let options = match scan(&rest, &["--declarations", "--grants", "--allow", "--language"]) {
         Ok(options) => options,
         Err(message) => return guide_usage(&message),
     };
@@ -69,8 +75,24 @@ pub(crate) fn run(args: &[String], new_registry: &dyn Fn() -> Registry) -> Exit 
     let Some(path) = options.last("--declarations") else {
         return guide_usage("sx guide needs --declarations FILE");
     };
+    let typescript = match options.last("--language") {
+        None | Some("sx") => false,
+        Some("ts") => true,
+        Some(other) => return guide_usage(&format!("--language takes sx or ts, not {other}")),
+    };
+    if rules && !typescript {
+        return guide_usage("--rules needs --language ts");
+    }
+    if notes_only && typescript {
+        return guide_usage("--notes and --language ts do not combine");
+    }
     let loaded = load_registry(Some(path), new_registry())
-        .and_then(|(registry, declarations, _)| grants_of(&options, &registry).map(|grants| (registry, declarations, grants)));
+        .and_then(|(mut registry, declarations, _)| {
+            if typescript {
+                add_typescript_cores(&mut registry)?;
+            }
+            grants_of(&options, &registry).map(|grants| (registry, declarations, grants))
+        });
     let (registry, declarations, grants) = match loaded {
         Ok(loaded) => loaded,
         Err(Stop::Usage(message)) => return guide_usage(&message),
@@ -78,7 +100,9 @@ pub(crate) fn run(args: &[String], new_registry: &dyn Fn() -> Registry) -> Exit 
             return Exit { code: EXIT_FAILED, stdout: String::new(), stderr: format!("sx guide: internal error: {message}\n") };
         }
     };
-    let text = if notes_only {
+    let text = if typescript {
+        typescript_guide(&registry, &declarations, &grants, rules)
+    } else if notes_only {
         let tools = granted_tools(&registry, &declarations, &grants);
         notes(&tools.iter().filter_map(|tool| tool.family).collect())
     } else {

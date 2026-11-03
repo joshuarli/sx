@@ -505,21 +505,23 @@ fn build(args: &[String], new_registry: &dyn Fn() -> Registry) -> Result<CodeSer
     };
     let guide = match language {
         Language::Sx => guide_text(&registry, &declarations, &grants),
-        Language::TypeScript => typescript_guide(&registry, &declarations, &grants),
+        Language::TypeScript => typescript_guide(&registry, &declarations, &grants, true),
     };
     Ok(CodeServer { registry, declared, grants, inputs, policy, mcp, guide, language })
 }
 
 const TYPESCRIPT_RULES: &str = include_str!("../guide/typescript-rules.md");
 
-fn typescript_guide(registry: &Registry, declarations: &Json, grants: &Grants) -> String {
+pub(crate) fn typescript_guide(registry: &Registry, declarations: &Json, grants: &Grants, rules: bool) -> String {
     let declared = sx_ts::declarations::declarations(registry, &|id| grants.contains(id));
     let mut parts = vec![format!("## Your tools\n\n```ts\n{declared}\n```")];
     let notes = notes_text(registry, declarations, grants);
     if !notes.trim().is_empty() {
         parts.push(format!("## How the tools behave\n\n{}", sx_ts::terms::rewrite(notes.trim_end(), registry).replace("`none`", "`null`")));
     }
-    parts.push(TYPESCRIPT_RULES.trim_end().to_string());
+    if rules {
+        parts.push(TYPESCRIPT_RULES.trim_end().to_string());
+    }
     parts.join("\n\n")
 }
 

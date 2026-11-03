@@ -770,3 +770,27 @@ fn typescript_mode_takes_no_inputs_and_an_unknown_language_is_a_usage_error() {
     assert_eq!(output.status.code(), Some(64));
     assert!(String::from_utf8_lossy(&output.stderr).contains("--language takes sx or ts"), "{}", String::from_utf8_lossy(&output.stderr));
 }
+
+#[test]
+fn the_typescript_guide_command_prints_what_the_run_tool_describes_and_leaves_out_the_rules_on_request() {
+    let sandbox = Sandbox::typescript("ts-guide", false, FS_GRANTS, OPEN_POLICY);
+    let guide = |extra: &[&str]| {
+        let output = Command::new(SX)
+            .args(["guide", "--declarations", &sandbox.at("declarations.json"), "--grants", &sandbox.at("grants.json")])
+            .args(["--language", "ts"])
+            .args(extra)
+            .output()
+            .expect("guide runs");
+        assert_eq!(output.status.code(), Some(0), "{}", String::from_utf8_lossy(&output.stderr));
+        String::from_utf8_lossy(&output.stdout).trim_end().to_string()
+    };
+    let with_rules = guide(&["--rules"]);
+    let without = guide(&[]);
+    let mut client = sandbox.client();
+    let tools = client.list();
+    let run = string_at(tools.get(1).expect("run tool"), &["description"]);
+    assert!(run.contains(&with_rules), "the run description lacks the guide");
+    assert!(without.starts_with("## Your tools"));
+    assert!(!without.contains("## Writing the program"));
+    assert!(with_rules.starts_with(&without));
+}
