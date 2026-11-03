@@ -52,7 +52,7 @@ MUTANTS: tuple[Mutant, ...] = (
     Mutant("duplicate-key", "ts-key", "const m = { a: 1, a: 2 };"),
     Mutant("default-parameter", "ts-param", "function m(a = 1) { return a; }"),
     Mutant("console-error", "ts-console", "console.error(\"x\");"),
-    Mutant("optional-chain-value", "ts-optional-chain", "const o = { a: null }; const m = o?.a;"),
+    Mutant("optional-chain-value", "ts-optional-chain", "const o = { a: null }; const m = o?.a; console.log(m);"),
     Mutant("while-in-loop-body", "ts-while", "for (const x of [1]) { let k = 0; while (k < x) { k += 1; } }"),
     Mutant("write-to-parameter", "ts-mutation-pattern", "function m(a: number[]) { a[0] = 1; return a; }"),
     Mutant("increment-in-expression", "ts-mutation-pattern", "let m = 0; const n = [1, 2][m++];"),

@@ -228,6 +228,16 @@ impl<'r> Checker<'r> {
         }
     }
 
+    pub(super) fn present_when_not_optional(&mut self, value: ir::Node, t: Type, span: Span) -> Checked {
+        match self.resolve(&t) {
+            Type::Option(_) | Type::Variable(_) | Type::Never => (value, t),
+            _ => {
+                let wrapped = option(t);
+                (some_of(value, &wrapped, span), wrapped)
+            }
+        }
+    }
+
     pub(super) fn settled_shape(&mut self, value: ir::Node, t: &Type, span: Span) -> Option<(ir::Node, Type)> {
         let resolved = self.resolve(t);
         match &resolved {

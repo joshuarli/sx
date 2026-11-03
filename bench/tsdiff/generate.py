@@ -280,7 +280,7 @@ class Writer:
     def strs_(self, d: int = 1) -> str:
         r = self.rng
         found = [v.name for v in self.vars_of("strs")]
-        options: list[Callable[[], str]] = [lambda: "[" + ", ".join(self.str_(0) for _ in range(r.randint(0, 3))) + "]"]
+        options: list[Callable[[], str]] = [lambda: "[" + ", ".join(self.str_(0) for _ in range(r.randint(1, 3))) + "]"]
         if found:
             options += [lambda: r.choice(found)] * 3
         if d > 0:
@@ -300,7 +300,7 @@ class Writer:
         r = self.rng
         found = [v.name for v in self.vars_of("ints")]
         options: list[Callable[[], str]] = [
-            lambda: "[" + ", ".join(r.choice(INT_LITERALS) for _ in range(r.randint(0, 4))) + "]"
+            lambda: "[" + ", ".join(r.choice(INT_LITERALS) for _ in range(r.randint(1, 4))) + "]"
         ]
         if found:
             options += [lambda: r.choice(found)] * 3

@@ -2273,6 +2273,12 @@ impl<'r> Checker<'r> {
         let subject = &items[1];
         let (scrutinee, scrutinee_type) = self.outside_tail(|c| c.check(subject, None, scope));
         let clause_nodes = &items[2..];
+        let optional_patterns = matches!(head_name(&clause_nodes[0]), Some("some")) || symbol(&clause_nodes[0]) == Some("none");
+        let (scrutinee, scrutinee_type) = if self.dialect == Dialect::JavaScript && optional_patterns {
+            self.present_when_not_optional(scrutinee, scrutinee_type, subject.span)
+        } else {
+            (scrutinee, scrutinee_type)
+        };
         if clause_nodes.len() % 2 == 1 {
             self.report(
                 Diagnostic::new(
@@ -4507,6 +4513,21 @@ impl<'r> Checker<'r> {
                 self.sort_key_owner = None;
                 if self.dialect == Dialect::JavaScript && self.resolve(&key) == STRING {
                     function = self.js_ordered_key(function);
+                }
+                if self.dialect == Dialect::JavaScript
+                    && symbol(function_node) == Some("identity")
+                    && !self.is_open(&key)
+                    && self.resolve(&key) != STRING
+                {
+                    self.report(
+                        Diagnostic::new(
+                            "ts-sort-comparator",
+                            function_node.span,
+                            "sort() without a comparator orders values as text",
+                        )
+                        .detail(format!("The elements are {}, not Strings.", describe(&self.zonk(&key))))
+                        .fix("(a, b) => k(a) - k(b)"),
+                    );
                 }
                 if self.is_open(&key) {
                     self.late_sort_keys.push((key.clone(), function_node.span));
