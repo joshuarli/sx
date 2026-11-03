@@ -4,5 +4,5 @@
                                     v'2
                                     (err e)
                                     (if (= (get e :kind) "NotFound") (some "") (fail e)))]
-                        (match ret'1 (some r'3) r'3 none unit)))]
+                        (match ret'1 (some r'3) r'3 none (fail "unreachable"))))]
   (let [[a b] (par (readOrDefault "a") (readOrDefault "b"))] (+ a b)))

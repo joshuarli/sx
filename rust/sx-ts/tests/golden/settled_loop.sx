@@ -1,0 +1,10 @@
+(let [settled (par-map {:limit 16} (fn [p] (attempt (call fs.read-text {:path p}))) ["x" "y"])
+      good 0
+      good (reduce (fn [good s]
+                     (let [good (if (= (js.settled-status s) "fulfilled")
+                                  (let [good (+ good (js.length (js.settled-value s)))] good)
+                                  good)]
+                       good))
+             good
+             settled)]
+  good)

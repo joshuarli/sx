@@ -1,0 +1,6 @@
+(let [ret'1 (match (attempt (let [r (call fs.read-text {:path "a"})] (some (str "ok " r))))
+              (ok v'2)
+              v'2
+              (err e)
+              (some (str "failed " (get e :message))))]
+  (match ret'1 (some r'3) r'3 none (fail "unreachable")))

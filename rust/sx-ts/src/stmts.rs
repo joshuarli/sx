@@ -411,7 +411,8 @@ impl<'a> Lowerer<'a> {
             StmtKind::If(condition, then, otherwise) => self.if_stmt(condition, then, otherwise.as_deref(), span, rest, k),
             StmtKind::ForOf { pattern, source, body } => {
                 let source_node = self.value_of(source, false);
-                self.for_of(pattern, source_node, body, span, rest, k)
+                let element_hint = if self.hint_of(source) == Hint::SettledList { Hint::Settled } else { Hint::Unknown };
+                self.for_of(pattern, source_node, element_hint, body, span, rest, k)
             }
             StmtKind::For { init, test, update, body } => self.counted_for(init.as_deref(), test.as_ref(), update.as_ref(), body, span, rest, k),
             StmtKind::Try { block, param, handler } => self.try_stmt(block, param.as_ref(), handler, span, rest, k),
@@ -671,7 +672,7 @@ impl<'a> Lowerer<'a> {
         app("put", vec![base, key, new], span)
     }
 
-    pub fn for_of(&mut self, pattern: &Pattern, source: Node, body: &Stmt, span: Span, rest: &[Stmt], k: Cont<'_, 'a>) -> Node {
+    pub fn for_of(&mut self, pattern: &Pattern, source: Node, element_hint: Hint, body: &Stmt, span: Span, rest: &[Stmt], k: Cont<'_, 'a>) -> Node {
         let vars = self.existing(assigned_outer_stmt(body));
         let exit = stmt_exits_of(body);
         let layout = Layout {
@@ -685,7 +686,9 @@ impl<'a> Lowerer<'a> {
         self.scopes.push(Scope::new());
         let (param, wrap) = match &pattern.kind {
             PatternKind::Ident(name) => {
-                let sx = self.declare(name, self.plain_var());
+                let mut template = self.plain_var();
+                template.hint = element_hint;
+                let sx = self.declare(name, template);
                 (sym(&sx, pattern.span), Vec::new())
             }
             _ => {
@@ -840,7 +843,7 @@ impl<'a> Lowerer<'a> {
         }
         let source = app("range", args, span);
         let pattern = Pattern { kind: PatternKind::Ident(counter.clone()), span: decl.pattern.span };
-        self.for_of(&pattern, source, body, span, rest, k)
+        self.for_of(&pattern, source, Hint::Unknown, body, span, rest, k)
     }
 
     fn invariant_bound(&self, bound: &Expr, assigned: &[String], counter: &str) -> bool {
@@ -993,7 +996,11 @@ impl<'a> Lowerer<'a> {
             span,
         );
         let rest_node = self.stmts(rest, k);
-        let mut after = rest_node;
+        let mut after = if diverges(block) && diverges(handler) {
+            app("fail", vec![string("unreachable", span)], span)
+        } else {
+            rest_node
+        };
         if let Some(ret) = &layout.ret {
             after = self.after_ret(ret, after, span);
         }
