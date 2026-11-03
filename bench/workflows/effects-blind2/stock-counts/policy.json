@@ -1,0 +1,5 @@
+{
+  "capabilities": ["wh.stock", "wh.level", "wh.adjust", "fs.read-text"],
+  "computed_inputs": ["wh.level", "wh.adjust", "fs.read-text"],
+  "max_write_sites": 2
+}

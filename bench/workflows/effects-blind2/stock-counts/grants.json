@@ -1,0 +1,6 @@
+{
+  "wh.stock": {"origins": ["{{wh_origin}}"], "methods": ["GET"]},
+  "wh.level": {"origins": ["{{wh_origin}}"], "methods": ["GET"]},
+  "wh.adjust": {"origins": ["{{wh_origin}}"], "methods": ["POST"]},
+  "fs.read-text": {"roots": ["{{root}}/counts"]}
+}

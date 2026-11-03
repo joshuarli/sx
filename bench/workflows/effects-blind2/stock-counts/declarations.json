@@ -1,0 +1,31 @@
+{
+  "cores": ["text", "re", "json"],
+  "packs": ["fs"],
+  "capabilities": [
+    {
+      "id": "wh.stock",
+      "http": {"method": "GET", "url": "{{wh_origin}}/stock", "query": []},
+      "input": "Record {}",
+      "output": "List<Record open {sku: String, on_hand: Int, frozen: Bool}>",
+      "effect": "read",
+      "description": "Lists every SKU with its on-hand quantity and whether it is frozen for audit."
+    },
+    {
+      "id": "wh.level",
+      "http": {"method": "GET", "url": "{{wh_origin}}/stock/{sku}", "query": []},
+      "input": "Record {sku: String}",
+      "output": "Record open {sku: String, on_hand: Int, frozen: Bool}",
+      "effect": "read",
+      "description": "Reads one SKU's on-hand quantity."
+    },
+    {
+      "id": "wh.adjust",
+      "http": {"method": "POST", "url": "{{wh_origin}}/adjustments", "query": []},
+      "input": "Record {sku: String, delta: Int}",
+      "output": "Record open {on_hand: Int}",
+      "effect": "write",
+      "idempotent": false,
+      "description": "Changes a SKU's on-hand quantity by a signed delta and returns the new quantity. Every successful call applies the delta again."
+    }
+  ]
+}

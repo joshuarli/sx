@@ -1,0 +1,30 @@
+(let [text (call fs.read-text {:path "{{root}}/counts/cycle.csv"})
+      counted (into-map
+                (keep (fn [line]
+                        (let [cells (text.split line ",")]
+                          (if (< (count cells) 2)
+                            none
+                            (match (text.to-int (text.trim (nth cells 1)))
+                              (some n) (some [(text.trim (nth cells 0)) n])
+                              none none))))
+                      (text.split text "\n")))
+      stock (call wh.stock {})
+      plan (keep (fn [[sku n]]
+                   (let [row (filter (fn [r] (= (get r :sku) sku)) stock)]
+                     (if (= (count row) 0)
+                       none
+                       (let [level (first row)
+                             delta (- n (get level :on_hand))]
+                         (if (or (get level :frozen) (= delta 0))
+                           none
+                           (some {:sku sku :counted n :delta delta}))))))
+                 (entries counted))
+      adjust (fn [p]
+               (let [sku (get p :sku)]
+                 (match (attempt (call wh.adjust {:sku sku :delta (get p :delta)}))
+                   (ok _) {:sku sku :delta (get p :delta)}
+                   (err _) (let [now (call wh.level {:sku sku})
+                                 missing (- (get p :counted) (get now :on_hand))
+                                 _ (when (not= missing 0) (call wh.adjust {:sku sku :delta missing}))]
+                             {:sku sku :delta (get p :delta)}))))]
+  (map adjust plan))
