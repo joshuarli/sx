@@ -552,6 +552,14 @@ struct Test {
     presence: bool,
     name: Option<String>,
     inner: Option<Type>,
+    narrow_true: Vec<(String, Type)>,
+    narrow_false: Vec<(String, Type)>,
+}
+
+impl Test {
+    fn plain(condition: ir::Node) -> Test {
+        Test { condition, presence: false, name: None, inner: None, narrow_true: Vec::new(), narrow_false: Vec::new() }
+    }
 }
 
 #[derive(Clone)]
@@ -1633,11 +1641,12 @@ impl<'r> Checker<'r> {
             });
         }
         if self.dialect == Dialect::JavaScript
-            && matches!(name, "truthy" | "typeof" | "record-spread")
+            && matches!(name, "truthy" | "present" | "typeof" | "record-spread")
             && scope.get(name).is_none()
         {
             return self.outside_tail(|c| match name {
                 "truthy" => c.form_truthy(span, items, expected, scope),
+                "present" => c.form_present(span, items, expected, scope),
                 "typeof" => c.form_typeof(span, items, expected, scope),
                 _ => c.form_record_spread(span, items, expected, scope),
             });
@@ -2041,6 +2050,9 @@ impl<'r> Checker<'r> {
     }
 
     fn check_test<'a>(&mut self, condition_node: &'a Node, scope: &Scope<'a>, who: &'static str) -> Test {
+        if let Some(operand) = self.present_operand(condition_node, scope) {
+            return self.check_present_test(operand, condition_node, scope, who);
+        }
         let (condition, condition_type) = self.outside_tail(|c| c.check(condition_node, None, scope));
         let resolved = self.resolve(&condition_type);
         if let Type::Option(inner_type) = &resolved {
@@ -2060,19 +2072,10 @@ impl<'r> Checker<'r> {
                         ))
                         .help(test_help(who)),
                 );
-                return Test { condition, presence: false, name: None, inner: None };
+                return Test::plain(condition);
             }
             if !matches!(inner, Type::Never) {
-                if self.is_open(&inner) {
-                    self.presence_tests.push(PresenceTest {
-                        inner: (**inner_type).clone(),
-                        span: condition_node.span,
-                        shown: show(condition_node),
-                        who,
-                    });
-                }
-                let name = symbol(condition_node).filter(|n| scope.is_value(n)).map(str::to_string);
-                return Test { condition, presence: true, name, inner: Some((**inner_type).clone()) };
+                return self.presence_test(condition, inner_type, condition_node, scope, who);
             }
         }
         if !self.trial(&condition_type, &BOOL) {
@@ -2087,7 +2090,27 @@ impl<'r> Checker<'r> {
                 Diagnostic::new("condition-not-bool", condition_node.span, message).maybe_detail(hint).help(test_help(who)),
             );
         }
-        Test { condition, presence: false, name: None, inner: None }
+        self.with_narrowings(Test::plain(condition), condition_node, scope)
+    }
+
+    fn presence_test(&mut self, condition: ir::Node, inner_type: &Type, operand: &Node, scope: &Scope<'_>, who: &'static str) -> Test {
+        if self.is_open(&self.resolve(inner_type)) {
+            self.presence_tests.push(PresenceTest {
+                inner: inner_type.clone(),
+                span: operand.span,
+                shown: show(operand),
+                who,
+            });
+        }
+        let name = symbol(operand).filter(|n| scope.is_value(n)).map(str::to_string);
+        Test {
+            condition,
+            presence: true,
+            name,
+            inner: Some(inner_type.clone()),
+            narrow_true: Vec::new(),
+            narrow_false: Vec::new(),
+        }
     }
 
     fn check_presence_tests(&mut self) {
@@ -2155,13 +2178,27 @@ impl<'r> Checker<'r> {
     }
 
     fn narrowed<'a>(test: &Test, scope: &Scope<'a>) -> Scope<'a> {
-        match (&test.name, &test.inner) {
+        let mut narrowed = match (&test.name, &test.inner) {
             (Some(name), Some(inner)) => scope.value(name, inner.clone()),
             _ => scope.clone(),
+        };
+        for (name, inner) in &test.narrow_true {
+            narrowed = narrowed.value(name, inner.clone());
         }
+        narrowed
     }
 
-    fn lower_test(test: Test, then: ir::Node, otherwise: ir::Node, span: Span) -> ir::Node {
+    fn narrowed_else<'a>(test: &Test, scope: &Scope<'a>) -> Scope<'a> {
+        let mut narrowed = scope.clone();
+        for (name, inner) in &test.narrow_false {
+            narrowed = narrowed.value(name, inner.clone());
+        }
+        narrowed
+    }
+
+    fn lower_test(test: Test, then: ir::Node, otherwise: ir::Node, span: Span, result: &Type) -> ir::Node {
+        let then = js::guard_present(&test.narrow_true, then, result, span);
+        let otherwise = js::guard_present(&test.narrow_false, otherwise, result, span);
         if !test.presence {
             return node(
                 Ir::If(ir::If {
@@ -2192,13 +2229,14 @@ impl<'r> Checker<'r> {
         let (condition_node, then_node, else_node) = (&items[1], &items[2], &items[3]);
         let test = self.check_test(condition_node, scope, "if");
         let (then, then_type) = self.check(then_node, expected, &Checker::narrowed(&test, scope));
-        let (otherwise, else_type) = self.check(else_node, expected, scope);
+        let (otherwise, else_type) = self.check(else_node, expected, &Checker::narrowed_else(&test, scope));
         let (nodes, t) = self.join(vec![(then, then_type, then_node.span), (otherwise, else_type, else_node.span)], expected);
         let mut nodes = nodes.into_iter();
         let (Some(then), Some(otherwise)) = (nodes.next(), nodes.next()) else {
             return self.placeholder(span);
         };
-        (Checker::lower_test(test, then, otherwise, span), t)
+        let result = self.zonk(&t);
+        (Checker::lower_test(test, then, otherwise, span, &result), t)
     }
 
     fn form_when<'a>(&mut self, span: Span, items: &'a [Node], expected: Option<&Type>, scope: &Scope<'a>) -> Checked {
@@ -2226,7 +2264,7 @@ impl<'r> Checker<'r> {
         let wrapped = option(t);
         let some = node(Ir::Wrap { kind: WrapKind::Some, value: Box::new(value), wrapped_type: wrapped.clone() }, span);
         let none = literal(Value::None, wrapped.clone(), span);
-        let made = Checker::lower_test(test, some, none, span);
+        let made = Checker::lower_test(test, some, none, span, &self.zonk(&wrapped));
         let options = Coercion { detail_hint: Some(WHEN_HINT.to_string()), ..Coercion::default() };
         self.coerce_with(made, &wrapped, expected, span, options)
     }
@@ -2302,8 +2340,9 @@ impl<'r> Checker<'r> {
         let Some(mut body) = nodes.pop() else {
             return self.placeholder(span);
         };
+        let result = self.zonk(&t);
         for (test, branch) in tests.into_iter().rev().zip(nodes.into_iter().rev()) {
-            body = Checker::lower_test(test, branch, body, span);
+            body = Checker::lower_test(test, branch, body, span, &result);
         }
         (body, t)
     }

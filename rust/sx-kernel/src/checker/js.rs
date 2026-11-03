@@ -1,5 +1,7 @@
 use super::*;
 
+type Narrowed = Vec<(String, Type)>;
+
 const SAFE_BOUND: f64 = 9_007_199_254_740_992.0;
 const PROMOTED: &str = "#promoted";
 const TRUTH: &str = "#truth";
@@ -60,6 +62,13 @@ fn trap(t: &Type, span: Span) -> ir::Node {
 
 fn some_of(value: ir::Node, wrapped: &Type, span: Span) -> ir::Node {
     node(Ir::Wrap { kind: WrapKind::Some, value: Box::new(value), wrapped_type: wrapped.clone() }, span)
+}
+
+pub(super) fn guard_present(narrowed: &[(String, Type)], body: ir::Node, result: &Type, span: Span) -> ir::Node {
+    narrowed
+        .iter()
+        .rev()
+        .fold(body, |body, (name, _)| when_present(variable(name, span), name, body, trap(result, span), span))
 }
 
 pub(super) enum Slot<'a> {
@@ -743,6 +752,123 @@ impl<'r> Checker<'r> {
                 self.late_json_values.push((t, span, "js.stringify"));
                 self.js_core_call("js.stringify", vec![value], span)
             }
+        }
+    }
+
+    pub(super) fn present_operand<'a>(&self, node: &'a Node, scope: &Scope<'a>) -> Option<&'a Node> {
+        if self.dialect != Dialect::JavaScript || scope.get("present").is_some() {
+            return None;
+        }
+        match form_items(node)? {
+            [head, operand] if symbol(head) == Some("present") => Some(operand),
+            _ => None,
+        }
+    }
+
+    pub(super) fn check_present_test<'a>(
+        &mut self,
+        operand: &'a Node,
+        node: &'a Node,
+        scope: &Scope<'a>,
+        who: &'static str,
+    ) -> Test {
+        let (value, t) = self.outside_tail(|c| c.check(operand, None, scope));
+        match self.resolve(&t) {
+            Type::Option(inner_type) if !matches!(self.resolve(&inner_type), Type::Never) => {
+                self.presence_test(value, &inner_type, operand, scope, who)
+            }
+            _ => {
+                let condition = self.presence_node(value, &t, node.span, operand.span);
+                Test::plain(condition)
+            }
+        }
+    }
+
+    pub(super) fn form_present<'a>(
+        &mut self,
+        span: Span,
+        items: &'a [Node],
+        expected: Option<&Type>,
+        scope: &Scope<'a>,
+    ) -> Checked {
+        if !self.arity(span, items, 1, Some(1), "value") {
+            return self.placeholder(span);
+        }
+        let (value, t) = self.firm(&items[1], scope);
+        let presence = self.presence_node(value, &t, span, items[1].span);
+        self.coerce(presence, &BOOL, expected, span)
+    }
+
+    fn presence_node(&mut self, value: ir::Node, t: &Type, span: Span, at: Span) -> ir::Node {
+        match self.resolve(t) {
+            Type::Option(_) => when_present(value, PROMOTED, boolean(true, span), boolean(false, span), span),
+            Type::Primitive(Primitive::Unit) => discard(value, boolean(false, span), span),
+            Type::Variable(_) => {
+                self.report(Diagnostic::new(
+                    "unresolved-type",
+                    at,
+                    "The checker cannot tell the type of this value, so it cannot say whether it is null.",
+                ));
+                boolean(false, span)
+            }
+            _ => discard(value, boolean(true, span), span),
+        }
+    }
+
+    pub(super) fn with_narrowings<'a>(&mut self, mut test: Test, node: &'a Node, scope: &Scope<'a>) -> Test {
+        if self.dialect == Dialect::JavaScript {
+            let (when_true, when_false) = self.narrowings(node, scope);
+            test.narrow_true = when_true;
+            test.narrow_false = when_false;
+        }
+        test
+    }
+
+    fn narrowings<'a>(&mut self, node: &'a Node, scope: &Scope<'a>) -> (Narrowed, Narrowed) {
+        let none = (Vec::new(), Vec::new());
+        let Some([head, rest @ ..]) = form_items(node) else {
+            return none;
+        };
+        let Some(head) = symbol(head).filter(|h| scope.get(h).is_none()) else {
+            return none;
+        };
+        let literal = |node: &Node, expected: bool| matches!(node.kind, NodeKind::Bool(b) if b == expected);
+        let merge = |mut first: Narrowed, second: Narrowed| {
+            for entry in second {
+                if !first.iter().any(|(name, _)| *name == entry.0) {
+                    first.push(entry);
+                }
+            }
+            first
+        };
+        match (head, rest) {
+            ("present" | "truthy", [operand]) => {
+                let Some(name) = symbol(operand).filter(|n| scope.is_value(n)) else {
+                    return none;
+                };
+                let Some(Binding::Value(t)) = scope.get(name) else {
+                    return none;
+                };
+                match self.resolve(t) {
+                    Type::Option(inner) if !matches!(self.resolve(&inner), Type::Never) => (vec![(name.to_string(), *inner)], Vec::new()),
+                    _ => none,
+                }
+            }
+            ("not", [operand]) => {
+                let (when_true, when_false) = self.narrowings(operand, scope);
+                (when_false, when_true)
+            }
+            ("if", [first, then, otherwise]) if literal(otherwise, false) => {
+                let (first_true, _) = self.narrowings(first, scope);
+                let (then_true, _) = self.narrowings(then, scope);
+                (merge(first_true, then_true), Vec::new())
+            }
+            ("if", [first, then, otherwise]) if literal(then, true) => {
+                let (_, first_false) = self.narrowings(first, scope);
+                let (_, otherwise_false) = self.narrowings(otherwise, scope);
+                (Vec::new(), merge(first_false, otherwise_false))
+            }
+            _ => none,
         }
     }
 

@@ -1,0 +1,5 @@
+; declarations: fixtures/run/declarations/js.json
+; dialect: js
+; python: no
+(let [x (call store.maybe {:id "a"})]
+  (do (if (present x) 1 0) (js.length x)))

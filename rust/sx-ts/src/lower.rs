@@ -101,12 +101,12 @@ pub fn camel(name: &str) -> String {
     out
 }
 
-const RESERVED: [&str; 62] = [
+const RESERVED: [&str; 63] = [
     "let", "if", "cond", "match", "when", "do", "fn", "defn", "def", "get", "call", "attempt", "retry", "wait-until", "sleep",
     "loop", "recur", "par", "par-map", "some", "none", "ok", "err", "unit", "true", "false", "map", "filter", "reduce",
     "flatten", "concat", "count", "nth", "first", "rest", "take", "sort-by", "identity", "str", "float", "floor", "ceil",
     "round", "rem", "quot", "any?", "all?", "contains?", "into-map", "keys", "vals", "entries", "enumerate", "range", "put",
-    "fail", "log", "truthy", "typeof", "not", "and", "or",
+    "fail", "log", "truthy", "present", "typeof", "not", "and", "or",
 ];
 
 impl<'a> Lowerer<'a> {

@@ -13,8 +13,8 @@
                              (if (= i 3) [true count'] (let [count' (+ count' 1)] [false count']))))
                    [false count']
                    (range 0 5))
-      flag (let [t'2 (> (js.length files) 1)] (if (truthy t'2) (> count' 0) t'2))
-      pick (let [t'3 tag] (if (truthy t'3) t'3 "fallback"))
+      flag (if (> (js.length files) 1) (> count' 0) false)
+      pick (let [t'2 tag] (if (truthy t'2) t'2 "fallback"))
       value (if (truthy (js.length files)) (get (nth files 0) :name) "")
       _ (log count' tag flag pick)]
   {:count count'

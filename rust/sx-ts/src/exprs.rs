@@ -103,9 +103,12 @@ impl<'a> Lowerer<'a> {
             }
             ExprKind::Binary(BinaryOp::LooseEqNull, x, _) => {
                 let v = self.expr_t(x, true, false);
-                app("not", vec![v], span)
+                app("not", vec![app("present", vec![v], span)], span)
             }
-            ExprKind::Binary(BinaryOp::LooseNeNull, x, _) => self.expr_t(x, true, false),
+            ExprKind::Binary(BinaryOp::LooseNeNull, x, _) => {
+                let v = self.expr_t(x, true, false);
+                app("present", vec![v], span)
+            }
             ExprKind::Binary(op @ (BinaryOp::StrictEq | BinaryOp::StrictNe), l, r) if matches!(r.kind, ExprKind::Null) || matches!(l.kind, ExprKind::Null) => {
                 let operand = if matches!(r.kind, ExprKind::Null) { l } else { r };
                 let v = self.expr_t(operand, false, false);
@@ -492,8 +495,17 @@ impl<'a> Lowerer<'a> {
             }
             BinaryOp::LooseEqNull | BinaryOp::LooseNeNull => {
                 let v = self.expr_t(l, true, false);
-                let (yes, no) = if op == BinaryOp::LooseNeNull { (true, false) } else { (false, true) };
-                app("if", vec![v, boolean(yes, span), boolean(no, span)], span)
+                let present = app("present", vec![v], span);
+                if op == BinaryOp::LooseNeNull { present } else { app("not", vec![present], span) }
+            }
+            BinaryOp::And | BinaryOp::Or if self.is_bool_expr(l) => {
+                let test = self.condition(l);
+                let b = self.expr_t(r, false, false);
+                if op == BinaryOp::And {
+                    app("if", vec![test, b, boolean(false, span)], span)
+                } else {
+                    app("if", vec![test, boolean(true, span), b], span)
+                }
             }
             BinaryOp::And | BinaryOp::Or => {
                 let a = self.expr_t(l, op == BinaryOp::Or, false);

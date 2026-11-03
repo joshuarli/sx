@@ -445,7 +445,8 @@ impl<'a> Lowerer<'a> {
             exit = Exits { ret: exit.ret || more.ret, brk: exit.brk || more.brk, cont: exit.cont || more.cont };
         }
         let cond = self.condition(condition);
-        if exit.any() {
+        let throws = diverges(std::slice::from_ref(then)) || otherwise.is_some_and(|o| diverges(std::slice::from_ref(o)));
+        if exit.any() || throws {
             let snapshot = self.scopes.clone();
             let kk = |l: &mut Lowerer<'a>| l.leave(&snapshot, rest, k);
             let a = self.branch(then, &kk);

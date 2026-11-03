@@ -1,0 +1,4 @@
+error[type-mismatch] 5:39-5:40
+    (do (if (present x) 1 0) (js.length x)))
+                                        ^
+  js.length takes a String or a list here, but this is an Option<String>.

@@ -9,5 +9,5 @@
             [cursor none events []]
             (let [page (call mcp-github.list-issues {:repo "r" :cursor cursor})
                   acc (concat events (get page :items))]
-              (if (get page :next) (recur (get page :next) acc) acc)))]
+              (if (present (get page :next)) (recur (get page :next) acc) acc)))]
   {:t t :u u :job job :sizes sizes :all all})

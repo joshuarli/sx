@@ -1,0 +1,15 @@
+(let [page (call mcp-github.list-issues {:repo "r"})
+      next (get page :next)
+      out []
+      out (reduce (fn [out issue]
+                    (let [text (get page :next)]
+                      (if (not (present text)) out (let [out (concat out [(js.length text)])] out))))
+            out
+            (get page :items))
+      a (if (present next) (> (js.length next) 0) false)
+      b (if (not (present next)) true (> (js.length next) 3))
+      c (if (not (present next)) 0 (js.length next))
+      d (if (truthy next) (js.length next) 0)]
+  (if (not (present next))
+    (fail "no next")
+    (let [e (if (present next) 1 0)] [out a b c d e (js.length next)])))

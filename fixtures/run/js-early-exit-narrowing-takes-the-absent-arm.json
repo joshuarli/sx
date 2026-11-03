@@ -1,0 +1,47 @@
+{
+  "description": "The early exit returns when the value is absent.",
+  "python": false,
+  "dialect": "js",
+  "program": "(let [x (call store.maybe {:id \"a\"})] (if (not (present x)) 0 (js.length x)))",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "responses": [
+    {
+      "capability": "store.maybe",
+      "input": {
+        "id": "a"
+      },
+      "results": [
+        {
+          "output": null
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": 0
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "store.maybe",
+      "input": {
+        "id": "a"
+      }
+    },
+    {
+      "response": "r:1",
+      "output": null
+    }
+  ]
+}

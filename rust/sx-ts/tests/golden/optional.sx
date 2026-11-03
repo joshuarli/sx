@@ -1,5 +1,7 @@
 (let [page (call mcp-github.list-issues {:repo "r"})
       n (get page :next "none")
       m (match (match (get page :next) (some v'1) (js.length v'1) none none) (some v'2) v'2 none 0)
-      label (if (get page :next) (get page :next) "end")]
-  (if (truthy (get page :next)) (get page :next) (if (not (get page :next)) "x" [n m label])))
+      label (if (present (get page :next)) (get page :next) "end")]
+  (if (truthy (get page :next))
+    (get page :next)
+    (if (not (present (get page :next))) "x" [n m label])))

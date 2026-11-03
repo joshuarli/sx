@@ -1,0 +1,21 @@
+{
+  "description": "false != null is true, because false is present.",
+  "python": false,
+  "dialect": "js",
+  "program": "(let [f false] (if (present f) \"yes\" \"no\"))",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "completed": "yes"
+  }
+}
