@@ -39,3 +39,5 @@ registers the `decimal` core for the fixtures that need its types. Only Rust loa
 
 A reader treats the whole file as the program, so the header lines are comments in it and a
 diagnostic's line numbers count them.
+
+A fixture checked in the JavaScript mode of the checker carries the header line `; dialect: js` and must also carry `; python: no`. It needs the `js` core, so it names `fixtures/run/declarations/js.json`.

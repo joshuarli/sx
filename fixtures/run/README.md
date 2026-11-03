@@ -8,6 +8,7 @@ and types the cases share.
 | --- | --- |
 | `description` | What the case shows, in one sentence |
 | `python` | Optional. `false` marks a case that the frozen Python prototype does not implement. Any other value, or no field, leaves the case unmarked. |
+| `dialect` | Optional. `"js"` checks the program in the checker's JavaScript mode, which the checkable TypeScript front end sets. A case that sets it must also set `python: false`. The protocol comparison skips it, and `lean/agree.py` leaves it to the Rust gates when its IR calls the `js` core or builds a `js.Shaped`. |
 | `program` | The source text |
 | `declarations` | The declarations file, relative to this directory |
 | `inputs` | Optional. A JSON object from input name to value, in the [JSON encoding](../../docs/language.md#values-and-json). Only a script (`python: false`) takes inputs here. An `Option` input left out is `none`. |
