@@ -1428,13 +1428,13 @@ passes, the lead proposes an approval study on the models where it held; if it f
 is the language's, not only the session's, and the TypeScript front end is kept as a checked subset, not
 as a code mode.
 
-**Phase 23 status: stopped by the owner; the gate is not read.** The first run recorded 412 of the 672
+**Phase 23 status: paused by the owner until the opencode-go limit resets; the gate is not read.** The first run recorded 412 of the 672
 trials before opencode-go's usage limit stopped the rest, and one more was lost to a NUL byte the harness
 could not pass to pi, now fixed. A resume finished `claude-haiku-5-5`, `gemini-4-argon`, and `gpt-6-luna`
 before the limit stopped it again, and the owner then ruled that only Muse Spark runs (see
 [Muse Spark is the only model](#muse-spark-is-the-only-model)). The other models' missing trials will
 not run, so the pooled gate over seven models cannot be read. Muse Spark has all 48 `blind` trials and
-lacks 23 of its 48 `blind2` trials. Two `kimi-k3` trials in the resume had a reply cut off by a server
+lacks 23 of its 48 `blind2` trials, which run when the limit resets. Two `kimi-k3` trials in the resume had a reply cut off by a server
 error and judged as a model failure; the harness now records such a reply as stopped.
 
 ### Phase 0: Skeleton, task corpus, and syntax pilot
