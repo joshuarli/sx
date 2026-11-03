@@ -1,0 +1,39 @@
+{
+  "description": "An Int a tool returns beyond 2^53 is the arithmetic trap.",
+  "python": false,
+  "dialect": "js",
+  "program": "(call store.size {})",
+  "declarations": "declarations/js-payloads.json",
+  "allow": [
+    "store.sizes",
+    "store.size",
+    "store.reading",
+    "store.listed",
+    "store.outcome"
+  ],
+  "responses": [
+    {
+      "capability": "store.size",
+      "input": {},
+      "results": [
+        {
+          "output": 9007199254740993
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "failed": "arithmetic"
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "store.size",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": 9007199254740993
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "description": "An Int inside a record payload of an enum a tool returns is checked.",
+  "python": false,
+  "dialect": "js",
+  "program": "(call store.reading {})",
+  "declarations": "declarations/js-payloads.json",
+  "allow": [
+    "store.sizes",
+    "store.size",
+    "store.reading",
+    "store.listed",
+    "store.outcome"
+  ],
+  "responses": [
+    {
+      "capability": "store.reading",
+      "input": {},
+      "results": [
+        {
+          "output": {
+            "tag": "Pair",
+            "value": {
+              "a": 1,
+              "b": 9007199254740993
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "failed": "arithmetic"
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "store.reading",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": {
+        "tag": "Pair",
+        "value": {
+          "a": 1,
+          "b": 9007199254740993
+        }
+      }
+    }
+  ]
+}

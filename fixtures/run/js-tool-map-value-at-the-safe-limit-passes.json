@@ -1,0 +1,45 @@
+{
+  "description": "A Map value of 2^53 is safe.",
+  "python": false,
+  "dialect": "js",
+  "program": "(get (call store.sizes {}) \"b\")",
+  "declarations": "declarations/js-payloads.json",
+  "allow": [
+    "store.sizes",
+    "store.size",
+    "store.reading",
+    "store.listed",
+    "store.outcome"
+  ],
+  "responses": [
+    {
+      "capability": "store.sizes",
+      "input": {},
+      "results": [
+        {
+          "output": {
+            "a": 1,
+            "b": 9007199254740992
+          }
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": 9007199254740992
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "store.sizes",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": {
+        "a": 1,
+        "b": 9007199254740992
+      }
+    }
+  ]
+}

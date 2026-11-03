@@ -1,0 +1,45 @@
+{
+  "description": "An Int in an enum payload a tool returns is checked like any other.",
+  "python": false,
+  "dialect": "js",
+  "program": "(call store.reading {})",
+  "declarations": "declarations/js-payloads.json",
+  "allow": [
+    "store.sizes",
+    "store.size",
+    "store.reading",
+    "store.listed",
+    "store.outcome"
+  ],
+  "responses": [
+    {
+      "capability": "store.reading",
+      "input": {},
+      "results": [
+        {
+          "output": {
+            "tag": "Count",
+            "value": 9007199254740993
+          }
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "failed": "arithmetic"
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "store.reading",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": {
+        "tag": "Count",
+        "value": 9007199254740993
+      }
+    }
+  ]
+}

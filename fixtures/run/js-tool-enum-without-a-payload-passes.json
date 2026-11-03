@@ -1,0 +1,39 @@
+{
+  "description": "A variant with no payload is unchanged by the check.",
+  "python": false,
+  "dialect": "js",
+  "program": "(match (call store.reading {}) Missing \"none\" (Count n) \"count\" (Pair p) \"pair\")",
+  "declarations": "declarations/js-payloads.json",
+  "allow": [
+    "store.sizes",
+    "store.size",
+    "store.reading",
+    "store.listed",
+    "store.outcome"
+  ],
+  "responses": [
+    {
+      "capability": "store.reading",
+      "input": {},
+      "results": [
+        {
+          "output": "Missing"
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": "none"
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "store.reading",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": "Missing"
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "description": "An Int in a Map value a tool returns is checked like any other.",
+  "python": false,
+  "dialect": "js",
+  "program": "(call store.sizes {})",
+  "declarations": "declarations/js-payloads.json",
+  "allow": [
+    "store.sizes",
+    "store.size",
+    "store.reading",
+    "store.listed",
+    "store.outcome"
+  ],
+  "responses": [
+    {
+      "capability": "store.sizes",
+      "input": {},
+      "results": [
+        {
+          "output": {
+            "a": 1,
+            "b": 9007199254740993
+          }
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "failed": "arithmetic"
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "store.sizes",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": {
+        "a": 1,
+        "b": 9007199254740993
+      }
+    }
+  ]
+}

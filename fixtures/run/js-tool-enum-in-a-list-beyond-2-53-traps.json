@@ -1,0 +1,57 @@
+{
+  "description": "A payload enum in a list is checked.",
+  "python": false,
+  "dialect": "js",
+  "program": "(call store.listed {})",
+  "declarations": "declarations/js-payloads.json",
+  "allow": [
+    "store.sizes",
+    "store.size",
+    "store.reading",
+    "store.listed",
+    "store.outcome"
+  ],
+  "responses": [
+    {
+      "capability": "store.listed",
+      "input": {},
+      "results": [
+        {
+          "output": [
+            {
+              "tag": "Count",
+              "value": 3
+            },
+            {
+              "tag": "Count",
+              "value": 9007199254740993
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "failed": "arithmetic"
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "store.listed",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": [
+        {
+          "tag": "Count",
+          "value": 3
+        },
+        {
+          "tag": "Count",
+          "value": 9007199254740993
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "cores": [
+    "js"
+  ],
+  "enums": {
+    "store.Reading": {
+      "Missing": null,
+      "Count": "Int",
+      "Pair": "Record {a: Int, b: Int}"
+    }
+  },
+  "types": {
+    "Sizes": "Map<String, Int>",
+    "Outcome": "Result<Int, String>"
+  },
+  "capabilities": [
+    {
+      "id": "store.sizes",
+      "effect": "read",
+      "input": "Record {}",
+      "output": "Map<String, Int>",
+      "description": "Reads sizes by name."
+    },
+    {
+      "id": "store.size",
+      "effect": "read",
+      "input": "Record {}",
+      "output": "Int",
+      "description": "Reads one size."
+    },
+    {
+      "id": "store.reading",
+      "effect": "read",
+      "input": "Record {}",
+      "output": "store.Reading",
+      "description": "Reads a payload enum."
+    },
+    {
+      "id": "store.listed",
+      "effect": "read",
+      "input": "Record {}",
+      "output": "List<store.Reading>",
+      "description": "Reads payload enums."
+    },
+    {
+      "id": "store.outcome",
+      "effect": "read",
+      "input": "Record {}",
+      "output": "Result<Int, String>",
+      "description": "Reads a result."
+    }
+  ]
+}

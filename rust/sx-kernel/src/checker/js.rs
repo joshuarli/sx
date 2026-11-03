@@ -224,6 +224,65 @@ impl<'r> Checker<'r> {
                 }
                 changed.then(|| bind(PROMOTED, value, node(Ir::MakeRecord { fields }, span), span))
             }
+            Type::Map(value_type) => {
+                let pair = Type::Tuple(vec![STRING, (**value_type).clone()]);
+                let entry = |index: i64| {
+                    prelude(PreludeOp::TupleItem, vec![variable(PROMOTED, span), integer(index, span)], span)
+                };
+                let body = self.guarded(entry(1), value_type, span)?;
+                let lambda = Lambda {
+                    params: vec![Binder::Name(PROMOTED.to_string())],
+                    param_types: vec![pair.clone()],
+                    result: pair,
+                    body: Box::new(node(Ir::MakeTuple { items: vec![entry(0), body] }, span)),
+                    captured: None,
+                    span,
+                };
+                let entries = prelude(PreludeOp::Entries, vec![value], span);
+                let mapped = prelude(PreludeOp::HigherOrder(HigherOrder::Map), vec![lambda_node(lambda), entries], span);
+                Some(prelude(PreludeOp::IntoMap, vec![mapped], span))
+            }
+            Type::Enum(found) => {
+                let mut changed = false;
+                let mut clauses = Vec::new();
+                for (variant, payload) in &found.variants {
+                    let guarded = payload.as_ref().and_then(|payload| self.guarded(variable(PROMOTED, span), payload, span));
+                    changed |= guarded.is_some();
+                    let held = payload.is_some().then(|| Box::new(guarded.unwrap_or_else(|| variable(PROMOTED, span))));
+                    let pattern = MatchPattern::Variant {
+                        variant: variant.clone(),
+                        inner: payload.as_ref().map(|_| Box::new(MatchPattern::Any(Binder::Name(PROMOTED.to_string())))),
+                    };
+                    let rebuilt = node(
+                        Ir::MakeVariant { enum_name: found.name.clone(), variant: variant.clone(), payload: held },
+                        span,
+                    );
+                    clauses.push((pattern, rebuilt));
+                }
+                changed.then(|| node(Ir::Match(ir::Match { scrutinee: Box::new(value), clauses }), span))
+            }
+            Type::Result(ok, err) => {
+                let guarded_ok = self.guarded(variable(PROMOTED, span), ok, span);
+                let guarded_err = self.guarded(variable(PROMOTED, span), err, span);
+                if guarded_ok.is_none() && guarded_err.is_none() {
+                    return None;
+                }
+                let arm = |kind: WrapKind, guarded: Option<ir::Node>| {
+                    let inner = guarded.unwrap_or_else(|| variable(PROMOTED, span));
+                    node(Ir::Wrap { kind, value: Box::new(inner), wrapped_type: resolved.clone() }, span)
+                };
+                let clauses = vec![
+                    (
+                        MatchPattern::Ok(Box::new(MatchPattern::Any(Binder::Name(PROMOTED.to_string())))),
+                        arm(WrapKind::Ok, guarded_ok),
+                    ),
+                    (
+                        MatchPattern::Err(Box::new(MatchPattern::Any(Binder::Name(PROMOTED.to_string())))),
+                        arm(WrapKind::Err, guarded_err),
+                    ),
+                ];
+                Some(node(Ir::Match(ir::Match { scrutinee: Box::new(value), clauses }), span))
+            }
             _ => None,
         }
     }
