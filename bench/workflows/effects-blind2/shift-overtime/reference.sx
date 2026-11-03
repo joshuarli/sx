@@ -1,0 +1,39 @@
+(let [rosters "{{root}}/rosters"
+      num (fn [s] (match (text.to-int s) (some n) n none (fail (str "not a number: " s))))
+      staff (loop {:max 20} [cursor none
+                            seen []]
+              (let [page (retry {:delays [200ms 400ms]} (call hr.staff {:cursor cursor}))
+                    all (concat seen (get page :items))]
+                (match (get page :next)
+                  (some next) (recur next all)
+                  none all)))
+      files (filter (fn [e] (and (= (get e :kind) "File") (re.test #"^week-\d+\.csv$" (get e :name))))
+                    (call fs.list {:path rosters}))
+      shift (fn [line]
+              (match (re.find #"^(\w+),\w+,(\d+):(\d+),(\d+):(\d+),(\d+)\s*$" line)
+                (some g) (let [start (+ (* 60 (num (nth g 2))) (num (nth g 3)))
+                               end (+ (* 60 (num (nth g 4))) (num (nth g 5)))
+                               length (if (< end start) (+ (- end start) 1440) (- end start))]
+                           (some {:staff (nth g 1) :minutes (- length (num (nth g 6)))}))
+                none none))
+      week (fn [f]
+             (let [shifts (keep shift (text.split (call fs.read-text {:path (str rosters "/" (get f :name))}) "\n"))]
+               (keep (fn [[id own]]
+                       (let [known (filter (fn [s] (= (get s :id) id)) staff)]
+                         (if (= (count known) 0)
+                           none
+                           (let [worked (reduce (fn [sum s] (+ sum (get s :minutes))) 0 own)
+                                 over (- worked (get (first known) :contract_minutes))]
+                             (some {:id id :over (if (> over 0) over 0)})))))
+                     (group-by (fn [s] (get s :staff)) shifts))))
+      totals (map (fn [[id own]]
+                    (let [who (first (filter (fn [s] (= (get s :id) id)) staff))]
+                      {:name (get who :name) :team (get who :team)
+                       :minutes (reduce (fn [sum w] (+ sum (get w :over))) 0 own)}))
+                  (group-by (fn [w] (get w :id)) (flatten (map week files))))
+      due (sort-by (fn [t] [(- 0 (get t :minutes)) (get t :name)])
+                   (filter (fn [t] (> (get t :minutes) 0)) totals))
+      report (str "name,team,overtime_min\n"
+                  (text.join "" (map (fn [t] (str (get t :name) "," (get t :team) "," (get t :minutes) "\n")) due)))
+      _ (call fs.write-text {:path "{{root}}/out/overtime.csv" :text report})]
+  (count due))

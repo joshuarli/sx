@@ -1,0 +1,5 @@
+{
+  "capabilities": ["hr.staff", "fs.list", "fs.read-text", "fs.write-text"],
+  "computed_inputs": ["hr.staff", "fs.list", "fs.read-text", "fs.write-text"],
+  "max_write_sites": 1
+}

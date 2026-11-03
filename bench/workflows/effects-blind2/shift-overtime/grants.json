@@ -1,0 +1,6 @@
+{
+  "hr.staff": {"origins": ["{{hr_origin}}"], "methods": ["GET"]},
+  "fs.list": {"roots": ["{{root}}/rosters"]},
+  "fs.read-text": {"roots": ["{{root}}/rosters"]},
+  "fs.write-text": {"roots": ["{{root}}/out", "{{root}}/rosters"]}
+}

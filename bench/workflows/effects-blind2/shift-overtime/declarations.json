@@ -1,0 +1,14 @@
+{
+  "cores": ["text", "re", "json"],
+  "packs": ["fs"],
+  "capabilities": [
+    {
+      "id": "hr.staff",
+      "http": {"method": "GET", "url": "{{hr_origin}}/staff", "query": ["cursor"]},
+      "input": "Record {cursor: Option<String>}",
+      "output": "Record open {items: List<Record open {id: String, name: String, team: String, contract_minutes: Int}>, next: Option<String>}",
+      "effect": "read",
+      "description": "Reads one page of the staff directory. Pass the previous page's next cursor, or no cursor for the first page."
+    }
+  ]
+}
