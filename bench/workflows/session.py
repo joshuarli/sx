@@ -10,12 +10,13 @@ from pathlib import Path
 
 import arms
 import effects
-from arms import Arm, Files
+from arms import Files
 from definition import Audit, AuditError, EffectsWorkflow, Verdict, Violation
 from metrics import Measure, measure
 from probe import sx_binary
 from records import (
     ATTEMPT_STATUSES,
+    CODE_SERVER_ARMS,
     EFFECT_CLASSES,
     OUTCOMES,
     TOOLS,
@@ -23,6 +24,7 @@ from records import (
     Effect,
     EffectClass,
     Json,
+    SessionArm,
     Usage,
     narrowed,
 )
@@ -35,7 +37,11 @@ SX_SERVER = "sx-code"
 SX_TOOLS_PATTERN = "mcp__sx_code__*"
 JS_TOOLS_PATTERN = f"codemode,mcp__{effects.JS_SERVER}__*"
 PROVIDER_RETRY_SETTINGS = {"retry": {"maxRetries": 8, "baseDelayMs": 5000, "maxAgentDelayMs": 120000}}
-CODEMODE_SETTINGS = {"codemode": {"mode": "only"}, **PROVIDER_RETRY_SETTINGS}
+CODEMODE_INLINE_BUDGET_TOKENS = 200_000
+CODEMODE_SETTINGS = {
+    "codemode": {"mode": "only", "inlineBudget": CODEMODE_INLINE_BUDGET_TOKENS}, **PROVIDER_RETRY_SETTINGS,
+}
+TYPESCRIPT_LANGUAGE = ("--language", "ts")
 MCP_TIMEOUT_SECONDS = 300
 PI_ISOLATION = (
     "-p", "--mode", "json", "--approve", "--no-session", "--no-extensions", "--no-skills", "--no-context-files",
@@ -46,7 +52,7 @@ PI_ISOLATION = (
 @dataclass(frozen=True, slots=True)
 class SessionRecord:
     workflow: str
-    arm: Arm
+    arm: SessionArm
     sample: int
     model: str
     thinking: str
@@ -119,16 +125,16 @@ class Wiring:
     append_system_prompt: str | None
 
 
-def wiring(arm: Arm, workflow: EffectsWorkflow, sandbox: Sandbox, files: Files, directory: Path) -> Wiring:
+def wiring(arm: SessionArm, workflow: EffectsWorkflow, sandbox: Sandbox, files: Files, directory: Path) -> Wiring:
     if files.server is not None:
         raise NotImplementedError(f"{workflow.id}: an effects workflow with a server.json is not supported yet")
     sx = str(sx_binary())
-    if arm == "sx":
+    if arm in CODE_SERVER_ARMS:
         policy = directory / "policy.json"
         policy.write_text(json.dumps(workflow.policy_json(sandbox)))
         server = [
             sx, "mcp", "code", "--declarations", str(files.declarations), "--grants", str(files.grants),
-            "--policy", str(policy),
+            "--policy", str(policy), *(TYPESCRIPT_LANGUAGE if arm == "ts" else ()),
         ]
         return Wiring(SX_SERVER, server, SX_TOOLS_PATTERN, ("builtin:mcp",), PROVIDER_RETRY_SETTINGS, None)
     notes = directory / "notes.md"
@@ -186,18 +192,18 @@ def run_pi(command: list[str], project: Path, events: Path, stderr: Path, enviro
     return code
 
 
-def normalize(arm: Arm, events: list[effects.Stamped], proxy: Path, classes: dict[str, EffectClass]) -> tuple[
+def normalize(arm: SessionArm, events: list[effects.Stamped], proxy: Path, classes: dict[str, EffectClass]) -> tuple[
     list[Attempt], list[Effect]
 ]:
     calls = effects.read_proxy(proxy)
     runs = effects.executions(events)
-    if arm == "sx":
+    if arm in CODE_SERVER_ARMS:
         return effects.sx_attempts(runs, calls, classes)
     return effects.js_attempts(runs, calls, classes)
 
 
 def run_session(
-    workflow: EffectsWorkflow, arm: Arm, model: str, thinking: str, sample: int, out: Path,
+    workflow: EffectsWorkflow, arm: SessionArm, model: str, thinking: str, sample: int, out: Path,
     environment: dict[str, str] | None = None,
 ) -> SessionRecord:
     directory = out / workflow.id / f"{arm}-{sample}"
@@ -244,7 +250,7 @@ def run_session(
 
 
 def run_measured_session(
-    workflow: EffectsWorkflow, arm: Arm, model: str, thinking: str, sample: int, out: Path, reruns: int,
+    workflow: EffectsWorkflow, arm: SessionArm, model: str, thinking: str, sample: int, out: Path, reruns: int,
     environment: dict[str, str] | None = None,
 ) -> SessionRecord:
     stopped = 0

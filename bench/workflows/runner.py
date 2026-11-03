@@ -10,6 +10,7 @@ import session
 import trial
 from arms import Arm, require_toolchain
 from probe import tokens
+from records import SESSION_ARMS, SessionArm
 
 PROVIDER_STOP_RERUNS = 2
 
@@ -45,7 +46,7 @@ def run_effects_references(ids: list[str], arm_names: tuple[Arm, ...], root: Pat
     return all_correct
 
 
-def run_sessions(args: argparse.Namespace, ids: list[str], arm_names: tuple[Arm, ...], root: Path) -> bool:
+def run_sessions(args: argparse.Namespace, ids: list[str], arm_names: tuple[SessionArm, ...], root: Path) -> bool:
     out = Path(args.out).resolve()
     out.mkdir(parents=True, exist_ok=True)
     clean = True
@@ -100,7 +101,9 @@ def main() -> None:
         "--set", choices=list(definition.SETS), default="dev", help="The workflow set",
     )
     parser.add_argument("--workflow", action="append", help="Workflow ids; every workflow of the set by default")
-    parser.add_argument("--arm", action="append", choices=[*ARMS, "both"])
+    parser.add_argument(
+        "--arm", action="append", choices=[*SESSION_ARMS, "both"], help="both is sx and js; name ts to run it",
+    )
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--thinking", default="medium")
     parser.add_argument("--guide", default="standard")
@@ -111,7 +114,12 @@ def main() -> None:
     args = parser.parse_args()
     root = definition.SETS[args.set]
     ids = args.workflow or definition.available(root)
-    arm_names = ARMS if not args.arm or "both" in args.arm else tuple(arm for arm in ARMS if arm in args.arm)
+    chosen: tuple[SessionArm, ...] = (
+        ARMS if not args.arm or "both" in args.arm else tuple(arm for arm in SESSION_ARMS if arm in args.arm)
+    )
+    if "ts" in chosen and args.mode != "sessions":
+        parser.error("the ts arm runs with sessions")
+    arm_names: tuple[Arm, ...] = tuple(arm for arm in chosen if arm != "ts")
     effects_set = args.set in definition.EFFECTS_SETS
     if args.mode in ("sessions", "effects-report") and not effects_set:
         parser.error(f"{args.mode} reads an effects set; pass --set {' or --set '.join(definition.EFFECTS_SETS)}")
@@ -135,7 +143,7 @@ def main() -> None:
     if args.out is None:
         parser.error(f"{args.mode} needs --out")
     if args.mode == "sessions":
-        raise SystemExit(0 if run_sessions(args, ids, arm_names, root) else 1)
+        raise SystemExit(0 if run_sessions(args, ids, chosen, root) else 1)
     run_trials(args, ids, arm_names, root)
 
 

@@ -8,6 +8,7 @@ type CallKind = Literal[
 ]
 type Outcome = Literal["ok", "protocol-error", "unanswered"] | CallKind
 type Tool = Literal["check", "run", "codemode"]
+type SessionArm = Literal["sx", "js", "ts"]
 type AttemptStatus = Literal["checked", "rejected", "refused", "completed", "failed"]
 
 CALL_KINDS: tuple[CallKind, ...] = (
@@ -16,6 +17,8 @@ CALL_KINDS: tuple[CallKind, ...] = (
 REFUSAL_KINDS: frozenset[CallKind] = frozenset({"RateLimited", "NotFound", "PermissionDenied", "Invalid", "Conflict"})
 OUTCOMES: tuple[Outcome, ...] = ("ok", "protocol-error", "unanswered", *CALL_KINDS)
 TOOLS: tuple[Tool, ...] = ("check", "run", "codemode")
+SESSION_ARMS: tuple[SessionArm, ...] = ("sx", "js", "ts")
+CODE_SERVER_ARMS: frozenset[SessionArm] = frozenset({"sx", "ts"})
 ATTEMPT_STATUSES: tuple[AttemptStatus, ...] = ("checked", "rejected", "refused", "completed", "failed")
 EFFECT_CLASSES: tuple[EffectClass, ...] = ("read", "write")
 NOT_PERFORMED: frozenset[Outcome] = frozenset({*REFUSAL_KINDS, "protocol-error"})

@@ -12,9 +12,11 @@ from typing import Literal
 
 import effects
 import fstree
+import gate
+import repairs
 import session
 from probe import sx_binary
-from records import AttemptStatus, Json, Usage
+from records import CODE_SERVER_ARMS, SESSION_ARMS, AttemptStatus, Json, SessionArm, Usage
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
@@ -31,8 +33,10 @@ FS_CAPABILITIES = ("fs.read-text", "fs.list", "fs.stat", "fs.write-text", "fs.ma
 READ_ONLY_TOOLS = ("read", "grep", "find", "ls")
 UNTRUSTED = "--no-approve"
 MAX_WRITE_SITES = 8
-type Arm = Literal["sx", "js"]
-ARMS: tuple[Arm, ...] = ("sx", "js")
+type JsListing = Literal["direct", "discovered"]
+JS_LISTINGS: tuple[JsListing, ...] = ("direct", "discovered")
+ARMS: tuple[SessionArm, ...] = ("sx", "js")
+REPORT_ARMS: tuple[SessionArm, ...] = SESSION_ARMS
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,7 +58,7 @@ class Program:
 @dataclass(frozen=True, slots=True)
 class RealRecord:
     request: str
-    arm: Arm
+    arm: SessionArm
     sample: int
     model: str
     thinking: str
@@ -65,6 +69,11 @@ class RealRecord:
     answer: str
     scratch: list[str] = field(default_factory=list)
     looked_at: list[str] = field(default_factory=list)
+    js_listing: JsListing | None = None
+
+    @property
+    def key(self) -> str:
+        return f"{self.request}/{self.arm}-{self.sample}"
 
     def read_sx_sources(self) -> bool:
         return any(path.startswith(str(ROOT)) and not path.startswith(str(SCRATCH_ROOT)) for path in self.looked_at)
@@ -104,7 +113,7 @@ def server_entry(command: list[str], environment: dict[str, str], exposure: str)
     }
 
 
-def configure(arm: Arm, directory: Path, scratch: Path, imported: Path) -> list[str]:
+def configure(arm: SessionArm, directory: Path, scratch: Path, imported: Path, listing: JsListing) -> list[str]:
     repomod_tools: list[Json] = json.loads(imported.read_text())["capabilities"]
     repomod_ids = [tool["id"] for tool in repomod_tools]
     fs_grants = {capability: {"roots": [str(scratch.resolve())]} for capability in FS_CAPABILITIES}
@@ -114,7 +123,7 @@ def configure(arm: Arm, directory: Path, scratch: Path, imported: Path) -> list[
     agent.mkdir()
     for name in SHARED_AGENT_FILES:
         (agent / name).symlink_to(USER_AGENT / name)
-    if arm == "sx":
+    if arm in CODE_SERVER_ARMS:
         declarations = write_json(
             directory / "declarations.json",
             {"packs": ["fs"], "cores": CORES, "capabilities": repomod_tools, **without_capabilities(imported)},
@@ -127,7 +136,7 @@ def configure(arm: Arm, directory: Path, scratch: Path, imported: Path) -> list[
         })
         command = [
             sx, "mcp", "code", "--declarations", str(declarations), "--grants", str(grants), "--policy", str(policy),
-            "--", *repomod_command,
+            *(session.TYPESCRIPT_LANGUAGE if arm == "ts" else ()), "--", *repomod_command,
         ]
         servers = {session.SX_SERVER: server_entry(command, repomod_environment, "direct")}
         settings: Json = session.PROVIDER_RETRY_SETTINGS
@@ -137,12 +146,15 @@ def configure(arm: Arm, directory: Path, scratch: Path, imported: Path) -> list[
         declarations = write_json(directory / "declarations.json", {"packs": ["fs"], "cores": CORES})
         grants = write_json(directory / "grants.json", fs_grants)
         files = [sx, "mcp", "serve", "--declarations", str(declarations), "--grants", str(grants)]
+        direct = listing == "direct"
+        exposure = "direct" if direct else "codemode"
         servers = {
-            REPOMOD: server_entry(repomod_command, repomod_environment, "codemode"),
-            FILES: server_entry(files, {}, "codemode"),
+            REPOMOD: server_entry(repomod_command, repomod_environment, exposure),
+            FILES: server_entry(files, {}, exposure),
         }
-        settings = session.PROVIDER_RETRY_SETTINGS
-        tools = ",".join([*READ_ONLY_TOOLS, effects.CODEMODE])
+        settings = session.CODEMODE_SETTINGS if direct else session.PROVIDER_RETRY_SETTINGS
+        served = [f"mcp__{REPOMOD}__*", f"mcp__{FILES}__*"] if direct else []
+        tools = ",".join([*READ_ONLY_TOOLS, effects.CODEMODE, *served])
         extensions = ["builtin:mcp", "builtin:codemode"]
     (agent / "mcp.json").write_text(json.dumps({"mcpServers": servers}, indent=2))
     (agent / "settings.json").write_text(json.dumps(settings, indent=2))
@@ -189,14 +201,15 @@ def final_answer(events: list[effects.Stamped]) -> str:
 
 
 def run_one(
-    request: Request, arm: Arm, model: str, thinking: str, sample: int, out: Path, imported: Path
+    request: Request, arm: SessionArm, model: str, thinking: str, sample: int, out: Path, imported: Path,
+    listing: JsListing,
 ) -> RealRecord:
     directory = out / request.id / f"{arm}-{sample}"
     directory.mkdir(parents=True)
     scratch = SCRATCH_ROOT / uuid.uuid4().hex
     scratch.mkdir(parents=True)
     scratch = scratch.resolve()
-    flags = configure(arm, directory, scratch, imported)
+    flags = configure(arm, directory, scratch, imported, listing)
     prompt = request.text.replace("{{scratch}}", str(scratch))
     isolation = [UNTRUSTED if flag == "--approve" else flag for flag in session.PI_ISOLATION]
     command = [str(session.PI), *isolation, *flags, "--model", model, "--thinking", thinking, prompt]
@@ -215,7 +228,7 @@ def run_one(
     error = error or effects.session_error(events)
     runs = effects.executions(events)
     top = [run for run in runs if run.parent is None]
-    if arm == "sx":
+    if arm in CODE_SERVER_ARMS:
         programs = [sx_program(run) for run in top if run.tool in effects.SX_TOOLS]
         other = [run.tool for run in top if run.tool not in effects.SX_TOOLS]
     else:
@@ -226,7 +239,8 @@ def run_one(
     record = RealRecord(
         request.id, arm, sample, model, thinking, error, effects.usage_of(events), programs, other,
         final_answer(events), written,
-        [str(run.args.get("path", "")) for run in top if run.tool in READ_ONLY_TOOLS],
+        [str(run.args.get("path", "")) for run in runs if run.tool in READ_ONLY_TOOLS],
+        listing if arm == "js" else None,
     )
     (directory / "record.json").write_text(json.dumps(asdict(record), indent=2))
     return record
@@ -235,6 +249,7 @@ def run_one(
 def load_record(path: Path) -> RealRecord:
     loaded: Json = json.loads(path.read_text())
     loaded["usage"] = Usage(**loaded["usage"])
+    loaded.setdefault("js_listing", "discovered" if loaded["arm"] == "js" else None)
     loaded["programs"] = [
         Program(p["tool"], p["status"], tuple(p["codes"]), tuple(p["refusals"]), p["source"], tuple(p["calls"]))
         for p in loaded["programs"]
@@ -248,7 +263,7 @@ def summary(records: list[RealRecord]) -> list[str]:
         "| Turns | Output | Cost |",
         "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
-    for arm in ARMS:
+    for arm in REPORT_ARMS:
         mine = [r for r in records if r.arm == arm]
         if not mine:
             continue
@@ -256,8 +271,10 @@ def summary(records: list[RealRecord]) -> list[str]:
         reasons = Counter(code for r in mine for p in r.programs for code in (*p.codes, *p.refusals))
         other = Counter(tool for r in mine for tool in r.other_tools)
         n = len(mine)
+        listings = sorted({r.js_listing for r in mine if r.js_listing is not None})
+        shown_arm = f"{arm} ({', '.join(listings)})" if listings else arm
         cells = [
-            arm, str(n), str(sum(r.error is not None for r in mine)), str(sum(len(r.programs) for r in mine)),
+            shown_arm, str(n), str(sum(r.error is not None for r in mine)), str(sum(len(r.programs) for r in mine)),
             ", ".join(f"{k} {v}" for k, v in sorted(statuses.items())) or "none",
             ", ".join(f"{k} {v}" for k, v in sorted(reasons.items())) or "none",
             ", ".join(f"{k} {v}" for k, v in sorted(other.items())) or "none",
@@ -267,6 +284,26 @@ def summary(records: list[RealRecord]) -> list[str]:
         ]
         lines.append("| " + " | ".join(cells) + " |")
     return lines
+
+
+def judged(records: list[RealRecord], judgments: dict[str, bool]) -> list[gate.Scored]:
+    return [gate.Scored(r.model, r.arm, judgments[r.key], r.usage.cost) for r in records if r.key in judgments]
+
+
+def gate_lines(records: list[RealRecord], judgments: dict[str, bool]) -> list[str]:
+    unjudged = [r.key for r in records if r.key not in judgments]
+    lines = gate.lines(judged(records, judgments), REPORT_ARMS)
+    if unjudged:
+        lines += ["", f"{len(unjudged)} of {len(records)} sessions have no judgment and are left out: "
+                      + ", ".join(sorted(unjudged))]
+    return lines
+
+
+def repair_lines(records: list[RealRecord], arm: str) -> list[str]:
+    sessions = [
+        [repairs.Tried(p.status, (*p.codes, *p.refusals)) for p in r.programs] for r in records if r.arm == arm
+    ]
+    return repairs.lines(repairs.tally(sessions))
 
 
 def sessions_table(records: list[RealRecord]) -> list[str]:
@@ -286,7 +323,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run everyday requests through Sx code mode and pi codemode.")
     parser.add_argument("mode", choices=["sessions", "report"])
     parser.add_argument("--request", action="append", help="Request ids; every request by default")
-    parser.add_argument("--arm", choices=["sx", "js", "both"], default="both")
+    parser.add_argument("--arm", action="append", choices=[*SESSION_ARMS, "both"], help="both is sx and js")
+    parser.add_argument(
+        "--js-listing", choices=JS_LISTINGS, default="direct",
+        help="direct lists the tools in codemode's description; discovered is Phase 17's",
+    )
+    parser.add_argument("--judgments", type=Path, help="JSON of REQUEST/ARM-SAMPLE to true or false for the report")
     parser.add_argument("--model", default="opencode-go/muse-spark-1.3-contributor")
     parser.add_argument("--thinking", default="medium")
     parser.add_argument("--samples", type=int, default=1)
@@ -296,15 +338,23 @@ def main() -> None:
     out = Path(args.out).resolve()
     if args.mode == "report":
         records = [load_record(path) for path in sorted(out.glob("*/*/record.json"))]
-        print("\n".join(["## Real sessions", "", *summary(records), "", *sessions_table(records)]))
+        judgments: dict[str, bool] = json.loads(args.judgments.read_text()) if args.judgments else {}
+        sections = ["## Real sessions", "", *summary(records), ""]
+        if judgments:
+            sections += ["## Gate: correctness and cost per session", "", *gate_lines(records, judgments), ""]
+        for arm in REPORT_ARMS:
+            if arm in CODE_SERVER_ARMS and any(r.arm == arm for r in records):
+                sections += [f"## Programs stopped in the {arm} arm, by diagnostic, refusal, or trap", "",
+                             *repair_lines(records, arm), ""]
+        print("\n".join([*sections, *sessions_table(records)]))
         return
     out.mkdir(parents=True, exist_ok=True)
     imported = imported_declarations(out)
     requests = [r for r in load_requests() if args.request is None or r.id in args.request]
-    arms = tuple(arm for arm in ARMS if args.arm in ("both", arm))
+    arms = ARMS if not args.arm or "both" in args.arm else tuple(arm for arm in SESSION_ARMS if arm in args.arm)
     with ThreadPoolExecutor(max_workers=args.jobs) as pool:
         jobs = [
-            pool.submit(run_one, request, arm, args.model, args.thinking, sample, out, imported)
+            pool.submit(run_one, request, arm, args.model, args.thinking, sample, out, imported, args.js_listing)
             for request in requests for arm in arms for sample in range(args.samples)
         ]
         for job in jobs:

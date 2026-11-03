@@ -23,6 +23,7 @@ from records import (
 SX_TOOLS: dict[str, Tool] = {"mcp__sx_code__check": "check", "mcp__sx_code__run": "run"}
 CODEMODE = "codemode"
 JS_SERVER = "tools"
+TRAP_PREFIX = "trap:"
 SLACK_NS = 250_000_000
 FINISHED_WORDS: dict[str, AttemptStatus] = {"Script completed": "completed", "Script failed": "failed"}
 
@@ -203,6 +204,11 @@ def diagnostic_codes(structured: Json) -> tuple[str, ...]:
     return tuple(str(d["code"]) for d in structured.get("diagnostics", []))
 
 
+def trap_codes(structured: Json) -> tuple[str, ...]:
+    failure = structured.get("failure")
+    return () if failure is None else (f"{TRAP_PREFIX}{failure['kind']}",)
+
+
 def refusal_kinds(policy: Json) -> tuple[str, ...]:
     return tuple(str(r["kind"]) for r in policy.get("refusals", []))
 
@@ -210,7 +216,8 @@ def refusal_kinds(policy: Json) -> tuple[str, ...]:
 def sx_status(tool: Tool, structured: Json) -> tuple[AttemptStatus, tuple[str, ...], tuple[str, ...]]:
     if tool == "run":
         outcome = narrowed(structured["outcome"], ATTEMPT_STATUSES)
-        return outcome, diagnostic_codes(structured), refusal_kinds(structured.get("policy", {}))
+        codes = (*diagnostic_codes(structured), *trap_codes(structured))
+        return outcome, codes, refusal_kinds(structured.get("policy", {}))
     if "diagnostics" in structured:
         return "rejected", diagnostic_codes(structured), ()
     policy: Json = structured["policy"]

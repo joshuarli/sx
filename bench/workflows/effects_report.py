@@ -1,9 +1,12 @@
 from pathlib import Path
 
+import gate
+import repairs
 from metrics import Measure, Totals, totals
+from records import CODE_SERVER_ARMS, SESSION_ARMS
 from session import SessionRecord, load_record
 
-ARM_ORDER = ("sx", "js")
+ARM_ORDER = SESSION_ARMS
 
 
 def load_records(out: Path) -> list[SessionRecord]:
@@ -60,11 +63,28 @@ def sessions(records: list[SessionRecord]) -> list[str]:
     return lines
 
 
+def scored(records: list[SessionRecord]) -> list[gate.Scored]:
+    return [gate.Scored(r.model, r.arm, r.verdict.status == "correct", r.usage.cost) for r in records]
+
+
+def repair_lines(records: list[SessionRecord], arm: str) -> list[str]:
+    sessions = [
+        [repairs.Tried(a.status, (*a.diagnostics, *a.refusals)) for a in r.attempts]
+        for r in records if r.arm == arm
+    ]
+    return repairs.lines(repairs.tally(sessions))
+
+
 def render(out: Path) -> str:
     records = load_records(out)
     if not records:
         raise FileNotFoundError(f"no session.json under {out}")
-    return "\n".join([
+    sections = [
+        "## Gate: correctness and cost per session", "", *gate.lines(scored(records), ARM_ORDER), "",
         "## Effects per arm and workflow", "", *table(records), "",
-        "## Sessions", "", *sessions(records), "",
-    ])
+    ]
+    for arm in ARM_ORDER:
+        if arm in CODE_SERVER_ARMS and any(r.arm == arm for r in records):
+            sections += [f"## Programs stopped in the {arm} arm, by diagnostic, refusal, or trap", "",
+                         *repair_lines(records, arm), ""]
+    return "\n".join([*sections, "## Sessions", "", *sessions(records), ""])
