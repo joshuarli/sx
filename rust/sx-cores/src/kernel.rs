@@ -12,6 +12,7 @@ use sx_kernel::values::{RecordValue, Value};
 use crate::decimal::{Decimal, DecimalError, Rounding};
 use crate::git::{self, Checkout, Head};
 use crate::github::{self, Check, CiState, UpstreamState};
+use crate::js::{self, JsError};
 use crate::json;
 use crate::re;
 use crate::semver::{self, Version};
@@ -692,8 +693,120 @@ pub fn json_core() -> Core {
     }
 }
 
+pub fn js_core() -> Core {
+    let functions = vec![
+        function("js.length", vec![STRING], INT, "Counts UTF-16 code units, as JavaScript's length does.", ("(js.length \"a\")", "1")),
+        function(
+            "js.slice",
+            vec![STRING, INT, INT],
+            STRING,
+            "Cuts the string between two UTF-16 indexes with JavaScript's negative and clamped indexes. A cut inside a \
+             surrogate pair is an arithmetic failure.",
+            ("(js.slice \"hello\" 1 -1)", "\"ell\""),
+        ),
+        function(
+            "js.index-of",
+            vec![STRING, STRING],
+            INT,
+            "Gives the UTF-16 index of the first occurrence of the second string, or -1.",
+            ("(js.index-of \"hello\" \"l\")", "2"),
+        ),
+        function(
+            "js.join",
+            vec![STRING, list(STRING)],
+            STRING,
+            "Joins the strings with the separator between each pair.",
+            ("(js.join \", \" [\"a\" \"b\"])", "\"a, b\""),
+        ),
+        function(
+            "js.trim",
+            vec![STRING],
+            STRING,
+            "Removes leading and trailing ECMAScript whitespace.",
+            ("(js.trim \"\\u{a0}a \")", "\"a\""),
+        ),
+        function("js.to-lower", vec![STRING], STRING, "Lowercases with the Unicode default case mapping.", ("(js.to-lower \"AbC\")", "\"abc\"")),
+        function("js.to-upper", vec![STRING], STRING, "Uppercases with the Unicode default case mapping.", ("(js.to-upper \"AbC\")", "\"ABC\"")),
+        function(
+            "js.pad-start",
+            vec![STRING, INT, STRING],
+            STRING,
+            "Pads the start with the filler up to the length in UTF-16 units.",
+            ("(js.pad-start \"7\" 3 \"0\")", "\"007\""),
+        ),
+        function(
+            "js.pad-end",
+            vec![STRING, INT, STRING],
+            STRING,
+            "Pads the end with the filler up to the length in UTF-16 units.",
+            ("(js.pad-end \"7\" 3 \"0\")", "\"700\""),
+        ),
+        function(
+            "js.replace-first",
+            vec![STRING, STRING, STRING],
+            STRING,
+            "Replaces the first occurrence of the second string with the third. A replacement with $ is a refusal.",
+            ("(js.replace-first \"a-b-c\" \"-\" \"+\")", "\"a+b-c\""),
+        ),
+        function(
+            "js.parse-int",
+            vec![STRING],
+            INT,
+            "Reads the leading decimal integer as parseInt(s, 10) does. Text without digits is an arithmetic failure.",
+            ("(js.parse-int \" 42px\")", "42"),
+        ),
+        function("js.is-integer", vec![FLOAT], BOOL, "True when the Float has no fraction.", ("(js.is-integer 2.0)", "true")),
+        function("js.float-text", vec![FLOAT], STRING, "Writes a Float as JavaScript's String(x) does.", ("(js.float-text 1.0)", "\"1\"")),
+        function(
+            "js.order-key",
+            vec![STRING],
+            STRING,
+            "Maps a string to one whose code point order is the original's UTF-16 code unit order.",
+            ("(js.order-key \"a\")", "\"a\""),
+        ),
+        function(
+            "js.stringify",
+            vec![Type::Never],
+            STRING,
+            "Writes any value as compact JSON with record fields in the order the record holds them.",
+            ("(js.stringify {:b 1 :a 2})", "\"{\\\"b\\\":1,\\\"a\\\":2}\""),
+        ),
+        function(
+            "js.stringify-indented",
+            vec![Type::Never, INT],
+            STRING,
+            "Writes any value as JSON indented by that many spaces.",
+            ("(js.stringify-indented [1] 2)", "\"[\\n  1\\n]\""),
+        ),
+        function(
+            "js.parse",
+            vec![STRING, STRING],
+            Type::Never,
+            "Decodes the text against the type written in the first argument. The checker reads that type from a string literal.",
+            ("(js.parse \"Record {a: Int}\" \"{\\\"a\\\": 1}\")", "{:a 1}"),
+        ),
+    ];
+    Core {
+        id: "js".to_string(),
+        version: "0.1.0".to_string(),
+        functions,
+        types: Vec::new(),
+        evidence: conformance(&["rust/sx-cores/tests/js_core.rs::every_js_example_produces_its_documented_result"]),
+    }
+}
+
 pub fn cores() -> Vec<Core> {
-    vec![text_core(), semver_core(), git_core(), github_core(), decimal_core(), yaml_core(), re_core(), json_core()]
+    vec![
+        text_core(),
+        semver_core(),
+        git_core(),
+        github_core(),
+        decimal_core(),
+        yaml_core(),
+        re_core(),
+        json_core(),
+        js_core(),
+    ]
 }
 
 pub fn core(id: &str) -> Option<Core> {
@@ -990,6 +1103,52 @@ fn json_call(function: &str, args: &[Value]) -> Option<Result<Value, CoreError>>
     Some(outcome.map_err(|error| CoreError::InvalidInput(error.to_string())))
 }
 
+fn js_outcome<T>(outcome: Result<T, JsError>, wrap: impl FnOnce(T) -> Value) -> Result<Value, CoreError> {
+    match outcome {
+        Ok(value) => Ok(wrap(value)),
+        Err(JsError::Trap(message)) => Err(CoreError::Arithmetic(message)),
+        Err(JsError::Refused(message)) => Err(CoreError::InvalidInput(message)),
+    }
+}
+
+fn float_of(value: &Value) -> Option<f64> {
+    match value {
+        Value::Float(f) => Some(f.0),
+        _ => None,
+    }
+}
+
+fn js_call(function: &str, args: &[Value]) -> Option<Result<Value, CoreError>> {
+    Some(match (function, args) {
+        ("js.length", [s]) => Ok(Value::Int(js::length(string_of(s)?))),
+        ("js.slice", [s, start, end]) => js_outcome(js::slice(string_of(s)?, int_of(start)?, int_of(end)?), |t| Value::string(&t)),
+        ("js.index-of", [s, needle]) => Ok(Value::Int(js::index_of(string_of(s)?, string_of(needle)?))),
+        ("js.join", [separator, parts]) => Ok(Value::string(&js::join(string_of(separator)?, &strings_of(parts)?))),
+        ("js.trim", [s]) => Ok(Value::string(&js::trim(string_of(s)?))),
+        ("js.to-lower", [s]) => Ok(Value::string(&js::to_lower(string_of(s)?))),
+        ("js.to-upper", [s]) => Ok(Value::string(&js::to_upper(string_of(s)?))),
+        ("js.pad-start", [s, n, filler]) => {
+            js_outcome(js::pad_start(string_of(s)?, int_of(n)?, string_of(filler)?), |t| Value::string(&t))
+        }
+        ("js.pad-end", [s, n, filler]) => {
+            js_outcome(js::pad_end(string_of(s)?, int_of(n)?, string_of(filler)?), |t| Value::string(&t))
+        }
+        ("js.replace-first", [s, old, new]) => {
+            js_outcome(js::replace_first(string_of(s)?, string_of(old)?, string_of(new)?), |t| Value::string(&t))
+        }
+        ("js.parse-int", [s]) => js_outcome(js::parse_int(string_of(s)?), Value::Int),
+        ("js.is-integer", [x]) => Ok(Value::Bool(js::is_integer(float_of(x)?))),
+        ("js.float-text", [x]) => Ok(Value::string(&js::float_text(float_of(x)?))),
+        ("js.order-key", [s]) => Ok(Value::string(&js::order_key(string_of(s)?))),
+        ("js.stringify", [value]) => js_outcome(js::stringify(value, 0), |t| Value::string(&t)),
+        ("js.stringify-indented", [value, indent]) => {
+            js_outcome(js::stringify(value, int_of(indent)?), |t| Value::string(&t))
+        }
+        ("js.parse", [type_text, text]) => js_outcome(js::parse_document(string_of(type_text)?, string_of(text)?), |v| v),
+        _ => Err(CoreError::Unimplemented),
+    })
+}
+
 pub struct Cores;
 
 impl Cores {
@@ -1044,6 +1203,7 @@ impl Cores {
             (function, args) if function.starts_with("yaml.") => return yaml_call(function, args),
             (function, args) if function.starts_with("json.") => return json_call(function, args),
             (function, args) if function.starts_with("re.") => return re_call(function, args),
+            (function, args) if function.starts_with("js.") => return js_call(function, args),
             _ => return Some(Err(CoreError::Unimplemented)),
         };
         Some(Ok(value))
