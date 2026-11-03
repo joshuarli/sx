@@ -1,0 +1,5 @@
+{
+  "cachex.entries": {"origins": ["{{idx_origin}}"], "methods": ["GET"]},
+  "fs.read-text": {"roots": ["{{root}}/config"]},
+  "fs.delete": {"roots": ["{{root}}"]}
+}

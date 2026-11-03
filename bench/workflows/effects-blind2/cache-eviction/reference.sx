@@ -1,0 +1,27 @@
+(let [limits (call fs.read-text {:path "{{root}}/config/limits.json"})
+      budget (match (json.get limits ["cache_bytes"])
+               (some t) (match (text.to-int t) (some n) n none (fail "cache_bytes is not a number"))
+               none (fail "limits.json has no cache_bytes"))
+      pins (map text.trim (text.split (call fs.read-text {:path "{{root}}/config/pins.txt"}) "\n"))
+      entries (loop {:max 20} [cursor none
+                              seen []]
+                (let [page (retry {:delays [200ms 400ms]} (call cachex.entries {:cursor cursor}))
+                      all (concat seen (get page :items))]
+                  (match (get page :next)
+                    (some next) (recur next all)
+                    none all)))
+      total (reduce (fn [sum e] (+ sum (get e :bytes))) 0 entries)
+      candidates (sort-by (fn [e] [(get e :hits) (- 0 (get e :bytes)) (get e :key)])
+                          (filter (fn [e] (not (contains? pins (get e :key)))) entries))
+      plan (get (reduce (fn [acc e]
+                          (if (<= (get acc :remaining) budget)
+                            acc
+                            {:remaining (- (get acc :remaining) (get e :bytes))
+                             :evicted (concat (get acc :evicted) [e])}))
+                        {:remaining total :evicted []}
+                        candidates)
+                :evicted)]
+  (map (fn [e]
+         (let [_ (call fs.delete {:path (str "{{root}}/cache/" (get e :path))})]
+           (get e :key)))
+       plan))

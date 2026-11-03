@@ -1,0 +1,5 @@
+{
+  "capabilities": ["cachex.entries", "fs.read-text", "fs.delete"],
+  "computed_inputs": ["cachex.entries", "fs.read-text", "fs.delete"],
+  "max_write_sites": 1
+}

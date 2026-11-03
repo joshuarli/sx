@@ -1,0 +1,14 @@
+{
+  "cores": ["text", "re", "json"],
+  "packs": ["fs"],
+  "capabilities": [
+    {
+      "id": "cachex.entries",
+      "http": {"method": "GET", "url": "{{idx_origin}}/entries", "query": ["cursor"]},
+      "input": "Record {cursor: Option<String>}",
+      "output": "Record open {items: List<Record open {key: String, path: String, bytes: Int, hits: Int}>, next: Option<String>}",
+      "effect": "read",
+      "description": "Reads one page of the cache index. Pass the previous page's next cursor, or no cursor for the first page."
+    }
+  ]
+}
