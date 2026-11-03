@@ -37,6 +37,7 @@ impl<'a> Lowerer<'a> {
             ExprKind::Array(_) => Hint::List,
             ExprKind::Str(_) | ExprKind::Template(..) => Hint::Text,
             ExprKind::Ident(name) => self.lookup(name).map_or(Hint::Unknown, |v| v.hint),
+            ExprKind::Index(base, _) if self.hint_of(base) == Hint::SettledList => Hint::Settled,
             ExprKind::Await(inner) => {
                 if let ExprKind::Call(callee, _) = &inner.kind
                     && matches!(&callee.kind, ExprKind::Field(r, m) if m == "allSettled" && matches!(&r.kind, ExprKind::Ident(o) if o == "Promise"))

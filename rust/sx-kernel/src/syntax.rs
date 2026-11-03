@@ -86,6 +86,25 @@ impl Fields {
     }
 }
 
+impl Node {
+    pub fn respan(&mut self, span: Span) {
+        let mut pending: Vec<&mut Node> = vec![self];
+        while let Some(node) = pending.pop() {
+            node.span = span;
+            match &mut node.kind {
+                NodeKind::List(items) | NodeKind::Form(items) => pending.extend(items.0.iter_mut()),
+                NodeKind::Record(fields) => {
+                    for field in fields.0.iter_mut() {
+                        field.key.span = span;
+                        pending.push(&mut field.value);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
 impl Deref for Items {
     type Target = [Node];
 

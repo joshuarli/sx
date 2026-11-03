@@ -1,0 +1,6 @@
+error[type-mismatch] 4:1-4:24
+  (js.includes [1 2] "a")
+  ^^^^^^^^^^^^^^^^^^^^^^^
+  This is a String, but an Int is needed here.
+  Expected: Int
+  Found: String

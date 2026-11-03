@@ -1,0 +1,4 @@
+; declarations: fixtures/run/declarations/js.json
+; dialect: js
+; python: no
+(js.includes [1 2] "a")

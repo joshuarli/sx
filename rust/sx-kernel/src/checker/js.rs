@@ -1031,10 +1031,11 @@ impl<'r> Checker<'r> {
         expected: Option<&Type>,
         scope: &Scope<'a>,
     ) -> Checked {
-        let Some(program) = crate::reader::read(template).program else {
+        let Some(mut program) = crate::reader::read(template).program else {
             self.report(Diagnostic::new("internal", span, "A js expansion did not read."));
             return self.placeholder(span);
         };
+        program.respan(span);
         let mut inner = scope.clone();
         let mut wrappers: Vec<(&'static str, Option<ir::Node>)> = Vec::new();
         for (name, slot) in slots {
