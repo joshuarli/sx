@@ -12,7 +12,7 @@ from tsdiff.generate import KINDS, write_program
 from tsdiff.mutants import MUTANTS, mutate
 
 SPEC = Path(__file__).resolve().parents[3] / "docs" / "checkable-typescript.md"
-SEEDS = range(120)
+SEEDS = range(160)
 
 
 def test_a_seed_gives_the_same_program_and_the_same_responses() -> None:

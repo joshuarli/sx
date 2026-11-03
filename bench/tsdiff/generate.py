@@ -527,6 +527,126 @@ def variants(w: Writer, depth: int) -> None:
             w.emit("}")
 
 
+def map_key(w: Writer, element: str) -> str:
+    plain = element
+    return w.pick(
+        lambda: plain,
+        lambda: plain,
+        lambda: f"{element}.trim()",
+        lambda: f"{element}.toUpperCase()",
+        lambda: f"{element} + \"!\"",
+        lambda: f"`${{{element}}}:${{{element}.length}}`",
+    )
+
+
+def map_idiom(w: Writer, depth: int) -> None:
+    r = w.rng
+    if not w.vars_of("items") and w.loop_depth == 0 and r.random() < 0.6:
+        listed = w.declare("items", "items")
+        w.emit(f"const {listed.name} = await tools.items.list({{}});")
+    items = w.vars_of("items")
+    kinds = ["count", "seen"]
+    if items:
+        kinds += ["fields", "fields", "group", "group", "split"]
+    match r.choice(kinds):
+        case "count":
+            source = w.strs_(1)
+            counts, element = w.fresh("cm"), w.fresh("cs")
+            key = map_key(w, element)
+            w.emit(f"const {counts} = {{}};")
+            w.emit(f"for (const {element} of {source}) {{")
+            if r.random() < 0.4:
+                w.emit(f"  const {counts}p = {counts}[{key}] ?? 0;")
+                w.emit(f"  {counts}[{key}] = {counts}p + 1;")
+            else:
+                w.emit(f"  {counts}[{key}] = ({counts}[{key}] ?? 0) + 1;")
+            w.emit("}")
+            keys = w.declare("mk", "strs")
+            w.emit(f"const {keys.name} = Object.keys({counts}).sort();")
+            probe, plain, wanted = w.fresh("mp"), w.fresh("mo"), w.str_(1)
+            w.emit(f"const {probe} = {wanted};")
+            found = w.declare("mi", "int")
+            w.emit(f"const {found.name} = {counts}[{probe}] ?? {r.choice(('-1', '0', '99'))};")
+            optional = w.declare("mj", "int")
+            w.emit(f"const {plain} = {counts}[{probe}];")
+            w.emit(f"const {optional.name} = {plain} == null ? -2 : {plain} + 1;")
+            w.emit(f"console.log({keys.name}, {found.name}, {optional.name});")
+            if r.random() < 0.5:
+                total = w.declare("mt", "int")
+                w.emit(f"let {total.name} = 0;")
+                name = w.fresh("mk")
+                w.emit(f"for (const {name} of {keys.name}) {{ {total.name} += {counts}[{name}] ?? 0; }}")
+        case "fields":
+            source = w.items_()
+            by, element = w.fresh("bm"), w.fresh("bi")
+            field_key = w.pick(
+                lambda: f"{element}.id",
+                lambda: f"{element}.name",
+                lambda: f"`${{{element}.id}}-${{{element}.qty}}`",
+                lambda: f"{element}.name.toUpperCase()",
+            )
+            value = w.pick(lambda: element, lambda: f"{element}.qty", lambda: f"{element}.name")
+            w.emit(f"const {by} = {{}};")
+            w.emit(f"for (const {element} of {source}) {{ {by}[{field_key}] = {value}; }}")
+            probe, held, looped = w.fresh("bp"), w.fresh("bh"), f"Object.keys({by}).sort().concat([\"zz\"])"
+            w.emit(f"const {probe} = {w.pick(lambda: item_id(w), lambda: w.str_(1))};")
+            w.emit(f"const {held} = {by}[{probe}];")
+            result = w.declare("bq", "int")
+            if value == element:
+                w.emit(f"const {result.name} = {held} == null ? -1 : {held}.qty;")
+                loop_item, total = w.fresh("bl"), w.declare("bt", "int")
+                w.emit(f"let {total.name} = 0;")
+                w.emit(f"for (const {loop_item} of {looped}) {{")
+                w.emit(f"  const {loop_item}m = {by}[{loop_item}];")
+                w.emit(f"  if ({loop_item}m == null) {{ continue; }}")
+                w.emit(f"  {total.name} += {loop_item}m.qty;")
+                w.emit("}")
+                w.emit(f"console.log({result.name}, {total.name});")
+            elif value.endswith(".qty"):
+                w.emit(f"const {result.name} = {held} == null ? -1 : {held};")
+                w.emit(f"console.log({result.name});")
+            else:
+                w.emit(f"const {result.name} = ({by}[{probe}] ?? \"none\").length;")
+                w.emit(f"console.log({result.name});")
+        case "group":
+            groups, element = w.fresh("gm"), w.fresh("gi")
+            key = w.pick(
+                lambda: f"{element}.qty > 1 ? \"big\" : \"small\"",
+                lambda: f"{element}.note == null ? \"plain\" : \"noted\"",
+                lambda: f"{element}.name.length > 2 ? \"long\" : \"short\"",
+            )
+            w.emit(f"const {groups} = {{}};")
+            w.emit(f"for (const {element} of {w.items_()}) {{")
+            w.emit(f"  const {groups}k = {key};")
+            w.emit(f"  {groups}[{groups}k] = ({groups}[{groups}k] ?? []).concat([{element}.{r.choice(('name', 'id'))}]);")
+            w.emit("}")
+            keys = w.declare("gk", "strs")
+            w.emit(f"const {keys.name} = Object.keys({groups}).sort();")
+            size = w.declare("gs", "int")
+            name = w.fresh("gn")
+            w.emit(f"let {size.name} = 0;")
+            w.emit(f"for (const {name} of {keys.name}) {{ {size.name} += ({groups}[{name}] ?? []).length; }}")
+            w.emit(f"console.log({keys.name}, {size.name});")
+            wanted = w.str_(0)
+            members = w.declare("gb", "strs")
+            w.emit(f"const {members.name} = {groups}[{wanted}] ?? [];")
+        case "seen":
+            seen, element, fresh = w.fresh("sm"), w.fresh("si"), w.declare("sf", "ownedstrs")
+            w.emit(f"const {seen} = {{}};")
+            w.emit(f"const {fresh.name} = [];")
+            w.emit(f"for (const {element} of {w.strs_(1)}) {{")
+            w.emit(f"  if ({seen}[{element}] == null) {{ {fresh.name}.push({element}); }}")
+            w.emit(f"  {seen}[{element}] = true;")
+            w.emit("}")
+            w.emit(f"console.log({fresh.name});")
+        case _:
+            names, numbers, element = w.declare("na", "ownedstrs"), w.declare("nb", "ownedints"), w.fresh("ni")
+            w.emit(f"const {names.name} = [];")
+            w.emit(f"const {numbers.name} = [];")
+            w.emit(f"for (const {element} of {w.items_()}) {{ {names.name}.push({element}.name); {numbers.name}.push({element}.qty); }}")
+            w.emit(f"console.log({names.name}, {numbers.name});")
+
+
 def statements(w: Writer, count: int, depth: int) -> None:
     for _ in range(count):
         statement(w, depth)
@@ -546,6 +666,8 @@ def statement(w: Writer, depth: int) -> None:
         lambda: call_write(w),
         lambda: narrowing(w, depth),
         lambda: variants(w, depth),
+        lambda: map_idiom(w, depth),
+        lambda: map_idiom(w, depth),
     ]
     if depth > 0:
         choices += [

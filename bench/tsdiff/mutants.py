@@ -93,6 +93,31 @@ MUTANTS: tuple[Mutant, ...] = (
         "field-read-of-another-item", "type-mismatch",
         "const mi = await tools.items.get({ id: \"i0\" }); const mj = await tools.items.get({ id: \"i1\" }); const m = mi.note != null ? mj.note.length : 0;",
     ),
+    Mutant(
+        "map-read-used-as-present", "type-mismatch",
+        "const mm = {}; for (const mk of [\"a\"]) { mm[mk] = 1; } const mq = \"a\"; const m = mm[mq] + 1;",
+    ),
+    Mutant(
+        "map-read-field-without-test", "not-a-record",
+        "const mm = {}; for (const mk of [\"a\"]) { mm[mk] = { n: 1 }; } const mq = \"a\"; const m = mm[mq].n;",
+    ),
+    Mutant(
+        "map-compound-update", "type-mismatch",
+        "const mm = {}; for (const mk of [\"a\"]) { mm[mk] = 1; } for (const mk of [\"a\"]) { mm[mk] += 1; }",
+    ),
+    Mutant("map-number-key", "type-mismatch", "const mm = {}; for (const mk of [1, 2]) { mm[mk] = 1; }"),
+    Mutant("map-two-value-types", "type-mismatch", "const mm = {}; for (const mk of [\"a\"]) { mm[mk] = 1; mm[mk] = \"x\"; }"),
+    Mutant("map-element-push", "ts-mutation-pattern", "const mm = {}; for (const mk of [\"a\"]) { mm[mk] = [1]; } for (const mk of [\"a\"]) { mm[mk].push(2); }"),
+    Mutant("map-keys-unsorted", "ts-map-order", "const mm = {}; for (const mk of [\"a\"]) { mm[mk] = 1; } const m = Object.keys(mm);"),
+    Mutant("map-stringified", "ts-map-order", "const mm = {}; for (const mk of [\"a\"]) { mm[mk] = 1; } console.log(JSON.stringify(mm));"),
+    Mutant("map-spread", "ts-spread", "const mm = {}; for (const mk of [\"a\"]) { mm[mk] = 1; } const m = { ...mm };"),
+    Mutant("map-delete", "ts-operator", "const mm = {}; for (const mk of [\"a\"]) { mm[mk] = 1; } delete mm[\"a\"];"),
+    Mutant("record-computed-key", "ts-dynamic-key", "const mr = { a: 1 }; const mk = \"a\"; const m = mr[mk];"),
+    Mutant("string-index", "ts-string-index", "const ms = \"abc\"; const m = ms[1];"),
+    Mutant("array-element-assignment", "ts-mutation-pattern", "const mx = [1, 2]; mx[0] = 5;"),
+    Mutant("array-element-compound", "ts-mutation-pattern", "const mx = [1, 2]; for (let mi = 0; mi < 2; mi++) { mx[mi] += 1; }"),
+    Mutant("concat-two-arguments", "ts-unknown-builtin", "const mx = [1]; const m = mx.concat([2], [3]);"),
+    Mutant("differently-keyed-branches", "branch-mismatch", "const mq = [1].length > 0 ? {} : { a: 1 };"),
     Mutant("tool-name", "unknown-tool", "await tools.items.nope({});"),
 )
 
