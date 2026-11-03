@@ -1,0 +1,4 @@
+; declarations: fixtures/run/declarations/js.json
+; dialect: js
+; python: no
+(rem 7.5 2)

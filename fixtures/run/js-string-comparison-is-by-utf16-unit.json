@@ -1,0 +1,26 @@
+{
+  "description": "An emoji sorts before U+FF5E by code unit, though it is after by code point.",
+  "python": false,
+  "dialect": "js",
+  "program": "[(< \"😀\" \"～\") (> \"😀\" \"～\") (< \"a\" \"b\") (<= \"b\" \"b\")]",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "completed": [
+      true,
+      false,
+      true,
+      true
+    ]
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "description": "slice indexes UTF-16 units, with negative and clamped indexes.",
+  "python": false,
+  "dialect": "js",
+  "program": "[(js.slice \"héllo\" 1 3) (js.slice \"hello\" -3) (js.slice \"hello\" 2 99) (js.slice \"hello\" 4 2) (js.slice \"a😀b\" 0 3)]",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "completed": [
+      "él",
+      "llo",
+      "llo",
+      "",
+      "a😀"
+    ]
+  }
+}

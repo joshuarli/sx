@@ -6,7 +6,7 @@ use sx_cores::json::{Kind, get, keys, kind};
 use sx_cores::kernel::{Cores, json_core};
 use sx_kernel::authority::{Authority, Grants};
 use sx_kernel::budgets::Budgets;
-use sx_kernel::checker::compile_source;
+use sx_kernel::checker::{Dialect, compile_source};
 use sx_kernel::json::{Json, MAX_DEPTH, parse};
 use sx_kernel::machine::{Machine, Outcome};
 use sx_kernel::registry::Registry;
@@ -105,7 +105,7 @@ fn run(source: &str) -> Outcome {
     registry.add_core(json_core()).expect("the json core registers");
     let grants = Grants::new();
     let checked =
-        compile_source(source, &registry, Authority::Granted(&grants), &BTreeMap::new(), Budgets::default());
+        compile_source(source, &registry, Authority::Granted(&grants), &BTreeMap::new(), Budgets::default(), Dialect::Sx);
     let program = checked.program.unwrap_or_else(|| panic!("{source}: {:?}", checked.diagnostics));
     let mut machine = Machine::new(&program, &[], Budgets::default(), &Cores);
     machine.start()

@@ -1,0 +1,34 @@
+{
+  "description": "truthy follows JavaScript for each type, including the empty array being truthy.",
+  "python": false,
+  "dialect": "js",
+  "program": "[(truthy \"\") (truthy \"a\") (truthy 0) (truthy 0.0) (truthy 2) (truthy []) (truthy {:a 1}) (truthy none) (truthy (some \"\")) (truthy (some \"x\")) (truthy unit) (truthy true)]",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "completed": [
+      false,
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true,
+      false,
+      true
+    ]
+  }
+}

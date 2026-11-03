@@ -1,0 +1,25 @@
+{
+  "description": "indexOf in a list gives the first index or -1.",
+  "python": false,
+  "dialect": "js",
+  "program": "[(js.index-of [5 6 6] 6) (js.index-of [5] 9) (js.index-of [\"a\" \"b\"] \"b\")]",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "completed": [
+      1,
+      -1,
+      1
+    ]
+  }
+}

@@ -1,0 +1,6 @@
+error[js-null-equality] 4:19-4:29
+  (let [x (some 3)] (= x none))
+                    ^^^^^^^^^^
+  === null and !== null are not supported.
+  A value that is absent can be undefined as well as null in JavaScript, so only a presence test is supported.
+  Fix: x == null

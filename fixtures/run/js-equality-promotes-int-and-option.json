@@ -1,0 +1,26 @@
+{
+  "description": "=== accepts an Int against a Float and a value against an optional one.",
+  "python": false,
+  "dialect": "js",
+  "program": "[(= 1 1.0) (= (some \"a\") \"a\") (= \"a\" (some \"b\")) (not= 2 2.5)]",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "completed": [
+      true,
+      true,
+      false,
+      true
+    ]
+  }
+}

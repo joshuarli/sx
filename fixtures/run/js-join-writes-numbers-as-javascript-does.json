@@ -1,0 +1,25 @@
+{
+  "description": "join converts Int and Float elements to text.",
+  "python": false,
+  "dialect": "js",
+  "program": "[(js.join \"-\" [\"a\" \"b\"]) (js.join \", \" [1 2.0 3.5]) (js.join \",\" [])]",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "completed": [
+      "a-b",
+      "1, 2, 3.5",
+      ""
+    ]
+  }
+}

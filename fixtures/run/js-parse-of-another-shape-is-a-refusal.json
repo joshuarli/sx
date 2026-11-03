@@ -1,0 +1,21 @@
+{
+  "description": "A document that does not have the declared shape is a refusal attempt can catch.",
+  "python": false,
+  "dialect": "js",
+  "program": "(match (attempt (js.parse \"Record {a: Int}\" \"{}\")) (ok v) \"ok\" (err e) (get e :kind))",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "completed": "Invalid"
+  }
+}

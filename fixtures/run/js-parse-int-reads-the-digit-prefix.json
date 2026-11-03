@@ -1,0 +1,25 @@
+{
+  "description": "parseInt(s, 10) reads leading space, a sign, and the longest digit prefix.",
+  "python": false,
+  "dialect": "js",
+  "program": "[(js.parse-int \"  -42px\") (js.parse-int \"+7\") (js.parse-int \"0012\")]",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "completed": [
+      -42,
+      7,
+      12
+    ]
+  }
+}

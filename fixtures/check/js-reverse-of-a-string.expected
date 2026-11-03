@@ -1,0 +1,4 @@
+error[type-mismatch] 4:13-4:17
+  (js.reverse "ab")
+              ^^^^
+  js.reverse takes a list here, but this is a String.

@@ -4,7 +4,7 @@ use std::process::ExitCode;
 
 use sx_cores::kernel::{Cores, core};
 use sx_kernel::budgets::Budgets;
-use sx_kernel::checker::{check, compile_source};
+use sx_kernel::checker::{Dialect, check, compile_source};
 use sx_kernel::host::{FixtureHost, run};
 use sx_kernel::ir::Program;
 use sx_kernel::json::{Json, parse};
@@ -87,7 +87,7 @@ fn cases(bundle: &Json, group: &str) -> Vec<Case> {
 }
 
 fn compiled(case: &Case) -> Program {
-    let result = compile_source(&case.source, &case.registry, Authority::Granted(&case.grants), &case.declared, case.budgets);
+    let result = compile_source(&case.source, &case.registry, Authority::Granted(&case.grants), &case.declared, case.budgets, Dialect::Sx);
     result.program.unwrap_or_else(|| panic!("a benchmark program was rejected: {}", case.source))
 }
 
@@ -131,7 +131,7 @@ fn main() -> ExitCode {
             let parsed: Vec<_> = cases.iter().map(|c| read(&c.source).program.expect("parses")).collect();
             for _ in 0..iterations {
                 for (case, node) in cases.iter().zip(&parsed) {
-                    black_box(check(black_box(node), &case.registry, Authority::Granted(&case.grants), &case.declared, case.budgets));
+                    black_box(check(black_box(node), &case.registry, Authority::Granted(&case.grants), &case.declared, case.budgets, Dialect::Sx));
                 }
             }
         }

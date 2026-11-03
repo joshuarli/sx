@@ -1,0 +1,26 @@
+{
+  "description": "includes is a substring test on a String and a membership test on a list.",
+  "python": false,
+  "dialect": "js",
+  "program": "[(js.includes \"hello\" \"ell\") (js.includes \"hello\" \"z\") (js.includes [1 2 3] 2) (js.includes [\"a\"] \"b\")]",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "completed": [
+      true,
+      false,
+      true,
+      false
+    ]
+  }
+}

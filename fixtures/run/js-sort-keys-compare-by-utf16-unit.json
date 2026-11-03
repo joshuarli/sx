@@ -1,0 +1,25 @@
+{
+  "description": "sort-by on string keys orders by UTF-16 code unit.",
+  "python": false,
+  "dialect": "js",
+  "program": "(sort-by (fn [s] s) [\"～\" \"😀\" \"a\"])",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "completed": [
+      "a",
+      "😀",
+      "～"
+    ]
+  }
+}

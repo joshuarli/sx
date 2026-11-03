@@ -1,0 +1,21 @@
+{
+  "description": "A reduce that starts at 0 and receives Floats is a Float throughout.",
+  "python": false,
+  "dialect": "js",
+  "program": "(reduce (fn [acc x] (+ acc x)) 0 [1.5 2.5])",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "completed": 4.0
+  }
+}

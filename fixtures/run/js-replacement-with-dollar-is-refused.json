@@ -1,0 +1,21 @@
+{
+  "description": "A replacement containing $ is a refusal, because JavaScript reads it as a pattern.",
+  "python": false,
+  "dialect": "js",
+  "program": "(js.replace-first \"abc\" \"b\" \"$&\")",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "failed": "invalid-input"
+  }
+}

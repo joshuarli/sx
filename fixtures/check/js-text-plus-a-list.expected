@@ -1,0 +1,6 @@
+error[js-coercion] 4:14-4:19
+  (+ "items: " [1 2])
+               ^^^^^
+  This + converts a List<Int> to text, which JavaScript does with a different result.
+  Only a String, Int, Float, or Bool can be added to a String.
+  Fix: write the text you mean

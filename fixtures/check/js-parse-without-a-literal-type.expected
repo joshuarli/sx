@@ -1,0 +1,4 @@
+error[ts-json-parse-type] 4:11-4:22
+  (js.parse (str "Int") "1")
+            ^^^^^^^^^^^
+  JSON.parse needs the type of the document

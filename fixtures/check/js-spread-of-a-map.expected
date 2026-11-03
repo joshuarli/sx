@@ -1,0 +1,6 @@
+error[ts-spread] 4:25-4:46
+  (record-spread (:spread (call store.sizes {})))
+                          ^^^^^^^^^^^^^^^^^^^^^
+  Only records with declared fields can be spread into an object
+  This is a Map<String, Int>.
+  Fix: write the fields

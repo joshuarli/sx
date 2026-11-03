@@ -1,0 +1,23 @@
+{
+  "description": "Spread of a Map is rejected, because its keys are not declared.",
+  "python": false,
+  "dialect": "js",
+  "program": "(record-spread (:spread (call store.sizes {})))",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "rejected": [
+      "ts-spread"
+    ]
+  }
+}

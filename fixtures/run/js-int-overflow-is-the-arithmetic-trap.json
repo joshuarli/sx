@@ -1,0 +1,21 @@
+{
+  "description": "An Int result beyond 2^53 traps instead of rounding.",
+  "python": false,
+  "dialect": "js",
+  "program": "(* 94906267 94906267)",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "failed": "arithmetic"
+  }
+}

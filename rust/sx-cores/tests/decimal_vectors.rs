@@ -5,7 +5,7 @@ use std::path::Path;
 use sx_cores::kernel::{Cores, decimal_core};
 use sx_kernel::authority::{Authority, Grants};
 use sx_kernel::budgets::Budgets;
-use sx_kernel::checker::compile_source;
+use sx_kernel::checker::{Dialect, compile_source};
 use sx_kernel::json::{Json, Layout, dumps, parse, python_equal};
 use sx_kernel::machine::{CoreError, CoreImplementations, Machine, Outcome};
 use sx_kernel::registry::Registry;
@@ -69,7 +69,7 @@ fn every_decimal_example_produces_its_documented_result() {
             &registry,
             Authority::Granted(&grants),
             &BTreeMap::new(),
-            Budgets::default(),
+            Budgets::default(), Dialect::Sx,
         );
         let program = checked.program.unwrap_or_else(|| panic!("{}: {:?}", function.name, checked.diagnostics));
         let mut machine = Machine::new(&program, &[], Budgets::default(), &Cores);

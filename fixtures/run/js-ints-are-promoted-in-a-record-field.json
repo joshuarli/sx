@@ -1,0 +1,47 @@
+{
+  "description": "A record field of type Float takes an Int, which is converted.",
+  "python": false,
+  "dialect": "js",
+  "program": "(let [_ (call store.average {:mean 3})] 1)",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "responses": [
+    {
+      "capability": "store.average",
+      "input": {
+        "mean": 3.0
+      },
+      "results": [
+        {
+          "output": null
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": 1
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "store.average",
+      "input": {
+        "mean": 3.0
+      }
+    },
+    {
+      "response": "r:1",
+      "output": null
+    }
+  ]
+}

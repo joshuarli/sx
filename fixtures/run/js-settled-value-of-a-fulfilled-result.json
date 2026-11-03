@@ -1,0 +1,21 @@
+{
+  "description": "value of a fulfilled result is the value.",
+  "python": false,
+  "dialect": "js",
+  "program": "(js.settled-value (attempt 3))",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "completed": 3
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "description": "Spread of an optional is rejected, because the field set would vary.",
+  "python": false,
+  "dialect": "js",
+  "program": "(record-spread (:spread (call store.maybe {:id \"a\"})))",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "rejected": [
+      "ts-spread"
+    ]
+  }
+}

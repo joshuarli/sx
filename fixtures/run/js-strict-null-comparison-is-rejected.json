@@ -1,0 +1,23 @@
+{
+  "description": "=== null is rejected, because an absent value may be undefined; only == null tests presence.",
+  "python": false,
+  "dialect": "js",
+  "program": "(= (some 1) none)",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "rejected": [
+      "js-null-equality"
+    ]
+  }
+}

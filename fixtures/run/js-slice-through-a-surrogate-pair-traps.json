@@ -1,0 +1,21 @@
+{
+  "description": "A cut inside a surrogate pair is the arithmetic trap.",
+  "python": false,
+  "dialect": "js",
+  "program": "(js.slice \"a😀b\" 0 2)",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "failed": "arithmetic"
+  }
+}

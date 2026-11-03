@@ -1,0 +1,23 @@
+{
+  "description": "A Float used as an index is js-float-as-int.",
+  "python": false,
+  "dialect": "js",
+  "program": "(nth [1 2] 1.0)",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "rejected": [
+      "js-float-as-int"
+    ]
+  }
+}

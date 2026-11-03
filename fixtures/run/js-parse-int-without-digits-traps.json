@@ -1,0 +1,21 @@
+{
+  "description": "parseInt of text with no digits is the arithmetic trap where JavaScript gives NaN.",
+  "python": false,
+  "dialect": "js",
+  "program": "(js.parse-int \"x1\")",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "failed": "arithmetic"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "description": "JSON.stringify(x, null, 2) indents by two spaces, with empty containers compact.",
+  "python": false,
+  "dialect": "js",
+  "program": "(js.stringify-indented {:a [1 2] :b {} :c []} 2)",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "completed": "{\n  \"a\": [\n    1,\n    2\n  ],\n  \"b\": {},\n  \"c\": []\n}"
+  }
+}

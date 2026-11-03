@@ -1,0 +1,24 @@
+{
+  "description": "Math.round lowers to a floor and a half test, so -2.5 rounds to -2 and 2.5 to 3.",
+  "python": false,
+  "dialect": "js",
+  "program": "(let [x 2.5 f (floor x) y -2.5 g (floor y)] [(if (>= (- x (float f)) 0.5) (+ f 1) f) (if (>= (- y (float g)) 0.5) (+ g 1) g)])",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "completed": [
+      3,
+      -2
+    ]
+  }
+}

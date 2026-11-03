@@ -1,0 +1,21 @@
+{
+  "description": "str writes a Float as String(x) does: 1.0 is 1, 1e21 keeps its exponent.",
+  "python": false,
+  "dialect": "js",
+  "program": "(str 1.0 \"|\" 1.5 \"|\" 100000000000000000000.0 \"|\" 1e21 \"|\" 0.000001 \"|\" 1e-7 \"|\" -0.0)",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "completed": "1|1.5|100000000000000000000|1e+21|0.000001|1e-7|0"
+  }
+}

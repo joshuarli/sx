@@ -1,0 +1,24 @@
+{
+  "description": "log writes strings bare, numbers as str, null for none, and JSON for lists and records.",
+  "python": false,
+  "dialect": "js",
+  "program": "(let [_ (log \"a\" 1 2.0 true none (some \"s\") [1 2] {:z 1 :y 2})] 1)",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "completed": 1
+  },
+  "logs": [
+    "a 1 2 true null s [1,2] {\"z\":1,\"y\":2}"
+  ]
+}

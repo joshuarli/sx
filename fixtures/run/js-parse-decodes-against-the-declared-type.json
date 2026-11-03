@@ -1,0 +1,24 @@
+{
+  "description": "JSON.parse with a type is a checked decode.",
+  "python": false,
+  "dialect": "js",
+  "program": "(js.parse \"Record {a: Int, b: Option<String>}\" \"{\\\"a\\\": 3, \\\"b\\\": null}\")",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "completed": {
+      "a": 3,
+      "b": null
+    }
+  }
+}

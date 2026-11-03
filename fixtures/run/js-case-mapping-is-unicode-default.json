@@ -1,0 +1,24 @@
+{
+  "description": "toUpperCase maps the sharp s to SS.",
+  "python": false,
+  "dialect": "js",
+  "program": "[(js.to-upper \"straße\") (js.to-lower \"ÀB\")]",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "completed": [
+      "STRASSE",
+      "àb"
+    ]
+  }
+}

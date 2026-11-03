@@ -1,0 +1,24 @@
+{
+  "description": "status is fulfilled or rejected, as in JavaScript's allSettled.",
+  "python": false,
+  "dialect": "js",
+  "program": "(let [s (attempt (fail \"boom\")) t (attempt 3)] [(js.settled-status s) (js.settled-status t)])",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "completed": [
+      "rejected",
+      "fulfilled"
+    ]
+  }
+}

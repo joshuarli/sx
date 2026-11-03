@@ -1,0 +1,25 @@
+{
+  "description": "Number.isInteger is true for an Int and for a whole Float.",
+  "python": false,
+  "dialect": "js",
+  "program": "[(js.is-integer 2) (js.is-integer 2.0) (js.is-integer 2.5)]",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "completed": [
+      true,
+      true,
+      false
+    ]
+  }
+}

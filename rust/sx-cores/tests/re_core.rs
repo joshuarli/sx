@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use sx_cores::kernel::{Cores, re_core};
 use sx_kernel::authority::{Authority, Grants};
 use sx_kernel::budgets::Budgets;
-use sx_kernel::checker::compile_source;
+use sx_kernel::checker::{Dialect, compile_source};
 use sx_kernel::machine::{Machine, Outcome};
 use sx_kernel::registry::Registry;
 use sx_kernel::values::show_value;
@@ -17,7 +17,7 @@ fn registry() -> Registry {
 fn run(source: &str) -> Result<String, String> {
     let registry = registry();
     let grants = Grants::new();
-    let compiled = compile_source(source, &registry, Authority::Granted(&grants), &BTreeMap::new(), Budgets::default());
+    let compiled = compile_source(source, &registry, Authority::Granted(&grants), &BTreeMap::new(), Budgets::default(), Dialect::Sx);
     let program = compiled
         .program
         .ok_or_else(|| compiled.diagnostics.iter().map(|d| format!("{}: {}", d.code, d.message)).collect::<Vec<_>>().join("\n"))?;
@@ -86,7 +86,7 @@ fn a_literal_pattern_that_does_not_compile_is_rejected_at_check_time_at_its_posi
     let registry = registry();
     let grants = Grants::new();
     let source = "(re.test #\"(a\" \"x\")";
-    let compiled = compile_source(source, &registry, Authority::Granted(&grants), &BTreeMap::new(), Budgets::default());
+    let compiled = compile_source(source, &registry, Authority::Granted(&grants), &BTreeMap::new(), Budgets::default(), Dialect::Sx);
     assert!(compiled.program.is_none());
     let diagnostic = compiled.diagnostics.first().expect("a diagnostic");
     assert_eq!(diagnostic.code, "bad-literal");
@@ -129,7 +129,7 @@ fn every_re_example_produces_its_documented_result() {
     let mut checked = 0;
     for function in registry.functions() {
         let example = function.example.as_ref().expect("every function has an example");
-        let compiled = compile_source(&example.program, &registry, Authority::Granted(&grants), &BTreeMap::new(), Budgets::default());
+        let compiled = compile_source(&example.program, &registry, Authority::Granted(&grants), &BTreeMap::new(), Budgets::default(), Dialect::Sx);
         let program = compiled.program.unwrap_or_else(|| panic!("{}: {:?}", function.name, compiled.diagnostics));
         let mut machine = Machine::new(&program, &[], Budgets::default(), &Cores);
         match machine.start() {

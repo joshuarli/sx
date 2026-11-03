@@ -1,0 +1,21 @@
+{
+  "description": "A decoded Int beyond 2^53 is the arithmetic trap.",
+  "python": false,
+  "dialect": "js",
+  "program": "(js.parse \"Record {a: Int}\" \"{\\\"a\\\": 9007199254740993}\")",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "failed": "arithmetic"
+  }
+}

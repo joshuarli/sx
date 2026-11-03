@@ -5,7 +5,7 @@ use std::process::Command;
 
 use sx_kernel::authority::{Authority, Grants};
 use sx_kernel::budgets::Budgets;
-use sx_kernel::checker::compile_source;
+use sx_kernel::checker::{Dialect, compile_source};
 use sx_kernel::export::{export_program, read_program_text};
 use sx_kernel::json::{Json, Layout, dumps};
 use sx_kernel::registry::Registry;
@@ -125,7 +125,7 @@ fn a_stack_too_small_for_the_nesting_is_reported_instead_of_overflowing() {
     let registry = Registry::new();
     let source = nested_lambdas(249);
     let checked = on_stack_of(24 * 1024 * 1024, || {
-        compile_source(&source, &registry, Authority::Granted(&Grants::new()), &BTreeMap::new(), Budgets::default())
+        compile_source(&source, &registry, Authority::Granted(&Grants::new()), &BTreeMap::new(), Budgets::default(), Dialect::Sx)
     })
     .expect("thread");
     match checked.program {

@@ -1,0 +1,21 @@
+{
+  "description": "A replaced key keeps its first position and takes the later value.",
+  "python": false,
+  "dialect": "js",
+  "program": "(js.stringify (record-spread (:spread {:a 1 :b 2}) (:field \"c\" 3) (:spread {:b 9 :d 4})))",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "completed": "{\"a\":1,\"b\":9,\"c\":3,\"d\":4}"
+  }
+}

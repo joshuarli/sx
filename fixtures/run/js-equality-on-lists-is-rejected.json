@@ -1,0 +1,23 @@
+{
+  "description": "=== on arrays compares references in JavaScript, so it is rejected.",
+  "python": false,
+  "dialect": "js",
+  "program": "(= [1] [1])",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "rejected": [
+      "js-equality"
+    ]
+  }
+}

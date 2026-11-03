@@ -1,0 +1,25 @@
+{
+  "description": "indexOf answers in UTF-16 units and -1 when absent.",
+  "python": false,
+  "dialect": "js",
+  "program": "[(js.index-of \"😀b\" \"b\") (js.index-of \"abc\" \"z\") (js.index-of \"abc\" \"\")]",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "completed": [
+      2,
+      -1,
+      0
+    ]
+  }
+}

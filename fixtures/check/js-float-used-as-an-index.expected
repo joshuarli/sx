@@ -1,0 +1,7 @@
+error[js-float-as-int] 4:12-4:15
+  (nth [1 2] 1.5)
+             ^^^
+  This is a Float, but an Int is needed here.
+  Expected: Int
+  Found: Float
+  Fix: Math.floor(x)

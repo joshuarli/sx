@@ -1,0 +1,21 @@
+{
+  "description": "An explicit key after a spread replaces the field's type in place.",
+  "python": false,
+  "dialect": "js",
+  "program": "(js.stringify (record-spread (:spread {:a 1 :b 2}) (:field \"a\" \"x\")))",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "completed": "{\"a\":\"x\",\"b\":2}"
+  }
+}

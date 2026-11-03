@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use crate::authority::Authority;
 use crate::budgets::Budgets;
-use crate::checker::{CheckResult, compile_source};
+use crate::checker::{CheckResult, Dialect, compile_source};
 use crate::json::Json;
 use crate::reader::{ReadResult, closer_of, indent, is_blank, read};
 use crate::registry::Registry;
@@ -414,7 +414,7 @@ pub fn compile_source_inferring(
     inputs: &BTreeMap<String, Type>,
     budgets: Budgets,
 ) -> Compiled {
-    let strict = compile_source(source, registry, authority, inputs, budgets);
+    let strict = compile_source(source, registry, authority, inputs, budgets, Dialect::Sx);
     let unchanged = |check| Compiled { check, source: source.to_string(), edits: Vec::new() };
     if strict.program.is_some() || !strict.diagnostics.iter().any(|d| matches!(d.code, "unclosed" | "unexpected-close")) {
         return unchanged(strict);
@@ -422,7 +422,7 @@ pub fn compile_source_inferring(
     let mut checked: Vec<(Inferred, CheckResult)> = infer_candidates(source)
         .into_iter()
         .map(|inferred| {
-            let check = compile_source(&inferred.text, registry, authority, inputs, budgets);
+            let check = compile_source(&inferred.text, registry, authority, inputs, budgets, Dialect::Sx);
             (inferred, check)
         })
         .collect();

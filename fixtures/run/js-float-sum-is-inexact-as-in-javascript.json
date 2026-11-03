@@ -1,0 +1,24 @@
+{
+  "description": "0.1 + 0.2 is not 0.3.",
+  "python": false,
+  "dialect": "js",
+  "program": "[(= (+ 0.1 0.2) 0.3) (= (+ 0.1 0.2) 0.30000000000000004)]",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "completed": [
+      false,
+      true
+    ]
+  }
+}

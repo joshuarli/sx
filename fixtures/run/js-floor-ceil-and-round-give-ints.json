@@ -1,0 +1,26 @@
+{
+  "description": "floor and ceil give an Int from a Float and are the identity on an Int.",
+  "python": false,
+  "dialect": "js",
+  "program": "[(floor 2.7) (ceil 2.1) (floor 3) (floor -2.5)]",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "completed": [
+      2,
+      3,
+      3,
+      -3
+    ]
+  }
+}

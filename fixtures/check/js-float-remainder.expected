@@ -1,0 +1,6 @@
+error[js-float-remainder] 4:6-4:9
+  (rem 7.5 2)
+       ^^^
+  % on a Float is not supported.
+  JavaScript's remainder of a Float can be NaN or a fraction; only Int % Int is supported.
+  Fix: Math.floor(x) % n

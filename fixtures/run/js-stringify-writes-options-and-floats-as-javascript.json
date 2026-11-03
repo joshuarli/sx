@@ -1,0 +1,21 @@
+{
+  "description": "null for none, the value for some, and numbers without a trailing .0.",
+  "python": false,
+  "dialect": "js",
+  "program": "(js.stringify [none (some 1.0) \"q\\\"\\n\" 1e21])",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "completed": "[null,1,\"q\\\"\\n\",1e+21]"
+  }
+}

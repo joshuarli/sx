@@ -1,0 +1,69 @@
+{
+  "description": "find makes no call after the first match, so the trace has two calls.",
+  "python": false,
+  "dialect": "js",
+  "program": "(js.find (fn [id] (= (call store.size {:id id}) 2)) [\"a\" \"b\" \"c\"])",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "responses": [
+    {
+      "capability": "store.size",
+      "input": {
+        "id": "a"
+      },
+      "results": [
+        {
+          "output": 1
+        }
+      ]
+    },
+    {
+      "capability": "store.size",
+      "input": {
+        "id": "b"
+      },
+      "results": [
+        {
+          "output": 2
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": "b"
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "store.size",
+      "input": {
+        "id": "a"
+      }
+    },
+    {
+      "response": "r:1",
+      "output": 1
+    },
+    {
+      "request": "r:2",
+      "capability": "store.size",
+      "input": {
+        "id": "b"
+      }
+    },
+    {
+      "response": "r:2",
+      "output": 2
+    }
+  ]
+}

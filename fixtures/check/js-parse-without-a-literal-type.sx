@@ -1,0 +1,4 @@
+; declarations: fixtures/run/declarations/js.json
+; dialect: js
+; python: no
+(js.parse (str "Int") "1")

@@ -1,0 +1,4 @@
+error[ts-json-parse-type] 4:11-4:20
+  (js.parse "Strange" "1")
+            ^^^^^^^^^
+  unknown type 'Strange' in 'Strange'

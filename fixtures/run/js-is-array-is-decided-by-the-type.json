@@ -1,0 +1,26 @@
+{
+  "description": "Array.isArray is true for a list and false for any other type.",
+  "python": false,
+  "dialect": "js",
+  "program": "[(js.is-array [1]) (js.is-array \"a\") (js.is-array {:a 1}) (js.is-array 3)]",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "completed": [
+      true,
+      false,
+      false,
+      false
+    ]
+  }
+}

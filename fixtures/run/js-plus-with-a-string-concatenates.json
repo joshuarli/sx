@@ -1,0 +1,26 @@
+{
+  "description": "+ with a String operand is concatenation of Strings, Ints, Floats, and Bools.",
+  "python": false,
+  "dialect": "js",
+  "program": "[(+ \"n=\" 1) (+ 1 \"x\") (+ \"a\" 2.0) (+ \"ok:\" true)]",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "completed": [
+      "n=1",
+      "1x",
+      "a2",
+      "ok:true"
+    ]
+  }
+}

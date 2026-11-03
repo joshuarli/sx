@@ -1,0 +1,21 @@
+{
+  "description": "trim removes no-break space, BOM, and em space.",
+  "python": false,
+  "dialect": "js",
+  "program": "(js.trim \" ﻿ x y  \")",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "completed": "x y"
+  }
+}

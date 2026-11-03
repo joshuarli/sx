@@ -8,7 +8,7 @@ use std::sync::OnceLock;
 use sx_cores::kernel::{Cores, declared_registry};
 use sx_kernel::authority::{Authority, Grants};
 use sx_kernel::budgets::Budgets;
-use sx_kernel::checker::compile_source;
+use sx_kernel::checker::{Dialect, compile_source};
 use sx_kernel::diagnostics::render;
 use sx_kernel::export::export_program;
 use sx_kernel::host::{FixtureHost, parse_result, run};
@@ -153,11 +153,12 @@ struct Case {
     allowed: Option<Vec<String>>,
     grants: Option<String>,
     budgets: Vec<(String, u64)>,
+    dialect: Dialect,
 }
 
 impl Case {
     fn new(name: impl Into<String>, source: impl Into<String>, spec: Spec) -> Case {
-        Case { name: name.into(), source: source.into(), spec, allowed: None, grants: None, budgets: Vec::new() }
+        Case { name: name.into(), source: source.into(), spec, allowed: None, grants: None, budgets: Vec::new(), dialect: Dialect::Sx }
     }
 
     fn json(&self) -> Json {
@@ -252,7 +253,7 @@ fn rust_check_here(case: &Case) -> (Checked, Option<sx_kernel::ir::Program>) {
     let registry = registry_for(&case.spec);
     let grants = grants_for(case, &registry);
     let outcome = catch_unwind(AssertUnwindSafe(|| {
-        compile_source(&case.source, &registry, Authority::Granted(&grants), &BTreeMap::new(), case.budgets())
+        compile_source(&case.source, &registry, Authority::Granted(&grants), &BTreeMap::new(), case.budgets(), case.dialect)
     }));
     match outcome {
         Err(panic) => {
@@ -273,6 +274,16 @@ fn rust_check_here(case: &Case) -> (Checked, Option<sx_kernel::ir::Program>) {
                 None,
             ),
         },
+    }
+}
+
+fn header_dialect(source: &str) -> Dialect {
+    let javascript = source.split('\n').take_while(|line| line.starts_with(';')).any(|line| line == "; dialect: js");
+    if javascript {
+        assert!(!source_runs_in_python(source), "a JavaScript-mode fixture must also carry `; python: no`");
+        Dialect::JavaScript
+    } else {
+        Dialect::Sx
     }
 }
 
@@ -318,9 +329,11 @@ fn check_fixture_cases() -> Vec<(Case, String)> {
             let source = fs::read_to_string(&path).expect("fixture source");
             let expected = fs::read_to_string(path.with_extension("expected")).expect("expected output");
             let (spec, allowed, grants) = header_spec(&source);
+            let dialect = header_dialect(&source);
             let mut case = Case::new(stem(&path), source, spec);
             case.allowed = allowed;
             case.grants = grants;
+            case.dialect = dialect;
             (case, expected)
         })
         .collect()
@@ -367,6 +380,11 @@ fn run_cases() -> Vec<RunCase> {
             case.allowed = Some(
                 fixture.get("allow").and_then(Json::as_array).expect("allow").iter().filter_map(Json::as_str).map(str::to_string).collect(),
             );
+            if let Some(dialect) = fixture.get("dialect").and_then(Json::as_str) {
+                assert_eq!(dialect, "js", "{}: the only other dialect is js", case.name);
+                assert!(!json_case_runs_in_python(&fixture), "{}: a js fixture must also set python: false", case.name);
+                case.dialect = Dialect::JavaScript;
+            }
             if let Some(overrides) = fixture.get("budgets").and_then(Json::as_object) {
                 case.budgets = overrides
                     .iter()

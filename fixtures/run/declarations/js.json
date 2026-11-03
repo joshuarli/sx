@@ -1,0 +1,19 @@
+{
+  "cores": ["js"],
+  "types": {
+    "Point": "Record {x: Int, y: Int}",
+    "Reading": "Record {name: String, celsius: Float, note: Option<String>}",
+    "Pair": "Record {a: Int, b: Int}"
+  },
+  "capabilities": [
+    {"id": "store.list", "effect": "read", "input": "Record {}", "output": "List<String>", "description": "Lists item ids."},
+    {"id": "store.size", "effect": "read", "input": "Record {id: String}", "output": "Int", "description": "Reads one size."},
+    {"id": "store.read", "effect": "read", "input": "Record {id: String}", "output": "String", "description": "Reads one text."},
+    {"id": "store.maybe", "effect": "read", "input": "Record {id: String}", "output": "Option<String>", "description": "Reads one optional text."},
+    {"id": "store.point", "effect": "read", "input": "Record {}", "output": "Point", "description": "Reads a point."},
+    {"id": "store.reading", "effect": "read", "input": "Record {}", "output": "Reading", "description": "Reads a reading."},
+    {"id": "store.sizes", "effect": "read", "input": "Record {}", "output": "Map<String, Int>", "description": "Reads sizes by name."},
+    {"id": "store.put", "effect": "write", "idempotent": true, "input": "Record {id: String, size: Int}", "output": "Unit", "description": "Stores an item."},
+    {"id": "store.average", "effect": "write", "idempotent": true, "input": "Record {mean: Float}", "output": "Unit", "description": "Stores a mean."}
+  ]
+}

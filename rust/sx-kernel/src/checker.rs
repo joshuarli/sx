@@ -16,9 +16,16 @@ use crate::types::{type_depth,
 };
 use crate::values::{MapValue, Value, show_value};
 
+mod js;
 mod script;
 
 pub use script::disagreement as input_disagreement;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Dialect {
+    Sx,
+    JavaScript,
+}
 
 const SPECIAL_FORMS: [&str; 18] = [
     "let", "if", "cond", "match", "fn", "get", "call", "attempt", "retry", "wait-until", "loop", "recur", "par",
@@ -647,6 +654,7 @@ struct Coercion<'s> {
 type Checked = (ir::Node, Type);
 
 struct Checker<'r> {
+    dialect: Dialect,
     registry: &'r Registry,
     authority: Authority<'r>,
     budgets: Budgets,
@@ -1005,11 +1013,17 @@ impl<'r> Checker<'r> {
             };
             return (value, expected.clone());
         }
+        if self.dialect == Dialect::JavaScript
+            && let Some(promoted) = self.promote_numbers(&value, actual, expected, span)
+        {
+            return (promoted, expected.clone());
+        }
         let (found, wanted) = (self.zonk(actual), self.zonk(expected));
         let mut detail = format!("Expected: {}\nFound: {}", show_type(&wanted), show_type(&found));
         let mut detail_hint = options.detail_hint;
         let mut help = options.help;
         let mut fix = None;
+        let mut code = "type-mismatch";
         if detail_hint.is_none()
             && let Type::Option(inner) = &found
             && self.trial(inner, &wanted)
@@ -1027,8 +1041,13 @@ impl<'r> Checker<'r> {
             fix = float_fix(options.source);
             help = help.or_else(|| Some("float".to_string()));
         } else if found == FLOAT && wanted == INT {
-            detail_hint = detail_hint.or_else(|| Some(FLOAT_TO_INT_HINT.to_string()));
-            help = help.or_else(|| Some("round".to_string()));
+            if self.dialect == Dialect::JavaScript {
+                code = "js-float-as-int";
+                fix = Some("Math.floor(x)".to_string());
+            } else {
+                detail_hint = detail_hint.or_else(|| Some(FLOAT_TO_INT_HINT.to_string()));
+                help = help.or_else(|| Some("round".to_string()));
+            }
         }
         if wanted == BYTES {
             detail_hint = detail_hint.or_else(|| Some(BYTES_HINT.to_string()));
@@ -1040,7 +1059,7 @@ impl<'r> Checker<'r> {
         let message = options
             .message
             .unwrap_or_else(|| format!("This is {}, but {} is needed here.", describe(&found), describe(&wanted)));
-        self.report(Diagnostic::new("type-mismatch", span, message).detail(detail).maybe_fix(fix).maybe_help(help));
+        self.report(Diagnostic::new(code, span, message).detail(detail).maybe_fix(fix).maybe_help(help));
         (value, expected.clone())
     }
 
@@ -1091,6 +1110,12 @@ impl<'r> Checker<'r> {
         }
         self.rollback(mark);
         match (&ra, &rb) {
+            (Type::Primitive(Primitive::Int), Type::Primitive(Primitive::Float))
+            | (Type::Primitive(Primitive::Float), Type::Primitive(Primitive::Int))
+                if self.dialect == Dialect::JavaScript =>
+            {
+                Some(FLOAT)
+            }
             (Type::Option(x), Type::Option(y)) => self.least_upper_bound(x, y).map(option),
             (Type::Option(x), _) if !self.is_open(&rb) => self.least_upper_bound(x, &rb).map(option),
             (_, Type::Option(y)) if !self.is_open(&ra) => self.least_upper_bound(&ra, y).map(option),
@@ -1433,6 +1458,11 @@ impl<'r> Checker<'r> {
             let made = node(Ir::MakeList { items: Vec::new(), element: element.clone() }, span);
             return self.coerce(made, &list(element), expected, span);
         };
+        if self.dialect == Dialect::JavaScript
+            && let Some(numbers) = self.js_number_list(&checked, span)
+        {
+            return self.coerce(numbers, &list(FLOAT), expected, span);
+        }
         let element = element.clone();
         let shared = checked.iter().skip(1).all(|(_, t)| self.trial(t, &element));
         let count = checked.len();
@@ -1562,6 +1592,19 @@ impl<'r> Checker<'r> {
             return self.outside_tail(|c| {
                 if name == "fail" { c.form_fail(span, items, expected, scope) } else { c.form_log(span, items, expected, scope) }
             });
+        }
+        if self.dialect == Dialect::JavaScript
+            && matches!(name, "truthy" | "typeof" | "record-spread")
+            && scope.get(name).is_none()
+        {
+            return self.outside_tail(|c| match name {
+                "truthy" => c.form_truthy(span, items, expected, scope),
+                "typeof" => c.form_typeof(span, items, expected, scope),
+                _ => c.form_record_spread(span, items, expected, scope),
+            });
+        }
+        if self.dialect == Dialect::JavaScript && name.starts_with("js.") && scope.get(name).is_none() {
+            return self.outside_tail(|c| c.js_function(span, name, items, expected, scope));
         }
         if matches!(name, "when" | "do") && !matches!(scope.get(name), Some(Binding::Function(_))) {
             return if name == "when" {
@@ -1963,7 +2006,7 @@ impl<'r> Checker<'r> {
         let resolved = self.resolve(&condition_type);
         if let Type::Option(inner_type) = &resolved {
             let inner = self.resolve(inner_type);
-            if inner == BOOL {
+            if inner == BOOL && self.dialect == Dialect::Sx {
                 let message = format!(
                     "{} must be true or false, but this is {}.",
                     test_subject(who),
@@ -2011,7 +2054,7 @@ impl<'r> Checker<'r> {
     fn check_presence_tests(&mut self) {
         let tests = std::mem::take(&mut self.presence_tests);
         for test in &tests {
-            if self.resolve(&test.inner) == BOOL {
+            if self.resolve(&test.inner) == BOOL && self.dialect == Dialect::Sx {
                 self.report(
                     Diagnostic::new(
                         "condition-not-bool",
@@ -2835,6 +2878,11 @@ impl<'r> Checker<'r> {
         }
         self.capabilities_used.insert(capability.id.clone());
         let call = node(Ir::Call { capability: capability.id.clone(), argument: Box::new(argument) }, span);
+        let call = if self.dialect == Dialect::JavaScript {
+            self.safe_decoded(call, &capability.output, span)
+        } else {
+            call
+        };
         self.coerce(call, &capability.output, expected, span)
     }
 
@@ -3248,6 +3296,10 @@ impl<'r> Checker<'r> {
         let mut args = Vec::with_capacity(items.len() - 1);
         for item in &items[1..] {
             let (value, t) = self.check(item, None, scope);
+            if self.dialect == Dialect::JavaScript {
+                args.push(self.js_displayed(value, &t, item.span));
+                continue;
+            }
             self.late_json_values.push((t, item.span, "log"));
             args.push(value);
         }
@@ -3984,6 +4036,11 @@ impl<'r> Checker<'r> {
             );
             return self.placeholder(span);
         }
+        if self.dialect == Dialect::JavaScript
+            && let Some(checked) = self.js_operator(syntax, items, op, expected, scope)
+        {
+            return checked;
+        }
         if op == "-" {
             if !self.arity(span, items, 1, Some(2), "a b") {
                 return self.placeholder(span);
@@ -4220,11 +4277,43 @@ impl<'r> Checker<'r> {
                 self.coerce(prelude(prelude_op, vec![pairs], span), &map_of(value_type), expected, span)
             }
             "reduce" => {
-                let (initial, accumulator) = self.check(&args[1], None, scope);
+                let (mut initial, mut accumulator) = self.check(&args[1], None, scope);
                 let (items_ir, t) = self.check(&args[2], None, scope);
                 let element = self.list_element(&t, &args[2], "reduce");
-                let (function, _) =
-                    self.function_argument(&args[0], vec![accumulator.clone(), element], Some(&accumulator), "reduce", scope);
+                let widens = self.dialect == Dialect::JavaScript && self.resolve(&accumulator) == INT;
+                let attempt = Speculation::start(self);
+                let (mut function, mut result) = self.function_argument(
+                    &args[0],
+                    vec![accumulator.clone(), element.clone()],
+                    Some(&accumulator),
+                    "reduce",
+                    scope,
+                );
+                if widens && self.diagnostics.len() > attempt.diagnostics {
+                    attempt.undo(self);
+                    let widened = self.coerce_joining(initial.clone(), &INT, &FLOAT, span);
+                    let again = Speculation::start(self);
+                    let (retried, retried_result) =
+                        self.function_argument(&args[0], vec![FLOAT, element.clone()], Some(&FLOAT), "reduce", scope);
+                    if self.diagnostics.len() > again.diagnostics {
+                        again.undo(self);
+                        let (reported, reported_result) = self.function_argument(
+                            &args[0],
+                            vec![accumulator.clone(), element],
+                            Some(&accumulator),
+                            "reduce",
+                            scope,
+                        );
+                        function = reported;
+                        result = reported_result;
+                    } else {
+                        initial = widened;
+                        accumulator = FLOAT;
+                        function = retried;
+                        result = retried_result;
+                    }
+                }
+                let _ = result;
                 let function = lambda_node(function);
                 self.coerce(prelude(prelude_op, vec![function, initial, items_ir], span), &accumulator, expected, span)
             }
@@ -4402,8 +4491,11 @@ impl<'r> Checker<'r> {
                     }
                     _ => None,
                 };
-                let (function, key) = self.function_argument(function_node, vec![element.clone()], None, op, scope);
+                let (mut function, key) = self.function_argument(function_node, vec![element.clone()], None, op, scope);
                 self.sort_key_owner = None;
+                if self.dialect == Dialect::JavaScript && self.resolve(&key) == STRING {
+                    function = self.js_ordered_key(function);
+                }
                 if self.is_open(&key) {
                     self.late_sort_keys.push((key.clone(), function_node.span));
                 }
@@ -4708,15 +4800,17 @@ pub fn check(
     authority: Authority<'_>,
     inputs: &BTreeMap<String, Type>,
     budgets: Budgets,
+    dialect: Dialect,
 ) -> CheckResult {
     let checked = crate::stack::on_sized_stack(|| {
         let mut arguments = ArgumentTypes::default();
-        let first = elaborate(program, registry, authority, inputs, budgets, ArgumentTypes::default(), &mut arguments);
+        let first =
+            elaborate(program, registry, authority, inputs, budgets, dialect, ArgumentTypes::default(), &mut arguments);
         let unresolved = first.diagnostics.iter().any(|d| d.code == "unresolved-type");
         if !unresolved || arguments.implicated.is_empty() {
             return first;
         }
-        elaborate(program, registry, authority, inputs, budgets, arguments, &mut ArgumentTypes::default())
+        elaborate(program, registry, authority, inputs, budgets, dialect, arguments, &mut ArgumentTypes::default())
     });
     match checked {
         Ok(result) => result,
@@ -4733,10 +4827,12 @@ fn elaborate(
     authority: Authority<'_>,
     inputs: &BTreeMap<String, Type>,
     budgets: Budgets,
+    dialect: Dialect,
     earlier: ArgumentTypes,
     found: &mut ArgumentTypes,
 ) -> CheckResult {
     let mut checker = Checker {
+        dialect,
         registry,
         authority,
         budgets,
@@ -4868,6 +4964,7 @@ pub fn compile_source(
     authority: Authority<'_>,
     inputs: &BTreeMap<String, Type>,
     budgets: Budgets,
+    dialect: Dialect,
 ) -> CheckResult {
     let size = source.len() as u64;
     if size > budgets.source_bytes {
@@ -4879,6 +4976,6 @@ pub fn compile_source(
     let read = crate::reader::read(source);
     match read.program {
         None => CheckResult::rejected(read.diagnostics),
-        Some(program) => check(&program, registry, authority, inputs, budgets),
+        Some(program) => check(&program, registry, authority, inputs, budgets, dialect),
     }
 }

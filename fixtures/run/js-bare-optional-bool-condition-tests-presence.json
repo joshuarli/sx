@@ -1,0 +1,25 @@
+{
+  "description": "In JavaScript mode a bare Option<Bool> condition is a presence test.",
+  "python": false,
+  "dialect": "js",
+  "program": "[(if (some false) 1 2) (if (not (some false)) 1 2) (not none)]",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "completed": [
+      1,
+      2,
+      true
+    ]
+  }
+}

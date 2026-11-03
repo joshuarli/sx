@@ -1,0 +1,21 @@
+{
+  "description": "value of a rejected result is the out-of-range trap where JavaScript has undefined.",
+  "python": false,
+  "dialect": "js",
+  "program": "(js.settled-value (attempt (fail \"boom\")))",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "failed": "out-of-range"
+  }
+}

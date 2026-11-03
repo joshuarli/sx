@@ -1,0 +1,6 @@
+error[js-equality] 4:1-4:16
+  (= [1 2] [1 2])
+  ^^^^^^^^^^^^^^^
+  === compares references here, and Sx compares values.
+  Only strings, numbers, booleans, and optional ones of those can be compared.
+  Fix: compare fields

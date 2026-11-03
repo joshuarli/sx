@@ -1,0 +1,55 @@
+{
+  "description": "log writes a record in the order its type declares, not ascending.",
+  "python": false,
+  "dialect": "js",
+  "program": "(let [r (call store.reading {}) _ (log r) _ (log (record-spread (:spread r) (:field \"extra\" [1 2])))] 1)",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "responses": [
+    {
+      "capability": "store.reading",
+      "input": {},
+      "results": [
+        {
+          "output": {
+            "name": "n",
+            "celsius": 21.5,
+            "note": null
+          }
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "completed": 1
+  },
+  "trace": [
+    {
+      "request": "r:1",
+      "capability": "store.reading",
+      "input": {}
+    },
+    {
+      "response": "r:1",
+      "output": {
+        "name": "n",
+        "celsius": 21.5,
+        "note": null
+      }
+    }
+  ],
+  "logs": [
+    "{\"name\":\"n\",\"celsius\":21.5,\"note\":null}",
+    "{\"name\":\"n\",\"celsius\":21.5,\"note\":null,\"extra\":[1,2]}"
+  ]
+}

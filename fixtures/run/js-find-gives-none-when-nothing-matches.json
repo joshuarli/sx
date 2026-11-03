@@ -1,0 +1,24 @@
+{
+  "description": "find is optional: none when no element matches.",
+  "python": false,
+  "dialect": "js",
+  "program": "[(js.find (fn [x] (> x 5)) [1 2]) (js.find (fn [x] (> x 1)) [1 2])]",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "completed": [
+      null,
+      2
+    ]
+  }
+}

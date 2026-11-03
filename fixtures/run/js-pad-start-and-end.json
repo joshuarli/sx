@@ -1,0 +1,26 @@
+{
+  "description": "padStart and padEnd fill to a length in UTF-16 units and cut the filler.",
+  "python": false,
+  "dialect": "js",
+  "program": "[(js.pad-start \"7\" 3 \"0\") (js.pad-end \"7\" 4 \"ab\") (js.pad-start \"long\" 2 \"x\") (js.pad-start \"a\" 5 \"\")]",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "completed": [
+      "007",
+      "7aba",
+      "long",
+      "a"
+    ]
+  }
+}

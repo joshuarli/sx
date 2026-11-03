@@ -6,7 +6,7 @@ use sx_cores::kernel::{Cores, yaml_core};
 use sx_cores::yaml::{get, keys, set};
 use sx_kernel::authority::{Authority, Grants};
 use sx_kernel::budgets::Budgets;
-use sx_kernel::checker::compile_source;
+use sx_kernel::checker::{Dialect, compile_source};
 use sx_kernel::json::{Json, parse};
 use sx_kernel::machine::{Machine, Outcome};
 use sx_kernel::registry::Registry;
@@ -123,7 +123,7 @@ fn a_refused_document_makes_the_core_fail_as_an_invalid_input_stop() {
         &registry,
         Authority::Granted(&grants),
         &BTreeMap::new(),
-        Budgets::default(),
+        Budgets::default(), Dialect::Sx,
     );
     let program = checked.program.expect("the program checks");
     let mut machine = Machine::new(&program, &[], Budgets::default(), &Cores);
@@ -149,7 +149,7 @@ fn every_yaml_example_produces_its_documented_result() {
             &registry,
             Authority::Granted(&grants),
             &BTreeMap::new(),
-            Budgets::default(),
+            Budgets::default(), Dialect::Sx,
         );
         let program = compiled.program.unwrap_or_else(|| panic!("{}: {:?}", function.name, compiled.diagnostics));
         let mut machine = Machine::new(&program, &[], Budgets::default(), &Cores);

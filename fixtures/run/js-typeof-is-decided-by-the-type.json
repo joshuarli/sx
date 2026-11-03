@@ -1,0 +1,30 @@
+{
+  "description": "typeof is a static function of the type, with null for an absent optional.",
+  "python": false,
+  "dialect": "js",
+  "program": "[(typeof \"a\") (typeof 1) (typeof 1.5) (typeof true) (typeof [1]) (typeof {:a 1}) (typeof none) (typeof (some \"s\"))]",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "completed": [
+      "string",
+      "number",
+      "number",
+      "boolean",
+      "object",
+      "object",
+      "object",
+      "string"
+    ]
+  }
+}

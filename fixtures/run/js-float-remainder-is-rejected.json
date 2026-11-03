@@ -1,0 +1,23 @@
+{
+  "description": "% with a Float operand is rejected.",
+  "python": false,
+  "dialect": "js",
+  "program": "(rem 7.5 2)",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "rejected": [
+      "js-float-remainder"
+    ]
+  }
+}

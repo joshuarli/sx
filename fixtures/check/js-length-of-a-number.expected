@@ -1,0 +1,4 @@
+error[type-mismatch] 4:12-4:13
+  (js.length 3)
+             ^
+  js.length takes a String or a list here, but this is an Int.

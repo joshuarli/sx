@@ -1,0 +1,4 @@
+; declarations: fixtures/run/declarations/js.json
+; dialect: js
+; python: no
+(nth [1 2] 1.5)
