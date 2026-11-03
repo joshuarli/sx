@@ -430,7 +430,7 @@ impl<'a> Lowerer<'a> {
                 app("js.slice", nodes, span)
             }
             "concat" => {
-                let Some(x) = arg(self, 0) else { return self.reject("ts-unknown-builtin", span, "concat takes one array") };
+                let (Some(x), 1) = (arg(self, 0), args.len()) else { return self.reject("ts-unknown-builtin", span, "concat takes one array") };
                 app("concat", vec![r, x], span)
             }
             "sort" => self.sort_node_pub(r, args.first(), span),

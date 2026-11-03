@@ -205,3 +205,10 @@ fn bounded_forms() {
     rejects("ts-promise-value", "const p = retry({ delaysMs: [1] }, () => tools.fs.readText({ path: \"a\" }));");
     accepts("return await retry({ delaysMs: [1000, 2000], on: [\"Timeout\"] }, () => tools.fs.readText({ path: \"a\" }));");
 }
+
+#[test]
+fn concat_takes_one_array() {
+    rejects("ts-unknown-builtin", "const a = [1];\nreturn a.concat([2], [3]);");
+    rejects("ts-unknown-builtin", "const a = [1];\nreturn a.concat();");
+    accepts("const a = [1];\nreturn a.concat([2]).concat([3]);");
+}
