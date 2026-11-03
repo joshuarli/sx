@@ -26,7 +26,10 @@ instead of continuing with a different answer:
   `try` cannot catch. [Traps](#traps) lists every one.
 - **A refinement** is a case where JavaScript leaves the answer to timing, such as which of two failing
   branches of `Promise.all` is reported, or the order in which concurrent reads start. The lowered program
-  picks one answer that JavaScript also allows: the failure of the lowest-numbered branch.
+  picks one answer that JavaScript also allows: the failure of the lowest-numbered branch. Sx may also stop
+  the branches that have not started once a branch has failed, so the calls it makes are a subset of
+  JavaScript's, and may start in another order; the differential comparison accepts a subset and a
+  reordering of the calls of concurrent branches, and requires the sequence of calls outside them.
 
 A program that traps has no JavaScript meaning to compare against. The differential tests of Phase 19
 treat a run in which Sx traps as agreeing only when the fixture says the trap is expected.
@@ -38,7 +41,7 @@ treat a run in which Sx traps as agreeing only when the fixture says the trap is
 | `Int` result outside ±2^53, or an `Int` decoded outside it | A rounded double | `arithmetic` |
 | `/`, `%`, or another `Float` operation that is infinite or not a number | `Infinity`, `NaN` | `arithmetic` |
 | `xs[i]`, or destructuring past the end of a list | `undefined` | `out-of-range` |
-| `Math.floor`, `ceil`, `round`, `trunc` of a value outside the `Int` range | A large double | `out-of-range` |
+| `Math.floor`, `ceil`, `round`, `trunc` of a value outside ±2^53 | A large double | `out-of-range` |
 | A string slice or index that cuts a surrogate pair | A lone surrogate | `arithmetic` |
 | `parseInt(s, 10)` when `s` has no leading digits | `NaN` | `arithmetic` |
 | `s.value` of a rejected `Settled` | `undefined` | `out-of-range` |
@@ -193,8 +196,9 @@ the call.
 | Source | Lowering |
 | --- | --- |
 | `x ?? d` | `(get x d)` when `x` is a bare name or an optional field, else `(match x (some v) v none d)`; `d` runs only when `x` is absent |
-| `x == null`, `x === null` | `(not x)` as a presence test |
-| `x != null`, `x !== null` | `x` as a presence test |
+| `x == null` | `(not x)` as a presence test |
+| `x != null` | `x` as a presence test |
+| `x === null`, `x !== null` | `(= x none)`, which the checker rejects with `js-null-equality`: an absent value may be `undefined`, so only `== null` and `!= null` test presence |
 | `x?.f` | `(match x (some v) (get v :f) none none)` |
 | `x?.[i]`, `x?.f()` | the same, with the index or the method |
 
@@ -208,7 +212,7 @@ So a `?.` chain may appear only where `undefined` and `null` behave alike:
 - as the value of a property of the object literal passed to a tool, where `null` and `undefined` are both left out;
 - as the initializer of a `const` or `let` whose every use is one of the above.
 
-`=== null` on a chain is rejected, because `undefined === null` is false. Any other use is `ts-optional-chain`,
+`=== null` on a chain is rejected, because `undefined === null` is false, and so is `=== null` on any optional value (`js-null-equality`). Any other use is `ts-optional-chain`,
 with the fix `x == null ? null : x.f`. A plain `.f` on an `Option` is a `type-mismatch`, in TypeScript terms
 "possibly null".
 
@@ -702,6 +706,44 @@ Sx program, because the flag is off for them.
 | `pop`, `shift`, `splice` | rewrite with `Option` results | deferred |
 | `switch`, `finally`, labeled statements | | deferred |
 
+## JS mode as built
+
+The mode is the `Dialect` parameter of the checker: `checker::check(program, registry, authority, inputs,
+budgets, Dialect::JavaScript)`, and `compile_source` takes the same last parameter for programs written as
+Sx text. These are the places where the implementation fixes what this document left open.
+
+- **Forms the front end emits.** `(truthy e)`, `(typeof e)`, `(record-spread (:spread e) (:field "k" e))`,
+  `(js.is-array e)`, `(js.includes recv x)`, `(js.parse "SX TYPE" text)`, `(js.stringify v [indent])`, and
+  the `js.` functions of the table. The checker chooses between a list and a `String` receiver by type: a
+  list expands into existing forms (`count`, `map`, `range`, `reduce`, `enumerate`), a `String` calls the
+  `js` core. `js.find` stops at the first match, so a predicate with a call makes no call after it.
+  `js.settled-status`, `js.settled-value`, and `js.settled-reason` read a `Result` of `attempt` and are
+  elaborated into a `match`; a `Settled` is a `Result<T, CallError>`.
+- **Numbers.** `+`, `-`, `*` on `Int`s are `(safe-int …)`; an `Int` a tool returns, in a list, option,
+  tuple, or record, is checked the same way (a `Map` value or an enum payload is not). `/` converts both
+  operands. A rounding is guarded: a `Float` outside ±2^53 is the `out-of-range` trap, so every `Int` stays
+  safe. An accumulator that starts as `0` and receives a `Float` is widened in `reduce`; a `loop` variable
+  is not, and mixed `Int` and `Float` there is `js-float-as-int`.
+- **Text.** `str` writes a `Float` through `js.float-text`, so `1.0` is `1` and `1e21` is `1e+21`; `+`, a
+  template, and `String(x)` accept a `String`, `Int`, `Float`, `Bool`, a nullary enum, or an optional one
+  of those, which is `null` when absent. `<`, `<=`, `>`, `>=` on strings and a `sort-by` key of type
+  `String` compare through `js.order-key`; a tuple key that contains a string is not mapped.
+- **Conditions.** A bare condition keeps its Sx meaning, with one change: an `Option<Bool>` is a presence
+  test, so the front end's `x != null` is the bare name. `(not x)` on an optional value is the absence
+  test. Everything else goes through `truthy`.
+- **Record order.** A record value holds its fields in the order of the literal or the type that built it
+  (a hint from a tool input type orders by the type). `log` and `js.stringify` write that order; `to-json`
+  still writes keys ascending. `console.log` elaborates each argument to text or to `js.stringify`.
+- **`js.Shaped`.** A spread `Settled` is an enum named `js.Shaped<R1 | R2>` with the variants `Fulfilled` and
+  `Rejected`, each holding its record. It is written, logged, stringified, and returned as the record it
+  holds. `get` on it is a `match`; a field the present shape lacks is the `out-of-range` trap. There is no
+  `js.shaped-get` function. `ts-spread` is reported by the checker, since only it knows the operand type.
+- **Decoding.** `js.parse` reads the target type from a string literal in the `Type` syntax of Sx, with
+  the registry's named types, and its core refuses a document of another shape (`invalid-input`) and traps
+  on an `Int` beyond ±2^53. A type the front end passes must be written structurally.
+- **Result encoding.** A `Result` returned from the program is still `{"ok": …}` or `{"err": …}`; a
+  `Settled` returned whole is not yet written as JavaScript's `{"status": …}`.
+
 ## Diagnostics
 
 A diagnostic has the parts of [Diagnostics](language.md#diagnostics): code, span, excerpt, message, detail, fix,
@@ -781,6 +823,8 @@ call that failed.
 | `js-float-remainder` | `%` with a `Float` | | |
 | `js-coercion` | an operand JavaScript would convert implicitly | `X + Y converts an object to text` | |
 | `js-equality` | `===` on arrays or objects | `=== compares references here` | compare fields |
+| `js-null-equality` | `===` or `!==` against `null` (checker, JS mode) | `=== null and !== null are not supported` | `x == null` |
+| `js-truthiness` | a condition on `Bytes` or a validated string type (checker, JS mode) | whether it is truthy depends on its text | compare it |
 | `js-for-of-source` | `for…of` over a non-list | | |
 
 ## The classifier

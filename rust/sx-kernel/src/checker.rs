@@ -2587,6 +2587,14 @@ impl<'r> Checker<'r> {
         let (record_node, key) = (&items[1], &items[2]);
         let default_node = items.get(3);
         let (record_ir, record_type) = self.check(record_node, None, scope);
+        if self.dialect == Dialect::JavaScript
+            && let Some(shaped) = self.shaped_enum(&record_type)
+            && let Some(field) = keyword(key)
+            && default_node.is_none()
+        {
+            let (read, t) = self.shaped_get(record_ir, &shaped, field, span, key.span);
+            return self.coerce(read, &t, expected, span);
+        }
         let mut resolved = self.resolve(&record_type);
         let Some(key_name) = keyword(key) else {
             if let Some(value_type) = self.map_value_of(&record_type) {

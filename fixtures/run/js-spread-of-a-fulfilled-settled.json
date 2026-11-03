@@ -1,0 +1,27 @@
+{
+  "description": "A spread Settled keeps its status and value, in the order the literal gives.",
+  "python": false,
+  "dialect": "js",
+  "program": "(record-spread (:field \"i\" 0) (:spread (attempt 3)) (:field \"z\" 1))",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "completed": {
+      "i": 0,
+      "status": "fulfilled",
+      "value": 3,
+      "z": 1
+    }
+  },
+  "logs": []
+}

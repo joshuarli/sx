@@ -1,0 +1,24 @@
+{
+  "description": "A field every shape has is an ordinary read, and one only this shape has reads too.",
+  "python": false,
+  "dialect": "js",
+  "program": "(let [r (record-spread (:field \"i\" 1) (:spread (attempt 3)))] [(get r :i) (get r :status)])",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "completed": [
+      1,
+      "fulfilled"
+    ]
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "description": "A literal that spreads two Settled values is rejected.",
+  "python": false,
+  "dialect": "js",
+  "program": "(record-spread (:spread (attempt 3)) (:spread (attempt 4)))",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "rejected": [
+      "ts-spread"
+    ]
+  }
+}

@@ -666,73 +666,77 @@ impl<'r> Checker<'r> {
         expected: Option<&Type>,
         scope: &Scope<'a>,
     ) -> Checked {
+        #[derive(Clone)]
         enum Source {
-            Whole,
-            Field(String),
+            Whole(usize),
+            Field(usize, String),
+            Text(&'static str),
+            Settled,
         }
+        #[derive(Clone)]
         struct Entry {
             name: String,
             t: Type,
-            item: usize,
             source: Source,
+        }
+        enum Part {
+            Fields(Vec<Entry>),
+            Settled(Type, Type),
         }
         let hint = match self.hint(expected) {
             Type::Record(record) => Some(record),
             _ => None,
         };
         let mut bound: Vec<ir::Node> = Vec::new();
-        let mut entries: Vec<Entry> = Vec::new();
+        let mut parts: Vec<Part> = Vec::new();
         for (index, item) in items[1..].iter().enumerate() {
-            let parts = form_items(item).unwrap_or(&[]);
-            let kind = parts.first().and_then(keyword);
-            match (kind, parts.len()) {
+            let pieces = form_items(item).unwrap_or(&[]);
+            let kind = pieces.first().and_then(keyword);
+            match (kind, pieces.len()) {
                 (Some("spread"), 2) => {
-                    let (value, t) = self.check(&parts[1], None, scope);
+                    let (value, t) = self.check(&pieces[1], None, scope);
                     bound.push(value);
                     match self.resolve(&t) {
                         Type::Record(record) if !record.open => {
-                            for (name, field_type) in &record.fields {
-                                let entry = Entry {
+                            let entries = record
+                                .fields
+                                .iter()
+                                .map(|(name, field_type)| Entry {
                                     name: name.clone(),
                                     t: field_type.clone(),
-                                    item: index,
-                                    source: Source::Field(name.clone()),
-                                };
-                                match entries.iter_mut().find(|e| e.name == *name) {
-                                    Some(existing) => *existing = entry,
-                                    None => entries.push(entry),
-                                }
-                            }
+                                    source: Source::Field(index, name.clone()),
+                                })
+                                .collect();
+                            parts.push(Part::Fields(entries));
                         }
-                        Type::Never => {}
+                        Type::Result(ok, err) if err.is_call_error() => parts.push(Part::Settled(*ok, *err)),
+                        Type::Never => parts.push(Part::Fields(Vec::new())),
                         other => {
                             let found = describe(&self.zonk(&other));
                             self.report(
                                 Diagnostic::new(
                                     "ts-spread",
-                                    parts[1].span,
+                                    pieces[1].span,
                                     "Only records with declared fields can be spread into an object",
                                 )
                                 .detail(format!("This is {found}."))
                                 .fix("write the fields"),
                             );
+                            parts.push(Part::Fields(Vec::new()));
                         }
                     }
                 }
                 (Some("field"), 3) => {
-                    let NodeKind::String(name) = &parts[1].kind else {
-                        self.report(Diagnostic::new("bad-literal", parts[1].span, "A field of record-spread names it with a string."));
+                    let NodeKind::String(name) = &pieces[1].kind else {
+                        self.report(Diagnostic::new("bad-literal", pieces[1].span, "A field of record-spread names it with a string."));
                         bound.push(literal(Value::Unit, UNIT, span));
+                        parts.push(Part::Fields(Vec::new()));
                         continue;
                     };
                     let wanted = hint.as_ref().and_then(|record| record.field(name)).cloned();
-                    let (value, t) = self.check(&parts[2], wanted.as_ref(), scope);
+                    let (value, t) = self.check(&pieces[2], wanted.as_ref(), scope);
                     bound.push(value);
-                    let entry = Entry { name: name.clone(), t, item: index, source: Source::Whole };
-                    match entries.iter_mut().find(|e| e.name == *name) {
-                        Some(existing) => *existing = entry,
-                        None => entries.push(entry),
-                    }
+                    parts.push(Part::Fields(vec![Entry { name: name.clone(), t, source: Source::Whole(index) }]));
                 }
                 _ => {
                     self.report(Diagnostic::new(
@@ -741,27 +745,151 @@ impl<'r> Checker<'r> {
                         "record-spread takes (:spread value) and (:field \"name\" value) items.",
                     ));
                     bound.push(literal(Value::Unit, UNIT, span));
+                    parts.push(Part::Fields(Vec::new()));
                 }
             }
         }
+        let settled: Vec<usize> =
+            parts.iter().enumerate().filter(|(_, p)| matches!(p, Part::Settled(..))).map(|(at, _)| at).collect();
+        if settled.len() > 1 {
+            self.report(
+                Diagnostic::new("ts-spread", span, "Only records with declared fields can be spread into an object")
+                    .detail("A literal can spread at most one result of Promise.allSettled.")
+                    .fix("write the fields"),
+            );
+            return self.placeholder(span);
+        }
+        let shapes: Vec<Option<bool>> = if settled.is_empty() { vec![None] } else { vec![Some(true), Some(false)] };
         let held = |index: usize| format!("{SPREAD}{index}");
-        let fields: Vec<(String, ir::Node)> = entries
-            .iter()
-            .map(|entry| {
-                let source = variable(&held(entry.item), span);
-                let part = match &entry.source {
-                    Source::Whole => source,
-                    Source::Field(field) => node(Ir::Get { record: Box::new(source), field: field.clone() }, span),
+        let mut built: Vec<(Vec<Entry>, ir::Node)> = Vec::new();
+        for shape in shapes {
+            let mut entries: Vec<Entry> = Vec::new();
+            for part in &parts {
+                let contributed = match (part, shape) {
+                    (Part::Fields(fields), _) => fields.clone(),
+                    (Part::Settled(ok, _), Some(true)) => vec![
+                        Entry { name: "status".to_string(), t: STRING, source: Source::Text("fulfilled") },
+                        Entry { name: "value".to_string(), t: ok.clone(), source: Source::Settled },
+                    ],
+                    (Part::Settled(_, err), _) => vec![
+                        Entry { name: "status".to_string(), t: STRING, source: Source::Text("rejected") },
+                        Entry { name: "reason".to_string(), t: err.clone(), source: Source::Settled },
+                    ],
                 };
-                (entry.name.clone(), part)
-            })
-            .collect();
-        let mut body = node(Ir::MakeRecord { fields }, span);
+                for entry in contributed {
+                    match entries.iter_mut().find(|e| e.name == entry.name) {
+                        Some(existing) => *existing = entry,
+                        None => entries.push(entry),
+                    }
+                }
+            }
+            let fields: Vec<(String, ir::Node)> = entries
+                .iter()
+                .map(|entry| {
+                    let part = match &entry.source {
+                        Source::Whole(at) => variable(&held(*at), span),
+                        Source::Field(at, field) => {
+                            node(Ir::Get { record: Box::new(variable(&held(*at), span)), field: field.clone() }, span)
+                        }
+                        Source::Text(shown) => text(shown, span),
+                        Source::Settled => variable(PROMOTED, span),
+                    };
+                    (entry.name.clone(), part)
+                })
+                .collect();
+            built.push((entries, node(Ir::MakeRecord { fields }, span)));
+        }
+        let (result_type, mut body) = match settled.first() {
+            None => {
+                let Some((entries, record)) = built.pop() else {
+                    return self.placeholder(span);
+                };
+                (Type::Record(RecordType::plain(entries.into_iter().map(|e| (e.name, e.t)).collect())), record)
+            }
+            Some(at) => {
+                let mut records = built.into_iter();
+                let (Some((ok_entries, ok_record)), Some((err_entries, err_record))) = (records.next(), records.next()) else {
+                    return self.placeholder(span);
+                };
+                let to_type = |entries: Vec<Entry>| Type::Record(RecordType::plain(entries.into_iter().map(|e| (e.name, e.t)).collect()));
+                let (ok_type, err_type) = (to_type(ok_entries), to_type(err_entries));
+                let shaped = Arc::new(EnumType {
+                    name: format!("{}{} | {}>", crate::values::SHAPED_PREFIX, crate::types::show_definition(&ok_type), crate::types::show_definition(&err_type)),
+                    variants: vec![("Fulfilled".to_string(), Some(ok_type)), ("Rejected".to_string(), Some(err_type))],
+                });
+                let arm = |variant: &str, record: ir::Node| {
+                    node(
+                        Ir::MakeVariant {
+                            enum_name: shaped.name.clone(),
+                            variant: variant.to_string(),
+                            payload: Some(Box::new(record)),
+                        },
+                        span,
+                    )
+                };
+                let clauses = vec![
+                    (MatchPattern::Ok(Box::new(MatchPattern::Any(Binder::Name(PROMOTED.to_string())))), arm("Fulfilled", ok_record)),
+                    (MatchPattern::Err(Box::new(MatchPattern::Any(Binder::Name(PROMOTED.to_string())))), arm("Rejected", err_record)),
+                ];
+                let scrutinee = Box::new(variable(&held(*at), span));
+                (Type::Enum(shaped), node(Ir::Match(ir::Match { scrutinee, clauses }), span))
+            }
+        };
         for (index, value) in bound.into_iter().enumerate().rev() {
             body = bind(&held(index), value, body, span);
         }
-        let record = Type::Record(RecordType::plain(entries.into_iter().map(|e| (e.name, e.t)).collect()));
-        self.coerce(body, &record, expected, span)
+        self.coerce(body, &result_type, expected, span)
+    }
+
+    pub(super) fn shaped_enum(&self, t: &Type) -> Option<Arc<EnumType>> {
+        match self.resolve(t) {
+            Type::Enum(e) if e.name.starts_with(crate::values::SHAPED_PREFIX) => Some(e),
+            _ => None,
+        }
+    }
+
+    pub(super) fn shaped_get(&mut self, value: ir::Node, shaped: &EnumType, field: &str, span: Span, at: Span) -> Checked {
+        let mut found: Option<Type> = None;
+        for (_, payload) in &shaped.variants {
+            if let Some(Type::Record(record)) = payload
+                && let Some(t) = record.field(field)
+            {
+                match &found {
+                    None => found = Some(t.clone()),
+                    Some(first) if first != t => {
+                        self.report(Diagnostic::new(
+                            "type-mismatch",
+                            at,
+                            format!("The field {field} has a different type in each shape of this object."),
+                        ));
+                        return self.placeholder(span);
+                    }
+                    Some(_) => {}
+                }
+            }
+        }
+        let Some(result) = found else {
+            self.report(Diagnostic::new("unknown-field", at, format!("No shape of this object has a field {field}.")));
+            return self.placeholder(span);
+        };
+        let clauses = shaped
+            .variants
+            .iter()
+            .map(|(variant, payload)| {
+                let has = matches!(payload, Some(Type::Record(record)) if record.field(field).is_some());
+                let body = if has {
+                    node(Ir::Get { record: Box::new(variable(PROMOTED, span)), field: field.to_string() }, span)
+                } else {
+                    trap(&result, span)
+                };
+                let pattern = MatchPattern::Variant {
+                    variant: variant.clone(),
+                    inner: Some(Box::new(MatchPattern::Any(Binder::Name(PROMOTED.to_string())))),
+                };
+                (pattern, body)
+            })
+            .collect();
+        (node(Ir::Match(ir::Match { scrutinee: Box::new(value), clauses }), span), result)
     }
 
     pub(super) fn expand<'a>(

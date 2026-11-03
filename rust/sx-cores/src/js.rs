@@ -297,6 +297,10 @@ impl Writer {
             Value::Err(inner) => {
                 self.tagged(depth, vec![("status", Value::string("rejected")), ("reason", (**inner).clone())])?;
             }
+            Value::Variant(variant) if variant.enum_name.starts_with(sx_kernel::values::SHAPED_PREFIX) => match &variant.payload {
+                Some(payload) => self.value(payload, depth)?,
+                None => return refused("A js.Shaped value holds a record."),
+            },
             Value::Variant(variant) => match &variant.payload {
                 None => write_string(&variant.variant, &mut self.out),
                 Some(payload) => {

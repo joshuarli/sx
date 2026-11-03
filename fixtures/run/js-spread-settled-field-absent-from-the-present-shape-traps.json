@@ -1,0 +1,21 @@
+{
+  "description": "Reading value of a rejected spread is the out-of-range trap where JavaScript has undefined.",
+  "python": false,
+  "dialect": "js",
+  "program": "(get (record-spread (:spread (attempt (fail \"boom\")))) :value)",
+  "declarations": "declarations/js.json",
+  "allow": [
+    "store.list",
+    "store.size",
+    "store.read",
+    "store.maybe",
+    "store.point",
+    "store.reading",
+    "store.sizes",
+    "store.put",
+    "store.average"
+  ],
+  "expect": {
+    "failed": "out-of-range"
+  }
+}

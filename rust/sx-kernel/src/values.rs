@@ -404,12 +404,15 @@ pub fn encode(value: &Value) -> Json {
         }
         Value::Variant(variant) => match &variant.payload {
             None => Json::String(variant.variant.to_string()),
+            Some(payload) if variant.enum_name.starts_with(SHAPED_PREFIX) => encode(payload),
             Some(payload) => {
                 Json::object([("tag", Json::String(variant.variant.to_string())), ("value", encode(payload))])
             }
         },
     }
 }
+
+pub const SHAPED_PREFIX: &str = "js.Shaped<";
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct NonFiniteFloat(pub f64);
