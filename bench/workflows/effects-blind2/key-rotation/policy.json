@@ -1,0 +1,5 @@
+{
+  "capabilities": ["vault.keys", "vault.consumers", "vault.freezes", "vault.create-key", "vault.use-key", "vault.revoke-key"],
+  "computed_inputs": ["vault.create-key", "vault.use-key", "vault.revoke-key"],
+  "max_write_sites": 4
+}

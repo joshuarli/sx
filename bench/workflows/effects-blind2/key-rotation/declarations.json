@@ -1,0 +1,57 @@
+{
+  "cores": ["text", "re", "json"],
+  "enums": {"KeyState": {"active": null, "revoked": null}},
+  "capabilities": [
+    {
+      "id": "vault.keys",
+      "http": {"method": "GET", "url": "{{vault_origin}}/keys", "query": []},
+      "input": "Record {}",
+      "output": "List<Record open {id: String, label: String, state: KeyState}>",
+      "effect": "read",
+      "description": "Lists every key with its label and whether it is active or revoked."
+    },
+    {
+      "id": "vault.consumers",
+      "http": {"method": "GET", "url": "{{vault_origin}}/consumers", "query": []},
+      "input": "Record {}",
+      "output": "List<Record open {id: String, key_id: String}>",
+      "effect": "read",
+      "description": "Lists every consumer with the id of the key it uses."
+    },
+    {
+      "id": "vault.freezes",
+      "http": {"method": "GET", "url": "{{vault_origin}}/freezes", "query": []},
+      "input": "Record {}",
+      "output": "List<Record open {consumer: String}>",
+      "effect": "read",
+      "description": "Lists the consumers whose key the service will not change."
+    },
+    {
+      "id": "vault.create-key",
+      "http": {"method": "POST", "url": "{{vault_origin}}/keys", "query": []},
+      "input": "Record {label: String}",
+      "output": "Record open {id: String}",
+      "effect": "write",
+      "idempotent": false,
+      "description": "Creates an active key with a label and returns its id. Every successful call adds a key."
+    },
+    {
+      "id": "vault.use-key",
+      "http": {"method": "PUT", "url": "{{vault_origin}}/consumers/{id}", "query": []},
+      "input": "Record {id: String, key_id: String}",
+      "output": "Record open {id: String, key_id: String}",
+      "effect": "write",
+      "idempotent": true,
+      "description": "Points one consumer at a key."
+    },
+    {
+      "id": "vault.revoke-key",
+      "http": {"method": "POST", "url": "{{vault_origin}}/keys/{id}/revoke", "query": []},
+      "input": "Record {id: String}",
+      "output": "Record open {id: String, state: KeyState}",
+      "effect": "write",
+      "idempotent": true,
+      "description": "Revokes a key."
+    }
+  ]
+}

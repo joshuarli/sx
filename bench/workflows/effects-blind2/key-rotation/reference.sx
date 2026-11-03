@@ -1,0 +1,26 @@
+(let [keys (call vault.keys {})
+      consumers (call vault.consumers {})
+      frozen (map (fn [f] (get f :consumer)) (call vault.freezes {}))
+      plan (keep (fn [label]
+                   (let [old (get (first (filter (fn [k] (and (= (get k :label) label) (= (get k :state) "active"))) keys)) :id)
+                         users (map (fn [c] (get c :id)) (filter (fn [c] (= (get c :key_id) old)) consumers))]
+                     (if (any? (fn [u] (contains? frozen u)) users)
+                       none
+                       (some {:label label :old old :users users}))))
+                 ["billing" "reports"])
+      rotate (fn [p]
+               (let [label (get p :label)
+                     old (get p :old)
+                     new (match (attempt (call vault.create-key {:label label}))
+                           (ok made) (get made :id)
+                           (err _) (let [fresh (filter (fn [k] (and (and (= (get k :label) label) (= (get k :state) "active"))
+                                                                   (not= (get k :id) old)))
+                                                       (call vault.keys {}))]
+                                     (if (> (count fresh) 0)
+                                       (get (first fresh) :id)
+                                       (get (call vault.create-key {:label label}) :id))))
+                     _ (map (fn [u] (retry {:delays [100ms 200ms]} (call vault.use-key {:id u :key_id new})))
+                            (get p :users))
+                     _ (call vault.revoke-key {:id old})]
+                 {:label label :old old :new new}))]
+  (map rotate plan))

@@ -1,0 +1,8 @@
+{
+  "vault.keys": {"origins": ["{{vault_origin}}"], "methods": ["GET"]},
+  "vault.consumers": {"origins": ["{{vault_origin}}"], "methods": ["GET"]},
+  "vault.freezes": {"origins": ["{{vault_origin}}"], "methods": ["GET"]},
+  "vault.create-key": {"origins": ["{{vault_origin}}"], "methods": ["POST"]},
+  "vault.use-key": {"origins": ["{{vault_origin}}"], "methods": ["PUT"]},
+  "vault.revoke-key": {"origins": ["{{vault_origin}}"], "methods": ["POST"]}
+}
