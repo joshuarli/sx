@@ -257,6 +257,14 @@ describe("bounded forms", () => {
     );
     expect(out.error).toMatchObject({ class: "call-failed", kind: "Timeout" });
   });
+
+  test("a branch with no recorded response is reported before any other branch's failure", async () => {
+    const entries = [entry("store.get", { id: "a" }, fail("Timeout", "a"))];
+    const all = await run(`await Promise.all([tools.store.get({ id: "a" }), tools.store.get({ id: "b" })]);`, entries);
+    expect(all.error?.class).toBe("unexpected-call");
+    const mapped = await run(`await parMap({ limit: 2 }, ["a", "b"], (id) => tools.store.get({ id }));`, entries);
+    expect(mapped.error?.class).toBe("unexpected-call");
+  });
 });
 
 describe("language", () => {

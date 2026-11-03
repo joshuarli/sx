@@ -41,12 +41,19 @@ def learn_responses(program: str, world: World, specs: list[dict[str, str]], dec
             error = raw.get("error")
             if error is None or error["class"] != "unexpected-call":
                 return responses
-            known = any(
-                r["capability"] == error["capability"] and without_nulls(r["input"]) == error["input"]
-                for r in responses
+            held = next(
+                (
+                    r
+                    for r in responses
+                    if r["capability"] == error["capability"] and without_nulls(r["input"]) == error["input"]
+                ),
+                None,
             )
-            if known:
-                return responses
+            if held is not None:
+                if "repeated-write" not in error["message"]:
+                    return responses
+                held["results"] += [held["results"][-1]] * len(held["results"])
+                continue
             capability = error["capability"]
             results = world.results(capability, error["input"], capability in WRITES)
             expanded = with_optional_nulls(error["input"], inputs[capability], declared.get("types", {}))

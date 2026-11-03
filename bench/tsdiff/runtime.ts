@@ -271,6 +271,8 @@ export class Environment {
       }
     };
     await Promise.all(Array.from({ length: Math.min(options.limit, items.length) }, worker));
+    const unanswered = failures.find((f) => f !== undefined && f.error instanceof UnexpectedCall);
+    if (unanswered !== undefined) throw unanswered.error;
     for (let i = 0; i < items.length; i++) if (failures[i] !== undefined) throw failures[i]!.error;
     return results;
   };
@@ -290,8 +292,10 @@ export class Environment {
   readonly Promise = {
     all: async (items: unknown[]): Promise<unknown[]> => {
       const results = await Promise.allSettled(items);
-      const failed = results.find((r) => r.status === "rejected");
-      if (failed !== undefined) throw (failed as PromiseRejectedResult).reason;
+      const rejections = results.filter((r): r is PromiseRejectedResult => r.status === "rejected");
+      const unanswered = rejections.find((r) => r.reason instanceof UnexpectedCall);
+      if (unanswered !== undefined) throw unanswered.reason;
+      if (rejections[0] !== undefined) throw rejections[0].reason;
       return results.map((r) => (r as PromiseFulfilledResult<unknown>).value);
     },
     allSettled: async (items: unknown[]): Promise<unknown[]> => {

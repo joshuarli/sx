@@ -161,6 +161,19 @@ pub(crate) fn load_registry(path: Option<&str>, mut registry: Registry) -> Resul
     Ok((registry, declarations, loader.finish()))
 }
 
+const TYPESCRIPT_CORES: [&str; 2] = ["js", "text"];
+
+fn add_typescript_cores(registry: &mut Registry) -> Result<(), Stop> {
+    for id in TYPESCRIPT_CORES {
+        if registry.core(id).is_some() {
+            continue;
+        }
+        let core = builtin_core(id).ok_or_else(|| Stop::Internal(format!("the built-in core {id} is missing")))?;
+        registry.add_core(core).map_err(|e| Stop::usage(format!("the {id} core that TypeScript programs use cannot be added: {e}")))?;
+    }
+    Ok(())
+}
+
 fn command_cores(args: &CoresArgs, registry: &Registry, output: &mut Output) -> Result<i32, Stop> {
     let payload = Json::Object(
         registry
@@ -247,7 +260,10 @@ pub(crate) fn diagnostic_json(diagnostic: &Diagnostic) -> Json {
 }
 
 fn command_program(args: &ProgramArgs, base: Registry, output: &mut Output, mcp: Option<&Host>) -> Result<i32, Stop> {
-    let (registry, declarations, declared) = load_registry(args.declarations.as_deref(), base)?;
+    let (mut registry, declarations, declared) = load_registry(args.declarations.as_deref(), base)?;
+    if args.language == Language::TypeScript {
+        add_typescript_cores(&mut registry)?;
+    }
     let shown = path_text(&args.file);
     let source = read_text(Path::new(&args.file)).map_err(|e| Stop::usage(format!("cannot read {shown}: {e}")))?;
     let mut allowed: Vec<&String> = args.allow.iter().collect();

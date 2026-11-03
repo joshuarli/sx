@@ -477,9 +477,13 @@ def update_mutable(w: Writer, mutable: list[Var]) -> None:
         case "int":
             w.emit(f"{var.name} {r.choice(('+=', '-=', '*=', '='))} {w.int_(1)};")
         case "float":
-            w.emit(f"{var.name} {r.choice(('+=', '*=', '/=', '='))} {w.float_(1)};")
+            step = r.choice(("1.5", "0.25", "10.5", "0.1"))
+            w.emit(f"{var.name} {r.choice(('+=', '-=', '*=', '/='))} {step};" if r.random() < 0.7 else f"{var.name} = {w.float_(1)};")
         case _:
-            w.emit(f"{var.name} {r.choice(('+=', '='))} {w.str_(1)};")
+            if r.random() < 0.5:
+                w.emit(f"{var.name} += {json.dumps(r.choice(STRINGS))};")
+            else:
+                w.emit(f"{var.name} = {w.str_(1)};")
 
 
 def accumulate_loop(w: Writer, depth: int) -> None:
