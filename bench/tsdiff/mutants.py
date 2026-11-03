@@ -81,6 +81,18 @@ MUTANTS: tuple[Mutant, ...] = (
         "const mr = await tools.items.review({ id: \"i0\" }); const m = mr.tag === \"Score\" ? 0 : mr.value.level;",
     ),
     Mutant("variant-payload-as-string", "js-equality", "const mr = await tools.items.review({ id: \"i0\" }); const m = mr === \"Score\";"),
+    Mutant(
+        "field-read-without-exit", "type-mismatch",
+        "const mi = await tools.items.get({ id: \"i0\" }); if (mi.note != null) { } const m = mi.note.length;",
+    ),
+    Mutant(
+        "field-read-after-write", "type-mismatch",
+        "let mi = { note: [1].length > 0 ? \"a\" : null }; if (mi.note != null) { mi.note = null; const m = mi.note.length; }",
+    ),
+    Mutant(
+        "field-read-of-another-item", "type-mismatch",
+        "const mi = await tools.items.get({ id: \"i0\" }); const mj = await tools.items.get({ id: \"i1\" }); const m = mi.note != null ? mj.note.length : 0;",
+    ),
     Mutant("tool-name", "unknown-tool", "await tools.items.nope({});"),
 )
 

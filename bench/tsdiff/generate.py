@@ -377,8 +377,47 @@ def optional_name(w: Writer) -> str:
     return var.name
 
 
+def field_narrowing(w: Writer) -> bool:
+    r = w.rng
+    items, lists = w.vars_of("item"), w.vars_of("items")
+    if not items and not lists:
+        return False
+    k = w.fresh("k")
+    if lists and (not items or r.random() < 0.5):
+        source = r.choice(lists).name
+        var = w.declare("fv", "int")
+        match r.choice(("filter", "map", "loop")):
+            case "filter":
+                w.emit(f"const {var.name} = {source}.filter((it) => it.note != null && it.note.length > {r.choice(('0', '1'))}).length;")
+            case "map":
+                w.emit(f"const {var.name} = {source}.map((it) => (it.note ? it.note.length : -1)).reduce((a, b) => a + b, 0);")
+            case _:
+                w.emit(f"let {var.name} = 0;")
+                w.emit(f"for (const {k} of {source}) {{")
+                w.emit(f"  if ({k}.note == null) {{ {r.choice(('continue', 'break'))}; }}")
+                w.emit(f"  {var.name} += {k}.note.length;")
+                w.emit("}")
+        return True
+    item = r.choice(items).name
+    match r.choice(("value", "exit", "else")):
+        case "value":
+            fallback = w.int_(0)
+            var = w.declare("fv", "int")
+            w.emit(f"const {var.name} = {item}.note == null ? {fallback} : {item}.note.length;")
+        case "exit":
+            w.emit(f"for (const {k} of [1, 2]) {{")
+            w.emit(f"  if (!{item}.note) {{ continue; }}")
+            w.emit(f"  console.log({item}.note.toUpperCase(), {k});")
+            w.emit("}")
+        case _:
+            w.emit(f"if ({item}.note != null && {item}.note.length > 0) {{ console.log({item}.note); }} else {{ console.log({item}.id); }}")
+    return True
+
+
 def narrowing(w: Writer, depth: int) -> None:
     r = w.rng
+    if r.random() < 0.3 and field_narrowing(w):
+        return
     o = optional_name(w)
     k = w.fresh("k")
     match r.choice(("exit", "exit", "throw", "value", "value", "else", "truthy", "nested", "pair", "function", "all")):

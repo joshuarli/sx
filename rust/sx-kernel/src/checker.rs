@@ -492,6 +492,7 @@ struct Frame<'a> {
     name: String,
     binding: Binding<'a>,
     variants: Option<Vec<String>>,
+    anchor: Option<Rc<Frame<'a>>>,
     parent: Scope<'a>,
 }
 
@@ -519,12 +520,45 @@ impl<'a> Scope<'a> {
     }
 
     fn with(&self, name: &str, binding: Binding<'a>) -> Scope<'a> {
-        Scope(Some(Rc::new(Frame { name: name.to_string(), binding, variants: None, parent: self.clone() })))
+        Scope(Some(Rc::new(Frame { name: name.to_string(), binding, variants: None, anchor: None, parent: self.clone() })))
     }
 
     fn with_variants(&self, name: &str, enum_type: Type, names: Vec<String>) -> Scope<'a> {
-        let frame = Frame { name: name.to_string(), binding: Binding::Value(enum_type), variants: Some(names), parent: self.clone() };
+        let frame = Frame { name: name.to_string(), binding: Binding::Value(enum_type), variants: Some(names), anchor: None, parent: self.clone() };
         Scope(Some(Rc::new(frame)))
+    }
+
+    fn frame_of(&self, name: &str) -> Option<&Rc<Frame<'a>>> {
+        let mut at = self.0.as_ref();
+        while let Some(frame) = at {
+            if frame.name == name {
+                return Some(frame);
+            }
+            at = frame.parent.0.as_ref();
+        }
+        None
+    }
+
+    fn with_path(&self, path: &str, t: Type) -> Scope<'a> {
+        let root = path.split('.').next().unwrap_or(path);
+        let frame = Frame {
+            name: path.to_string(),
+            binding: Binding::Value(t),
+            variants: None,
+            anchor: self.frame_of(root).cloned(),
+            parent: self.clone(),
+        };
+        Scope(Some(Rc::new(frame)))
+    }
+
+    fn narrowed_path(&self, path: &str) -> Option<&Type> {
+        let frame = self.frame_of(path)?;
+        let root = self.frame_of(path.split('.').next().unwrap_or(path))?;
+        let anchor = frame.anchor.as_ref()?;
+        match &frame.binding {
+            Binding::Value(t) if Rc::ptr_eq(anchor, root) => Some(t),
+            _ => None,
+        }
     }
 
     fn variants_of(&self, name: &str) -> Option<&[String]> {
@@ -542,6 +576,7 @@ impl<'a> Scope<'a> {
         let mut scope = self.clone();
         for (name, fact) in narrowed {
             scope = match fact {
+                Fact::Present(inner) if name.contains('.') => scope.with_path(name, inner.clone()),
                 Fact::Present(inner) => scope.value(name, inner.clone()),
                 Fact::Variants { enum_type, names } => scope.with_variants(name, enum_type.clone(), names.clone()),
             };
@@ -2707,6 +2742,14 @@ impl<'r> Checker<'r> {
         }
         let (record_node, key) = (&items[1], &items[2]);
         let default_node = items.get(3);
+        if self.dialect == Dialect::JavaScript
+            && default_node.is_none()
+            && let Some(narrowed) = self.narrowed_read(record_node, key, scope)
+            && let Some(path) = js::path_of(record_node, keyword(key).unwrap_or_default())
+        {
+            let read = node(Ir::Variable { name: path }, span);
+            return self.coerce(read, &narrowed, expected, span);
+        }
         let (record_ir, record_type) = self.check(record_node, None, scope);
         if self.dialect == Dialect::JavaScript
             && let Some(shaped) = self.shaped_enum(&record_type)

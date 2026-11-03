@@ -62,9 +62,29 @@ fn some_of(value: ir::Node, wrapped: &Type, span: Span) -> ir::Node {
     node(Ir::Wrap { kind: WrapKind::Some, value: Box::new(value), wrapped_type: wrapped.clone() }, span)
 }
 
+fn path_read(path: &str, span: Span) -> ir::Node {
+    let mut parts = path.split('.');
+    let root = variable(parts.next().unwrap_or(path), span);
+    parts.fold(root, |record, field| node(Ir::Get { record: Box::new(record), field: field.to_string() }, span))
+}
+
+pub(super) fn path_of(record: &Node, field: &str) -> Option<String> {
+    match &record.kind {
+        NodeKind::Symbol(name) => Some(format!("{name}.{field}")),
+        NodeKind::Form(_) => match form_items(record)? {
+            [get, inner, key] if symbol(get) == Some("get") => {
+                let held = path_of(inner, keyword(key)?)?;
+                Some(format!("{held}.{field}"))
+            }
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
 pub(super) fn guard_present(narrowed: &Narrowed, body: ir::Node, result: &Type, span: Span) -> ir::Node {
     narrowed.iter().rev().fold(body, |body, (name, fact)| match fact {
-        Fact::Present(_) => when_present(variable(name, span), name, body, trap(result, span), span),
+        Fact::Present(_) => when_present(path_read(name, span), name, body, trap(result, span), span),
         Fact::Variants { .. } => body,
     })
 }
@@ -789,7 +809,8 @@ impl<'r> Checker<'r> {
         let (value, t) = self.outside_tail(|c| c.check(operand, None, scope));
         match self.resolve(&t) {
             Type::Option(inner_type) if !matches!(self.resolve(&inner_type), Type::Never) => {
-                self.presence_test(value, &inner_type, operand, scope, who)
+                let test = self.presence_test(value, &inner_type, operand, scope, who);
+                if test.name.is_some() { test } else { self.with_narrowings(test, node, scope) }
             }
             _ => {
                 let condition = self.presence_node(value, &t, node.span, operand.span);
@@ -863,15 +884,12 @@ impl<'r> Checker<'r> {
         };
         match (head, rest) {
             ("present" | "truthy", [operand]) => {
-                let Some(name) = symbol(operand).filter(|n| scope.is_value(n)) else {
+                let Some((key, held)) = self.operand_type(operand, scope) else {
                     return none;
                 };
-                let Some(Binding::Value(t)) = scope.get(name) else {
-                    return none;
-                };
-                match self.resolve(t) {
+                match self.resolve(&held) {
                     Type::Option(inner) if !matches!(self.resolve(&inner), Type::Never) => {
-                        (vec![(name.to_string(), Fact::Present(*inner))], Vec::new())
+                        (vec![(key, Fact::Present(*inner))], Vec::new())
                     }
                     _ => none,
                 }
@@ -906,16 +924,55 @@ impl<'r> Checker<'r> {
             }
             ("if", [first, then, otherwise]) if literal(otherwise, false) => {
                 let (first_true, _) = self.narrowings(first, scope);
-                let (then_true, _) = self.narrowings(then, scope);
+                let (then_true, _) = self.narrowings(then, &scope.narrow(&first_true));
                 (merge(first_true, then_true), Vec::new())
             }
             ("if", [first, then, otherwise]) if literal(then, true) => {
                 let (_, first_false) = self.narrowings(first, scope);
-                let (_, otherwise_false) = self.narrowings(otherwise, scope);
+                let (_, otherwise_false) = self.narrowings(otherwise, &scope.narrow(&first_false));
                 (Vec::new(), merge(first_false, otherwise_false))
             }
             _ => none,
         }
+    }
+
+    fn operand_type<'a>(&self, operand: &'a Node, scope: &Scope<'a>) -> Option<(String, Type)> {
+        if let Some(name) = symbol(operand).filter(|n| scope.is_value(n)) {
+            let Some(Binding::Value(t)) = scope.get(name) else {
+                return None;
+            };
+            return Some((name.to_string(), t.clone()));
+        }
+        let Some([get, inner, key]) = form_items(operand) else {
+            return None;
+        };
+        if symbol(get) != Some("get") || scope.get("get").is_some() {
+            return None;
+        }
+        let path = path_of(inner, keyword(key)?)?;
+        let mut parts = path.split('.');
+        let root = parts.next()?;
+        let Some(Binding::Value(root_type)) = scope.get(root).filter(|_| scope.is_value(root)) else {
+            return None;
+        };
+        let mut held = root_type.clone();
+        let mut prefix = root.to_string();
+        for field in parts {
+            prefix = format!("{prefix}.{field}");
+            held = match scope.narrowed_path(&prefix) {
+                Some(narrowed) => narrowed.clone(),
+                None => match self.resolve(&held) {
+                    Type::Record(record) => record.field(field)?.clone(),
+                    _ => return None,
+                },
+            };
+        }
+        Some((path, held))
+    }
+
+    pub(super) fn narrowed_read<'a>(&mut self, record: &'a Node, key: &'a Node, scope: &Scope<'a>) -> Option<Type> {
+        let path = path_of(record, keyword(key)?)?;
+        scope.narrowed_path(&path).cloned()
     }
 
     fn variant_subject<'a>(&self, subject: &'a Node, scope: &Scope<'a>) -> Option<(String, Arc<EnumType>)> {
