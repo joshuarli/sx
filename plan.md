@@ -171,8 +171,10 @@ sessions over repomod, Sx answered 27 of 32 requests correctly against JavaScrip
 turns, at about the same cost. A checkable-subset test then found that 91% of the JavaScript models wrote
 lowers into Sx's forms, and the owner chose the fifth campaign, Phases 18 to 22, a checkable
 TypeScript front end over the same kernel. The owner authorized every phase unattended and delegated the
-spec review to the lead. Phase 18 missed its coverage gate and the lead ruled to continue; Phase 19 is
-next.
+spec review to the lead. Phase 18 missed its coverage gate and the lead ruled to continue. In Phase 19,
+Bun and `sx` agreed on every accepted program from the corpus and a generator, and every mutant was
+rejected; the clean build grew 16% against a 10% limit, from the JS-mode checker, and the lead ruled to
+continue. Phase 20 is next.
 
 **The Python prototype is frozen.** `src/sx` and the Python cores are frozen as of commit
 `15b6ed6`, the parent of the commit that records this, because Rust passed its gates. The prototype
@@ -1193,6 +1195,51 @@ mutation rule. Every rejected construct has a fixture that shows its diagnostic.
 **Gate:** no disagreement between Bun and `sx` on any accepted program; every lowerable corpus script
 yields the call set the classifier read from it; Lean agrees on the fixtures; all existing gates pass;
 the binary and build stay within the parser measurement's limits.
+
+**Phase 19 result: the differential gate passed; the build-time limit was missed, and the lead ruled to
+continue.** `sx check`, `explain`, and `run` take `--language ts` through the `sx-ts` crate, and the
+checker's `Dialect::JavaScript` carries the number, string, equality, and record rules. `bench/tsdiff`
+runs every accepted program in Bun against a shim that answers from recorded responses, and as lowered
+Sx in `sx`:
+
+| Source | Agree | Agree as a refinement | Rejected | Disagree |
+| --- | --- | --- | --- | --- |
+| Generated, 1,000 programs (seed 0) | 992 | 7 | 1 | 0 |
+| Corpus, 471 scripts | 318 | 1 | 152 | 0 |
+| Mutants, 150 | | | 150 | |
+
+A refinement is a run where a failing parallel branch leaves a subset or reordering of the calls. Two
+more generated runs, 2,000 and 3,000 programs, show no disagreement. Every mutant is rejected with the
+spec's code, and no corpus script calls a tool outside the call set the classifier read from it. Of the
+152 rejected corpus scripts, more than 80 are the spec's own `ts-*` rules, about 20 are `parallel-write`,
+and about 50 are type errors in the scripts as written: branches of different types, a field read on a
+tuple or a string, records with different fields.
+
+The loop found one silent miscompile: a `Bool` joined with an absent value became an `Option<Bool>`,
+which a condition tests for presence, so a `false` took the true branch. It is now `branch-mismatch`. It
+also found programs accepted against the spec (`=== null`, `.sort()` over numbers) and ones rejected
+against it, and each fix is a fixture or golden test. The rules that settled them are in "JS mode as
+built" in the spec. Three gaps stay: a `loop` variable does not widen from `Int` to `Float`
+(`js-float-as-int`, loud); a `Map` value or enum payload a tool returns is not checked against ±2^53
+(silent, closed in Phase 20); a tuple sort key with a string compares by code point (no TypeScript form
+reaches it).
+
+Lean agrees on all 276 fixtures it can judge. The 33 that use the `js` core or `js.Shaped` have no Lean
+counterpart and are judged by the Rust gates alone. The workspace tests, clippy, 621 Python tests, the
+fuzzer's fast slice, and the Bun tests pass.
+
+| Against `336a73e`, before the campaign | Baseline | Now | Change |
+| --- | --- | --- | --- |
+| Release binary, aarch64-apple-darwin | 9,633,456 bytes | 10,524,688 bytes | +9.3% |
+| Clean release build, wall, median of 3 interleaved | 8.07 s (7.93–8.54) | 9.34 s (9.11–9.56) | +16% |
+| Clean release build, user CPU, median | 71.7 s | 81.6 s | +14% |
+
+`perf-gate-ready` passed around every build, and the builds ran without the `kache` wrapper. The build
+exceeds the 10% limit. `cargo --timings` puts the cause on the critical path, in `sx-kernel` (4.5 s to
+5.7 s) and `sx-cli` (1.3 s to 1.7 s); the hand-written parser in `sx-ts` builds in parallel and ends
+before `sx-cli` does. The kernel grew by the JS-mode checker, which any front end needs, so the limit
+no longer separates the parser choices it was set for. The lead continued, because the excess is 1.3 s
+of wall time and the question that decides the campaign is Phase 21's.
 
 #### Phase 20: Checkable TypeScript as code mode
 
