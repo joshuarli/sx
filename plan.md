@@ -1415,6 +1415,12 @@ passes, the lead proposes an approval study on the models where it held; if it f
 is the language's, not only the session's, and the TypeScript front end is kept as a checked subset, not
 as a code mode.
 
+**Phase 23 status: blocked on the provider.** The first run recorded 412 of the 672 trials before
+opencode-go's usage limit stopped the rest (259 trials), and one more was lost to a NUL byte the harness
+could not pass to pi, now fixed. `claude-haiku-5-5` and `gemini-4-argon` finished, `gpt-6-luna` lacks 5
+trials, and the other four models lack most of theirs. The gate is not read until every trial has run:
+`runner.py trials --resume` with the same arguments reruns only the missing and stopped ones.
+
 ### Phase 0: Skeleton, task corpus, and syntax pilot
 
 This phase tests whether a model can learn the syntax before the checker and machine exist.
