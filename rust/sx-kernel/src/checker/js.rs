@@ -228,6 +228,126 @@ impl<'r> Checker<'r> {
         }
     }
 
+    pub(super) fn settled_shape(&mut self, value: ir::Node, t: &Type, span: Span) -> Option<(ir::Node, Type)> {
+        let resolved = self.resolve(t);
+        match &resolved {
+            Type::Result(ok, err) => {
+                let (fulfilled, ok_type) = match self.settled_shape(variable(PROMOTED, span), ok, span) {
+                    Some(shaped) => shaped,
+                    None => (variable(PROMOTED, span), (**ok).clone()),
+                };
+                let (rejected, err_type) = match self.settled_shape(variable(PROMOTED, span), err, span) {
+                    Some(shaped) => shaped,
+                    None => (variable(PROMOTED, span), (**err).clone()),
+                };
+                let ok_record = Type::Record(RecordType::plain(vec![("status".to_string(), STRING), ("value".to_string(), ok_type)]));
+                let err_record =
+                    Type::Record(RecordType::plain(vec![("status".to_string(), STRING), ("reason".to_string(), err_type)]));
+                let shaped = Arc::new(EnumType {
+                    name: format!(
+                        "{}{} | {}>",
+                        crate::values::SHAPED_PREFIX,
+                        crate::types::show_definition(&ok_record),
+                        crate::types::show_definition(&err_record)
+                    ),
+                    variants: vec![
+                        ("Fulfilled".to_string(), Some(ok_record)),
+                        ("Rejected".to_string(), Some(err_record)),
+                    ],
+                });
+                let arm = |variant: &str, status: &str, field: &str, payload: ir::Node| {
+                    let record = node(
+                        Ir::MakeRecord {
+                            fields: vec![("status".to_string(), text(status, span)), (field.to_string(), payload)],
+                        },
+                        span,
+                    );
+                    node(
+                        Ir::MakeVariant {
+                            enum_name: shaped.name.clone(),
+                            variant: variant.to_string(),
+                            payload: Some(Box::new(record)),
+                        },
+                        span,
+                    )
+                };
+                let clauses = vec![
+                    (
+                        MatchPattern::Ok(Box::new(MatchPattern::Any(Binder::Name(PROMOTED.to_string())))),
+                        arm("Fulfilled", "fulfilled", "value", fulfilled),
+                    ),
+                    (
+                        MatchPattern::Err(Box::new(MatchPattern::Any(Binder::Name(PROMOTED.to_string())))),
+                        arm("Rejected", "rejected", "reason", rejected),
+                    ),
+                ];
+                let made = node(Ir::Match(ir::Match { scrutinee: Box::new(value), clauses }), span);
+                Some((made, Type::Enum(shaped)))
+            }
+            Type::Option(inner) => {
+                let (body, shaped_type) = self.settled_shape(variable(PROMOTED, span), inner, span)?;
+                let wrapped = option(shaped_type);
+                Some((
+                    when_present(value, PROMOTED, some_of(body, &wrapped, span), literal(Value::None, wrapped.clone(), span), span),
+                    wrapped,
+                ))
+            }
+            Type::List(element) => {
+                let (body, shaped_type) = self.settled_shape(variable(PROMOTED, span), element, span)?;
+                let lambda = Lambda {
+                    params: vec![Binder::Name(PROMOTED.to_string())],
+                    param_types: vec![(**element).clone()],
+                    result: shaped_type.clone(),
+                    body: Box::new(body),
+                    captured: None,
+                    span,
+                };
+                Some((prelude(PreludeOp::HigherOrder(HigherOrder::Map), vec![lambda_node(lambda), value], span), list(shaped_type)))
+            }
+            Type::Tuple(parts) => {
+                let mut changed = false;
+                let mut items = Vec::new();
+                let mut types = Vec::new();
+                for (index, part) in parts.iter().enumerate() {
+                    let held = prelude(PreludeOp::TupleItem, vec![variable(PROMOTED, span), integer(index as i64, span)], span);
+                    match self.settled_shape(held.clone(), part, span) {
+                        Some((shaped, shaped_type)) => {
+                            changed = true;
+                            items.push(shaped);
+                            types.push(shaped_type);
+                        }
+                        None => {
+                            items.push(held);
+                            types.push(part.clone());
+                        }
+                    }
+                }
+                changed.then(|| (bind(PROMOTED, value, node(Ir::MakeTuple { items }, span), span), Type::Tuple(types)))
+            }
+            Type::Record(record) => {
+                let mut changed = false;
+                let mut fields = Vec::new();
+                let mut types = Vec::new();
+                for (name, field_type) in &record.fields {
+                    let held = node(Ir::Get { record: Box::new(variable(PROMOTED, span)), field: name.clone() }, span);
+                    match self.settled_shape(held.clone(), field_type, span) {
+                        Some((shaped, shaped_type)) => {
+                            changed = true;
+                            fields.push((name.clone(), shaped));
+                            types.push((name.clone(), shaped_type));
+                        }
+                        None => {
+                            fields.push((name.clone(), held));
+                            types.push((name.clone(), field_type.clone()));
+                        }
+                    }
+                }
+                changed.then(|| (bind(PROMOTED, value, node(Ir::MakeRecord { fields }, span), span), Type::Record(RecordType::plain(types))))
+            }
+            _ => None,
+        }
+    }
+
     pub(super) fn js_number_list(&mut self, checked: &[Checked], span: Span) -> Option<ir::Node> {
         let kinds: Vec<Type> = checked.iter().map(|(_, t)| self.resolve(t)).collect();
         if !kinds.iter().all(|t| *t == INT || *t == FLOAT) || !kinds.contains(&INT) || !kinds.contains(&FLOAT) {
@@ -549,7 +669,8 @@ impl<'r> Checker<'r> {
         match self.js_text(value.clone(), t, span) {
             Some(shown) => shown,
             None => {
-                self.late_json_values.push((t.clone(), span, "js.stringify"));
+                let (value, t) = self.settled_shape(value.clone(), t, span).unwrap_or((value, t.clone()));
+                self.late_json_values.push((t, span, "js.stringify"));
                 self.js_core_call("js.stringify", vec![value], span)
             }
         }
@@ -997,6 +1118,7 @@ impl<'r> Checker<'r> {
             "js.settled-status" | "js.settled-value" | "js.settled-reason" => self.settled(name, span, args, expected, scope),
             "js.stringify" => {
                 let (value, t) = self.check(&args[0], None, scope);
+                let (value, t) = self.settled_shape(value.clone(), &t, args[0].span).unwrap_or((value, t));
                 self.late_json_values.push((t, args[0].span, "js.stringify"));
                 let mut call = vec![value];
                 let function = if args.len() == 2 {

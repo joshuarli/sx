@@ -268,6 +268,12 @@ describe("bounded forms", () => {
 });
 
 describe("language", () => {
+  test("an arrow with an array pattern and a parenthesized object body keeps its body", async () => {
+    const out = await run(`return await Promise.all([["a", "b"]].map(async([x, y]) => ({ x, y })));`);
+    expect(out.error).toBeUndefined();
+    expect(out.result).toEqual([{ x: "a", y: "b" }]);
+  });
+
   test("type annotations are erased and the body may use top-level await and return", async () => {
     const out = await run(`type T = { a: number }; const x: T = { a: 2 }; const f = (n: number): number => n * 2; return f(x.a);`);
     expect(out.result).toBe(4);

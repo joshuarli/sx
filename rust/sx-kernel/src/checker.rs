@@ -1123,6 +1123,7 @@ impl<'r> Checker<'r> {
                 let mut fields = Vec::new();
                 for (name, field_type) in &x.fields {
                     let joined = match y.field(name) {
+                        None if self.dialect == Dialect::JavaScript => None,
                         None => self.optional_field(field_type),
                         Some(other) => self.least_upper_bound(field_type, other),
                     }?;
@@ -1131,6 +1132,9 @@ impl<'r> Checker<'r> {
                 for (name, field_type) in &y.fields {
                     if x.field(name).is_some() {
                         continue;
+                    }
+                    if self.dialect == Dialect::JavaScript {
+                        return None;
                     }
                     fields.push((name.clone(), self.optional_field(field_type)?));
                 }
@@ -4890,8 +4894,14 @@ fn elaborate(program: &Node, setting: &Setting<'_>, earlier: ArgumentTypes, foun
     for name in &unusable {
         scope = scope.value(name, Type::Never);
     }
-    let (mut body, result) = checker.check(body_node, None, &scope);
+    let (mut body, mut result) = checker.check(body_node, None, &scope);
     drop(scope);
+    if dialect == Dialect::JavaScript {
+        let resolved = checker.zonk(&result);
+        if let Some(shaped) = checker.settled_shape(body.clone(), &resolved, program.span) {
+            (body, result) = shaped;
+        }
+    }
     *found = std::mem::take(&mut checker.arguments);
     checker.check_presence_tests();
     checker.check_late_sort_keys();

@@ -68,7 +68,8 @@ export function instrument(javascript: string): string {
     if (!patterned) return splice(node);
     const { params: text, prologue } = withDestructuring(node, params);
     const head = source.slice(node.start, params[0]!.start);
-    const tail = source.slice(params[params.length - 1]!.end, node.body.start);
+    const between = source.slice(params[params.length - 1]!.end, node.body.start);
+    const tail = node.type === "ArrowFunctionExpression" ? between.slice(0, between.indexOf("=>") + 2) : between;
     const body =
       node.body.type === "BlockStatement"
         ? `{${prologue}${emit(node.body)}}`
